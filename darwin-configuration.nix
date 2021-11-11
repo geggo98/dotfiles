@@ -207,6 +207,9 @@ in
       if command -v {$HOME}/.local/bin/lvim > /dev/null
         alias lvim {$HOME}/.local/bin/lvim
         set -x VISUAL /{$HOME}/.local/bin/lvim
+        set -x GIT_EDITOR /{$HOME}/.local/bin/lvim
+      else
+        set -x GIT_EDITOR vim
       end
 
       if command -v /opt/homebrew/bin/brew > /dev/null
