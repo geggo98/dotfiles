@@ -65,7 +65,8 @@ in
       unstable.k6 # Load testing: https://github.com/grafana/k6
 
       # Python programming language
-      pkgs.python
+      pkgs.python27Full
+      pkgs.python38Full
       pkgs.poetry
       # unstable.python-language-server
 
@@ -82,6 +83,10 @@ in
       pkgs.gopkgs
       pkgs.gopls
       pkgs.go-tools
+
+      # Haskell programming language
+      unstable.stack
+      pkgs.ghc
 
 
       # UI Tools
@@ -222,6 +227,7 @@ in
 
 
       test -e {$HOME}/.iterm2_shell_integration.fish ; and source {$HOME}/.iterm2_shell_integration.fish
+      test -d {$HOME}/.iterm2 ; and fish_add_path {$HOME}/.iterm2 
     '';
   };
 
