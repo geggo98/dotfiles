@@ -13,6 +13,7 @@ cask "alfred"
 cask "anaconda" # /opt/homebrew/anaconda3
 cask "bartender"
 cask "brave-browser"
+cask "chromium"
 cask "dash" # Dash 6
 cask "deezer"
 cask "font-iosevka"
@@ -38,6 +39,7 @@ cask "obsidian"
 # cask "openvpn-connect"
 cask "path-finder"
 cask "pock"
+cask "postman"
 cask "raindropio"
 cask "slack"
 cask "soundsource"
@@ -56,6 +58,7 @@ mas "Dynamo", id: 1445910651
 mas "File Cabinet Pro", id: 1150565778
 mas "Friendly Streaming", id: 553245401 
 mas "iMazing HEIC Converter", id: 1292198261
+mas "Infuse", id: 1136220934
 mas "Ka-Block!", id: 1335413823
 mas "PhotoScape X", id: 929507092 
 mas "Vectornator", id: 1219074514
