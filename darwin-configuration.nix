@@ -120,6 +120,7 @@ in
 
       # Video donwload
       unstable.youtube-dl
+      unstable.yt-dlp
       unstable.aria2
 
       # Password management
@@ -157,6 +158,7 @@ in
       pkgs.mosh # https://mosh.org/
       unstable.netcat
       pkgs.parallel
+      pkgs.python39Packages.ftfy # Fix broken unicode encoding
       pkgs.pv
       pkgs.pwgen
       pkgs.rename
