@@ -95,6 +95,12 @@ in
       # unstable.maestral-gui
 
       # DevOps & Kubernetes
+      unstable.colima # Docker on Linux on Max: Replaces Docker Desktop
+      unstable.docker-buildx
+      unstable.docker-client
+      unstable.docker-compose
+      unstable.docker-compose_2 # Enable "docker compose" (without dash), so docker cli can directly use compose files.
+      unstable.docker-credential-helpers # Safely store docker credentials: https://github.com/docker/docker-credential-helpers
       pkgs.minikube
       pkgs.nimbo # https://github.com/nimbo-sh/nimbo
       # pkgs.niv
@@ -134,6 +140,7 @@ in
       pkgs.passExtensions.pass-update
 
       # Command line tools
+      pkgs.asciinema
       pkgs.bat
       pkgs.bar
       pkgs.broot
@@ -237,15 +244,15 @@ in
   #   enable = true;
   #   enableNixDirenvIntegration = true;
   # };
- 
+
   # programs.neovim = {
   #     enable = true;
   # };
 
   programs.vim = {
-      enable = true;
-      enableSensible = true;
-      plugins = [ { names = [ "surround" "vim-nix" "vim-gnupg" "editorconfig-vim" "neorg"] ; } ];
+    enable = true;
+    enableSensible = true;
+    plugins = [{ names = [ "surround" "vim-nix" "vim-gnupg" "editorconfig-vim" "neorg" ]; }];
   };
 
   programs.tmux = {
@@ -328,22 +335,22 @@ in
 
   system.defaults.NSGlobalDomain.ApplePressAndHoldEnabled = false;
   system.defaults.NSGlobalDomain.AppleShowAllExtensions = true;
-  
+
   # https://apple.stackexchange.com/a/288764
   system.defaults.NSGlobalDomain.InitialKeyRepeat = 15;
   system.defaults.NSGlobalDomain.KeyRepeat = 2;
   #system.defaults.NSGlobalDomain.com.apple.keyboard.fnState = true;
-  
+
   #system.defaults.NSGlobalDomain.com.apple.mouse.tapBehavior = 1;
   #system.defaults.NSGlobalDomain.com.apple.trackpad.scaling = 3;
-  
+
   system.defaults.dock.autohide = true;
   system.defaults.dock.mru-spaces = false;
   system.defaults.dock.orientation = "right";
   system.defaults.dock.tilesize = 16;
-  
+
   system.defaults.trackpad.TrackpadThreeFingerDrag = true;
-  
+
   system.keyboard.enableKeyMapping = true;
   system.keyboard.nonUS.remapTilde = true;
   system.keyboard.remapCapsLockToEscape = true;

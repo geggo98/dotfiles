@@ -2,19 +2,19 @@
   "entries": {
     "tap": {
       "homebrew/bundle": {
-        "revision": "407dafc7dbdacd1d897cfc79e8c3ab86a859ca71"
+        "revision": "d40b20f64e29453a77290f7c329cf336a59e8b66"
       },
       "homebrew/cask": {
-        "revision": "1317b1f28eaa575d7300848ae483f2c036b23ef5"
+        "revision": "eac5dc2a4e1e6805061c7815502a3039cf658ab6"
       },
       "homebrew/cask-fonts": {
-        "revision": "7408724109e62357b0ece047f59127a7467b29a7"
+        "revision": "25e63dfd72905c8ce156a7af6940e2bd18662c13"
       },
       "homebrew/core": {
-        "revision": "d8a3b22c919c396a6b79097894031508c1c48c3c"
+        "revision": "3daf0354936707b96233a55c07d87770d4bebb8c"
       },
       "homebrew/services": {
-        "revision": "0d503a251d67f5e93aaf376eb65ec9ed6cb62e9d"
+        "revision": "1cdefcecd1aacbc3d5caf735a9db6bc04cd809a6"
       }
     },
     "brew": {
@@ -178,7 +178,7 @@
         }
       },
       "alfred": {
-        "version": "4.6.1,1274",
+        "version": "4.6.2,1280",
         "options": {
           "full_name": "alfred"
         }
@@ -196,25 +196,25 @@
         }
       },
       "brave-browser": {
-        "version": "1.34.80.0,134.80",
+        "version": "1.34.81.0,134.81",
         "options": {
           "full_name": "brave-browser"
         }
       },
       "dash": {
-        "version": "6.2.1,990",
+        "version": "6.2.2,992",
         "options": {
           "full_name": "dash"
         }
       },
       "deezer": {
-        "version": "5.30.130",
+        "version": "5.30.150",
         "options": {
           "full_name": "deezer"
         }
       },
       "font-iosevka": {
-        "version": "11.2.6",
+        "version": "11.2.7",
         "options": {
           "full_name": "font-iosevka"
         }
@@ -238,7 +238,7 @@
         }
       },
       "google-chrome": {
-        "version": "97.0.4692.71",
+        "version": "97.0.4692.99",
         "options": {
           "full_name": "google-chrome"
         }
@@ -292,7 +292,7 @@
         }
       },
       "keka": {
-        "version": "1.2.51",
+        "version": "1.2.52",
         "options": {
           "full_name": "keka"
         }
@@ -418,15 +418,27 @@
         }
       },
       "chromium": {
-        "version": "959060",
+        "version": "962796",
         "options": {
           "full_name": "chromium"
         }
       },
       "postman": {
-        "version": "9.9.0",
+        "version": "9.10.1",
         "options": {
           "full_name": "postman"
+        }
+      },
+      "lens": {
+        "version": "5.3.4,20220120.1",
+        "options": {
+          "full_name": "lens"
+        }
+      },
+      "rancher": {
+        "version": "1.0.0",
+        "options": {
+          "full_name": "rancher"
         }
       }
     },
@@ -453,7 +465,7 @@
       },
       "Friendly Streaming": {
         "id": "553245401",
-        "version": "5.9.15"
+        "version": "5.9.16"
       },
       "iMazing HEIC Converter": {
         "id": "1292198261",
@@ -465,7 +477,7 @@
       },
       "PhotoScape X": {
         "id": "929507092",
-        "version": "4.1.1"
+        "version": "4.2.1"
       },
       "Vectornator": {
         "id": "1219074514",
@@ -473,16 +485,16 @@
       },
       "Infuse": {
         "id": "1136220934",
-        "version": "7.3.2"
+        "version": "7.3.3"
       }
     }
   },
   "system": {
     "macos": {
       "monterey": {
-        "HOMEBREW_VERSION": "3.3.10",
+        "HOMEBREW_VERSION": "3.3.12",
         "HOMEBREW_PREFIX": "/opt/homebrew",
-        "Homebrew/homebrew-core": "d8a3b22c919c396a6b79097894031508c1c48c3c",
+        "Homebrew/homebrew-core": "3daf0354936707b96233a55c07d87770d4bebb8c",
         "CLT": "13.0.0.0.1.1627064638",
         "Xcode": "13.1",
         "macOS": "12.0.1"
