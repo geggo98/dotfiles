@@ -31,8 +31,9 @@ cask "jdk-mission-control"
 cask "jetbrains-toolbox"
 cask "keka"
 cask "krita"
+cask "lens" # K8s IDE
 cask "lunar"
-cask "maestral"
+cask "maestral" # Leightweight Dropbox client optimized for M1
 cask "mosaic"
 cask "multipass"
 cask "obsidian"
@@ -41,6 +42,7 @@ cask "path-finder"
 cask "pock"
 cask "postman"
 cask "raindropio"
+cask "rancher" # Rancher Desktop
 cask "slack"
 cask "soundsource"
 cask "studio-3t"
