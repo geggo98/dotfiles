@@ -16,6 +16,7 @@ cask "brave-browser"
 cask "chromium"
 cask "dash" # Dash 6
 cask "deezer"
+cask "devutils" # https://devutils.app/
 cask "font-iosevka"
 cask "font-iosevka-nerd-font"
 cask "font-victor-mono"
