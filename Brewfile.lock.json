@@ -2,19 +2,19 @@
   "entries": {
     "tap": {
       "homebrew/bundle": {
-        "revision": "d40b20f64e29453a77290f7c329cf336a59e8b66"
+        "revision": "4b703e446be1d848521b0bdf3e85f36bb3aae1f9"
       },
       "homebrew/cask": {
-        "revision": "eac5dc2a4e1e6805061c7815502a3039cf658ab6"
+        "revision": "a740596a7e403c5cd69c96b42fff0b0f2a617619"
       },
       "homebrew/cask-fonts": {
-        "revision": "25e63dfd72905c8ce156a7af6940e2bd18662c13"
+        "revision": "79db65c83e5291253faec46751c05fcb4c614265"
       },
       "homebrew/core": {
-        "revision": "3daf0354936707b96233a55c07d87770d4bebb8c"
+        "revision": "516f0570ebc10d815ad09c64d31470322da5cd3c"
       },
       "homebrew/services": {
-        "revision": "1cdefcecd1aacbc3d5caf735a9db6bc04cd809a6"
+        "revision": "59b361bb330e48ae62f6e8175002cfa8dfeeecb8"
       }
     },
     "brew": {
@@ -322,7 +322,7 @@
         }
       },
       "obsidian": {
-        "version": "0.13.19",
+        "version": "0.13.23",
         "options": {
           "full_name": "obsidian"
         }
@@ -418,13 +418,13 @@
         }
       },
       "chromium": {
-        "version": "962796",
+        "version": "964845",
         "options": {
           "full_name": "chromium"
         }
       },
       "postman": {
-        "version": "9.10.1",
+        "version": "9.11.0",
         "options": {
           "full_name": "postman"
         }
@@ -440,6 +440,12 @@
         "options": {
           "full_name": "rancher"
         }
+      },
+      "devutils": {
+        "version": "1.13.0,108",
+        "options": {
+          "full_name": "devutils"
+        }
       }
     },
     "mas": {
@@ -449,7 +455,7 @@
       },
       "Bear": {
         "id": "1091189122",
-        "version": "1.9.3"
+        "version": "1.9.4"
       },
       "Cascadea": {
         "id": "1432182561",
@@ -481,7 +487,7 @@
       },
       "Vectornator": {
         "id": "1219074514",
-        "version": "4.5.2"
+        "version": "4.5.3"
       },
       "Infuse": {
         "id": "1136220934",
@@ -492,9 +498,9 @@
   "system": {
     "macos": {
       "monterey": {
-        "HOMEBREW_VERSION": "3.3.12",
+        "HOMEBREW_VERSION": "3.3.13",
         "HOMEBREW_PREFIX": "/opt/homebrew",
-        "Homebrew/homebrew-core": "3daf0354936707b96233a55c07d87770d4bebb8c",
+        "Homebrew/homebrew-core": "516f0570ebc10d815ad09c64d31470322da5cd3c",
         "CLT": "13.0.0.0.1.1627064638",
         "Xcode": "13.1",
         "macOS": "12.0.1"
