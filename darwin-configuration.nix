@@ -59,6 +59,7 @@ in
       # unstable.sbt-extras
 
       # JavaScript / TypeScript programming language
+      unstable.deno
       unstable.yarn
       unstable.nodejs-17_x
       unstable.esbuild
@@ -156,6 +157,7 @@ in
       pkgs.fd
       pkgs.fzf
       # pkgs.fff
+      pkgs.python39Packages.ftfy # Fix unicode, https://ftfy.readthedocs.io/en/latest/
       pkgs.hexyl
       pkgs.git-trim
       pkgs.htop
