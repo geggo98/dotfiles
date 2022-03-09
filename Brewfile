@@ -10,7 +10,7 @@ brew "mas"
 # brew "podman"
 cask "1password"
 cask "alfred"
-cask "anaconda" # /opt/homebrew/anaconda3
+# cask "anaconda" # /opt/homebrew/anaconda3
 cask "bartender"
 cask "brave-browser"
 cask "chromium"
@@ -35,6 +35,7 @@ cask "krita"
 cask "lens" # K8s IDE
 cask "lunar"
 cask "maestral" # Leightweight Dropbox client optimized for M1
+cask "miniconda" # Provieds binaries for "osx-arm64", installed under /opt/homebrew/bin/conda
 cask "mosaic"
 cask "multipass"
 cask "obsidian"
