@@ -153,7 +153,7 @@ in
       pkgs.nix-direnv
       pkgs.nix-direnv-flakes
       pkgs.exa
-      pkgs.et # https://eternalterminal.dev/
+      # pkgs.eternal-terminal # https://eternalterminal.dev/
       pkgs.fd
       pkgs.fzf
       # pkgs.fff
