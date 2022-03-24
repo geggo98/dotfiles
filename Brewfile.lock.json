@@ -2,19 +2,19 @@
   "entries": {
     "tap": {
       "homebrew/bundle": {
-        "revision": "4b703e446be1d848521b0bdf3e85f36bb3aae1f9"
+        "revision": "36e0f7a5df44761ccf1901877aaf4ed3a2ff8c06"
       },
       "homebrew/cask": {
-        "revision": "a740596a7e403c5cd69c96b42fff0b0f2a617619"
+        "revision": "27cd7eded41fb948855b802ae73ac437b4c3e1ac"
       },
       "homebrew/cask-fonts": {
-        "revision": "79db65c83e5291253faec46751c05fcb4c614265"
+        "revision": "21aa88605da3e0de4df9ad64389b5e1a22d8ee28"
       },
       "homebrew/core": {
-        "revision": "516f0570ebc10d815ad09c64d31470322da5cd3c"
+        "revision": "6decdd1dc78f2b429f341135df938a97adca688d"
       },
       "homebrew/services": {
-        "revision": "59b361bb330e48ae62f6e8175002cfa8dfeeecb8"
+        "revision": "2d164babbf0b98a4e7f400ea37a9dc6cf91a99b6"
       }
     },
     "brew": {
@@ -172,13 +172,13 @@
     },
     "cask": {
       "1password": {
-        "version": "7.9.2",
+        "version": "7.9.3",
         "options": {
           "full_name": "1password"
         }
       },
       "alfred": {
-        "version": "4.6.2,1280",
+        "version": "4.6.3,1285",
         "options": {
           "full_name": "alfred"
         }
@@ -190,13 +190,13 @@
         }
       },
       "bartender": {
-        "version": "4.1.21,41021",
+        "version": "4.1.40,41040",
         "options": {
           "full_name": "bartender"
         }
       },
       "brave-browser": {
-        "version": "1.34.81.0,134.81",
+        "version": "1.36.112.0,136.112",
         "options": {
           "full_name": "brave-browser"
         }
@@ -208,13 +208,13 @@
         }
       },
       "deezer": {
-        "version": "5.30.150",
+        "version": "5.30.180",
         "options": {
           "full_name": "deezer"
         }
       },
       "font-iosevka": {
-        "version": "11.2.7",
+        "version": "15.0.2",
         "options": {
           "full_name": "font-iosevka"
         }
@@ -238,13 +238,13 @@
         }
       },
       "google-chrome": {
-        "version": "97.0.4692.99",
+        "version": "99.0.4844.74",
         "options": {
           "full_name": "google-chrome"
         }
       },
       "gpg-suite-no-mail": {
-        "version": "2021.3",
+        "version": "2022.1",
         "options": {
           "full_name": "gpg-suite-no-mail"
         }
@@ -298,13 +298,13 @@
         }
       },
       "lunar": {
-        "version": "5.2.1",
+        "version": "5.4.3",
         "options": {
           "full_name": "lunar"
         }
       },
       "maestral": {
-        "version": "1.5.2",
+        "version": "1.5.3",
         "options": {
           "full_name": "maestral"
         }
@@ -322,7 +322,7 @@
         }
       },
       "obsidian": {
-        "version": "0.13.23",
+        "version": "0.13.31",
         "options": {
           "full_name": "obsidian"
         }
@@ -334,7 +334,7 @@
         }
       },
       "path-finder": {
-        "version": "10.2,2098",
+        "version": "2123",
         "options": {
           "full_name": "path-finder"
         }
@@ -346,19 +346,19 @@
         }
       },
       "raindropio": {
-        "version": "5.4.2",
+        "version": "5.4.19",
         "options": {
           "full_name": "raindropio"
         }
       },
       "slack": {
-        "version": "4.23.0",
+        "version": "4.24.1",
         "options": {
           "full_name": "slack"
         }
       },
       "soundsource": {
-        "version": "5.3.9",
+        "version": "5.3.11",
         "options": {
           "full_name": "soundsource"
         }
@@ -382,7 +382,7 @@
         }
       },
       "visual-studio-code": {
-        "version": "1.63.2",
+        "version": "1.65.2",
         "options": {
           "full_name": "visual-studio-code"
         }
@@ -394,7 +394,7 @@
         }
       },
       "zerotier-one": {
-        "version": "1.8.4",
+        "version": "1.8.6",
         "options": {
           "full_name": "zerotier-one"
         }
@@ -412,31 +412,31 @@
         }
       },
       "studio-3t": {
-        "version": "2021.10.1",
+        "version": "2022.2.0",
         "options": {
           "full_name": "studio-3t"
         }
       },
       "chromium": {
-        "version": "964845",
+        "version": "latest",
         "options": {
           "full_name": "chromium"
         }
       },
       "postman": {
-        "version": "9.11.0",
+        "version": "9.14.0",
         "options": {
           "full_name": "postman"
         }
       },
       "lens": {
-        "version": "5.3.4,20220120.1",
+        "version": "5.4.2,20220314.1",
         "options": {
           "full_name": "lens"
         }
       },
       "rancher": {
-        "version": "1.0.0",
+        "version": "1.1.1",
         "options": {
           "full_name": "rancher"
         }
@@ -445,6 +445,18 @@
         "version": "1.13.0,108",
         "options": {
           "full_name": "devutils"
+        }
+      },
+      "karabiner-elements": {
+        "version": "14.4.0",
+        "options": {
+          "full_name": "karabiner-elements"
+        }
+      },
+      "miniforge": {
+        "version": "4.11.0-4",
+        "options": {
+          "full_name": "miniforge"
         }
       }
     },
@@ -455,7 +467,7 @@
       },
       "Bear": {
         "id": "1091189122",
-        "version": "1.9.4"
+        "version": "1.9.6"
       },
       "Cascadea": {
         "id": "1432182561",
@@ -471,7 +483,7 @@
       },
       "Friendly Streaming": {
         "id": "553245401",
-        "version": "5.9.16"
+        "version": "5.9.18"
       },
       "iMazing HEIC Converter": {
         "id": "1292198261",
@@ -487,23 +499,27 @@
       },
       "Vectornator": {
         "id": "1219074514",
-        "version": "4.5.3"
+        "version": "4.6.2"
       },
       "Infuse": {
         "id": "1136220934",
-        "version": "7.3.3"
+        "version": "7.3.6"
+      },
+      "Tailscale": {
+        "id": "1475387142",
+        "version": "1.22.1"
       }
     }
   },
   "system": {
     "macos": {
       "monterey": {
-        "HOMEBREW_VERSION": "3.3.13",
+        "HOMEBREW_VERSION": "3.4.2",
         "HOMEBREW_PREFIX": "/opt/homebrew",
-        "Homebrew/homebrew-core": "516f0570ebc10d815ad09c64d31470322da5cd3c",
-        "CLT": "13.0.0.0.1.1627064638",
+        "Homebrew/homebrew-core": "6decdd1dc78f2b429f341135df938a97adca688d",
+        "CLT": "13.2.0.0.1.1638488800",
         "Xcode": "13.1",
-        "macOS": "12.0.1"
+        "macOS": "12.2.1"
       }
     }
   }

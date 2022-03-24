@@ -30,12 +30,13 @@ cask "iterm2"
 cask "istat-menus"
 cask "jdk-mission-control"
 cask "jetbrains-toolbox"
+cask "karabiner-elements"
 cask "keka"
 cask "krita"
 cask "lens" # K8s IDE
 cask "lunar"
 cask "maestral" # Leightweight Dropbox client optimized for M1
-cask "miniconda" # Provieds binaries for "osx-arm64", installed under /opt/homebrew/bin/conda
+cask "miniforge" # Provides Python binaries for "osx-arm64", installed under /opt/homebrew/bin/conda
 cask "mosaic"
 cask "multipass"
 cask "obsidian"
@@ -51,7 +52,7 @@ cask "studio-3t"
 cask "switchresx"
 cask "tripmode"
 cask "ubar"
-# cask "usb-overdrive" # Wait for app version, supporting Big Sur (and newer)
+cask "usb-overdrive"
 cask "visual-studio-code"
 cask "witch"
 cask "zerotier-one"
@@ -66,4 +67,5 @@ mas "Infuse", id: 1136220934
 mas "Ka-Block!", id: 1335413823
 mas "PhotoScape X", id: 929507092 
 mas "Vectornator", id: 1219074514
+mas "Tailscale", id: 1475387142
 
