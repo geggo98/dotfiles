@@ -149,6 +149,7 @@ in
       pkgs.curl
       pkgs.curlie
       pkgs.delta # git-delta: https://github.com/dandavison/delta
+      unstable.difftastic # difft: https://github.com/Wilfred/difftastic
       pkgs.direnv
       pkgs.nix-direnv
       pkgs.nix-direnv-flakes
