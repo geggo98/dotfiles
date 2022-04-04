@@ -1,7 +1,7 @@
 { config, pkgs, lib, ... }:
 let
   unstable = import <nixpkgs-unstable> { config = config.nixpkgs.config; }; # nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs-unstable
-  pkgsX86 = import <nixpkgs> { localSystem = "x86_64-darwin"; config = config.nixpkgs.config; overlays = config.nixpkgs.overlays; };
+  pkgs_x86 = import <nixpkgs> { localSystem = "x86_64-darwin"; config = config.nixpkgs.config; overlays = config.nixpkgs.overlays; };
 in
 {
   # List packages installed in system profile. To search by name, run:
@@ -52,11 +52,9 @@ in
       pkgs.clojure
       # pkgs.clojure-lsp
       pkgs.leiningen
-      # pkgs.babashka
-      pkgsX86.babashka
+      pkgs_x86.babashka
 
       # Scala programming language
-      # unstable.ammonite
       unstable.sbt-with-scala-native
       # unstable.sbt-extras
 
@@ -71,7 +69,7 @@ in
       pkgs.python27Full
       pkgs.python38Full
       pkgs.poetry
-      # unstable.python-language-server
+      # pkgs.python-language-server
 
       # Rust programming language
       pkgs.cargo
@@ -156,8 +154,9 @@ in
       pkgs.nix-direnv
       pkgs.nix-direnv-flakes
       pkgs.exa
-      # pkgs.eternal-terminal # https://eternalterminal.dev/
+      pkgs_x86.eternal-terminal # https://eternalterminal.dev/
       pkgs.fd
+      pkgs.findutils # xargs
       pkgs.fzf
       # pkgs.fff
       pkgs.python39Packages.ftfy # Fix unicode, https://ftfy.readthedocs.io/en/latest/
@@ -180,13 +179,12 @@ in
       pkgs.socat
       pkgs.tig
       # pkgs.tmux
-      # pkgs.tor
-      # pkgs.torsocks # https://www.jamieweb.net/blog/tor-is-a-great-sysadmin-tool/
+      pkgs_x86.tor
+      pkgs_x86.torsocks # https://www.jamieweb.net/blog/tor-is-a-great-sysadmin-tool/
       # pkgs.usbutils # lsusb
       pkgs.watch
       pkgs.wget
-      # pkgs.watchexec
-      # pkgs.xargs
+      pkgs_x86.watchexec
       pkgs.xz
       pkgs.yq
       pkgs.zstd
