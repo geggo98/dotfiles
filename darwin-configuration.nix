@@ -1,6 +1,7 @@
 { config, pkgs, lib, ... }:
 let
   unstable = import <nixpkgs-unstable> { config = config.nixpkgs.config; }; # nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs-unstable
+  pkgsX86 = import <nixpkgs> { localSystem = "x86_64-darwin"; config = config.nixpkgs.config; overlays = config.nixpkgs.overlays; };
 in
 {
   # List packages installed in system profile. To search by name, run:
@@ -52,6 +53,7 @@ in
       # pkgs.clojure-lsp
       pkgs.leiningen
       # pkgs.babashka
+      pkgsX86.babashka
 
       # Scala programming language
       # unstable.ammonite
@@ -332,6 +334,9 @@ in
   # $ sysctl -n hw.ncpu
   nix.maxJobs = 4;
   nix.buildCores = 4;
+  nix.extraOptions = ''
+    extra-platforms = x86_64-darwin aarch64-darwin
+  '';
 
   # Allow non-free packages
   nixpkgs.config.allowUnfree = true;
