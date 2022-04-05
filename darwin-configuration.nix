@@ -13,6 +13,7 @@ in
       pkgs.fishPlugins.foreign-env
       pkgs.fishPlugins.forgit
       # pkgs.fishPlugins.fzf-fish
+      pkgs_x86.nix-index # Provides nix-locate
       pkgs.starship
       pkgs.mcfly
       pkgs.gitAndTools.gitFull
@@ -197,7 +198,7 @@ in
 
   # Auto upgrade nix package and the daemon service.
   services.nix-daemon.enable = true;
-  # nix.package = pkgs.nix;
+  nix.package = pkgs.nixFlakes;
 
   # Enable lorri direnv rebuild: https://github.com/nix-community/lorri
   services.lorri.enable = true;
@@ -323,6 +324,7 @@ in
   };
 
   # programs.nix-index.enable = true;
+  # programs.command-not-found.enable = true;
 
   # Used for backwards compatibility, please read the changelog before changing.
   # $ darwin-rebuild changelog
@@ -334,6 +336,7 @@ in
   nix.buildCores = 4;
   nix.extraOptions = ''
     extra-platforms = x86_64-darwin aarch64-darwin
+    experimental-features = nix-command flakes
   '';
 
   # Allow non-free packages
