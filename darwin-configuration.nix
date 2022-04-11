@@ -167,6 +167,7 @@ in
       pkgs.httpie
       pkgs.hyperfine
       pkgs.jq
+      pkgs.lazygit
       pkgs.mosh # https://mosh.org/
       unstable.netcat
       pkgs.parallel
