@@ -198,7 +198,7 @@ in
 
   # Auto upgrade nix package and the daemon service.
   services.nix-daemon.enable = true;
-  nix.package = pkgs.nixFlakes;
+  nix.package = pkgs.nix; # or: pkgs.nixFlakes
 
   # Enable lorri direnv rebuild: https://github.com/nix-community/lorri
   services.lorri.enable = true;
