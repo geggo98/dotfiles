@@ -147,6 +147,7 @@ in
       pkgs.bar
       pkgs.broot
       pkgs.bottom # Was "ytop", now "btm": https://github.com/ClementTsang/bottom
+      pkgs.coreutils # Command line utils with more options than their macOS / BSD counterparts.
       pkgs.curl
       pkgs.curlie
       pkgs.delta # git-delta: https://github.com/dandavison/delta
@@ -168,6 +169,7 @@ in
       pkgs.hyperfine
       pkgs.jq
       pkgs.lazygit
+      pkgs.mktemp # This version supports the `--tmpdir` option
       pkgs.mosh # https://mosh.org/
       unstable.netcat
       pkgs.parallel
