@@ -147,6 +147,7 @@ in
       pkgs.bar
       pkgs.broot
       pkgs.bottom # Was "ytop", now "btm": https://github.com/ClementTsang/bottom
+      unstable.btop
       pkgs.coreutils # Command line utils with more options than their macOS / BSD counterparts.
       pkgs.curl
       pkgs.curlie
