@@ -2,19 +2,19 @@
   "entries": {
     "tap": {
       "homebrew/bundle": {
-        "revision": "36e0f7a5df44761ccf1901877aaf4ed3a2ff8c06"
+        "revision": "2c9486cbd821179f148d0702b89d827cb12e377e"
       },
       "homebrew/cask": {
-        "revision": "27cd7eded41fb948855b802ae73ac437b4c3e1ac"
+        "revision": "da1a813e96f90fdf17180784c87130b2aad969f3"
       },
       "homebrew/cask-fonts": {
-        "revision": "21aa88605da3e0de4df9ad64389b5e1a22d8ee28"
+        "revision": "57342d22acd82c85a2aa45db2b57210687f2c63c"
       },
       "homebrew/core": {
-        "revision": "6decdd1dc78f2b429f341135df938a97adca688d"
+        "revision": "ff0e91978c5f60b7205e6a94ab86584209c2c125"
       },
       "homebrew/services": {
-        "revision": "2d164babbf0b98a4e7f400ea37a9dc6cf91a99b6"
+        "revision": "b27900ebb8f0c07133b82130053e2b2910bad8bc"
       }
     },
     "brew": {
@@ -172,13 +172,13 @@
     },
     "cask": {
       "1password": {
-        "version": "7.9.3",
+        "version": "7.9.4",
         "options": {
           "full_name": "1password"
         }
       },
       "alfred": {
-        "version": "4.6.3,1285",
+        "version": "4.6.4,1294",
         "options": {
           "full_name": "alfred"
         }
@@ -196,25 +196,25 @@
         }
       },
       "brave-browser": {
-        "version": "1.36.112.0,136.112",
+        "version": "1.37.116.0,137.116",
         "options": {
           "full_name": "brave-browser"
         }
       },
       "dash": {
-        "version": "6.2.2,992",
+        "version": "6.2.3,994",
         "options": {
           "full_name": "dash"
         }
       },
       "deezer": {
-        "version": "5.30.180",
+        "version": "5.30.210",
         "options": {
           "full_name": "deezer"
         }
       },
       "font-iosevka": {
-        "version": "15.0.2",
+        "version": "15.2.0",
         "options": {
           "full_name": "font-iosevka"
         }
@@ -238,7 +238,7 @@
         }
       },
       "google-chrome": {
-        "version": "99.0.4844.74",
+        "version": "100.0.4896.127",
         "options": {
           "full_name": "google-chrome"
         }
@@ -274,37 +274,37 @@
         }
       },
       "istat-menus": {
-        "version": "6.61",
+        "version": "6.62",
         "options": {
           "full_name": "istat-menus"
         }
       },
       "jdk-mission-control": {
-        "version": "8.1.0,07",
+        "version": "8.2.0,06",
         "options": {
           "full_name": "jdk-mission-control"
         }
       },
       "jetbrains-toolbox": {
-        "version": "1.22,1.22.10970",
+        "version": "1.23,1.23.11731",
         "options": {
           "full_name": "jetbrains-toolbox"
         }
       },
       "keka": {
-        "version": "1.2.52",
+        "version": "1.2.53",
         "options": {
           "full_name": "keka"
         }
       },
       "lunar": {
-        "version": "5.4.3",
+        "version": "5.6.1",
         "options": {
           "full_name": "lunar"
         }
       },
       "maestral": {
-        "version": "1.5.3",
+        "version": "1.6.1",
         "options": {
           "full_name": "maestral"
         }
@@ -322,7 +322,7 @@
         }
       },
       "obsidian": {
-        "version": "0.13.31",
+        "version": "0.14.6",
         "options": {
           "full_name": "obsidian"
         }
@@ -346,13 +346,13 @@
         }
       },
       "raindropio": {
-        "version": "5.4.19",
+        "version": "5.5.1",
         "options": {
           "full_name": "raindropio"
         }
       },
       "slack": {
-        "version": "4.24.1",
+        "version": "4.25.0",
         "options": {
           "full_name": "slack"
         }
@@ -370,7 +370,7 @@
         }
       },
       "tripmode": {
-        "version": "3.1.2,1267",
+        "version": "3.1.3,1303",
         "options": {
           "full_name": "tripmode"
         }
@@ -382,7 +382,7 @@
         }
       },
       "visual-studio-code": {
-        "version": "1.65.2",
+        "version": "1.66.2",
         "options": {
           "full_name": "visual-studio-code"
         }
@@ -394,13 +394,13 @@
         }
       },
       "zerotier-one": {
-        "version": "1.8.6",
+        "version": "1.8.8",
         "options": {
           "full_name": "zerotier-one"
         }
       },
       "krita": {
-        "version": "5.0.2",
+        "version": "5.0.5",
         "options": {
           "full_name": "krita"
         }
@@ -424,25 +424,25 @@
         }
       },
       "postman": {
-        "version": "9.14.0",
+        "version": "9.15.2",
         "options": {
           "full_name": "postman"
         }
       },
       "lens": {
-        "version": "5.4.2,20220314.1",
+        "version": "5.4.5,20220405.1",
         "options": {
           "full_name": "lens"
         }
       },
       "rancher": {
-        "version": "1.1.1",
+        "version": "1.2.1",
         "options": {
           "full_name": "rancher"
         }
       },
       "devutils": {
-        "version": "1.13.0,108",
+        "version": "1.14.0,127",
         "options": {
           "full_name": "devutils"
         }
@@ -454,9 +454,21 @@
         }
       },
       "miniforge": {
-        "version": "4.11.0-4",
+        "version": "4.12.0-0",
         "options": {
           "full_name": "miniforge"
+        }
+      },
+      "daisydisk": {
+        "version": "4.21.4",
+        "options": {
+          "full_name": "daisydisk"
+        }
+      },
+      "usb-overdrive": {
+        "version": "5.1",
+        "options": {
+          "full_name": "usb-overdrive"
         }
       }
     },
@@ -479,11 +491,11 @@
       },
       "File Cabinet Pro": {
         "id": "1150565778",
-        "version": "8.4"
+        "version": "8.4.1"
       },
       "Friendly Streaming": {
         "id": "553245401",
-        "version": "5.9.18"
+        "version": "5.9.19"
       },
       "iMazing HEIC Converter": {
         "id": "1292198261",
@@ -499,11 +511,11 @@
       },
       "Vectornator": {
         "id": "1219074514",
-        "version": "4.6.2"
+        "version": "4.7.1"
       },
       "Infuse": {
         "id": "1136220934",
-        "version": "7.3.6"
+        "version": "7.3.10"
       },
       "Tailscale": {
         "id": "1475387142",
@@ -514,9 +526,9 @@
   "system": {
     "macos": {
       "monterey": {
-        "HOMEBREW_VERSION": "3.4.2",
+        "HOMEBREW_VERSION": "3.4.7",
         "HOMEBREW_PREFIX": "/opt/homebrew",
-        "Homebrew/homebrew-core": "6decdd1dc78f2b429f341135df938a97adca688d",
+        "Homebrew/homebrew-core": "ff0e91978c5f60b7205e6a94ab86584209c2c125",
         "CLT": "13.2.0.0.1.1638488800",
         "Xcode": "13.1",
         "macOS": "12.2.1"
