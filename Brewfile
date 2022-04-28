@@ -13,6 +13,7 @@ cask "alfred"
 # cask "anaconda" # /opt/homebrew/anaconda3
 cask "bartender"
 cask "brave-browser"
+# cask "Beardie" # Maintained for of BeardedSpice -> redirects media keys to the running media app and to the browser 
 cask "chromium"
 cask "dash" # Dash 6
 cask "daisydisk"
