@@ -2,19 +2,19 @@
   "entries": {
     "tap": {
       "homebrew/bundle": {
-        "revision": "2c9486cbd821179f148d0702b89d827cb12e377e"
+        "revision": "7664fe9b4f19181adf3aca634e3b66340a375b5d"
       },
       "homebrew/cask": {
-        "revision": "da1a813e96f90fdf17180784c87130b2aad969f3"
+        "revision": "9a3cc9949a8b51e55a0b1fdce10c34838a0aed28"
       },
       "homebrew/cask-fonts": {
-        "revision": "57342d22acd82c85a2aa45db2b57210687f2c63c"
+        "revision": "a9d28816a9001eded30c4caa6c6900a9eb400ec4"
       },
       "homebrew/core": {
-        "revision": "ff0e91978c5f60b7205e6a94ab86584209c2c125"
+        "revision": "42c7b6d3e3d3699c34f49b91f602def69ca1ac4d"
       },
       "homebrew/services": {
-        "revision": "b27900ebb8f0c07133b82130053e2b2910bad8bc"
+        "revision": "8cb99f5f0b8d5b2f23e981f0480fed492ea3715c"
       }
     },
     "brew": {
@@ -178,7 +178,7 @@
         }
       },
       "alfred": {
-        "version": "4.6.4,1294",
+        "version": "4.6.5,1299",
         "options": {
           "full_name": "alfred"
         }
@@ -196,7 +196,7 @@
         }
       },
       "brave-browser": {
-        "version": "1.37.116.0,137.116",
+        "version": "1.38.109.0,138.109",
         "options": {
           "full_name": "brave-browser"
         }
@@ -238,7 +238,7 @@
         }
       },
       "google-chrome": {
-        "version": "100.0.4896.127",
+        "version": "101.0.4951.41",
         "options": {
           "full_name": "google-chrome"
         }
@@ -286,7 +286,7 @@
         }
       },
       "jetbrains-toolbox": {
-        "version": "1.23,1.23.11731",
+        "version": "1.23,1.23.11849",
         "options": {
           "full_name": "jetbrains-toolbox"
         }
@@ -298,13 +298,13 @@
         }
       },
       "lunar": {
-        "version": "5.6.1",
+        "version": "5.6.3",
         "options": {
           "full_name": "lunar"
         }
       },
       "maestral": {
-        "version": "1.6.1",
+        "version": "1.6.2",
         "options": {
           "full_name": "maestral"
         }
@@ -334,7 +334,7 @@
         }
       },
       "path-finder": {
-        "version": "2123",
+        "version": "2131",
         "options": {
           "full_name": "path-finder"
         }
@@ -352,7 +352,7 @@
         }
       },
       "slack": {
-        "version": "4.25.0",
+        "version": "4.26.0",
         "options": {
           "full_name": "slack"
         }
@@ -394,13 +394,13 @@
         }
       },
       "zerotier-one": {
-        "version": "1.8.8",
+        "version": "1.8.9",
         "options": {
           "full_name": "zerotier-one"
         }
       },
       "krita": {
-        "version": "5.0.5",
+        "version": "5.0.6",
         "options": {
           "full_name": "krita"
         }
@@ -424,19 +424,19 @@
         }
       },
       "postman": {
-        "version": "9.15.2",
+        "version": "9.16.0",
         "options": {
           "full_name": "postman"
         }
       },
       "lens": {
-        "version": "5.4.5,20220405.1",
+        "version": "5.4.6,20220428.1",
         "options": {
           "full_name": "lens"
         }
       },
       "rancher": {
-        "version": "1.2.1",
+        "version": "1.3.0",
         "options": {
           "full_name": "rancher"
         }
@@ -460,7 +460,7 @@
         }
       },
       "daisydisk": {
-        "version": "4.21.4",
+        "version": "4.22",
         "options": {
           "full_name": "daisydisk"
         }
@@ -469,6 +469,12 @@
         "version": "5.1",
         "options": {
           "full_name": "usb-overdrive"
+        }
+      },
+      "zoom": {
+        "version": "5.10.4.6592",
+        "options": {
+          "full_name": "zoom"
         }
       }
     },
@@ -511,7 +517,7 @@
       },
       "Vectornator": {
         "id": "1219074514",
-        "version": "4.7.1"
+        "version": "4.7.2"
       },
       "Infuse": {
         "id": "1136220934",
@@ -519,16 +525,16 @@
       },
       "Tailscale": {
         "id": "1475387142",
-        "version": "1.22.1"
+        "version": "1.24.2"
       }
     }
   },
   "system": {
     "macos": {
       "monterey": {
-        "HOMEBREW_VERSION": "3.4.7",
+        "HOMEBREW_VERSION": "3.4.10",
         "HOMEBREW_PREFIX": "/opt/homebrew",
-        "Homebrew/homebrew-core": "ff0e91978c5f60b7205e6a94ab86584209c2c125",
+        "Homebrew/homebrew-core": "42c7b6d3e3d3699c34f49b91f602def69ca1ac4d",
         "CLT": "13.2.0.0.1.1638488800",
         "Xcode": "13.1",
         "macOS": "12.2.1"
