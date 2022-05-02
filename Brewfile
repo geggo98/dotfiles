@@ -58,6 +58,7 @@ cask "usb-overdrive"
 cask "visual-studio-code"
 cask "witch"
 cask "zerotier-one"
+cask "zoom"
 mas "Amphetamine", id: 937984704 
 mas "Bear", id: 1091189122
 mas "Cascadea", id: 1432182561
