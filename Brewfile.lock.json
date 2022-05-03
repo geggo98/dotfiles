@@ -5,13 +5,13 @@
         "revision": "7664fe9b4f19181adf3aca634e3b66340a375b5d"
       },
       "homebrew/cask": {
-        "revision": "9a3cc9949a8b51e55a0b1fdce10c34838a0aed28"
+        "revision": "051942255a8fa90ab1fc866798231ef3b1ebe078"
       },
       "homebrew/cask-fonts": {
         "revision": "a9d28816a9001eded30c4caa6c6900a9eb400ec4"
       },
       "homebrew/core": {
-        "revision": "42c7b6d3e3d3699c34f49b91f602def69ca1ac4d"
+        "revision": "cb530cebe93f9bff2ce546e3e5602cf5a1f5a2fd"
       },
       "homebrew/services": {
         "revision": "8cb99f5f0b8d5b2f23e981f0480fed492ea3715c"
@@ -476,6 +476,12 @@
         "options": {
           "full_name": "zoom"
         }
+      },
+      "losslesscut": {
+        "version": "3.44.0",
+        "options": {
+          "full_name": "losslesscut"
+        }
       }
     },
     "mas": {
@@ -534,7 +540,7 @@
       "monterey": {
         "HOMEBREW_VERSION": "3.4.10",
         "HOMEBREW_PREFIX": "/opt/homebrew",
-        "Homebrew/homebrew-core": "42c7b6d3e3d3699c34f49b91f602def69ca1ac4d",
+        "Homebrew/homebrew-core": "cb530cebe93f9bff2ce546e3e5602cf5a1f5a2fd",
         "CLT": "13.2.0.0.1.1638488800",
         "Xcode": "13.1",
         "macOS": "12.2.1"
