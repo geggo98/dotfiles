@@ -103,7 +103,7 @@ in
       unstable.docker-compose
       unstable.docker-compose_2 # Enable "docker compose" (without dash), so docker cli can directly use compose files.
       unstable.docker-credential-helpers # Safely store docker credentials: https://github.com/docker/docker-credential-helpers
-      nixpkgs.docker-ls # Query docker registries
+      pkgs.docker-ls # Query docker registries
       pkgs.minikube
       pkgs.nimbo # https://github.com/nimbo-sh/nimbo
       # pkgs.niv
@@ -171,7 +171,7 @@ in
       pkgs.hyperfine
       pkgs.jq
       pkgs.lazygit
-      pkgs.mani # Manage multiple Git repositories at the same time, https://github.com/alajmo/mani 
+      unstable.mani # Manage multiple Git repositories at the same time, https://github.com/alajmo/mani 
       pkgs.mktemp # This version supports the `--tmpdir` option
       pkgs.mosh # https://mosh.org/
       unstable.netcat
