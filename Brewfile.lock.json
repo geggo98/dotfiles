@@ -2,19 +2,19 @@
   "entries": {
     "tap": {
       "homebrew/bundle": {
-        "revision": "7664fe9b4f19181adf3aca634e3b66340a375b5d"
+        "revision": "5381c8228d295d95cad1deda93b6bafa3891cc1c"
       },
       "homebrew/cask": {
-        "revision": "051942255a8fa90ab1fc866798231ef3b1ebe078"
+        "revision": "abd4948978e956aafa91511c085c7e65e5a9b786"
       },
       "homebrew/cask-fonts": {
-        "revision": "a9d28816a9001eded30c4caa6c6900a9eb400ec4"
+        "revision": "d36498684ab87d33389110afd1d834e7c327e5ac"
       },
       "homebrew/core": {
-        "revision": "cb530cebe93f9bff2ce546e3e5602cf5a1f5a2fd"
+        "revision": "3fd9c486db62788190c71588694e3f4223491223"
       },
       "homebrew/services": {
-        "revision": "8cb99f5f0b8d5b2f23e981f0480fed492ea3715c"
+        "revision": "a5f53c6a6704d7b6b25423dee9d3c8dd90cce1e8"
       }
     },
     "brew": {
@@ -172,7 +172,7 @@
     },
     "cask": {
       "1password": {
-        "version": "7.9.4",
+        "version": "8.7.0",
         "options": {
           "full_name": "1password"
         }
@@ -190,13 +190,13 @@
         }
       },
       "bartender": {
-        "version": "4.1.40,41040",
+        "version": "4.1.48,41048",
         "options": {
           "full_name": "bartender"
         }
       },
       "brave-browser": {
-        "version": "1.38.109.0,138.109",
+        "version": "1.38.111.0,138.111",
         "options": {
           "full_name": "brave-browser"
         }
@@ -208,7 +208,7 @@
         }
       },
       "deezer": {
-        "version": "5.30.210",
+        "version": "5.30.220",
         "options": {
           "full_name": "deezer"
         }
@@ -238,7 +238,7 @@
         }
       },
       "google-chrome": {
-        "version": "101.0.4951.41",
+        "version": "101.0.4951.54",
         "options": {
           "full_name": "google-chrome"
         }
@@ -316,7 +316,7 @@
         }
       },
       "multipass": {
-        "version": "1.8.1",
+        "version": "1.9.0",
         "options": {
           "full_name": "multipass"
         }
@@ -352,7 +352,7 @@
         }
       },
       "slack": {
-        "version": "4.26.0",
+        "version": "4.26.1",
         "options": {
           "full_name": "slack"
         }
@@ -460,7 +460,7 @@
         }
       },
       "daisydisk": {
-        "version": "4.22",
+        "version": "4.22.1",
         "options": {
           "full_name": "daisydisk"
         }
@@ -532,6 +532,10 @@
       "Tailscale": {
         "id": "1475387142",
         "version": "1.24.2"
+      },
+      "DaVinci Resolve": {
+        "id": "571213070",
+        "version": "17.4.6"
       }
     }
   },
@@ -540,7 +544,7 @@
       "monterey": {
         "HOMEBREW_VERSION": "3.4.10",
         "HOMEBREW_PREFIX": "/opt/homebrew",
-        "Homebrew/homebrew-core": "cb530cebe93f9bff2ce546e3e5602cf5a1f5a2fd",
+        "Homebrew/homebrew-core": "3fd9c486db62788190c71588694e3f4223491223",
         "CLT": "13.2.0.0.1.1638488800",
         "Xcode": "13.1",
         "macOS": "12.2.1"
