@@ -33,6 +33,7 @@ cask "istat-menus"
 cask "jdk-mission-control"
 cask "jetbrains-toolbox"
 cask "karabiner-elements"
+# cask "kdenlive" # Video editor, https://kdenlive.org/en/ 
 cask "keka"
 cask "krita"
 cask "lens" # K8s IDE
@@ -63,6 +64,7 @@ cask "zoom"
 mas "Amphetamine", id: 937984704 
 mas "Bear", id: 1091189122
 mas "Cascadea", id: 1432182561
+mas "DaVinci Resolve", id: 571213070
 mas "Dynamo", id: 1445910651
 mas "File Cabinet Pro", id: 1150565778
 mas "Friendly Streaming", id: 553245401 
@@ -72,4 +74,3 @@ mas "Ka-Block!", id: 1335413823
 mas "PhotoScape X", id: 929507092 
 mas "Vectornator", id: 1219074514
 mas "Tailscale", id: 1475387142
-
