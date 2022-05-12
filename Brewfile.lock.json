@@ -5,13 +5,13 @@
         "revision": "5381c8228d295d95cad1deda93b6bafa3891cc1c"
       },
       "homebrew/cask": {
-        "revision": "abd4948978e956aafa91511c085c7e65e5a9b786"
+        "revision": "e29de54aff51bfa78f59acea042bbc2a3f26ec5c"
       },
       "homebrew/cask-fonts": {
-        "revision": "d36498684ab87d33389110afd1d834e7c327e5ac"
+        "revision": "2298f7061cb3730c9f5d754b6e0c6bdcf891688c"
       },
       "homebrew/core": {
-        "revision": "3fd9c486db62788190c71588694e3f4223491223"
+        "revision": "6dc55f72ef149dea0fd6725f36202528614f6860"
       },
       "homebrew/services": {
         "revision": "a5f53c6a6704d7b6b25423dee9d3c8dd90cce1e8"
@@ -190,7 +190,7 @@
         }
       },
       "bartender": {
-        "version": "4.1.48,41048",
+        "version": "4.1.49,41049",
         "options": {
           "full_name": "bartender"
         }
@@ -214,7 +214,7 @@
         }
       },
       "font-iosevka": {
-        "version": "15.2.0",
+        "version": "15.3.0",
         "options": {
           "full_name": "font-iosevka"
         }
@@ -286,7 +286,7 @@
         }
       },
       "jetbrains-toolbox": {
-        "version": "1.23,1.23.11849",
+        "version": "1.24,1.24.11947",
         "options": {
           "full_name": "jetbrains-toolbox"
         }
@@ -298,7 +298,7 @@
         }
       },
       "lunar": {
-        "version": "5.6.3",
+        "version": "5.6.4",
         "options": {
           "full_name": "lunar"
         }
@@ -382,7 +382,7 @@
         }
       },
       "visual-studio-code": {
-        "version": "1.66.2",
+        "version": "1.67.0",
         "options": {
           "full_name": "visual-studio-code"
         }
@@ -482,6 +482,12 @@
         "options": {
           "full_name": "losslesscut"
         }
+      },
+      "fig": {
+        "version": "1.0.57,440",
+        "options": {
+          "full_name": "fig"
+        }
       }
     },
     "mas": {
@@ -544,7 +550,7 @@
       "monterey": {
         "HOMEBREW_VERSION": "3.4.10",
         "HOMEBREW_PREFIX": "/opt/homebrew",
-        "Homebrew/homebrew-core": "3fd9c486db62788190c71588694e3f4223491223",
+        "Homebrew/homebrew-core": "6dc55f72ef149dea0fd6725f36202528614f6860",
         "CLT": "13.2.0.0.1.1638488800",
         "Xcode": "13.1",
         "macOS": "12.2.1"
