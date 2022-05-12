@@ -19,6 +19,7 @@ cask "dash" # Dash 6
 cask "daisydisk"
 cask "deezer"
 cask "devutils" # https://devutils.app/
+cask "fig" # Auto completion, https://github.com/withfig/autocomplete
 cask "font-iosevka"
 cask "font-iosevka-nerd-font"
 cask "font-victor-mono"
