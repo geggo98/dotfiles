@@ -124,7 +124,7 @@ in
       pkgs.miller
       pkgs.q-text-as-data
       pkgs.sc-im
-      # pkgs.visidata
+      unstable.visidata
       pkgs.xsv
 
       # Video donwload
