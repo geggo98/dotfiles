@@ -150,6 +150,7 @@ in
       pkgs.broot
       pkgs.bottom # Was "ytop", now "btm": https://github.com/ClementTsang/bottom
       unstable.btop
+      unstable.comby # Structural search & replace for source code, https://comby.dev/docs/overview
       pkgs.coreutils # Command line utils with more options than their macOS / BSD counterparts.
       pkgs.curl
       pkgs.curlie
