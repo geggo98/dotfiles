@@ -3,6 +3,7 @@ let
   unstable = import <nixpkgs-unstable> { config = config.nixpkgs.config; }; # nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs-unstable
   pkgs_x86 = import <nixpkgs> { localSystem = "x86_64-darwin"; config = config.nixpkgs.config; overlays = config.nixpkgs.overlays; };
   unstable_x86 = import <nixpkgs-unstable> { localSystem = "x86_64-darwin"; config = config.nixpkgs.config; overlays = config.nixpkgs.overlays; }; # nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs-unstable
+  node = import ./node/default.nix { nodejs = pkgs.nodejs-14_x; }; # Update with: nix run nixpkgs-unstable.node2nix --command "node2nix -i ./node-packages.json -o node-packages.nix"
 in
 {
   # List packages installed in system profile. To search by name, run:
@@ -198,6 +199,11 @@ in
       pkgs.xz
       pkgs.yq
       pkgs.zstd
+
+      # Node packages
+      node.remark-cli # LSP for Markdown
+      node.ts-node
+      node.typescript
     ];
 
   # Use a custom configuration.nix location.
