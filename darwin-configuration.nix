@@ -105,6 +105,7 @@ in
       unstable.docker-compose_2 # Enable "docker compose" (without dash), so docker cli can directly use compose files.
       unstable.docker-credential-helpers # Safely store docker credentials: https://github.com/docker/docker-credential-helpers
       pkgs.docker-ls # Query docker registries
+      pkgs.pssh # Parallel SSH
       pkgs.minikube
       pkgs.nimbo # https://github.com/nimbo-sh/nimbo
       # pkgs.niv
