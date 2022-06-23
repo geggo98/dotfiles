@@ -193,7 +193,8 @@ in
       pkgs_x86.tor
       pkgs_x86.torsocks # https://www.jamieweb.net/blog/tor-is-a-great-sysadmin-tool/
       # pkgs.usbutils # lsusb
-      pkgs.watch
+      pkgs.viddy # A modern watch alternative
+      pkgs.watch # Conider using "viddy" instead
       pkgs.wget
       pkgs_x86.watchexec
       pkgs.xz
