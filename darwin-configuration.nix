@@ -197,6 +197,7 @@ in
       pkgs.watch # Conider using "viddy" instead
       pkgs.wget
       pkgs_x86.watchexec
+      unstable.xxh # ssh with better shell supporton the remote site 
       pkgs.xz
       pkgs.yq
       pkgs.zstd
