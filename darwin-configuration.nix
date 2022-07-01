@@ -173,6 +173,7 @@ in
       pkgs.htop
       pkgs.httpie
       pkgs.hyperfine
+      unstable.jc # Converts everything to json
       pkgs.jq
       pkgs.lazygit
       unstable.mani # Manage multiple Git repositories at the same time, https://github.com/alajmo/mani 
