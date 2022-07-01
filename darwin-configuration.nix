@@ -4,6 +4,11 @@ let
   pkgs_x86 = import <nixpkgs> { localSystem = "x86_64-darwin"; config = config.nixpkgs.config; overlays = config.nixpkgs.overlays; };
   unstable_x86 = import <nixpkgs-unstable> { localSystem = "x86_64-darwin"; config = config.nixpkgs.config; overlays = config.nixpkgs.overlays; }; # nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs-unstable
   node = import ./node/default.nix { nodejs = pkgs.nodejs-14_x; }; # Update with: nix run nixpkgs-unstable.node2nix --command "node2nix -i ./node-packages.json -o node-packages.nix"
+  moreutilsWithoutParallel = pkgs.moreutils.overrideAttrs(oldAttrs: rec {
+        preBuild = oldAttrs.preBuild + ''
+           substituteInPlace Makefile --replace " parallel " " " --replace " parallel.1 " " "
+        '';
+      });
 in
 {
   # List packages installed in system profile. To search by name, run:
@@ -178,6 +183,7 @@ in
       pkgs.lazygit
       unstable.mani # Manage multiple Git repositories at the same time, https://github.com/alajmo/mani 
       pkgs.mktemp # This version supports the `--tmpdir` option
+      moreutilsWithoutParallel
       pkgs.mosh # https://mosh.org/
       unstable.netcat
       pkgs.parallel
