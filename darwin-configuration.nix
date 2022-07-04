@@ -69,7 +69,7 @@ in
       # JavaScript / TypeScript programming language
       pkgs.deno
       unstable.yarn
-      unstable.nodejs-17_x
+      unstable.nodejs-18_x
       unstable.esbuild
       unstable.k6 # Load testing: https://github.com/grafana/k6
 
