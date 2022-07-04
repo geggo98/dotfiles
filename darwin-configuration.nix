@@ -67,7 +67,7 @@ in
       # unstable.sbt-extras
 
       # JavaScript / TypeScript programming language
-      unstable.deno
+      pkgs.deno
       unstable.yarn
       unstable.nodejs-17_x
       unstable.esbuild
@@ -94,7 +94,7 @@ in
       pkgs.go-tools
 
       # Haskell programming language
-      unstable.stack
+      pkgs.stack
       pkgs.ghc
 
 
@@ -104,11 +104,10 @@ in
       # unstable.maestral-gui
 
       # DevOps & Kubernetes
-      unstable.colima # Docker on Linux on Max: Replaces Docker Desktop
+      # unstable.colima # Docker on Linux on Max: Replaces Docker Desktop
       unstable.docker-buildx
       unstable.docker-client
       unstable.docker-compose
-      unstable.docker-compose_2 # Enable "docker compose" (without dash), so docker cli can directly use compose files.
       unstable.docker-credential-helpers # Safely store docker credentials: https://github.com/docker/docker-credential-helpers
       pkgs.docker-ls # Query docker registries
       pkgs.pssh # Parallel SSH
@@ -132,13 +131,13 @@ in
       pkgs.miller
       pkgs.q-text-as-data
       pkgs.sc-im
-      unstable.visidata
+      # unstable.visidata
       pkgs.xsv
 
       # Video donwload
       unstable.youtube-dl
-      unstable.yt-dlp
-      unstable.aria2
+      unstable_x86.yt-dlp
+      unstable_x86.aria2
 
       # Password management
       # pkgs._1password
