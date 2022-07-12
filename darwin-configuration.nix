@@ -28,20 +28,19 @@ in
       pkgs.any-nix-shell
 
       # Vim & NeoVim
-      # pkgs.vim
       pkgs.vimpager
-      unstable.neovim
-      # unstable.nvimpager
-      unstable.rnix-lsp
-      # unstable.treesitter
-      unstable.tabnine
-      unstable.lua
+      pkgs.neovim
+      # pkgs.nvimpager
+      pkgs.rnix-lsp
+      # pkgs.treesitter
+      pkgs.tabnine
+      pkgs.lua
 
 
       pkgs.postgresql_13
 
       # Backups
-      # unstable.maestral
+      # pkgs.maestral
       # pkgs.mackup
       # pkgs.git-annex-remote-dbx
 
@@ -51,10 +50,10 @@ in
       pkgs.nimlsp
 
       # Java programming language
-      unstable.java-language-server
-      unstable.openjdk17
-      unstable.gradle_7
-      # unstable.graalvm17-ce
+      pkgs.java-language-server
+      pkgs.openjdk17
+      pkgs.gradle_7
+      # pkgs.graalvm17-ce
 
       # Clojure programming language
       pkgs.clojure
@@ -63,15 +62,15 @@ in
       pkgs_x86.babashka
 
       # Scala programming language
-      unstable.sbt-with-scala-native
-      # unstable.sbt-extras
+      pkgs.sbt-with-scala-native
+      # pkgs.sbt-extras
 
       # JavaScript / TypeScript programming language
       pkgs.deno
-      unstable.yarn
-      unstable.nodejs-18_x
-      unstable.esbuild
-      unstable.k6 # Load testing: https://github.com/grafana/k6
+      pkgs.yarn
+      pkgs.nodejs-18_x
+      pkgs.esbuild
+      pkgs.k6 # Load testing: https://github.com/grafana/k6
 
       # Python programming language
       pkgs.python27Full
@@ -80,12 +79,12 @@ in
       # pkgs.python-language-server
 
       # Rust programming language
-      pkgs.cargo
-      pkgs.rls
+      # pkgs.cargo # Part of rustup
+      # pkgs.rls # Part of rustup
       pkgs.rust-script
-      pkgs.rustc
-      pkgs.rustfmt
-      # pkgs.rustup
+      # pkgs.rustc # Part of rustup
+      # pkgs.rustfmt # Part of rustup
+      pkgs.rustup
 
       # Go programming language
       pkgs.go_1_17
@@ -99,16 +98,16 @@ in
 
 
       # UI Tools
-      # unstable.handbrake
-      # unstable.iterm2
-      # unstable.maestral-gui
+      # pkgs.handbrake
+      # pkgs.iterm2
+      # pkgs.maestral-gui
 
       # DevOps & Kubernetes
-      # unstable.colima # Docker on Linux on Max: Replaces Docker Desktop
-      unstable.docker-buildx
-      unstable.docker-client
-      unstable.docker-compose
-      unstable.docker-credential-helpers # Safely store docker credentials: https://github.com/docker/docker-credential-helpers
+      # pkgs.colima # Docker on Linux on Max: Replaces Docker Desktop
+      pkgs.docker-buildx
+      pkgs.docker-client
+      pkgs.docker-compose
+      pkgs.docker-credential-helpers # Safely store docker credentials: https://github.com/docker/docker-credential-helpers
       pkgs.docker-ls # Query docker registries
       pkgs.pssh # Parallel SSH
       pkgs.minikube
@@ -131,13 +130,13 @@ in
       pkgs.miller
       pkgs.q-text-as-data
       pkgs.sc-im
-      # unstable.visidata
+      pkgs.visidata
       pkgs.xsv
 
       # Video donwload
-      unstable.youtube-dl
-      unstable_x86.yt-dlp
-      unstable_x86.aria2
+      pkgs.youtube-dl
+      pkgs.yt-dlp
+      pkgs.aria2
 
       # Password management
       # pkgs._1password
@@ -155,18 +154,18 @@ in
       pkgs.bar
       pkgs.broot
       pkgs.bottom # Was "ytop", now "btm": https://github.com/ClementTsang/bottom
-      unstable.btop
-      unstable.comby # Structural search & replace for source code, https://comby.dev/docs/overview
+      pkgs.btop
+      pkgs.comby # Structural search & replace for source code, https://comby.dev/docs/overview
       pkgs.coreutils # Command line utils with more options than their macOS / BSD counterparts.
       pkgs.curl
       pkgs.curlie
       pkgs.delta # git-delta: https://github.com/dandavison/delta
-      unstable.difftastic # difft: https://github.com/Wilfred/difftastic
+      pkgs.difftastic # difft: https://github.com/Wilfred/difftastic
       pkgs.direnv
       pkgs.nix-direnv
       pkgs.nix-direnv-flakes
       pkgs.exa
-      pkgs_x86.eternal-terminal # https://eternalterminal.dev/
+      # pkgs.eternal-terminal # https://eternalterminal.dev/
       pkgs.fd
       pkgs.findutils # xargs
       pkgs.fzf
@@ -175,16 +174,16 @@ in
       pkgs.hexyl
       pkgs.git-trim
       pkgs.htop
-      pkgs.httpie
+      pkgs_x86.httpie
       pkgs.hyperfine
-      unstable.jc # Converts everything to json
+      pkgs.jc # Converts everything to json
       pkgs.jq
       pkgs.lazygit
-      unstable.mani # Manage multiple Git repositories at the same time, https://github.com/alajmo/mani 
+      pkgs.mani # Manage multiple Git repositories at the same time, https://github.com/alajmo/mani 
       pkgs.mktemp # This version supports the `--tmpdir` option
       moreutilsWithoutParallel
       pkgs.mosh # https://mosh.org/
-      unstable.netcat
+      pkgs.netcat
       pkgs.parallel
       pkgs.python39Packages.ftfy # Fix broken unicode encoding
       pkgs.pv
@@ -203,9 +202,9 @@ in
       pkgs.watch # Conider using "viddy" instead
       pkgs.wget
       pkgs_x86.watchexec
-      unstable.xxh # ssh with better shell supporton the remote site 
+      pkgs.xxh # ssh with better shell supporton the remote site 
       pkgs.xz
-      pkgs.yq
+      pkgs_x86.yq
       pkgs.zstd
 
       # Node packages
@@ -221,7 +220,7 @@ in
 
   # Auto upgrade nix package and the daemon service.
   services.nix-daemon.enable = true;
-  nix.package = pkgs.nix; # or: pkgs.nixFlakes
+  nix.package = pkgs.nix; # or: pkgs.nixFlakes, pkgs.nixUnstable
 
   # Enable lorri direnv rebuild: https://github.com/nix-community/lorri
   services.lorri.enable = true;
