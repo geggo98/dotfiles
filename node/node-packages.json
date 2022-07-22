@@ -1,4 +1,5 @@
 [
+  "qnx",
   "remark-cli",
   "ts-node",
   "typescript"
