@@ -3,7 +3,7 @@ let
   unstable = import <nixpkgs-unstable> { config = config.nixpkgs.config; }; # nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs-unstable
   pkgs_x86 = import <nixpkgs> { localSystem = "x86_64-darwin"; config = config.nixpkgs.config; overlays = config.nixpkgs.overlays; };
   unstable_x86 = import <nixpkgs-unstable> { localSystem = "x86_64-darwin"; config = config.nixpkgs.config; overlays = config.nixpkgs.overlays; }; # nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs-unstable
-  node = import ./node/default.nix { nodejs = pkgs.nodejs-14_x; }; # Update with: nix shell nixpkgs#node2nix --command node2nix -i ./node/node-packages.json -o ./node/node-packages.nix
+  node = import ./node/default.nix { nodejs = pkgs.nodejs-14_x; }; # Update with: nix shell nixpkgs#node2nix --command node2nix -i ./node-packages.json -o node-packages.nix
   moreutilsWithoutParallel = pkgs.moreutils.overrideAttrs(oldAttrs: rec {
         preBuild = oldAttrs.preBuild + ''
            substituteInPlace Makefile --replace " parallel " " " --replace " parallel.1 " " "
