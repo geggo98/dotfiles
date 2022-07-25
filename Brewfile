@@ -43,6 +43,7 @@ cask "losslesscut" # Simple video editor: https://github.com/mifi/lossless-cut
 cask "lunar"
 cask "maestral" # Leightweight Dropbox client optimized for M1
 cask "miniforge" # Provides Python binaries for "osx-arm64", installed under /opt/homebrew/bin/conda
+cask "monodraw"
 cask "mosaic"
 cask "multipass"
 cask "obsidian"

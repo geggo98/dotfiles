@@ -2,19 +2,19 @@
   "entries": {
     "tap": {
       "homebrew/bundle": {
-        "revision": "d8d445f0464d02b02c52d5f04c5856b1ede0ae1b"
+        "revision": "8ec900f210c925f4b4731b0f359b0808ca132285"
       },
       "homebrew/cask": {
-        "revision": "11baf7babb01b6fb38d5757c2bc4c86106e64479"
+        "revision": "a9b92e2c41b9ba0735014a2b8d16e4cba800f3ff"
       },
       "homebrew/cask-fonts": {
-        "revision": "85239d934569154a2e4c754125b9727d17804d01"
+        "revision": "cc1f50ee418658a364bd54c5d6dce3cecfa05f1e"
       },
       "homebrew/core": {
-        "revision": "12d9fe1a6128f496ce49664e9614e38893da25b0"
+        "revision": "b2ba529053ad1b218e11d10825d6ec23d37b2b44"
       },
       "homebrew/services": {
-        "revision": "8ceb3a4b695c9d0e0c761a3f52502e6c7e78a905"
+        "revision": "b167b4279698e0bbf1a00a81bd9c209cbf9bab69"
       }
     },
     "brew": {
@@ -172,7 +172,7 @@
     },
     "cask": {
       "1password": {
-        "version": "8.7.3",
+        "version": "8.8.0",
         "options": {
           "full_name": "1password"
         }
@@ -196,7 +196,7 @@
         }
       },
       "brave-browser": {
-        "version": "1.41.96.0,141.96",
+        "version": "1.41.100.0,141.100",
         "options": {
           "full_name": "brave-browser"
         }
@@ -214,7 +214,7 @@
         }
       },
       "font-iosevka": {
-        "version": "15.6.0",
+        "version": "15.6.1",
         "options": {
           "full_name": "font-iosevka"
         }
@@ -238,7 +238,7 @@
         }
       },
       "google-chrome": {
-        "version": "103.0.5060.114",
+        "version": "103.0.5060.134",
         "options": {
           "full_name": "google-chrome"
         }
@@ -280,13 +280,13 @@
         }
       },
       "jdk-mission-control": {
-        "version": "8.2.0,06",
+        "version": "8.2.1,03",
         "options": {
           "full_name": "jdk-mission-control"
         }
       },
       "jetbrains-toolbox": {
-        "version": "1.25,1.25.12424",
+        "version": "1.25,1.25.12569",
         "options": {
           "full_name": "jetbrains-toolbox"
         }
@@ -298,7 +298,7 @@
         }
       },
       "lunar": {
-        "version": "5.7.2",
+        "version": "5.7.3",
         "options": {
           "full_name": "lunar"
         }
@@ -316,13 +316,13 @@
         }
       },
       "multipass": {
-        "version": "1.10.0",
+        "version": "1.10.1",
         "options": {
           "full_name": "multipass"
         }
       },
       "obsidian": {
-        "version": "0.15.6",
+        "version": "0.15.8",
         "options": {
           "full_name": "obsidian"
         }
@@ -364,7 +364,7 @@
         }
       },
       "switchresx": {
-        "version": "4.12",
+        "version": "4.12.1",
         "options": {
           "full_name": "switchresx"
         }
@@ -412,7 +412,7 @@
         }
       },
       "studio-3t": {
-        "version": "2022.6.1",
+        "version": "2022.7.0",
         "options": {
           "full_name": "studio-3t"
         }
@@ -424,7 +424,7 @@
         }
       },
       "postman": {
-        "version": "9.22.2",
+        "version": "9.25.0",
         "options": {
           "full_name": "postman"
         }
@@ -472,13 +472,13 @@
         }
       },
       "zoom": {
-        "version": "5.11.1.8356",
+        "version": "5.11.3.9065",
         "options": {
           "full_name": "zoom"
         }
       },
       "losslesscut": {
-        "version": "3.45.0",
+        "version": "3.46.2",
         "options": {
           "full_name": "losslesscut"
         }
@@ -493,6 +493,12 @@
         "version": "102.0.1",
         "options": {
           "full_name": "firefox"
+        }
+      },
+      "monodraw": {
+        "version": "1.6.1,111",
+        "options": {
+          "full_name": "monodraw"
         }
       }
     },
@@ -519,7 +525,7 @@
       },
       "Friendly Streaming": {
         "id": "553245401",
-        "version": "5.9.21"
+        "version": "5.9.22"
       },
       "iMazing HEIC Converter": null,
       "Ka-Block!": {
@@ -540,7 +546,7 @@
       },
       "Tailscale": {
         "id": "1475387142",
-        "version": "1.26.2"
+        "version": "1.28.0"
       },
       "DaVinci Resolve": {
         "id": "571213070",
@@ -551,11 +557,11 @@
   "system": {
     "macos": {
       "monterey": {
-        "HOMEBREW_VERSION": "3.5.5",
+        "HOMEBREW_VERSION": "3.5.6",
         "HOMEBREW_PREFIX": "/opt/homebrew",
-        "Homebrew/homebrew-core": "12d9fe1a6128f496ce49664e9614e38893da25b0",
-        "CLT": "13.0.0.0.1.1627064638",
-        "Xcode": "13.1",
+        "Homebrew/homebrew-core": "b2ba529053ad1b218e11d10825d6ec23d37b2b44",
+        "CLT": "13.4.0.0.1.1651278267",
+        "Xcode": "13.4.1",
         "macOS": "12.4"
       }
     }
