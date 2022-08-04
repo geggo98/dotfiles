@@ -172,6 +172,8 @@ in
       # pkgs.fff
       pkgs.python39Packages.ftfy # Fix unicode, https://ftfy.readthedocs.io/en/latest/
       pkgs.hexyl
+      pkgs.git-branchless
+      pkgs.git-machete
       pkgs.git-trim
       pkgs.htop
       pkgs_x86.httpie
@@ -359,6 +361,7 @@ in
   nix.extraOptions = ''
     extra-platforms = x86_64-darwin aarch64-darwin
     experimental-features = nix-command flakes
+    auto-optimise-store = true
   '';
 
   # Allow non-free packages
