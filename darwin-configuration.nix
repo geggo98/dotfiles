@@ -178,6 +178,7 @@ in
       pkgs.htop
       pkgs_x86.httpie
       pkgs.hyperfine
+      pkgs.imagemagickBig
       pkgs.jc # Converts everything to json
       pkgs.jq
       pkgs.lazygit
