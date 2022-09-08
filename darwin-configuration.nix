@@ -122,6 +122,7 @@ in
       pkgs.lorri
       # pkgs.helm
       pkgs.mkcert
+      pkgs.rancher
       pkgs.step-ca
       pkgs.step-cli # https://github.com/smallstep/cli
       pkgs.terraform
