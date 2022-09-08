@@ -75,5 +75,7 @@ mas "iMazing HEIC Converter", id: 1292198261
 mas "Infuse", id: 1136220934
 mas "Ka-Block!", id: 1335413823
 mas "PhotoScape X", id: 929507092 
+mas "rcmd", id: 1596283165 
 mas "Vectornator", id: 1219074514
+mas "Tabs Switcher", id: 1406718335 # Switches browser tabs
 mas "Tailscale", id: 1475387142
