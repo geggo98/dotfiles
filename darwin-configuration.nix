@@ -248,7 +248,10 @@ in
         end
       end
 
-      if command -v {$HOME}/.local/bin/lvim > /dev/null
+      if test -f ~/.config/nvim/init.lua > /dev/null
+        set -x VISUAL nvim
+        set -x GIT_EDITOR nvim
+      else if command -v {$HOME}/.local/bin/lvim > /dev/null
         alias lvim {$HOME}/.local/bin/lvim
         set -x VISUAL /{$HOME}/.local/bin/lvim
         set -x GIT_EDITOR /{$HOME}/.local/bin/lvim
