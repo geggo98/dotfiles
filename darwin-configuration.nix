@@ -126,6 +126,7 @@ in
       pkgs.step-ca
       pkgs.step-cli # https://github.com/smallstep/cli
       pkgs.terraform
+      pkgs.telepresence2
 
       # CSV processing
       pkgs.miller
@@ -213,6 +214,7 @@ in
 
       # Node packages
       node.remark-cli # LSP for Markdown
+      node.qnm # Inspect npm / node_modules packages, show dependency tree
       node.ts-node
       node.typescript
     ];
