@@ -45,9 +45,9 @@ in
       # pkgs.git-annex-remote-dbx
 
       # Nim programming language
-      pkgs.nim
+      # pkgs.nim
       # pkgs.nrpl
-      pkgs.nimlsp
+      # pkgs.nimlsp
 
       # Java programming language
       pkgs.java-language-server
@@ -363,8 +363,8 @@ in
 
   # You should generally set this to the total number of logical cores in your system.
   # $ sysctl -n hw.ncpu
-  nix.maxJobs = 4;
-  nix.buildCores = 4;
+  nix.settings.max-jobs = 4;
+  nix.settings.cores = 4;
   nix.extraOptions = ''
     extra-platforms = x86_64-darwin aarch64-darwin
     experimental-features = nix-command flakes
