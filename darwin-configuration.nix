@@ -30,7 +30,7 @@ in
 
       # Vim & NeoVim
       pkgs.vimpager
-      pkgs.neovim
+      unstable.neovim
       # pkgs.nvimpager
       pkgs.rnix-lsp
       # pkgs.treesitter
