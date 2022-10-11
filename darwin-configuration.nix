@@ -117,6 +117,7 @@ in
       # pkgs.nixopsUnstable
       pkgs.awscli
       pkgs.cloudflared # https://developers.cloudflare.com/cloudflare-one/connections/connect-apps/run-tunnel/trycloudflare (cloudflared tunnel --url http://localhost:7000)
+      # unstable.copilot-cli # aws-copilot: https://aws.github.io/copilot-cli/docs/overview/
       pkgs.k9s
       pkgs.kubectl
       pkgs.kubetail
