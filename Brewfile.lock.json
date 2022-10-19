@@ -2,19 +2,19 @@
   "entries": {
     "tap": {
       "homebrew/bundle": {
-        "revision": "8ec900f210c925f4b4731b0f359b0808ca132285"
+        "revision": "cf8a86177665825a7f30780e8fe1af333a0527c6"
       },
       "homebrew/cask": {
-        "revision": "a9b92e2c41b9ba0735014a2b8d16e4cba800f3ff"
+        "revision": "3821440652f7e21c8d2e9477f2741ccb8804f7da"
       },
       "homebrew/cask-fonts": {
-        "revision": "cc1f50ee418658a364bd54c5d6dce3cecfa05f1e"
+        "revision": "40ffcb958daebbf7bcd98bc4b0e791e3d65b4856"
       },
       "homebrew/core": {
-        "revision": "b2ba529053ad1b218e11d10825d6ec23d37b2b44"
+        "revision": "105d1770134939c95012f5a50b62ec5b5d979b3c"
       },
       "homebrew/services": {
-        "revision": "b167b4279698e0bbf1a00a81bd9c209cbf9bab69"
+        "revision": "4fe8e3c38c9a38f1d76c9d741f32bdfe8c59e340"
       }
     },
     "brew": {
@@ -58,40 +58,40 @@
         }
       },
       "mackup": {
-        "version": "0.8.34",
+        "version": "0.8.35",
         "bottle": {
           "rebuild": 0,
           "root_url": "https://ghcr.io/v2/homebrew/core",
           "files": {
             "arm64_monterey": {
               "cellar": ":any_skip_relocation",
-              "url": "https://ghcr.io/v2/homebrew/core/mackup/blobs/sha256:2eb529806486a3980086ee3ddd4cd0c2b4238c71762e23befb41132f8bf70913",
-              "sha256": "2eb529806486a3980086ee3ddd4cd0c2b4238c71762e23befb41132f8bf70913"
+              "url": "https://ghcr.io/v2/homebrew/core/mackup/blobs/sha256:238d45c8bf17b952c8dd3293a6ca60767cc3f51b6a52a219a85317b398dd4cf2",
+              "sha256": "238d45c8bf17b952c8dd3293a6ca60767cc3f51b6a52a219a85317b398dd4cf2"
             },
             "arm64_big_sur": {
               "cellar": ":any_skip_relocation",
-              "url": "https://ghcr.io/v2/homebrew/core/mackup/blobs/sha256:2eb529806486a3980086ee3ddd4cd0c2b4238c71762e23befb41132f8bf70913",
-              "sha256": "2eb529806486a3980086ee3ddd4cd0c2b4238c71762e23befb41132f8bf70913"
+              "url": "https://ghcr.io/v2/homebrew/core/mackup/blobs/sha256:238d45c8bf17b952c8dd3293a6ca60767cc3f51b6a52a219a85317b398dd4cf2",
+              "sha256": "238d45c8bf17b952c8dd3293a6ca60767cc3f51b6a52a219a85317b398dd4cf2"
             },
             "monterey": {
               "cellar": ":any_skip_relocation",
-              "url": "https://ghcr.io/v2/homebrew/core/mackup/blobs/sha256:080eb406349a8ef4c22adb53e6dd0cee4020278599349a467de1b0c686844bf9",
-              "sha256": "080eb406349a8ef4c22adb53e6dd0cee4020278599349a467de1b0c686844bf9"
+              "url": "https://ghcr.io/v2/homebrew/core/mackup/blobs/sha256:a1e102e917fa6c9fff2a76fa68333cb151f9ee822f00c105a0565222f486a3e7",
+              "sha256": "a1e102e917fa6c9fff2a76fa68333cb151f9ee822f00c105a0565222f486a3e7"
             },
             "big_sur": {
               "cellar": ":any_skip_relocation",
-              "url": "https://ghcr.io/v2/homebrew/core/mackup/blobs/sha256:080eb406349a8ef4c22adb53e6dd0cee4020278599349a467de1b0c686844bf9",
-              "sha256": "080eb406349a8ef4c22adb53e6dd0cee4020278599349a467de1b0c686844bf9"
+              "url": "https://ghcr.io/v2/homebrew/core/mackup/blobs/sha256:a1e102e917fa6c9fff2a76fa68333cb151f9ee822f00c105a0565222f486a3e7",
+              "sha256": "a1e102e917fa6c9fff2a76fa68333cb151f9ee822f00c105a0565222f486a3e7"
             },
             "catalina": {
               "cellar": ":any_skip_relocation",
-              "url": "https://ghcr.io/v2/homebrew/core/mackup/blobs/sha256:080eb406349a8ef4c22adb53e6dd0cee4020278599349a467de1b0c686844bf9",
-              "sha256": "080eb406349a8ef4c22adb53e6dd0cee4020278599349a467de1b0c686844bf9"
+              "url": "https://ghcr.io/v2/homebrew/core/mackup/blobs/sha256:a1e102e917fa6c9fff2a76fa68333cb151f9ee822f00c105a0565222f486a3e7",
+              "sha256": "a1e102e917fa6c9fff2a76fa68333cb151f9ee822f00c105a0565222f486a3e7"
             },
             "x86_64_linux": {
               "cellar": ":any_skip_relocation",
-              "url": "https://ghcr.io/v2/homebrew/core/mackup/blobs/sha256:43691496fed4a9b67c9ea19bea31cb66a9f2a95c1aa599c8c6a3116131265eb8",
-              "sha256": "43691496fed4a9b67c9ea19bea31cb66a9f2a95c1aa599c8c6a3116131265eb8"
+              "url": "https://ghcr.io/v2/homebrew/core/mackup/blobs/sha256:e1a92c39f5ac40a8c02a26a6b877f720a0802d910f87eaf8995d8ef817dfb4b3",
+              "sha256": "e1a92c39f5ac40a8c02a26a6b877f720a0802d910f87eaf8995d8ef817dfb4b3"
             }
           }
         }
@@ -172,13 +172,13 @@
     },
     "cask": {
       "1password": {
-        "version": "8.8.0",
+        "version": "8.9.4",
         "options": {
           "full_name": "1password"
         }
       },
       "alfred": {
-        "version": "5.0,2057",
+        "version": "5.0.2,2073",
         "options": {
           "full_name": "alfred"
         }
@@ -190,37 +190,37 @@
         }
       },
       "bartender": {
-        "version": "4.2.0,42000",
+        "version": "4.2.11,42011",
         "options": {
           "full_name": "bartender"
         }
       },
       "brave-browser": {
-        "version": "1.41.100.0,141.100",
+        "version": "1.44.108.0,144.108",
         "options": {
           "full_name": "brave-browser"
         }
       },
       "dash": {
-        "version": "6.2.4,996",
+        "version": "6.3.2,1002",
         "options": {
           "full_name": "dash"
         }
       },
       "deezer": {
-        "version": "5.30.220",
+        "version": "5.30.340",
         "options": {
           "full_name": "deezer"
         }
       },
       "font-iosevka": {
-        "version": "15.6.1",
+        "version": "16.3.3",
         "options": {
           "full_name": "font-iosevka"
         }
       },
       "font-iosevka-nerd-font": {
-        "version": "2.1.0",
+        "version": "2.2.2",
         "options": {
           "full_name": "font-iosevka-nerd-font"
         }
@@ -238,7 +238,7 @@
         }
       },
       "google-chrome": {
-        "version": "103.0.5060.134",
+        "version": "106.0.5249.103",
         "options": {
           "full_name": "google-chrome"
         }
@@ -256,7 +256,7 @@
         }
       },
       "headset": {
-        "version": "4.1.1",
+        "version": "4.2.1",
         "options": {
           "full_name": "headset"
         }
@@ -286,19 +286,19 @@
         }
       },
       "jetbrains-toolbox": {
-        "version": "1.25,1.25.12569",
+        "version": "1.26.1,1.26.1.13138",
         "options": {
           "full_name": "jetbrains-toolbox"
         }
       },
       "keka": {
-        "version": "1.2.55",
+        "version": "1.2.56",
         "options": {
           "full_name": "keka"
         }
       },
       "lunar": {
-        "version": "5.7.3",
+        "version": "5.7.9",
         "options": {
           "full_name": "lunar"
         }
@@ -322,7 +322,7 @@
         }
       },
       "obsidian": {
-        "version": "0.15.8",
+        "version": "0.15.9",
         "options": {
           "full_name": "obsidian"
         }
@@ -334,7 +334,7 @@
         }
       },
       "path-finder": {
-        "version": "2135",
+        "version": "2138",
         "options": {
           "full_name": "path-finder"
         }
@@ -346,19 +346,19 @@
         }
       },
       "raindropio": {
-        "version": "5.5.5",
+        "version": "5.5.10",
         "options": {
           "full_name": "raindropio"
         }
       },
       "slack": {
-        "version": "4.27.154",
+        "version": "4.28.184",
         "options": {
           "full_name": "slack"
         }
       },
       "soundsource": {
-        "version": "5.5.3",
+        "version": "5.5.4",
         "options": {
           "full_name": "soundsource"
         }
@@ -382,7 +382,7 @@
         }
       },
       "visual-studio-code": {
-        "version": "1.69.2",
+        "version": "1.72.0",
         "options": {
           "full_name": "visual-studio-code"
         }
@@ -400,7 +400,7 @@
         }
       },
       "krita": {
-        "version": "5.0.6",
+        "version": "5.1.1",
         "options": {
           "full_name": "krita"
         }
@@ -412,7 +412,7 @@
         }
       },
       "studio-3t": {
-        "version": "2022.7.0",
+        "version": "2022.8.3",
         "options": {
           "full_name": "studio-3t"
         }
@@ -424,19 +424,19 @@
         }
       },
       "postman": {
-        "version": "9.25.0",
+        "version": "9.31.0",
         "options": {
           "full_name": "postman"
         }
       },
       "lens": {
-        "version": "5.5.4,20220609.2",
+        "version": "2022.10.70653",
         "options": {
           "full_name": "lens"
         }
       },
       "rancher": {
-        "version": "1.4.1",
+        "version": "1.6.0",
         "options": {
           "full_name": "rancher"
         }
@@ -448,13 +448,13 @@
         }
       },
       "karabiner-elements": {
-        "version": "14.5.0",
+        "version": "14.10.0",
         "options": {
           "full_name": "karabiner-elements"
         }
       },
       "miniforge": {
-        "version": "4.12.0-2",
+        "version": "4.14.0-0",
         "options": {
           "full_name": "miniforge"
         }
@@ -472,7 +472,7 @@
         }
       },
       "zoom": {
-        "version": "5.11.3.9065",
+        "version": "5.12.2.11434",
         "options": {
           "full_name": "zoom"
         }
@@ -484,13 +484,13 @@
         }
       },
       "fig": {
-        "version": "1.0.58,472",
+        "version": "1.0.62,541",
         "options": {
           "full_name": "fig"
         }
       },
       "firefox": {
-        "version": "102.0.1",
+        "version": "105.0.3",
         "options": {
           "full_name": "firefox"
         }
@@ -499,6 +499,12 @@
         "version": "1.6.1,111",
         "options": {
           "full_name": "monodraw"
+        }
+      },
+      "dropbox": {
+        "version": "158.4.4564",
+        "options": {
+          "full_name": "Dropbox"
         }
       }
     },
@@ -525,7 +531,7 @@
       },
       "Friendly Streaming": {
         "id": "553245401",
-        "version": "5.9.22"
+        "version": "5.9.24"
       },
       "iMazing HEIC Converter": null,
       "Ka-Block!": {
@@ -538,31 +544,39 @@
       },
       "Vectornator": {
         "id": "1219074514",
-        "version": "4.8.4"
+        "version": "4.10.3"
       },
       "Infuse": {
         "id": "1136220934",
-        "version": "7.4.2"
+        "version": "7.4.5"
       },
       "Tailscale": {
         "id": "1475387142",
-        "version": "1.28.0"
+        "version": "1.30.2"
       },
       "DaVinci Resolve": {
         "id": "571213070",
-        "version": "17.4.6"
+        "version": "18.0.4"
+      },
+      "rcmd": {
+        "id": "1596283165",
+        "version": "2.2.1"
+      },
+      "Tabs Switcher": {
+        "id": "1406718335",
+        "version": "2.6.0"
       }
     }
   },
   "system": {
     "macos": {
       "monterey": {
-        "HOMEBREW_VERSION": "3.5.6",
+        "HOMEBREW_VERSION": "3.6.5",
         "HOMEBREW_PREFIX": "/opt/homebrew",
-        "Homebrew/homebrew-core": "b2ba529053ad1b218e11d10825d6ec23d37b2b44",
-        "CLT": "13.4.0.0.1.1651278267",
+        "Homebrew/homebrew-core": "105d1770134939c95012f5a50b62ec5b5d979b3c",
+        "CLT": "14.0.0.0.1.1661618636",
         "Xcode": "13.4.1",
-        "macOS": "12.4"
+        "macOS": "12.6"
       }
     }
   }
