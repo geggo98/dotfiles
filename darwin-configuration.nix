@@ -192,6 +192,7 @@ in
       moreutilsWithoutParallel
       pkgs.mosh # https://mosh.org/
       pkgs.netcat
+      pkgs.p7zip # 7-zip with more codecs (Z-Standard, Brotli, Lizerd, AES encrypted ZIP files, ...)
       pkgs.parallel
       pkgs.python39Packages.ftfy # Fix broken unicode encoding
       pkgs.pv
