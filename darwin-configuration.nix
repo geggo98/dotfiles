@@ -68,7 +68,8 @@ in
 
       # JavaScript / TypeScript programming language
       pkgs.deno
-      pkgs.yarn
+      node.pnpm
+      node.yarn
       pkgs.nodejs-18_x
       pkgs.esbuild
       pkgs.k6 # Load testing: https://github.com/grafana/k6
