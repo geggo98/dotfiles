@@ -38,6 +38,7 @@ cask "jetbrains-toolbox"
 cask "karabiner-elements"
 # cask "kdenlive" # Video editor, https://kdenlive.org/en/ 
 cask "keka" # Archive utility, supports encrypted ZIP files, https://www.keka.io/
+cask "kekaexternalhelper" # Register Keka as default app for archives
 cask "krita"
 cask "lens" # K8s IDE
 cask "losslesscut" # Simple video editor: https://github.com/mifi/lossless-cut
