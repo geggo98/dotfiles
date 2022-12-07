@@ -180,6 +180,7 @@ in
       pkgs.git-branchless
       pkgs.git-machete
       pkgs.git-trim
+      pkgs.htmlq # Like JQ, but for HTML
       pkgs.htop
       pkgs_x86.httpie
       pkgs.hyperfine
