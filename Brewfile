@@ -74,6 +74,7 @@ mas "DaVinci Resolve", id: 571213070
 mas "Dynamo", id: 1445910651
 mas "File Cabinet Pro", id: 1150565778
 mas "Friendly Streaming", id: 553245401 
+mas "Gifski", id: 1351639930 
 mas "iMazing HEIC Converter", id: 1292198261
 mas "Infuse", id: 1136220934
 mas "Ka-Block!", id: 1335413823
