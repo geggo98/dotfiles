@@ -89,7 +89,7 @@ in
       pkgs.rustup
 
       # Go programming language
-      pkgs.go_1_17
+      pkgs.go_1_19
       pkgs.gopkgs
       pkgs.gopls
       pkgs.go-tools
