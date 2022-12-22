@@ -132,6 +132,7 @@ in
       pkgs.telepresence2
 
       # CSV processing
+      pkgs.jless
       pkgs.miller
       pkgs.q-text-as-data
       pkgs.sc-im
