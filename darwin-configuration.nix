@@ -112,6 +112,7 @@ in
       pkgs.docker-credential-helpers # Safely store docker credentials: https://github.com/docker/docker-credential-helpers
       pkgs.docker-ls # Query docker registries
       pkgs.pssh # Parallel SSH
+      pkgs.lnav # Log file viewer https://lnav.org/
       pkgs.minikube
       pkgs.nimbo # https://github.com/nimbo-sh/nimbo
       # pkgs.niv
