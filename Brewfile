@@ -14,6 +14,7 @@ cask "alfred"
 # cask "anaconda" # /opt/homebrew/anaconda3
 cask "bartender"
 cask "balenaetcher"
+cask "betterdisplay" # https://github.com/waydabber/BetterDisplay
 cask "brave-browser"
 # cask "Beardie" # Maintained for of BeardedSpice -> redirects media keys to the running media app and to the browser 
 cask "chromium"
