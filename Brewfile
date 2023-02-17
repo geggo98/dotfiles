@@ -80,9 +80,12 @@ mas "Friendly Streaming", id: 553245401
 mas "Gifski", id: 1351639930 
 mas "iMazing HEIC Converter", id: 1292198261
 mas "Infuse", id: 1136220934
+mas "Horo", id: 1437226581
 mas "Ka-Block!", id: 1335413823
 mas "PhotoScape X", id: 929507092 
 mas "rcmd", id: 1596283165 
 mas "Vectornator", id: 1219074514
 mas "Tabs Switcher", id: 1406718335 # Switches browser tabs
 mas "Tailscale", id: 1475387142
+mas "TinyStopwatch", id: 1447754003
+
