@@ -29,9 +29,7 @@ in
       pkgs.any-nix-shell
 
       # Vim & NeoVim
-      pkgs.vimpager
       unstable.neovim
-      # pkgs.nvimpager
       pkgs.rnix-lsp
       # pkgs.treesitter
       pkgs.tabnine
@@ -247,8 +245,9 @@ in
       if command -v starship > /dev/null
         starship init fish | source
       end
-      if command -v vimpager > /dev/null
-        set -x MANPAGER (command -v vimpager)
+      if command -v nvim > /dev/null
+        set -x MANPAGER "$(command -v nvim) +Man!"
+        set -x MANWIDTH 999
       end
       if command -v bat > /dev/null
         set -x PAGER (command -v bat)
@@ -294,7 +293,6 @@ in
   programs.vim = {
     enable = true;
     enableSensible = true;
-    plugins = [{ names = [ "surround" "vim-nix" "vim-gnupg" "editorconfig-vim" "neorg" ]; }];
   };
 
   programs.tmux = {
