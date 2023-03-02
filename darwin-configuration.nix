@@ -195,6 +195,7 @@ in
       pkgs.netcat
       pkgs.p7zip # 7-zip with more codecs (Z-Standard, Brotli, Lizerd, AES encrypted ZIP files, ...)
       pkgs.parallel
+      pkgs.pueue # Task manager https://github.com/Nukesor/pueue
       pkgs.python39Packages.ftfy # Fix broken unicode encoding
       pkgs.pv
       pkgs.pwgen
@@ -203,12 +204,14 @@ in
       # pkgs.sagemath
       pkgs.shellcheck
       pkgs.socat
+      pkgs.tldr-hs
       pkgs.tig
       # pkgs.tmux
       pkgs_x86.tor
       pkgs_x86.torsocks # https://www.jamieweb.net/blog/tor-is-a-great-sysadmin-tool/
       # pkgs.usbutils # lsusb
       pkgs.viddy # A modern watch alternative
+      pkkgs.vips # Image manipulation: https://www.libvips.org/API/current/using-cli.html
       pkgs.watch # Conider using "viddy" instead
       pkgs.wget
       pkgs_x86.watchexec
