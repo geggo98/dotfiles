@@ -212,6 +212,7 @@ in
       # pkgs.usbutils # lsusb
       pkgs.viddy # A modern watch alternative
       pkkgs.vips # Image manipulation: https://www.libvips.org/API/current/using-cli.html
+      pkgs.vips # Image manipulation: https://www.libvips.org/API/current/using-cli.html
       pkgs.watch # Conider using "viddy" instead
       pkgs.wget
       pkgs_x86.watchexec
