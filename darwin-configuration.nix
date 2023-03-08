@@ -211,7 +211,6 @@ in
       pkgs_x86.torsocks # https://www.jamieweb.net/blog/tor-is-a-great-sysadmin-tool/
       # pkgs.usbutils # lsusb
       pkgs.viddy # A modern watch alternative
-      pkkgs.vips # Image manipulation: https://www.libvips.org/API/current/using-cli.html
       pkgs.vips # Image manipulation: https://www.libvips.org/API/current/using-cli.html
       pkgs.watch # Conider using "viddy" instead
       pkgs.wget
@@ -226,6 +225,7 @@ in
       node.qnm # Inspect npm / node_modules packages, show dependency tree
       node.ts-node
       node.typescript
+      node.vite
     ];
 
   # Use a custom configuration.nix location.
