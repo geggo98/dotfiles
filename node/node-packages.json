@@ -4,5 +4,6 @@
   "remark-cli",
   "ts-node",
   "typescript",
+  "vite",
   "yarn"
 ]
