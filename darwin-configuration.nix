@@ -27,6 +27,7 @@ in
       pkgs.gitAndTools.gitFull
       pkgs.git-lfs
       pkgs.any-nix-shell
+      pkgs.comma
 
       # Vim & NeoVim
       unstable.neovim
