@@ -110,6 +110,7 @@ in
       pkgs.docker-compose
       pkgs.docker-credential-helpers # Safely store docker credentials: https://github.com/docker/docker-credential-helpers
       pkgs.docker-ls # Query docker registries
+      # pkgs.dive # Analyze each layer in a Docker image - seems to be broken. Use `docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock jauderho/dive:latest ...` instead.
       pkgs.pssh # Parallel SSH
       pkgs.lnav # Log file viewer https://lnav.org/
       pkgs.minikube
