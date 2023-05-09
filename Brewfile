@@ -88,5 +88,5 @@ mas "rcmd", id: 1596283165
 mas "Vectornator", id: 1219074514
 mas "Tabs Switcher", id: 1406718335 # Switches browser tabs
 mas "Tailscale", id: 1475387142
-mas "TinyStopwatch", id: 1447754003
+# mas "TinyStopwatch", id: 1447754003
 
