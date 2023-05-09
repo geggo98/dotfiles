@@ -84,7 +84,9 @@ mas "Infuse", id: 1136220934
 mas "Horo", id: 1437226581
 mas "Ka-Block!", id: 1335413823
 mas "PhotoScape X", id: 929507092 
+mas "PopClip", id: 445189367
 mas "rcmd", id: 1596283165 
+mas "Shortery", id: 1594183810  
 mas "Vectornator", id: 1219074514
 mas "Tabs Switcher", id: 1406718335 # Switches browser tabs
 mas "Tailscale", id: 1475387142
