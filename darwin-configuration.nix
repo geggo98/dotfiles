@@ -27,7 +27,7 @@ in
       pkgs.gitAndTools.gitFull
       pkgs.git-lfs
       pkgs.any-nix-shell
-      pkgs.comma
+      unstable.comma # Update database with `comma --update`
 
       # Vim & NeoVim
       unstable.neovim
@@ -109,7 +109,7 @@ in
       pkgs.docker-client
       pkgs.docker-compose
       pkgs.docker-credential-helpers # Safely store docker credentials: https://github.com/docker/docker-credential-helpers
-      pkgs.docker-ls # Query docker registries
+      pkgs.docker-ls # Query docker registries https://github.com/mayflower/docker-ls
       # pkgs.dive # Analyze each layer in a Docker image - seems to be broken. Use `docker run --rm -it -v /var/run/docker.sock:/var/run/docker.sock jauderho/dive:latest ...` instead.
       pkgs.pssh # Parallel SSH
       pkgs.lnav # Log file viewer https://lnav.org/
