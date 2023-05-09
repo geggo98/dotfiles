@@ -60,6 +60,8 @@ cask "postman"
 cask "raindropio"
 cask "rancher" # Rancher Desktop
 cask "raycast"
+cask "red-canary-mac-monitor" # System event viewer (Process Monitor / procmon), https://github.com/redcanaryco/mac-monitor
+cask "shottr"
 cask "slack"
 cask "soundsource"
 cask "studio-3t"
