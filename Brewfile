@@ -47,6 +47,7 @@ cask "losslesscut" # Simple video editor: https://github.com/mifi/lossless-cut
 cask "lunar"
 # cask "maestral" # Leightweight Dropbox client optimized for M1
 cask "Dropbox"
+cask "HiDock" # Manages the Dock for multiple montors
 cask "miniforge" # Provides Python binaries for "osx-arm64", installed under /opt/homebrew/bin/conda
 cask "monodraw"
 cask "mosaic"
@@ -64,7 +65,7 @@ cask "soundsource"
 cask "studio-3t"
 cask "switchresx"
 cask "tripmode"
-cask "ubar"
+# cask "ubar" # Try "HiDock" instead
 cask "usb-overdrive"
 cask "visual-studio-code"
 cask "witch"
