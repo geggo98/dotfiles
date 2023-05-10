@@ -20,6 +20,7 @@ in
       pkgs.fishPlugins.foreign-env
       pkgs.fishPlugins.forgit
       # pkgs.fishPlugins.fzf-fish
+      unstable.fishPlugins.z
       pkgs.nushell
       pkgs_x86.nix-index # Provides nix-locate
       pkgs.starship
