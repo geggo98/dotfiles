@@ -20,6 +20,7 @@ in
       pkgs.fishPlugins.foreign-env
       pkgs.fishPlugins.forgit
       # pkgs.fishPlugins.fzf-fish
+      unstable.fishPlugins.github-copilot-cli-fish
       unstable.fishPlugins.z
       pkgs.nushell
       pkgs_x86.nix-index # Provides nix-locate
@@ -29,6 +30,7 @@ in
       pkgs.git-lfs
       pkgs.any-nix-shell
       unstable.comma # Update database with `comma --update`
+      unstable.github-copilot-cli
 
       # Vim & NeoVim
       unstable.neovim
