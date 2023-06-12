@@ -165,6 +165,7 @@ in
       pkgs.broot
       pkgs.bottom # Was "ytop", now "btm": https://github.com/ClementTsang/bottom
       pkgs.btop
+      # pkgs.clifm # Terminal file manager, similar to broot, mc, ranger: https://github.com/leo-arch/clifm
       pkgs.comby # Structural search & replace for source code, https://comby.dev/docs/overview
       pkgs.coreutils # Command line utils with more options than their macOS / BSD counterparts.
       pkgs.curl
@@ -209,6 +210,7 @@ in
       # pkgs.sagemath
       pkgs.shellcheck
       pkgs.socat
+      unstable.thefuck # Corrects typos and other small errors, https://github.com/nvbn/thefuck
       pkgs.tldr-hs
       pkgs.tig
       # pkgs.tmux
@@ -223,6 +225,7 @@ in
       pkgs.xxh # ssh with better shell supporton the remote site 
       pkgs.xz
       pkgs_x86.yq
+      pkgs.zellij # Tmux / screen alternative: https://github.com/zellij-org/zellij
       pkgs.zstd
 
       # Node packages
