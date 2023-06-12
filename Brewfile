@@ -20,7 +20,7 @@ cask "brave-browser"
 cask "chromium"
 cask "dash" # Dash 6
 cask "daisydisk"
-cask "deezer"
+# cask "deezer"
 cask "devutils" # https://devutils.app/
 cask "fig" # Auto completion, https://github.com/withfig/autocomplete
 cask "firefox"
@@ -32,6 +32,7 @@ cask "google-chrome"
 cask "gpg-suite-no-mail"
 cask "gas-mask"
 cask "headset"
+cask "http-toolkit"
 cask "iina"
 cask "iterm2"
 cask "istat-menus"
