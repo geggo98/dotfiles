@@ -3,7 +3,7 @@ let
   unstable = import <nixpkgs-unstable> { config = config.nixpkgs.config; }; # nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs-unstable
   pkgs_x86 = import <nixpkgs> { localSystem = "x86_64-darwin"; config = config.nixpkgs.config; overlays = config.nixpkgs.overlays; };
   unstable_x86 = import <nixpkgs-unstable> { localSystem = "x86_64-darwin"; config = config.nixpkgs.config; overlays = config.nixpkgs.overlays; }; # nix-channel --add https://nixos.org/channels/nixpkgs-unstable nixpkgs-unstable
-  node = import ./node/default.nix { nodejs = pkgs.nodejs-14_x; }; # Update with: nix shell nixpkgs#node2nix --command node2nix -i ./node-packages.json -o node-packages.nix
+  # node = import ./node/default.nix { nodejs = pkgs.nodejs-14_x; }; # Update with: nix shell nixpkgs#node2nix --command node2nix -i ./node-packages.json -o node-packages.nix
   moreutilsWithoutParallel = pkgs.moreutils.overrideAttrs(oldAttrs: rec {
         preBuild = oldAttrs.preBuild + ''
            substituteInPlace Makefile --replace " parallel " " " --replace " parallel.1 " " "
@@ -40,7 +40,7 @@ in
       pkgs.lua
 
 
-      pkgs.postgresql_13
+      # pkgs.postgresql_13
 
       # Backups
       # pkgs.maestral
@@ -70,14 +70,14 @@ in
 
       # JavaScript / TypeScript programming language
       pkgs.deno
-      node.pnpm
-      node.yarn
+      # node.pnpm
+      # node.yarn
       pkgs.nodejs-18_x
       pkgs.esbuild
       pkgs.k6 # Load testing: https://github.com/grafana/k6
 
       # Python programming language
-      pkgs.python27Full
+      # pkgs.python27Full
       pkgs.python38Full
       pkgs.poetry
       # pkgs.python-language-server
@@ -229,11 +229,11 @@ in
       pkgs.zstd
 
       # Node packages
-      node.remark-cli # LSP for Markdown
-      node.qnm # Inspect npm / node_modules packages, show dependency tree
-      node.ts-node
-      node.typescript
-      node.vite
+      # node.remark-cli # LSP for Markdown
+      # node.qnm # Inspect npm / node_modules packages, show dependency tree
+      # node.ts-node
+      # node.typescript
+      # node.vite
     ];
 
   # Use a custom configuration.nix location.
