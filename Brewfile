@@ -99,3 +99,9 @@ mas "Tailscale", id: 1475387142
 # mas "TinyStopwatch", id: 1447754003
 mas "DockTime", id: 508034739
 
+# YubiKey for SSH
+tap "theseal/ssh-askpass"
+brew "openssh" # Newer version of SSH
+cask "yubico-yubikey-manager"
+brew "theseal/ssh-askpass/ssh-askpass" # UI for PIN entry
+
