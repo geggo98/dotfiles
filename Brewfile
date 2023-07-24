@@ -4,13 +4,15 @@ tap "homebrew/cask"
 tap "homebrew/cask-fonts"
 tap "homebrew/core"
 tap "homebrew/services"
+brew "chatblade"
 brew "handbrake"
 brew "mackup"
 brew "mas"
 # brew "podman"
 cask "1password"
 cask "1password-cli"
-cask "alfred"
+cask "appcleaner"
+# cask "alfred"
 # cask "anaconda" # /opt/homebrew/anaconda3
 cask "bartender"
 cask "balenaetcher"
@@ -38,7 +40,7 @@ cask "iterm2"
 cask "istat-menus"
 cask "jdk-mission-control"
 cask "jetbrains-toolbox"
-cask "karabiner-elements"
+# cask "karabiner-elements"
 # cask "kdenlive" # Video editor, https://kdenlive.org/en/ 
 cask "keka" # Archive utility, supports encrypted ZIP files, https://www.keka.io/
 cask "kekaexternalhelper" # Register Keka as default app for archives
@@ -46,9 +48,10 @@ cask "krita"
 cask "lens" # K8s IDE
 cask "losslesscut" # Simple video editor: https://github.com/mifi/lossless-cut
 cask "lunar"
+cask "moom"
 # cask "maestral" # Leightweight Dropbox client optimized for M1
 cask "Dropbox"
-cask "HiDock" # Manages the Dock for multiple montors
+# cask "HiDock" # Manages the Dock for multiple montors
 cask "miniforge" # Provides Python binaries for "osx-arm64", installed under /opt/homebrew/bin/conda
 cask "monodraw"
 cask "mosaic"
@@ -56,7 +59,7 @@ cask "multipass"
 cask "obsidian"
 # cask "openvpn-connect"
 cask "path-finder"
-cask "pock"
+# cask "pock"
 cask "postman"
 cask "raindropio"
 cask "rancher" # Rancher Desktop
@@ -69,7 +72,7 @@ cask "studio-3t"
 cask "switchresx"
 cask "tripmode"
 # cask "ubar" # Try "HiDock" instead
-cask "usb-overdrive"
+# cask "usb-overdrive"
 cask "visual-studio-code"
 cask "witch"
 cask "zerotier-one"
@@ -94,4 +97,5 @@ mas "Vectornator", id: 1219074514
 mas "Tabs Switcher", id: 1406718335 # Switches browser tabs
 mas "Tailscale", id: 1475387142
 # mas "TinyStopwatch", id: 1447754003
+mas "DockTime", id: 508034739
 
