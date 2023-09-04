@@ -48,8 +48,7 @@ cask "krita"
 cask "lens" # K8s IDE
 cask "losslesscut" # Simple video editor: https://github.com/mifi/lossless-cut
 cask "lunar"
-cask "moom"
-# cask "maestral" # Leightweight Dropbox client optimized for M1
+cask "maestral" # Leightweight Dropbox client optimized for M1
 cask "Dropbox"
 # cask "HiDock" # Manages the Dock for multiple montors
 cask "miniforge" # Provides Python binaries for "osx-arm64", installed under /opt/homebrew/bin/conda
@@ -89,6 +88,7 @@ mas "iMazing HEIC Converter", id: 1292198261
 mas "Infuse", id: 1136220934
 mas "Horo", id: 1437226581
 mas "Ka-Block!", id: 1335413823
+mas "Moom", id: 419330170
 mas "PhotoScape X", id: 929507092 
 mas "PopClip", id: 445189367
 mas "rcmd", id: 1596283165 
