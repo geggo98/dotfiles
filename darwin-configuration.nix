@@ -39,6 +39,14 @@ in
       pkgs.tabnine
       pkgs.lua
 
+      # Devbox
+      pkgs.devbox
+
+      # AI tools
+      unstable.shell_gpt
+      unstable.k8sgpt
+      unstable.chatblade
+
 
       # pkgs.postgresql_13
 
