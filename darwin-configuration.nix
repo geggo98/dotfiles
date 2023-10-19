@@ -183,7 +183,7 @@ in
       pkgs.direnv
       pkgs.nix-direnv
       pkgs.nix-direnv-flakes
-      pkgs.exa
+      unstable.lsd # Exa is deprecated, use either eza or lsd
       # pkgs.eternal-terminal # https://eternalterminal.dev/
       pkgs.fd
       pkgs.findutils # xargs
@@ -207,6 +207,7 @@ in
       moreutilsWithoutParallel
       pkgs.mosh # https://mosh.org/
       pkgs.netcat
+      pkgs.ngrok
       pkgs.p7zip # 7-zip with more codecs (Z-Standard, Brotli, Lizerd, AES encrypted ZIP files, ...)
       pkgs.parallel
       pkgs.pueue # Task manager https://github.com/Nukesor/pueue
@@ -221,7 +222,8 @@ in
       unstable.thefuck # Corrects typos and other small errors, https://github.com/nvbn/thefuck
       pkgs.tldr-hs
       pkgs.tig
-      # pkgs.tmux
+      # pkgs.tmux # Already installed with `programs.tmux`
+      pkgs.tmuxp # Tmuxinator like session manager
       pkgs_x86.tor
       pkgs_x86.torsocks # https://www.jamieweb.net/blog/tor-is-a-great-sysadmin-tool/
       # pkgs.usbutils # lsusb
@@ -321,6 +323,14 @@ in
     enableMouse = true;
     enableFzf = true;
     enableVim = true;
+    # plugins = [
+    #   pkgs.tmuxPlugins.sensible
+    #   pkgs.tmuxPlugins.dracula
+    #   pkgs.tmuxPlugins.tmux-fzf # Ctrl-b f
+    #   pkgs.tmuxPlugins.power-theme
+    #   pkgs.tmuxPlugins.resurrect # Save: Ctrl-b s , Restore: Ctrl-b r 
+    #   pkgs.tmuxPlugins.vim-tmux-navigator
+    # ];
     defaultCommand = "${pkgs.fish}/bin/fish";
     extraConfig = ''
       # https://github.com/namtzigla/oh-my-tmux
