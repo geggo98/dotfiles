@@ -48,6 +48,7 @@ cask "krita"
 cask "lens" # K8s IDE
 cask "losslesscut" # Simple video editor: https://github.com/mifi/lossless-cut
 cask "lunar"
+cask "mac-mouse-fix" # Use mouse keys to switch between spaces
 cask "maestral" # Leightweight Dropbox client optimized for M1
 cask "Dropbox"
 # cask "HiDock" # Manages the Dock for multiple montors
