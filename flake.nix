@@ -1,54 +1,63 @@
 # darwin-rebuild switch --flake ~/.config/nix-darwin
 {
-  description = "Stefan's standard desktop configuration";
+  description = "Stefan's darwin system";
 
   inputs = {
-    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
-    nix-darwin.url = "github:LnL7/nix-darwin";
-    nix-darwin.inputs.nixpkgs.follows = "nixpkgs";
+    # Package sets
+    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-21.11-darwin";
+    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+
+    # Environment/system management
+    darwin.url = "github:lnl7/nix-darwin/master";
+    darwin.inputs.nixpkgs.follows = "nixpkgs-unstable";
+    home-manager.url = "github:nix-community/home-manager";
+    home-manager.inputs.nixpkgs.follows = "nixpkgs-unstable";
+
   };
 
-  outputs = inputs@{ self, nix-darwin, nixpkgs }:
-  let
-    configuration = { pkgs, ... }: {
-      # List packages installed in system profile. To search by name, run:
-      # $ nix-env -qaP | grep wget
-      environment.systemPackages =
-        [ 
-          pkgs.vim
-          pkgs.comma
-        ];
+  outputs = { self, darwin, nixpkgs, home-manager, ... }@inputs:
+  let 
+    inherit (darwin.lib) darwinSystem;
+    inherit (inputs.nixpkgs-unstable.lib) attrValues makeOverridable optionalAttrs singleton;
 
-      # Auto upgrade nix package and the daemon service.
-      services.nix-daemon.enable = true;
-      # nix.package = pkgs.nix;
-
-      # Necessary for using flakes on this system.
-      nix.settings.experimental-features = "nix-command flakes";
-
-      # Create /etc/zshrc that loads the nix-darwin environment.
-      programs.zsh.enable = true;  # default shell on catalina
-      programs.fish.enable = true;
-
-      # Set Git commit hash for darwin-version.
-      system.configurationRevision = self.rev or self.dirtyRev or null;
-
-      # Used for backwards compatibility, please read the changelog before changing.
-      # $ darwin-rebuild changelog
-      system.stateVersion = 4;
-
-      # The platform the configuration will be used on.
-      nixpkgs.hostPlatform = "aarch64-darwin";
-    };
+    # Configuration for `nixpkgs`
+    nixpkgsConfig = {
+      config = { allowUnfree = true; };
+    }; 
   in
   {
-    # Build darwin flake using:
-    # $ darwin-rebuild build --flake .#FCX19GT9XR
-    darwinConfigurations."FCX19GT9XR" = nix-darwin.lib.darwinSystem {
-      modules = [ configuration ];
+    # My `nix-darwin` configs
+      
+    darwinConfigurations = {
+      FCX19GT9XR = darwinSystem {
+        system = "aarch64-darwin";
+        modules = [ 
+          # Main `nix-darwin` config
+          ./configuration.nix
+          # `home-manager` module
+          home-manager.darwinModules.home-manager
+          {
+            nixpkgs = nixpkgsConfig;
+            # `home-manager` config
+            home-manager.useGlobalPkgs = true;
+            home-manager.useUserPackages = true;
+            home-manager.users.stefan = import ./home.nix;            
+          }
+        ];
+      };
     };
 
-    # Expose the package set, including overlays, for convenience.
-    darwinPackages = self.darwinConfigurations."FCX19GT9XR".pkgs;
-  };
+    # Overlays --------------------------------------------------------------- {{{
+
+    overlays = {
+      # Overlay useful on Macs with Apple Silicon
+        apple-silicon = final: prev: optionalAttrs (prev.stdenv.system == "aarch64-darwin") {
+          # Add access to x86 packages system is running Apple Silicon
+          pkgs-x86 = import inputs.nixpkgs-unstable {
+            system = "x86_64-darwin";
+            inherit (nixpkgsConfig) config;
+          };
+        }; 
+      };
+ };
 }
