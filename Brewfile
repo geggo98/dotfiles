@@ -5,7 +5,7 @@ tap "homebrew/cask-fonts"
 tap "homebrew/core"
 tap "homebrew/services"
 brew "chatblade"
-brew "handbrake"
+cask "handbrake" # Also available as "brew"
 brew "mackup"
 brew "mas"
 # brew "podman"
@@ -24,7 +24,7 @@ cask "dash" # Dash 6
 cask "daisydisk"
 # cask "deezer"
 cask "devutils" # https://devutils.app/
-cask "fig" # Auto completion, https://github.com/withfig/autocomplete
+# cask "fig" # Auto completion, https://github.com/withfig/autocomplete - is now "AWS CodeWhisperer for Command Line"
 cask "firefox"
 cask "font-iosevka"
 cask "font-iosevka-nerd-font"
@@ -91,6 +91,7 @@ mas "Horo", id: 1437226581
 mas "Ka-Block!", id: 1335413823
 mas "Moom", id: 419330170
 mas "PhotoScape X", id: 929507092 
+mas "Pixelmator Pro", id: 1289583905 
 mas "PopClip", id: 445189367
 mas "rcmd", id: 1596283165 
 mas "Shortery", id: 1594183810  
