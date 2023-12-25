@@ -2,16 +2,18 @@
 {
   # Nix configuration ------------------------------------------------------------------------------
 
-  nix.binaryCaches = [
+  nix.settings.substituters = [
     "https://cache.nixos.org/"
   ];
-  nix.binaryCachePublicKeys = [
+  nix.settings.trusted-public-keys = [
     "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
   ];
-  nix.trustedUsers = [
+  nix.settings.trusted-users = [
     "@admin"
   ];
-  users.nix.configureBuildUsers = true;
+  nix.configureBuildUsers = true;
+  
+  # For home-manager
   users.users.stefan.home = /Users/stefan;
 
   # Enable experimental nix command and flakes
@@ -45,7 +47,7 @@
   programs.nix-index.enable = true;
 
   # Fonts
-  fonts.enableFontDir = true;
+  fonts.fontDir.enable = true;
   fonts.fonts = with pkgs; [
      recursive
      (nerdfonts.override { fonts = [ "JetBrainsMono" ]; })
