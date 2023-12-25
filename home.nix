@@ -1,4 +1,4 @@
-{ config, pkgs, lib, ... }:
+{ config, pkgs, lib, astronvim, ... }:
 
 {
   home.stateVersion = "22.05";
@@ -52,6 +52,9 @@
 
       # YubiKey
       "+ssh-add-yubikey" = "env SSH_AUTH_SOCK={$HOME}.ssh/agent ssh-add {$HOME}/.ssh/id_es255519_sk";
+
+      # yt-dlp
+      "+yt-dlp" = "yt-dlp -i --format 'bestvideo[ext=mp4]+bestaudio/best[ext=m4a]/best' --merge-output-format mp4 --no-post-overwrites --output ~/Downloads/yt-dlp/'%(title)s.%(ext)s'";
     };
   };
   programs.nix-index.enable = true;
@@ -112,6 +115,7 @@
     nodePackages.typescript
     nodePackages.ts-node
     nodejs
+    neovim
 
     # Command line helper
     fd
@@ -129,6 +133,18 @@
     mas # CLI for the macOS app store
     m-cli # useful macOS CLI commands
   ];
+
+  xdg.configFile = {
+    # See https://github.com/maxbrunet/dotfiles/blob/ebd85ceb40cbe79ebd5453bce63d384c1b49274a/nix/home.nix#L62
+    astronvim = {
+      onChange = "PATH=$PATH:${pkgs.git}/bin ${pkgs.neovim}/bin/nvim --headless +quitall";
+      source = ./config/astronvim;
+    };
+    nvim = {
+      onChange = "PATH=$PATH:${pkgs.git}/bin ${pkgs.neovim}/bin/nvim --headless +quitall";
+      source = astronvim;
+    };
+  };
 
   # Misc configuration files --------------------------------------------------------------------{{{
 
