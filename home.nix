@@ -14,6 +14,9 @@
   programs.zsh.enable = true;
   programs.fish = {
     enable = true;
+    interactiveShellInit = ''
+      set fish_greeting # Disable greeting
+    '';
     plugins = [
       { name = "z"; src = pkgs.fishPlugins.z.src; }
       { name = "fzf"; src = pkgs.fishPlugins.fzf-fish.src; }
@@ -47,8 +50,12 @@
       "+llt" = "lsd --long --tree --ignore-glob .git --ignore-glob node_modules";
       "+lt" = "lsd --tree --ignore-glob .git --ignore-glob node_modules";
 
+      # YubiKey
+      "+ssh-add-yubikey" = "env SSH_AUTH_SOCK={$HOME}.ssh/agent ssh-add {$HOME}/.ssh/id_es255519_sk";
     };
   };
+  programs.nix-index.enable = true;
+  programs.nnn.enable = true;
   programs.starship.enable = true;
 
   programs.git = {
@@ -69,6 +76,8 @@
   
   programs.bat.enable = true;
   programs.fzf.enable = true;
+  programs.gpg.enable = true;
+  programs.k9s.enable = true;
   programs.lsd.enable = true;
   programs.mcfly.enable = true;
   programs.ripgrep.enable = true;
@@ -77,6 +86,18 @@
   # https://rycee.gitlab.io/home-manager/options.html#opt-programs.htop.enable
   programs.htop.enable = true;
   programs.htop.settings.show_program_path = true;
+
+  programs.aria2.enable = true;
+  programs.yt-dlp = {
+    enable = true;
+    settings = {
+      embed-thumbnail = true;
+      embed-subs = true;
+      sub-langs = "all";
+      downloader = "aria2c";
+      downloader-args = "aria2c:'-c -x8 -s8 -k1M'";
+    };
+  };
 
   home.packages = with pkgs; [
     # Some basics
@@ -87,18 +108,22 @@
     # Dev stuff
     # (agda.withPackages (p: [ p.standard-library ]))
     jq
+    just # https://github.com/casey/just
     nodePackages.typescript
     nodePackages.ts-node
     nodejs
 
     # Command line helper
+    fd
+    pv
+    xxd
 
     # Useful nix related tools
     cachix # adding/managing alternative binary caches hosted by Cachix
     comma # run software from without installing it
     nodePackages.node2nix # Convert node packages to Nix
 
-    chatblade
+    # chatblade # Broken, use brew version
 
   ] ++ lib.optionals stdenv.isDarwin [
     mas # CLI for the macOS app store
