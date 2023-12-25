@@ -37,6 +37,7 @@
           # Main `nix-darwin` config
           ./configuration.nix
           # `home-manager` module
+          ./darwin.nix
           home-manager.darwinModules.home-manager
           {
             nixpkgs = nixpkgsConfig;
