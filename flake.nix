@@ -13,6 +13,8 @@
     home-manager.url = "github:nix-community/home-manager";
     home-manager.inputs.nixpkgs.follows = "nixpkgs-unstable";
 
+    # External dependencies
+    astronvim = { url = "github:AstroNvim/AstroNvim/v3.40.1"; flake = false; };
   };
 
   outputs = { self, darwin, nixpkgs, home-manager, ... }@inputs:
@@ -41,7 +43,8 @@
             # `home-manager` config
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
-            home-manager.users.stefan = import ./home.nix;            
+            home-manager.users.stefan = import ./home.nix;
+            home-manager.extraSpecialArgs = inputs;            
           }
         ];
       };
