@@ -55,6 +55,9 @@
 
       # yt-dlp
       "+yt-dlp" = "yt-dlp -i --format 'bestvideo[ext=mp4]+bestaudio/best[ext=m4a]/best' --merge-output-format mp4 --no-post-overwrites --output ~/Downloads/yt-dlp/'%(title)s.%(ext)s'";
+
+      # Nix
+      "+darwin-rebuild-switch" = "darwin-rebuild switch --flake ~/.config/nix-darwin";
     };
   };
   programs.nix-index.enable = true;
