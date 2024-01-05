@@ -56,6 +56,10 @@
 
       # Nix
       "+darwin-rebuild-switch" = "darwin-rebuild switch --flake ~/.config/nix-darwin";
+
+      # Grep
+      "+grep" = "ug";
+      "+grep-tui" = "ug -Q";
     };
   };
   programs.nix-index.enable = true;
@@ -117,6 +121,7 @@
     nodePackages.ts-node
     nodejs
     neovim
+    ugrep
 
     # Command line helper
     fd
