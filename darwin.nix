@@ -3,8 +3,8 @@
   homebrew.enable = true;
   homebrew.caskArgs = {
     appdir = "~/Applications";
-    require_sha = true;
-    no_quarantine = true;
+    # require_sha = true;
+    # no_quarantine = true;
   };
   homebrew.brews = [
     "chatblade"
@@ -17,9 +17,9 @@
     "bartender"
     "brave-browser"
     "dash" # Dash 6
-    "dasiydisk"
+    "daisydisk"
     "devutils" # https://devutils.app/
-    "Dropbox"
+    # "Dropbox"
     "firefox"
     "google-chrome"
     "http-toolkit"
@@ -40,7 +40,7 @@
     "microsoft-office"
     # "maestral" # Leightweight Dropbox client optimized for M1
     "monodraw"
-    "mosaic"
+    # "mosaic" # Window manager
     # "multipass" # Ubuntu VMs https://multipass.run
     "obsidian"
     "raindropio"
@@ -65,20 +65,15 @@
 
     # Mouse key manager
     # "mac-mouse-fix"
-    "better-mouse"
+    "bettermouse"
     # "better-touch-tool"
     # "usb-overdrive"
-
-    # Fonts
-    "font-iosevka"
-    "font-iosevka-nerd-font"
-    "font-victor-mono"
-    "font-victor-mono-nerd-font"
 
     # Manual install:
     # AlDente # Battery Manager
     # Brother PrinterDrivers ColorLaser
     # Strongsync # Clound Mount
+    # YourKit Profiler
   ];
   homebrew.masApps = {
     "1Blocker" = 1365531024;
@@ -115,7 +110,7 @@
     "Omnivore: Read-it-later" = 1564031042;
     "rcmd" = 1596283165;
     "Shortery" = 1594183810;
-    "Spark Mail – AI-Mails & Inbox" = -2144121543;
+    # "Spark Mail – AI-Mails & Inbox" = -2144121543;
     "SponsorBlock for YouTube - Skip Sponsorships" = 1573461917;
     "Tabby" = 1586203406; # Tab switcher for Safari
     "Vectornator"= 1219074514; # Linearity Curve / Vectornator
