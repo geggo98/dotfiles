@@ -50,7 +50,10 @@
   fonts.fontDir.enable = true;
   fonts.fonts = with pkgs; [
      recursive
-     (nerdfonts.override { fonts = [ "JetBrainsMono" ]; })
+     (nerdfonts.override { fonts = [ "JetBrainsMono" "Iosevka" "IosevkaTerm" "VictorMono" ]; })
+     iosevka
+     jetbrains-mono
+     victor-mono
    ];
 
   # Keyboard

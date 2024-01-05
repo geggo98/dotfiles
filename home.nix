@@ -14,9 +14,7 @@
   programs.zsh.enable = true;
   programs.fish = {
     enable = true;
-    interactiveShellInit = ''
-      set fish_greeting # Disable greeting
-    '';
+    interactiveShellInit = builtins.readFile ./config/fish/promptInit.fish;
     plugins = [
       { name = "z"; src = pkgs.fishPlugins.z.src; }
       { name = "fzf"; src = pkgs.fishPlugins.fzf-fish.src; }
