@@ -4,6 +4,7 @@
     "NSGlobalDomain" = {
       "NSQuitAlwaysKeepsWindows" = true;
     };
+    # For this wrok, you have to add Terminal to apps with Full Disk Access in Security And Privacy
     "com.apple.Safari" = {
       "com.apple.Safari.ContentPageGroupIdentifier.WebKit2DeveloperExtrasEnabled" = true;
     };
