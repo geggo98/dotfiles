@@ -36,8 +36,10 @@
         modules = [ 
           # Main `nix-darwin` config
           ./configuration.nix
-          # `home-manager` module
           ./darwin.nix
+          # Host specific packages
+          ./homebrew-FCX19GT9XR
+          # `home-manager` module
           home-manager.darwinModules.home-manager
           {
             nixpkgs = nixpkgsConfig;
