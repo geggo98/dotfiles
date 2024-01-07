@@ -1,5 +1,11 @@
 { config, pkgs, lib, astronvim, ... }:
-
+let
+  moreutilsWithoutParallel = pkgs.moreutils.overrideAttrs(oldAttrs: rec {
+        preBuild = oldAttrs.preBuild + ''
+           substituteInPlace Makefile --replace " parallel " " " --replace " parallel.1 " " "
+        '';
+      });
+in
 {
   home.stateVersion = "22.05";
 
@@ -109,31 +115,124 @@
 
   home.packages = with pkgs; [
     # Some basics
-    coreutils
+    coreutils-prefixed # Command line utils with more options than their macOS / BSD counterparts.
     curl
     wget
 
     # Dev stuff
     # (agda.withPackages (p: [ p.standard-library ]))
-    jq
-    just # https://github.com/casey/just
+    asciinema
+    git-branchless
+    git-machete
+    git-trim
+    lazygit
     nodePackages.typescript
     nodePackages.ts-node
     nodejs
     neovim
-    ugrep
+
+    # DevOps tools
+    awscli
+    docker-buildx
+    docker-client
+    docker-credential-helpers # Safely store docker credentials: https://github.com/docker/docker-credential-helpers
+    docker-ls # Query docker registries https://github.com/mayflower/docker-ls
+    k9s
+    kubectl
+    kubetail
+    lazydocker
+    lnav # Log file viewer https://lnav.org/
+    mkcert
+    mosh
+    netcat
+    ngrok
+    pssh
+    shellcheck
+    step-ca
+    step-cli # https://github.com/smallstep/cli
+    socat
+    # tor
+    # torsocks # https://www.jamieweb.net/blog/tor-is-a-great-sysadmin-tool/
+    xxh # ssh with better shell supporton the remote site
+
+    # CSV processing
+    jless
+    miller
+    q-text-as-data
+    # sc-im # Has open CVE in libxls-1.6.2
+    visidata
+    xsv
+
+    # Password management
+    # pkgs._1password
+    pass
+    passExtensions.pass-audit
+    passExtensions.pass-checkup
+    passExtensions.pass-genphrase
+    passExtensions.pass-import
+    passExtensions.pass-otp
+    passExtensions.pass-update
 
     # Command line helper
+    btop
+    bottom # Was "ytop", now "btm": https://github.com/ClementTsang/bottom
     fd
+    findutils # xargs
+    hexyl
+    jc # Converts everything to json
+    jq
+    just # https://github.com/casey/just
+    moreutilsWithoutParallel
+    mktemp # This version supports the `--tmpdir` option
+    pueue # Task manager https://github.com/Nukesor/pueue
+    parallel
     pv
+    python39Packages.ftfy # Fix broken unicode encoding
+    rename
+    tmuxp # Tmuxinator like session manager
+    tldr-hs # TLDR client with local cache
+    ugrep
+    viddy # A modern watch alternative
+    watchexec
     xxd
+    yq
+    zellij # Tmux / screen alternative: https://github.com/zellij-org/zellij
+
+    # Pictures / Images
+    imagemagickBig
+    vips # Image manipulation: https://www.libvips.org/API/current/using-cli.html
+
+    # Compressions
+    p7zip # 7-zip with more codecs (Z-Standard, Brotli, Lizerd, AES encrypted ZIP files.
+    xz
+    zstd
+
+    # Web
+    curlie
+    htmlq # Like JQ, but for HTML
+
+    # File explorers
+    broot
+    # nnn
+    ranger
+    vifm
 
     # Useful nix related tools
+    any-nix-shell
     cachix # adding/managing alternative binary caches hosted by Cachix
-    comma # run software from without installing it
+    comma # run software from without installing it, update with `comma --update`
+    devbox # https://www.jetpack.io/devbox/docs/cli_reference/devbox/
+    nil # Nix LSP https://github.com/oxalica/nil
     nodePackages.node2nix # Convert node packages to Nix
 
+
+    # AI Tools
     # chatblade # Broken, use brew version
+    github-copilot-cli # ??/!! git?/git! gh?/gh!
+    # k8sgpt
+    # shell_gpt
+    # tabnine
+
 
   ] ++ lib.optionals stdenv.isDarwin [
     mas # CLI for the macOS app store
