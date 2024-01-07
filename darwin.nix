@@ -3,9 +3,14 @@
   system.defaults.CustomUserPreferences = {
     "NSGlobalDomain" = {
       "NSQuitAlwaysKeepsWindows" = true;
+      # Enable web inspector in web views
+      "WebKitDeveloperExtras" = true;
     };
-    # For this wrok, you have to add Terminal to apps with Full Disk Access in Security And Privacy
+    # For this work, you have to add Terminal to apps with Full Disk Access in Security And Privacy
     "com.apple.Safari" = {
+      # Enable debug menu and web inspector
+      "IncludeInternalDebugMenu" = true;
+      "WebKitDeveloperExtrasEnabledPreferenceKey" = true;
       "com.apple.Safari.ContentPageGroupIdentifier.WebKit2DeveloperExtrasEnabled" = true;
     };
     "com.apple.dock" = {
