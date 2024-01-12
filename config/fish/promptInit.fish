@@ -32,13 +32,5 @@ else if command -v /usr/local/bin/brew > /dev/null
     /usr/local/bin/brew shellenv | source
 end
 
-if command -v mcfly > /dev/null
-    mcfly init fish | source
-    if type mcfly_key_bindings > /dev/null
-        mcfly_key_bindings
-    end
-end
-
-
 test -e {$HOME}/.iterm2_shell_integration.fish ; and source {$HOME}/.iterm2_shell_integration.fish
 test -d {$HOME}/.iterm2 ; and fish_add_path {$HOME}/.iterm2 
