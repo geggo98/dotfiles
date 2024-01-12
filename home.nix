@@ -88,12 +88,12 @@ in
   programs.gh.enable = true;
   programs.lazygit.enable = true;
   
+  programs.atuin.enable = true;
   programs.bat.enable = true;
   programs.fzf.enable = true;
   programs.gpg.enable = true;
   programs.k9s.enable = true;
   programs.lsd.enable = true;
-  programs.mcfly.enable = true;
   programs.ripgrep.enable = true;
 
   # Htop
@@ -133,6 +133,7 @@ in
 
     # DevOps tools
     awscli
+    dive # Inspect Docker images
     docker-buildx
     docker-client
     docker-credential-helpers # Safely store docker credentials: https://github.com/docker/docker-credential-helpers
