@@ -11,6 +11,14 @@
   nix.settings.trusted-users = [
     "@admin"
   ];
+  # Enable the Linux builder
+  #   # Example:
+  #   $ nix build \
+  #   --impure \
+  #   --expr '(with import <nixpkgs> { system = "aarch64-linux"; }; runCommand "foo" {} "uname -a > $out")'
+  #   $ cat result
+  #   Linux localhost 6.1.72 #1-NixOS SMP Wed Jan 10 16:10:37 UTC 2024 aarch64 GNU/Linux
+  nix.linux-builder.enable = true;
   nix.configureBuildUsers = true;
   
   # For home-manager
