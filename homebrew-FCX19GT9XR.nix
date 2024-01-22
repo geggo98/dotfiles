@@ -37,6 +37,8 @@
     "localsend/localsend/localsend"
     "omnigraffle"
     "orbstack"
+    "macgpt"
+    "macwhisper"
     "microsoft-office"
     # "maestral" # Leightweight Dropbox client optimized for M1
     "monodraw"
