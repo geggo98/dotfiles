@@ -1,7 +1,10 @@
 set fish_greeting # Disable greeting
 
 if command -v starship > /dev/null
-    starship init fish | source
+#    starship init fish | source
+    function starship_transient_rprompt_func
+        starship module directory
+    end
 end
 if command -v nvim > /dev/null
     set -x MANPAGER "$(command -v nvim) +Man!"
@@ -32,5 +35,15 @@ else if command -v /usr/local/bin/brew > /dev/null
     /usr/local/bin/brew shellenv | source
 end
 
-test -e {$HOME}/.iterm2_shell_integration.fish ; and source {$HOME}/.iterm2_shell_integration.fish
+if test -e {$HOME}/.iterm2_shell_integration.fish
+    source {$HOME}/.iterm2_shell_integration.fish
+    if functions fish_prompt > /dev/null 
+        # random 100000000000 1000000000000
+        functions --copy fish_prompt fish_prompt_old_892546889851
+        function fish_prompt
+            iterm2_prompt_mark
+            fish_prompt_old_892546889851
+        end
+    end
+end
 test -d {$HOME}/.iterm2 ; and fish_add_path {$HOME}/.iterm2 
