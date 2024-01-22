@@ -31,6 +31,7 @@
   system.defaults.finder.QuitMenuItem = true;
   system.defaults.finder.ShowPathbar = true;
   system.defaults.finder.FXPreferredViewStyle = "clmv"; # Column view
+  # system.defaults.loginwindow.LoginwindowText = "nixcademy.com";
   system.defaults.magicmouse.MouseButtonMode = "TwoButton";
   system.defaults.menuExtraClock.IsAnalog = true;
   system.defaults.screencapture.location = "~/Downloads";
