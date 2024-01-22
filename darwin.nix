@@ -30,8 +30,11 @@
   system.defaults.finder.AppleShowAllExtensions = true;
   system.defaults.finder.QuitMenuItem = true;
   system.defaults.finder.ShowPathbar = true;
+  system.defaults.finder.FXPreferredViewStyle = "clmv"; # Column view
   system.defaults.magicmouse.MouseButtonMode = "TwoButton";
   system.defaults.menuExtraClock.IsAnalog = true;
+  system.defaults.screencapture.location = "~/Downloads";
+  # system.defaults.screensaver.askForPasswordDelay = 10;
   system.defaults.trackpad.Clicking = true;
   system.defaults.trackpad.Dragging = true;
   system.defaults.trackpad.TrackpadRightClick = true;
