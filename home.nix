@@ -70,7 +70,10 @@ in
   };
   programs.nix-index.enable = true;
   programs.nnn.enable = true;
-  programs.starship.enable = true;
+  programs.starship= {
+    enable = true;
+    enableTransience = true;
+  };
 
   programs.git = {
     enable = true;
@@ -88,7 +91,10 @@ in
   programs.gh.enable = true;
   programs.lazygit.enable = true;
   
-  programs.atuin.enable = true;
+  programs.atuin= {
+    enable = true;
+    # https://atuin.sh/docs/commands/sync
+  };
   programs.bat.enable = true;
   programs.fzf.enable = true;
   programs.gpg.enable = true;
@@ -249,6 +255,9 @@ in
     nvim = {
       onChange = "PATH=$PATH:${pkgs.git}/bin ${pkgs.neovim}/bin/nvim --headless +quitall";
       source = astronvim;
+    };
+    "starship.toml" = {
+      source = ./config/starship-preset-bracketed-segments.toml;
     };
   };
 
