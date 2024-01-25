@@ -49,9 +49,9 @@ in
       # lsd dir colors
       "+l" = "lsd";
       "+la" = "lsd -a";
-      "+ll" = "lsd -l";
-      "+lla" = "lsd -la";
-      "+llt" = "lsd --long --tree --ignore-glob .git --ignore-glob node_modules";
+      "+ll" = "lsd -l --git";
+      "+lla" = "lsd -la --git";
+      "+llt" = "lsd --long --tree --git --ignore-glob .git --ignore-glob node_modules";
       "+lt" = "lsd --tree --ignore-glob .git --ignore-glob node_modules";
 
       # YubiKey
