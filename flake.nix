@@ -12,12 +12,14 @@
     darwin.inputs.nixpkgs.follows = "nixpkgs-unstable";
     home-manager.url = "github:nix-community/home-manager";
     home-manager.inputs.nixpkgs.follows = "nixpkgs-unstable";
+    sops-nix.url = "github:Mic92/sops-nix";
+    sops-nix.inputs.nixpkgs.follows = "nixpkgs-unstable";
 
     # External dependencies
     astronvim = { url = "github:AstroNvim/AstroNvim/v3.40.1"; flake = false; };
   };
 
-  outputs = { self, darwin, nixpkgs, home-manager, ... }@inputs:
+  outputs = { self, darwin, nixpkgs, home-manager, sops-nix, ... }@inputs:
   let 
     inherit (darwin.lib) darwinSystem;
     inherit (inputs.nixpkgs-unstable.lib) attrValues makeOverridable optionalAttrs singleton;
@@ -41,6 +43,8 @@
           ./homebrew-FCX19GT9XR.nix
           # `home-manager` module
           home-manager.darwinModules.home-manager
+          # `sops` module
+          # sops-nix.homeManagerModules.sops 
           {
             nixpkgs = nixpkgsConfig;
             # `home-manager` config
