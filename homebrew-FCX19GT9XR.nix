@@ -27,6 +27,7 @@
     "iterm2"
     "istat-menus"
     "jetbrains-toolbox"
+    "karabiner-elements"
     "keka" # Archive utility, supports encrypted ZIP files, https://www.keka.io/
     "kekaexternalhelper" # Register Keka as default app for archives
     "krita"
