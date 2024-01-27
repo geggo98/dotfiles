@@ -1,7 +1,6 @@
 { pkgs, lib, ... }:
 {
   # Nix configuration ------------------------------------------------------------------------------
-
   nix.settings.substituters = [
     "https://cache.nixos.org/"
   ];
