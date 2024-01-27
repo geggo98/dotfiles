@@ -47,8 +47,11 @@ in
   programs.zsh.enable = true;
   programs.fish = {
     enable = true;
-    interactiveShellInit = "set -l OPEN_AI_API_KEY_PATH ${config.sops.secrets.open_ai_api_key.path}\n"
-      + (builtins.readFile ./config/fish/promptInit.fish) +  "\n";
+    interactiveShellInit = (builtins.readFile ./config/fish/promptInit.fish)
+      + ''
+        export_nix_sops_secret_path OPEN_AI_API_KEY_PATH "${config.sops.secrets.open_ai_api_key.path}"
+        export_nix_sops_secret_value OPEN_AI_API_KEY "${config.sops.secrets.open_ai_api_key.path}"
+        '';
     plugins = [
       { name = "z"; src = pkgs.fishPlugins.z.src; }
       { name = "fzf"; src = pkgs.fishPlugins.fzf-fish.src; }
@@ -312,6 +315,7 @@ in
   home.sessionVariables = {
     # Convert from ssh key with `ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw`
     SOPS_AGE_RECIPIENTS = "age1vygfenpy584kvfdge57ep2vwqqe33zd4auanwu7frmf0tht5jq0q5ugmgd";
-    OPEN_AI_API_KEY_FILE = config.sops.secrets."open_ai_api_key".path;
+    # Doesn't work, because it contains the `%r` placeholder for the sops secrets directory.
+    # OPEN_AI_API_KEY_FILE = config.sops.secrets."open_ai_api_key".path;
   };
 }
