@@ -1,4 +1,4 @@
-{ config, pkgs, lib, astronvim, ... }:
+{ config, pkgs, lib, astronvim, sops-nix, ... }:
 let
   moreutilsWithoutParallel = pkgs.moreutils.overrideAttrs(oldAttrs: rec {
         preBuild = oldAttrs.preBuild + ''
@@ -7,7 +7,34 @@ let
       });
 in
 {
+  # This value determines the Home Manager release that your
+  # configuration is compatible with. This helps avoid breakage
+  # when a new Home Manager release introduces backwards
+  # incompatible changes.
+  #
+  # You can update Home Manager without changing this value. See
+  # the Home Manager release notes for a list of state version
+  # changes in each release.
+  # https://nix-community.github.io/home-manager/release-notes.xhtml
   home.stateVersion = "22.05";
+
+  # Import home-manager modules
+  # Import them here instead of in the flake input to avoid importing NixOS modules not compatible with macOS Darwin
+  imports = [
+    sops-nix.homeManagerModules.sops
+  ];
+
+  sops = {
+    # age.keyFile = "~/.config/sops/keys/age";
+    # SSH keys must be passwordless and in Ed25519 format
+    # `ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_sops_nopw -N ""`
+    # Convert them with the ssh-to=age command: `ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw`
+    age.sshKeyPaths = [ "/Users/stefan/.ssh/id_ed25519_sops_nopw" ];
+    defaultSopsFile = ./secrets/secrets.enc.yaml;
+    secrets = {
+      open_ai_api_key = {};
+    };
+  };
 
   # https://github.com/malob/nixpkgs/blob/master/home/default.nix
 
@@ -20,7 +47,8 @@ in
   programs.zsh.enable = true;
   programs.fish = {
     enable = true;
-    interactiveShellInit = builtins.readFile ./config/fish/promptInit.fish;
+    interactiveShellInit = "set -l OPEN_AI_API_KEY_PATH ${config.sops.secrets.open_ai_api_key.path}\n"
+      + (builtins.readFile ./config/fish/promptInit.fish) +  "\n";
     plugins = [
       { name = "z"; src = pkgs.fishPlugins.z.src; }
       { name = "fzf"; src = pkgs.fishPlugins.fzf-fish.src; }
@@ -86,6 +114,10 @@ in
       # Note: For big files, use "delta" instead. 
       # It's faster, also has syntax highlightning, but doesn't interpret structure.
       enable = true;
+    };
+    extraConfig = {
+      # `echo '*.enc.yaml diff=sopsdiffer' >> .gitattributes`
+      diff."sopsdiffer".textconv = "${pkgs.sops}/bin/sops -d";
     };
   };
   programs.gh.enable = true;
@@ -158,6 +190,7 @@ in
     step-ca
     step-cli # https://github.com/smallstep/cli
     socat
+    sops
     # tor
     # torsocks # https://www.jamieweb.net/blog/tor-is-a-great-sysadmin-tool/
     xxh # ssh with better shell supporton the remote site
@@ -276,4 +309,9 @@ in
     nix.enable = true;
   };
 
+  home.sessionVariables = {
+    # Convert from ssh key with `ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw`
+    SOPS_AGE_RECIPIENTS = "age1vygfenpy584kvfdge57ep2vwqqe33zd4auanwu7frmf0tht5jq0q5ugmgd";
+    OPEN_AI_API_KEY_FILE = config.sops.secrets."open_ai_api_key".path;
+  };
 }

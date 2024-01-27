@@ -1,5 +1,25 @@
 set fish_greeting # Disable greeting
 
+function read_nix_sops_secret --argument secret_path
+    # Determine the base path for secrets. On Linux, it's $XDG_RUNTIME_DIR. On macOS Darwin it's `getconf DARWIN_USER_TEMP_DIR`.
+    if command -v getconf > /dev/null
+        set secrets_base_path (getconf DARWIN_USER_TEMP_DIR)
+    else
+        set secrets_base_path $XDG_RUNTIME_DIR
+    end
+    # In the paramter secret_path, replace `%r` with secret base path with the Fish stirng function
+    set secret_path (string replace '%r' $secrets_base_path $secret_path)
+    # If the file exists, read it and set the environment variable $secret_name
+    if test -f "$secret_path"
+        cat $secret_path
+    end 
+end
+
+# If the variable $OPEN_AI_API_KEY_FILE is defined, read it and set the environment variable $OPEN_AI_API_KEY
+if set -q OPEN_AI_API_KEY_FILE
+    set -x OPEN_AI_API_KEY (read_nix_sops_secret $OPEN_AI_API_KEY_FILE)
+end
+
 if command -v starship > /dev/null
 #    starship init fish | source
     function starship_transient_rprompt_func
@@ -12,7 +32,7 @@ if command -v nvim > /dev/null
 end
 if command -v bat > /dev/null
     set -x PAGER (command -v bat)
-    set -x FZF_PREVIEW_FILE_CMD "fzf --preview \"bat --color=always --style=numbers --line-range=:500 {}\"" 
+    set -x FZF_PREVIEW_FILE_CMD 'fzf --preview "bat --color=always --style=numbers --line-range=:500 {}"' 
 end
 if command -v lsd > /dev/null
     set -x FZF_PREVIEW_DIR_CMD "lsd -a"
