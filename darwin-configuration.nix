@@ -279,6 +279,7 @@ in
       end
 
       if test -f ~/.config/nvim/init.lua > /dev/null
+        set -x EDITOR nvim
         set -x VISUAL nvim
         set -x GIT_EDITOR nvim
       else if command -v {$HOME}/.local/bin/lvim > /dev/null
@@ -296,6 +297,8 @@ in
       if command -v ${pkgs.mcfly}/bin/mcfly > /dev/null
         ${pkgs.mcfly}/bin/mcfly init fish | source
       end
+
+      set -x OPEN_AI_API_KEY ${config.sops.secrets."openai-api-key".path}
 
 
       test -e {$HOME}/.iterm2_shell_integration.fish ; and source {$HOME}/.iterm2_shell_integration.fish

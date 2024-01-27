@@ -43,8 +43,15 @@
           ./homebrew-FCX19GT9XR.nix
           # `home-manager` module
           home-manager.darwinModules.home-manager
-          # `sops` module
-          # sops-nix.homeManagerModules.sops 
+          
+          # WARNING:
+          # Don't import the sops home-maanger module here,
+          # it's a NixOS specific plugin and tries to use SystemD.
+          # You will get an error message like this:
+          # `error: The option `systemd' does not exist. Definition values: ...`
+          # So don't do this: `sops-nix.homeManagerModules.sops`
+          # Instead, import it in the `home.nix` file.
+
           {
             nixpkgs = nixpkgsConfig;
             # `home-manager` config
