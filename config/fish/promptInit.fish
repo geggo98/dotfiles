@@ -1,23 +1,28 @@
 set fish_greeting # Disable greeting
 
-function read_nix_sops_secret --argument secret_path
-    # Determine the base path for secrets. On Linux, it's $XDG_RUNTIME_DIR. On macOS Darwin it's `getconf DARWIN_USER_TEMP_DIR`.
-    if command -v getconf > /dev/null
-        set secrets_base_path (getconf DARWIN_USER_TEMP_DIR)
-    else
-        set secrets_base_path $XDG_RUNTIME_DIR
+function fix_nix_sops_secret_path --argument secret_path --description "Fix the path to a Nix SOPS secret"
+    if test -z "$nix_sops_secrets_base_path"
+        # Determine the base path for secrets. On Linux, it's $XDG_RUNTIME_DIR. On macOS Darwin it's `getconf DARWIN_USER_TEMP_DIR`.
+        if command -v getconf > /dev/null
+            set -g nix_sops_secrets_base_path (getconf DARWIN_USER_TEMP_DIR)
+        else
+            set -g nix_sops_secrets_base_path $XDG_RUNTIME_DIR
+        end
     end
-    # In the paramter secret_path, replace `%r` with secret base path with the Fish stirng function
-    set secret_path (string replace '%r' $secrets_base_path $secret_path)
-    # If the file exists, read it and set the environment variable $secret_name
-    if test -f "$secret_path"
-        cat $secret_path
-    end 
+    # In the paramter secret_path, replace `%r` with secret base path
+    set -f secret_path (string replace '%r' $nix_sops_secrets_base_path $secret_path)
+    echo $secret_path
 end
 
-# If the variable $OPEN_AI_API_KEY_FILE is defined, read it and set the environment variable $OPEN_AI_API_KEY
-if set -q OPEN_AI_API_KEY_FILE
-    set -x OPEN_AI_API_KEY (read_nix_sops_secret $OPEN_AI_API_KEY_FILE)
+function export_nix_sops_secret_path --argument variable_name --argument secret_path --description "Export the path to a Nix SOPS secret"
+    set -g -x $variable_name (fix_nix_sops_secret_path $secret_path)
+end
+
+function export_nix_sops_secret_value --argument variable_name --argument secret_path --description "Export the value of a Nix SOPS secret"
+    set -f secret_path (fix_nix_sops_secret_path $secret_path)
+    if test -f "$secret_path"
+        set -g -x $variable_name (cat $secret_path)
+    end
 end
 
 if command -v starship > /dev/null
