@@ -252,7 +252,7 @@ in
   environment.darwinConfig = "$HOME/.nixpkgs/darwin-configuration.nix";
 
   # Auto upgrade nix package and the daemon service.
-  services.nix-daemon.enable = true;
+  # services.nix-daemon.enable = true;
   nix.package = pkgs.nix; # or: pkgs.nixFlakes, pkgs.nixUnstable
 
   # Enable lorri direnv rebuild: https://github.com/nix-community/lorri
@@ -405,6 +405,9 @@ in
     experimental-features = nix-command flakes
     auto-optimise-store = true
   '';
+  # nix.settings.build-users-group = null;
+  nix.useDaemon = lib.mkForce false;
+  services.nix-daemon.enable = false;
 
   # Allow non-free packages
   nixpkgs.config.allowUnfree = true;
