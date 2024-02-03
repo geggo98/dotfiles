@@ -31,6 +31,14 @@
   '' + lib.optionalString (pkgs.system == "aarch64-darwin") ''
     extra-platforms = x86_64-darwin aarch64-darwin
   '';
+  # Extra platforms allow to build for Intel and ARM on Apple Silicon:
+  # ```bash
+  # $ nix run nixpkgs#legacyPackages.aarch64-darwin.hello
+  # Hello, world!
+  # $ nix run nixpkgs#legacyPackages.x86_64-darwin.hello
+  # Hello, world!
+  # ```
+
 
   # Create /etc/bashrc that loads the nix-darwin environment.
   programs.zsh.enable = true;
