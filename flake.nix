@@ -10,16 +10,23 @@
     # Environment/system management
     darwin.url = "github:lnl7/nix-darwin/master";
     darwin.inputs.nixpkgs.follows = "nixpkgs-unstable";
+    
     home-manager.url = "github:nix-community/home-manager";
     home-manager.inputs.nixpkgs.follows = "nixpkgs-unstable";
+    
+    # https://github.com/Mic92/sops-nix
     sops-nix.url = "github:Mic92/sops-nix";
     sops-nix.inputs.nixpkgs.follows = "nixpkgs-unstable";
+    
+    # https://github.com/nix-community/nix-index-database
+    nix-index-database.url = "github:Mic92/nix-index-database";
+    nix-index-database.inputs.nixpkgs.follows = "nixpkgs";
 
     # External dependencies
     astronvim = { url = "github:AstroNvim/AstroNvim/v3.40.1"; flake = false; };
   };
 
-  outputs = { self, darwin, nixpkgs, home-manager, sops-nix, ... }@inputs:
+  outputs = { self, darwin, nixpkgs, nixpkgs-unstable, home-manager, sops-nix, nix-index-database, ... }@inputs:
   let 
     inherit (darwin.lib) darwinSystem;
     inherit (inputs.nixpkgs-unstable.lib) attrValues makeOverridable optionalAttrs singleton;
@@ -40,7 +47,7 @@
           ./configuration.nix
           ./darwin.nix
           # Host specific packages
-          ./homebrew-FCX19GT9XR.nix
+          ./devices/FCX19GT9XR/homebrew.nix
           # `home-manager` module
           home-manager.darwinModules.home-manager
           
@@ -62,6 +69,36 @@
           }
         ];
       };
+      DKL6GDJ7X1 = darwinSystem {
+        system = "aarch64-darwin";
+        modules = [ 
+          # Main `nix-darwin` config
+          ./configuration.nix
+          ./darwin.nix
+          # Host specific packages
+          ./devices/DKL6GDJ7X1/homebrew.nix
+          # `home-manager` module
+          home-manager.darwinModules.home-manager
+          
+          # WARNING:
+          # Don't import the sops home-maanger module here,
+          # it's a NixOS specific plugin and tries to use SystemD.
+          # You will get an error message like this:
+          # `error: The option `systemd' does not exist. Definition values: ...`
+          # So don't do this: `sops-nix.homeManagerModules.sops`
+          # Instead, import it in the `home.nix` file.
+
+          {
+            nixpkgs = nixpkgsConfig;
+            # `home-manager` config
+            home-manager.useGlobalPkgs = true;
+            home-manager.useUserPackages = true;
+            home-manager.users.stefan = import ./home.nix;
+            home-manager.extraSpecialArgs = inputs;            
+          }
+        ];
+      };
+
     };
 
     # Overlays --------------------------------------------------------------- {{{
