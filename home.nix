@@ -1,8 +1,8 @@
-{ config, pkgs, lib, astronvim, sops-nix, ... }:
+{ config, pkgs, nixpkgs-unstable, lib, astronvim, sops-nix, nix-index-database, ... }:
 let
   moreutilsWithoutParallel = pkgs.moreutils.overrideAttrs(oldAttrs: rec {
         preBuild = oldAttrs.preBuild + ''
-           substituteInPlace Makefile --replace " parallel " " " --replace " parallel.1 " " "
+          substituteInPlace Makefile --replace " parallel " " " --replace " parallel.1 " " "
         '';
       });
 in
@@ -21,6 +21,7 @@ in
   # Import home-manager modules
   # Import them here instead of in the flake input to avoid importing NixOS modules not compatible with macOS Darwin
   imports = [
+    nix-index-database.hmModules.nix-index
     sops-nix.homeManagerModules.sops
   ];
 
@@ -43,6 +44,8 @@ in
   # https://rycee.gitlab.io/home-manager/options.html#opt-programs.direnv.enable
   programs.direnv.enable = true;
   programs.direnv.nix-direnv.enable = true;
+
+  programs.nix-index-database.comma.enable = true;
   
   programs.zsh.enable = true;
   programs.fish = {
@@ -263,7 +266,6 @@ in
     # Useful nix related tools
     any-nix-shell
     cachix # adding/managing alternative binary caches hosted by Cachix
-    comma # run software from without installing it, update with `comma --update`
     devbox # https://www.jetpack.io/devbox/docs/cli_reference/devbox/
     nil # Nix LSP https://github.com/oxalica/nil
     nodePackages.node2nix # Convert node packages to Nix
@@ -313,6 +315,7 @@ in
   };
 
   home.sessionVariables = {
+    # Comma separated list of age recipients.
     # Convert from ssh key with `ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw`
     SOPS_AGE_RECIPIENTS = "age1vygfenpy584kvfdge57ep2vwqqe33zd4auanwu7frmf0tht5jq0q5ugmgd";
     # Doesn't work, because it contains the `%r` placeholder for the sops secrets directory.
