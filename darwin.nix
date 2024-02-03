@@ -22,7 +22,9 @@
   system.defaults.NSGlobalDomain.AppleKeyboardUIMode = 3;
   system.defaults.NSGlobalDomain.InitialKeyRepeat = 15;
   system.defaults.NSGlobalDomain.KeyRepeat = 2;
-  system.defaults.NSGlobalDomain."com.apple.keyboard.fnState" = false;
+  
+  # 1 turns on F1,F2, etc. as standard function keys; 0 sets them as special-purpose keys
+  system.defaults.NSGlobalDomain."com.apple.keyboard.fnState" = true;
   system.defaults.NSGlobalDomain."com.apple.mouse.tapBehavior" = 1;
   system.defaults.dock.autohide = true;
   system.defaults.dock.mru-spaces = false;
