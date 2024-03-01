@@ -4,7 +4,7 @@
   nix.settings.substituters = [
     "https://cache.nixos.org/"
   ];
-  nix.settings.trusted-public-keys = [
+  nix.settings.extra-trusted-public-keys = [
     "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
   ];
   nix.settings.trusted-users = [
@@ -39,6 +39,11 @@
   # Hello, world!
   # ```
 
+nix.gc = {
+  automatic = true;
+  dates = "weekly";
+  options = "--delete-older-than 30d";
+};
 
   # Create /etc/bashrc that loads the nix-darwin environment.
   programs.zsh.enable = true;
