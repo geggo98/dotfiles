@@ -47,7 +47,7 @@
           ./configuration.nix
           ./darwin.nix
           # Host specific packages
-          ./devices/FCX19GT9XR/homebrew.nix
+          ./hosts/FCX19GT9XR/homebrew.nix
           # `home-manager` module
           home-manager.darwinModules.home-manager
           
@@ -76,7 +76,7 @@
           ./configuration.nix
           ./darwin.nix
           # Host specific packages
-          ./devices/DKL6GDJ7X1/homebrew.nix
+          ./hosts/DKL6GDJ7X1/homebrew.nix
           # `home-manager` module
           home-manager.darwinModules.home-manager
           
