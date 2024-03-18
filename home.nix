@@ -31,10 +31,12 @@ in
     # SSH keys must be passwordless and in Ed25519 format
     # `ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_sops_nopw -N ""`
     # Convert them with the ssh-to=age command: `ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw`
+    # Edit file with `env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops secrets/secrets.enc.yaml`
     age.sshKeyPaths = [ "/Users/stefan/.ssh/id_ed25519_sops_nopw" ];
     defaultSopsFile = ./secrets/secrets.enc.yaml;
     secrets = {
-      open_ai_api_key = {};
+      openai_api_key = {};
+      anthropic_api_key = {};
     };
   };
 
@@ -53,8 +55,10 @@ in
     enable = true;
     interactiveShellInit = (builtins.readFile ./config/fish/promptInit.fish)
       + ''
-        export_nix_sops_secret_path OPENAI_API_KEY_PATH "${config.sops.secrets.open_ai_api_key.path}"
-        export_nix_sops_secret_value OPENAI_API_KEY "${config.sops.secrets.open_ai_api_key.path}"
+        export_nix_sops_secret_path OPENAI_API_KEY_PATH "${config.sops.secrets.openai_api_key.path}"
+        export_nix_sops_secret_value OPENAI_API_KEY "${config.sops.secrets.openai_api_key.path}"
+        export_nix_sops_secret_path ANTHROPIC_API_KEY_PATH "${config.sops.secrets.anthropic_api_key.path}"
+        export_nix_sops_secret_value ANTHROPIC_API_KEY "${config.sops.secrets.anthropic_api_key.path}"
         '';
     plugins = [
       { name = "z"; src = pkgs.fishPlugins.z.src; }
