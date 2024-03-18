@@ -1,4 +1,4 @@
-{ config, system, pkgs, nixpkgs-unstable, lib, astronvim, sops-nix, nix-index-database, ... }:
+{ config, pkgs, nixpkgs-unstable, lib, astronvim, sops-nix, nix-index-database, ... }:
 let
   moreutilsWithoutParallel = pkgs.moreutils.overrideAttrs(oldAttrs: rec {
         preBuild = oldAttrs.preBuild + ''
@@ -319,7 +319,9 @@ in
     nix.enable = true;
   };
 
-  home.file."Library/Application Support/iTerm2/DynamicProfiles".source = ./config/iTerm2/DynamicProfiles;
+  home.file."Library/Application Support/iTerm2/DynamicProfiles/50_Nix.json" = lib.optionalAttrs (pkgs.system == "aarch64-darwin" || pkgs.system == "x86_64-darwin") {
+    source = ./config/iTerm2/DynamicProfiles/50_Nix.json;
+  };
 
   home.sessionVariables = {
     # Comma separated list of age recipients.
