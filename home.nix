@@ -1,4 +1,4 @@
-{ config, pkgs, nixpkgs-unstable, lib, astronvim, sops-nix, nix-index-database, ... }:
+{ config, system, pkgs, nixpkgs-unstable, lib, astronvim, sops-nix, nix-index-database, ... }:
 let
   moreutilsWithoutParallel = pkgs.moreutils.overrideAttrs(oldAttrs: rec {
         preBuild = oldAttrs.preBuild + ''
@@ -272,7 +272,6 @@ in
 
 
     # AI Tools
-    # chatblade # Broken, use brew version
     github-copilot-cli # ??/!! git?/git! gh?/gh!
     # k8sgpt
     # shell_gpt
@@ -299,6 +298,7 @@ in
     };
   };
 
+
   # Misc configuration files --------------------------------------------------------------------{{{
 
   # https://docs.haskellstack.org/en/stable/yaml_configuration/#non-project-specific-config
@@ -313,6 +313,8 @@ in
     };
     nix.enable = true;
   };
+
+  home.file."Library/Application Support/iTerm2/DynamicProfiles".source = ./config/iTerm2/DynamicProfiles;
 
   home.sessionVariables = {
     # Comma separated list of age recipients.
