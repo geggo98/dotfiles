@@ -8,12 +8,14 @@
   };
   homebrew.brews = [
     "chatblade"
+    "llm" # https://llm.datasette.io/ like chatblade, but also for local models
   ];
   homebrew.casks = [
     "1password"
     # "affinity-designer"
     # "affinity-photo"
     # "affinity-publisher"
+    "appcleaner"
     "bartender"
     "brave-browser"
     "dash" # Dash 6
@@ -27,6 +29,7 @@
     "iterm2"
     "istat-menus"
     "jetbrains-toolbox"
+    "MonitorControl"
     "keka" # Archive utility, supports encrypted ZIP files, https://www.keka.io/
     "kekaexternalhelper" # Register Keka as default app for archives
     "krita"
@@ -37,7 +40,7 @@
     "localsend/localsend/localsend"
     "omnigraffle"
     "orbstack"
-    "macgpt"
+    # "macgpt"
     "macwhisper"
     "maestral" # Leightweight Dropbox client optimized for M1
     "monodraw"
@@ -75,7 +78,8 @@
     "1Password for Safari" = 1569813296;
     "Amphetamine" = 937984704;
     # "Bear" = 1091189122;
-    "Cascadea" =1432182561;
+    "Cascadea" = 1432182561;
+    "CloudMounter" = 1130254674; # Mounts: Dropbox, Google Drive, OneDrive, Amazon S3, FTP, SFTP, WebDAV
     "Compressor" = 424390742;
     "DaVinci Resolve" = 571213070;
     "DockTime" = 508034739;

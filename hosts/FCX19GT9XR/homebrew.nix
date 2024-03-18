@@ -14,14 +14,17 @@
     "affinity-designer"
     "affinity-photo"
     "affinity-publisher"
+    "appcleaner"
     "bartender"
     "brave-browser"
+    "crossover"
     "dash" # Dash 6
     "daisydisk"
     "devutils" # https://devutils.app/
     # "Dropbox"
     "firefox"
     "google-chrome"
+    "hammerspoon" # Helper for RCmd with alt-key
     "http-toolkit"
     # "iina" # VLC video player replacement https://iina.io
     "iterm2"
@@ -36,9 +39,10 @@
     "lunar"
     "lm-studio"
     "localsend/localsend/localsend"
+    "MonitorControl"
     "omnigraffle"
     "orbstack"
-    "macgpt"
+    # "macgpt"
     "macwhisper"
     "microsoft-office"
     # "maestral" # Leightweight Dropbox client optimized for M1
@@ -85,6 +89,7 @@
     "Amphetamine" = 937984704;
     # "Bear" = 1091189122;
     "Cascadea" =1432182561;
+    "CloudMounter" = 1130254674; # Mounts: Dropbox, Google Drive, OneDrive, Amazon S3, FTP, SFTP, WebDAV
     "Compressor" = 424390742;
     "DaVinci Resolve" = 571213070;
     "DockTime" = 508034739;
@@ -114,7 +119,7 @@
     "Omnivore: Read-it-later" = 1564031042;
     "rcmd" = 1596283165;
     "Shortery" = 1594183810;
-    # "Spark Mail – AI-Mails & Inbox" = -2144121543;
+    "Spark Desktop" = 6445813049;
     "SponsorBlock for YouTube - Skip Sponsorships" = 1573461917;
     "Tabby" = 1586203406; # Tab switcher for Safari
     "Vectornator"= 1219074514; # Linearity Curve / Vectornator
