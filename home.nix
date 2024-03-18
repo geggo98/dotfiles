@@ -169,7 +169,10 @@ in
     git-branchless
     git-machete
     git-trim
+    git-credential-manager # Manages HTTPS tokens for Azure DevOps, Bitbucket, GitHub, and GitLab. `git credential-manager configure`
     lazygit
+    # gitu # https://github.com/altsem/gitu - GIT TUI client
+    # tig # https://jonas.github.io/tig/
     nodePackages.typescript
     nodePackages.ts-node
     nodejs
@@ -272,6 +275,8 @@ in
 
 
     # AI Tools
+    # nixpkgs-unstable.chatblade # Broken, use brew version
+    # nixpkgs-unstable.llm
     github-copilot-cli # ??/!! git?/git! gh?/gh!
     # k8sgpt
     # shell_gpt
