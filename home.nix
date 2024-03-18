@@ -132,6 +132,11 @@ in
   
   programs.atuin= {
     enable = true;
+    settings = {
+      dialect = "uk"; # Date format
+      workspaces = true;
+      enter_accept = true;
+    };
     # https://atuin.sh/docs/commands/sync
   };
   programs.bat.enable = true;
