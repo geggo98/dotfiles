@@ -7,8 +7,8 @@
     # no_quarantine = true;
   };
   homebrew.brews = [
-    "chatblade"
-    "llm" # https://llm.datasette.io/ like chatblade, but also for local models
+    # "chatblade"
+    # "llm"
   ];
   homebrew.casks = [
     "1password"

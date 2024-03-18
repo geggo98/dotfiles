@@ -5,6 +5,7 @@ let
           substituteInPlace Makefile --replace " parallel " " " --replace " parallel.1 " " "
         '';
       });
+  unstable = nixpkgs-unstable.legacyPackages.${pkgs.system};
 in
 {
   # This value determines the Home Manager release that your
@@ -275,8 +276,8 @@ in
 
 
     # AI Tools
-    # nixpkgs-unstable.chatblade # Broken, use brew version
-    # nixpkgs-unstable.llm
+    unstable.chatblade
+    unstable.llm # https://llm.datasette.io/ like chatblade, but also for local models
     github-copilot-cli # ??/!! git?/git! gh?/gh!
     # k8sgpt
     # shell_gpt

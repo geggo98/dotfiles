@@ -7,7 +7,7 @@
     # no_quarantine = true;
   };
   homebrew.brews = [
-    "chatblade"
+    # "chatblade"
   ];
   homebrew.casks = [
     "1password"
