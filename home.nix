@@ -37,6 +37,7 @@ in
     secrets = {
       openai_api_key = {};
       anthropic_api_key = {};
+      openrouter_api_key = {};
     };
   };
 
@@ -59,6 +60,8 @@ in
         export_nix_sops_secret_value OPENAI_API_KEY "${config.sops.secrets.openai_api_key.path}"
         export_nix_sops_secret_path ANTHROPIC_API_KEY_PATH "${config.sops.secrets.anthropic_api_key.path}"
         export_nix_sops_secret_value ANTHROPIC_API_KEY "${config.sops.secrets.anthropic_api_key.path}"
+        export_nix_sops_secret_path OPENROUTER_API_KEY_PATH "${config.sops.secrets.openrouter_api_key.path}"
+        export_nix_sops_secret_value OPENROUTER_API_KEY "${config.sops.secrets.openrouter_api_key.path}"
         '';
     plugins = [
       { name = "z"; src = pkgs.fishPlugins.z.src; }
@@ -286,7 +289,7 @@ in
 
     # AI Tools
     unstable.chatblade
-    unstable.llm # https://llm.datasette.io/ like chatblade, but also for local models
+    (unstable.llm.withPlugins([])) # https://llm.datasette.io/ like chatblade, but also for local models
     github-copilot-cli # ??/!! git?/git! gh?/gh!
     # k8sgpt
     # shell_gpt
