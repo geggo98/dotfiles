@@ -8,6 +8,8 @@
   };
   homebrew.brews = [
     # "chatblade"
+    # "jan" # https://jan.ai
+    "llm" # The Nix version has still problems with plugins
   ];
   homebrew.casks = [
     "1password"
