@@ -289,7 +289,9 @@ in
 
     # AI Tools
     unstable.chatblade
-    (unstable.llm.withPlugins([])) # https://llm.datasette.io/ like chatblade, but also for local models
+    unstable.aichat
+    # The Nix version has problems with plugins, use the Brew version instead
+    # (unstable.llm.withPlugins([])) # https://llm.datasette.io/ like chatblade, but also for local models
     github-copilot-cli # ??/!! git?/git! gh?/gh!
     # k8sgpt
     # shell_gpt
@@ -340,6 +342,7 @@ in
     # Comma separated list of age recipients.
     # Convert from ssh key with `ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw`
     SOPS_AGE_RECIPIENTS = "age1vygfenpy584kvfdge57ep2vwqqe33zd4auanwu7frmf0tht5jq0q5ugmgd";
+    EDITOR = "${pkgs.neovim}/bin/nvim";
     # Doesn't work, because it contains the `%r` placeholder for the sops secrets directory.
     # OPENAI_API_KEY_FILE = config.sops.secrets."open_ai_api_key".path;
   };
