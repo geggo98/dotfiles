@@ -31,8 +31,9 @@ in
     # SSH keys must be passwordless and in Ed25519 format
     # `ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_sops_nopw -N ""`
     # Convert them with the ssh-to=age command: `ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw`
-    # Edit file with `env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops secrets/secrets.enc.yaml`
-    age.sshKeyPaths = [ "/Users/stefan/.ssh/id_ed25519_sops_nopw" ];
+    # Edit file with: `env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops -s secrets/secrets.enc.yaml`
+    # Add key with: `env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops --add-age age1... -r -i secrets/secrets.enc.yaml
+    age.sshKeyPaths = [ "${config.home.homeDirectory}/.ssh/id_ed25519_sops_nopw" ];
     defaultSopsFile = ./secrets/secrets.enc.yaml;
     secrets = {
       openai_api_key = {};
@@ -340,8 +341,9 @@ in
 
   home.sessionVariables = {
     # Comma separated list of age recipients.
-    # Convert from ssh key with `ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw`
-    SOPS_AGE_RECIPIENTS = "age1vygfenpy584kvfdge57ep2vwqqe33zd4auanwu7frmf0tht5jq0q5ugmgd";
+    # Convert from ssh key with `ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw.pub`
+    SOPS_AGE_RECIPIENTS = "age1vygfenpy584kvfdge57ep2vwqqe33zd4auanwu7frmf0tht5jq0q5ugmgd," # FCX19GT9XR
+      + "age1ae3vaq0cwzd8y0eatczdz7dz26m3mpxfnelwfxle9mqdachftd7q96fvaz"; # DKL6GDJ7X1
     EDITOR = "${pkgs.neovim}/bin/nvim";
     # Doesn't work, because it contains the `%r` placeholder for the sops secrets directory.
     # OPENAI_API_KEY_FILE = config.sops.secrets."open_ai_api_key".path;
