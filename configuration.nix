@@ -20,9 +20,6 @@
   nix.linux-builder.enable = true;
   nix.configureBuildUsers = true;
   
-  # For home-manager
-  users.users.stefan.home = /Users/stefan;
-
   # Enable experimental nix command and flakes
   # nix.package = pkgs.nixUnstable;
   nix.extraOptions = ''
@@ -50,9 +47,7 @@ nix.gc = {
   #programs.direnv.enable = true;
   #programs.starship.enable = true;
 
-  # Auto upgrade nix package and the daemon service.
-  services.nix-daemon.enable = true;
-
+  
   # Apps
   # `home-manager` currently has issues adding them to `~/Applications`
   # Issue: https://github.com/nix-community/home-manager/issues/1341
