@@ -30,7 +30,6 @@
     "iterm2"
     "istat-menus"
     "jetbrains-toolbox"
-    "MonitorControl"
     "keka" # Archive utility, supports encrypted ZIP files, https://www.keka.io/
     "kekaexternalhelper" # Register Keka as default app for archives
     "krita"
@@ -39,11 +38,13 @@
     "lunar"
     "lm-studio"
     "localsend/localsend/localsend"
+    "MonitorControl"
     "omnigraffle"
+    "openvpn-connect"
     "orbstack"
     # "macgpt"
     "macwhisper"
-    "maestral" # Leightweight Dropbox client optimized for M1
+    # "maestral" # Leightweight Dropbox client optimized for M1
     "monodraw"
     # "mosaic" # Window manager
     # "multipass" # Ubuntu VMs https://multipass.run
