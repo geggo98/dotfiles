@@ -1,0 +1,8 @@
+{ pkgs, lib, ... }:
+{
+  # Auto upgrade nix package and the daemon service.
+  services.nix-daemon.enable = true;
+
+  # For home-manager
+  users.users.stefan.home = /Users/stefan;
+}
