@@ -294,15 +294,27 @@ in
     # The Nix version has problems with plugins, use the Brew version instead
     # (unstable.llm.withPlugins([])) # https://llm.datasette.io/ like chatblade, but also for local models
     github-copilot-cli # ??/!! git?/git! gh?/gh!
+    unstable.ollama
     # k8sgpt
     # shell_gpt
     # tabnine
-
-
   ] ++ lib.optionals stdenv.isDarwin [
     mas # CLI for the macOS app store
     m-cli # useful macOS CLI commands
   ];
+  launchd.agents = {
+    ollama = {
+      enable = true;
+      config = {
+        # Program = unstable.ollama/bin/ollama;
+        ProgramArguments = [ "${unstable.ollama}/bin/ollama" "serve" ];
+        RunAtLoad = true;
+        KeepAlive = true;
+        StandardOutPath = "/tmp/ollama_${config.home.username}.out.log";
+        StandardErrorPath = "/tmp/ollama_${config.home.username}.err.log";
+      };
+    };
+  };
 
   xdg.configFile = {
     # See https://github.com/maxbrunet/dotfiles/blob/ebd85ceb40cbe79ebd5453bce63d384c1b49274a/nix/home.nix#L62
