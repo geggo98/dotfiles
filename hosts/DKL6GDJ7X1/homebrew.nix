@@ -52,6 +52,7 @@
     "raindropio"
     "raycast"
     "red-canary-mac-monitor" # System event viewer (Process Monitor / procmon), https://github.com/redcanaryco/mac-monitor
+    "sf-symbols" # https://developer.apple.com/sf-symbols/
     "shottr"
     "slack"
     # "studio-3t"
@@ -111,7 +112,8 @@
     "Shortery" = 1594183810;
     "SponsorBlock for YouTube - Skip Sponsorships" = 1573461917;
     "Tabby" = 1586203406; # Tab switcher for Safari
-    "Vectornator"= 1219074514; # Linearity Curve / Vectornator
+    "Vectornator" = 1219074514; # Linearity Curve / Vectornator
+    "Velja" = 1607635845; # Open links in specific browser
     # "Tabs Switcher" = 1406718335; # Switches browser tabs
     "Tailscale" = 1475387142;
     # "TinyStopwatch" = 1447754003;
