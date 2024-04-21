@@ -56,6 +56,7 @@
     "raycast"
     "resilio-sync"
     "red-canary-mac-monitor" # System event viewer (Process Monitor / procmon), https://github.com/redcanaryco/mac-monitor
+    "sf-symbols" # https://developer.apple.com/sf-symbols/
     "shottr"
     # "slack"
     # "soundsource"
@@ -124,6 +125,7 @@
     "Spark Desktop" = 6445813049;
     "SponsorBlock for YouTube - Skip Sponsorships" = 1573461917;
     "Tabby" = 1586203406; # Tab switcher for Safari
+    "Velja" = 1607635845; # Open links in specific browser
     "Vectornator"= 1219074514; # Linearity Curve / Vectornator
     # "Tabs Switcher" = 1406718335; # Switches browser tabs
     "Tailscale" = 1475387142;
