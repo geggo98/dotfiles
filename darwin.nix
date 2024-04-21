@@ -23,6 +23,11 @@
     "com.apple.dock" = {
       "size-immutable" = false;
     };
+    "com.apple.desktopservices" = {
+      # https://support.apple.com/en-us/102064
+      # Suppress the creation of .DS_Store files on network volumes
+      "DSDontWriteNetworkStores" = true;
+    };
   };
   system.defaults.ActivityMonitor.IconType = 5; # CPU Usage
   system.defaults.NSGlobalDomain.AppleInterfaceStyle = "Dark";
