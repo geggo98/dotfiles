@@ -1,6 +1,7 @@
 
 # MacOS
 
+- `xcode-select --install`
 - Give Terminal "Full Disk Access" (otherwise you'll get the error: "Defaults: Could not write to domain ...")
 - Make Terminal a "Developer Tool"
 - Configure sops encryption
@@ -10,6 +11,10 @@
 - `git-credential-manager install`
 - `atuin login && atuin sync -f`
 - Import Raycast settings
+- Configure Velja Browser picker
+- Install manually
+  - YourKit Profiler
+  - iTerm Shell Integration
 
 
 

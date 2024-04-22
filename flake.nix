@@ -1,4 +1,5 @@
 # darwin-rebuild switch --flake ~/.config/nix-darwin
+# git add . && nix --extra-experimental-features "nix-command flakes"  run nix-darwin -- switch --flake ~/.config/nix-darwin
 {
   description = "Stefan's darwin system";
 
