@@ -25,6 +25,7 @@
     "Dropbox"
     "firefox"
     "google-chrome"
+    "git-credential-manager" # The version in Nix doesn't find its Dotnet SDK
     "http-toolkit"
     # "iina" # VLC video player replacement https://iina.io
     "iterm2"

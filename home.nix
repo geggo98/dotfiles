@@ -190,7 +190,8 @@ in
     git-branchless
     git-machete
     git-trim
-    git-credential-manager # Manages HTTPS tokens for Azure DevOps, Bitbucket, GitHub, and GitLab. `git credential-manager configure`
+    # git-credential-manager # Manages HTTPS tokens for Azure DevOps, Bitbucket, GitHub, and GitLab. `git credential-manager configure`
+    # dotnet-runtime_7 # git-credential-manager needs this.
     lazygit
     # gitu # https://github.com/altsem/gitu - GIT TUI client
     # tig # https://jonas.github.io/tig/
