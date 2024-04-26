@@ -96,6 +96,7 @@
     "CloudMounter" = 1130254674; # Mounts: Dropbox, Google Drive, OneDrive, Amazon S3, FTP, SFTP, WebDAV
     "Compressor" = 424390742;
     "DaVinci Resolve" = 571213070;
+    "Display Maid" = 450063525;
     "DockTime" = 508034739;
     # "Dynamo" = 1445910651; # Safari Extension to block YouTube Ads
     "Faxbot" = 640079107;
