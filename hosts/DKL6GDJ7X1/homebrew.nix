@@ -26,6 +26,7 @@
     "firefox"
     "google-chrome"
     "git-credential-manager" # The version in Nix doesn't find its Dotnet SDK
+    "hammerspoon"
     "http-toolkit"
     # "iina" # VLC video player replacement https://iina.io
     "iterm2"
@@ -34,11 +35,11 @@
     "keka" # Archive utility, supports encrypted ZIP files, https://www.keka.io/
     "kekaexternalhelper" # Register Keka as default app for archives
     "krita"
+    "languagetool"
     "lens" # K8s IDE
     "losslesscut" # Simple video editor: https://github.com/mifi/lossless-cut
     "lunar"
     "lm-studio"
-    "localsend/localsend/localsend"
     "MonitorControl"
     "omnigraffle"
     "openvpn-connect"
@@ -59,6 +60,7 @@
     # "studio-3t"
     "tunnelblick"
     "visual-studio-code"
+    "yubico-yubikey-manager"
 
     # Display resolution manager
     # "betterdisplay" # https://github.com/waydabber/BetterDisplay
@@ -88,6 +90,7 @@
     "Compressor" = 424390742;
     "DaVinci Resolve" = 571213070;
     "DockTime" = 508034739;
+    "Display Maid" = 450063525;
     # "Dynamo" = 1445910651; # Safari Extension to block YouTube Ads
     "File Cabinet Pro" = 1150565778;
     "Final Cut Pro" = 424389933;
