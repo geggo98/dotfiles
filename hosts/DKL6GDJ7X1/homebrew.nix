@@ -56,7 +56,7 @@
     "red-canary-mac-monitor" # System event viewer (Process Monitor / procmon), https://github.com/redcanaryco/mac-monitor
     "sf-symbols" # https://developer.apple.com/sf-symbols/
     "shottr"
-    "slack"
+    "slack" # Also available via the Mac App Store
     # "studio-3t"
     "tunnelblick"
     "visual-studio-code"
@@ -100,11 +100,12 @@
     "iMazing HEIC Converter" = 1292198261;
     "Infuse" = 1136220934;
     "Horo" = 1437226581;
-    #mas "Ka-Block!", id: 1335413823
+    # "Ka-Block!", id: 1335413823
     "Keynote" = 409183694;
     "Logic Pro" = 634148309;
     "Logoist 5" = 6443412717;
     "MainStage" = 634159523;
+    "MeetingBar" = 1532419400; # Quickly join online meetings from the menus bar
     "Moom" = 419330170;
     "Motion" = 434290957;
     "Paste - Clipboard Manager" = 967805235;
@@ -115,6 +116,7 @@
     "Omnivore: Read-it-later" = 1564031042;
     "rcmd" = 1596283165;
     "Shortery" = 1594183810;
+    # "Slack for Desktop"= 803453959; # Also available as Homebrew Cask
     "SponsorBlock for YouTube - Skip Sponsorships" = 1573461917;
     "Tabby" = 1586203406; # Tab switcher for Safari
     "Vectornator" = 1219074514; # Linearity Curve / Vectornator
