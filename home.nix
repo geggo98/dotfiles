@@ -31,7 +31,8 @@ in
     # SSH keys must be passwordless and in Ed25519 format
     # `ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_sops_nopw -N ""`
     # Convert them with the ssh-to=age command: `ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw`
-    # Edit file with: `env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops -s secrets/secrets.enc.yaml`
+    # Edit secrets in the file with: `env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops secrets/secrets.enc.yaml`
+    # Edit keys in the file: `env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops -s secrets/secrets.enc.yaml`
     # Add key with: `env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops --add-age age1... -r -i secrets/secrets.enc.yaml
     age.sshKeyPaths = [ "${config.home.homeDirectory}/.ssh/id_ed25519_sops_nopw" ];
     defaultSopsFile = ./secrets/secrets.enc.yaml;
@@ -39,6 +40,7 @@ in
       openai_api_key = {};
       anthropic_api_key = {};
       openrouter_api_key = {};
+      groq_api_key = {};
     };
   };
 
@@ -63,6 +65,8 @@ in
         export_nix_sops_secret_value ANTHROPIC_API_KEY "${config.sops.secrets.anthropic_api_key.path}"
         export_nix_sops_secret_path OPENROUTER_API_KEY_PATH "${config.sops.secrets.openrouter_api_key.path}"
         export_nix_sops_secret_value OPENROUTER_API_KEY "${config.sops.secrets.openrouter_api_key.path}"
+        export_nix_sops_secret_path GROQ_API_KEY_PATH "${config.sops.secrets.groq_api_key.path}"
+        export_nix_sops_secret_value GROQ_API_KEY "${config.sops.secrets.groq_api_key.path}"
         '';
     plugins = [
       { name = "z"; src = pkgs.fishPlugins.z.src; }
@@ -366,6 +370,6 @@ in
       + "age1ae3vaq0cwzd8y0eatczdz7dz26m3mpxfnelwfxle9mqdachftd7q96fvaz"; # DKL6GDJ7X1
     EDITOR = "${pkgs.neovim}/bin/nvim";
     # Doesn't work, because it contains the `%r` placeholder for the sops secrets directory.
-    # OPENAI_API_KEY_FILE = config.sops.secrets."open_ai_api_key".path;
+    # OPENAI_API_KEY_FILE = config.sops.secrets."openai_api_key".path;
   };
 }
