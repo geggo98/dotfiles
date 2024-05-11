@@ -117,6 +117,13 @@ in
     enable = true;
     enableTransience = true;
   };
+  programs.yazi = {
+    enable = true; # TUI file manager, start with `ya`. https://yazi-rs.github.io/docs/quick-start
+    enableFishIntegration = true;
+    enableZshIntegration = true;
+    # enableBashIntegration = true;
+    # enableNushellIntegration = true;
+  };
 
   programs.git = {
     enable = true;
@@ -153,7 +160,7 @@ in
   programs.k9s.enable = true;
   programs.lsd.enable = true;
   programs.ripgrep.enable = true;
-
+  
   # Htop
   # https://rycee.gitlab.io/home-manager/options.html#opt-programs.htop.enable
   programs.htop.enable = true;
@@ -275,7 +282,7 @@ in
     htmlq # Like JQ, but for HTML
 
     # File explorers
-    broot
+    # broot
     # nnn
     ranger
     vifm
