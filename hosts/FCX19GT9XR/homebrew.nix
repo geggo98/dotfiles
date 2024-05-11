@@ -63,6 +63,7 @@
     # "studio-3t"
     "steam"
     "tripmode"
+    "vuescan"
     "visual-studio-code"
 
     # Display resolution manager
