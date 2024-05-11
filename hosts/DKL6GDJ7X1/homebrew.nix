@@ -56,6 +56,7 @@
     "shottr"
     "slack"
     # "studio-3t"
+    "tunnelblick"
     "visual-studio-code"
 
     # Display resolution manager
