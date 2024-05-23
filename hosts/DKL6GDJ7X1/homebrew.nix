@@ -18,6 +18,7 @@
     # "affinity-publisher"
     "appcleaner"
     "bartender"
+    "beardie" # Control Media Keys https://github.com/Stillness-2/beardie
     "brave-browser"
     "dash" # Dash 6
     "daisydisk"
