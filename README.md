@@ -11,10 +11,12 @@
 - `git-credential-manager install`
 - `atuin login && atuin sync -f`
 - Import Raycast settings
+- [Configure iTerm session restore](https://iterm2.com/why_no_content.html)
 - Configure Velja Browser picker
 - Install manually
   - YourKit Profiler
   - iTerm Shell Integration
+
 
 
 
