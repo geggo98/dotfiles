@@ -378,4 +378,16 @@ in
     # Doesn't work, because it contains the `%r` placeholder for the sops secrets directory.
     # OPENAI_API_KEY_FILE = config.sops.secrets."openai_api_key".path;
   };
+
+  home.activation.llm = lib.hm.dag.entryAfter [ "installPackages" ] ''
+      # Install or update LLM plugins
+      if command -v llm > /dev/null 2>&1
+      then
+        echo "Installing or updating LLM plugins"
+        llm install -U llm-openrouter llm-groq llm-ollama llm-claude-3
+        # Fix for llm-cmd on macOS
+        llm install https://github.com/nkkko/llm-cmd/archive/b5ff9c2a970720d57ecd3622bd86d2d99591838b.zip
+      fi
+    '';
+
 }
