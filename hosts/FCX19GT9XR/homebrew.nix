@@ -66,6 +66,7 @@
     "tripmode"
     "vuescan"
     "visual-studio-code"
+    "yubico-yubikey-manager"
 
     # Display resolution manager
     # "betterdisplay" # https://github.com/waydabber/BetterDisplay
