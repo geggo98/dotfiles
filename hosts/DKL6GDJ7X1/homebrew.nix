@@ -98,6 +98,7 @@
     "Friendly Streaming" = 553245401;
     "Gifski" = 1351639930;
     "Goodnotes" = 1444383602;
+    "HomeAtmo" = 1359795390; # Netatmo weather station app (humidity, temperature, CO2, etc.)
     "iMazing HEIC Converter" = 1292198261;
     "Infuse" = 1136220934;
     "Horo" = 1437226581;

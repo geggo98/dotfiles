@@ -109,6 +109,7 @@
     "Goodnotes" = 1444383602;
     "iMazing HEIC Converter" = 1292198261;
     "Infuse" = 1136220934;
+    "HomeAtmo" = 1359795390; # Netatmo weather station app (humidity, temperature, CO2, etc.)
     "Horo" = 1437226581;
     #mas "Ka-Block!", id: 1335413823
     "Keynote" = 409183694;
