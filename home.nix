@@ -389,13 +389,13 @@ in
         llm install https://github.com/nkkko/llm-cmd/archive/b5ff9c2a970720d57ecd3622bd86d2d99591838b.zip
       fi
     '';
-  home.activation.menuBarSpacing = lib.hm.dag.entryAfter [ "installPackages" ] ''
-      # Set the menu bar spacing
-      # Needs separate script until https://github.com/LnL7/nix-darwin/pull/872 is merged.
-      if command -v defaults > /dev/null 2>&1
-      then
-        defaults -currentHost write -globalDomain NSStatusItemSpacing -int 0
-        defaults -currentHost write -globalDomain NSStatusItemSelectionPadding -int 0
-      fi
-    '';
+  # home.activation.menuBarSpacing = lib.hm.dag.entryAfter [ "installPackages" ] ''
+  #     # Set the menu bar spacing
+  #     # Needs separate script until https://github.com/LnL7/nix-darwin/pull/872 is merged.
+  #     if command -v defaults > /dev/null 2>&1
+  #     then
+  #       defaults -currentHost write -globalDomain NSStatusItemSpacing -int 0
+  #       defaults -currentHost write -globalDomain NSStatusItemSelectionPadding -int 0
+  #     fi
+  #   '';
 }
