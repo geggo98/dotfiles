@@ -5,13 +5,13 @@
       "NSQuitAlwaysKeepsWindows" = true;
       # Enable web inspector in web views
       "WebKitDeveloperExtras" = true;
-      # Menu Bar Status Item Spacing
-      # https://www.jessesquires.com/blog/2023/12/16/macbook-notch-and-menu-bar-fixes/
-      # https://www.reddit.com/r/MacOS/comments/16lpfg5/hidden_preference_to_alter_the_menubar_spacing/
-      # https://flaky.build/native-fix-for-applications-hiding-under-the-macbook-pro-notch
-      # https://news.ycombinator.com/item?id=39343919
-      "NSStatusItemPadding" = 0;
-      "NSStatusItemSeparation" = 0;
+      # # Menu Bar Status Item Spacing
+      # # https://www.jessesquires.com/blog/2023/12/16/macbook-notch-and-menu-bar-fixes/
+      # # https://www.reddit.com/r/MacOS/comments/16lpfg5/hidden_preference_to_alter_the_menubar_spacing/
+      # # https://flaky.build/native-fix-for-applications-hiding-under-the-macbook-pro-notch
+      # # https://news.ycombinator.com/item?id=39343919
+      # "NSStatusItemPadding" = 0;
+      # "NSStatusItemSeparation" = 0;
     };
     # For this work, you have to add Terminal to apps with Full Disk Access in Security And Privacy
     "com.apple.Safari" = {
