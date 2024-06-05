@@ -19,6 +19,7 @@
     "appcleaner"
     "bartender"
     "beardie" # Control Media Keys https://github.com/Stillness-2/beardie
+    "hashicorp/tap/hashicorp-boundary-desktop"
     "brave-browser"
     "dash" # Dash 6
     "daisydisk"
