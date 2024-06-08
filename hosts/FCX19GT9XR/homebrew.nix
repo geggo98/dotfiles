@@ -19,6 +19,7 @@
     "appcleaner"
     "bartender"
     "beardie" # Control Media Keys https://github.com/Stillness-2/beardie
+    "balenaetcher" # Writing iamges to SD Cards
     "brave-browser"
     "crossover"
     "dash" # Dash 6
@@ -94,6 +95,7 @@
     "1Password for Safari" = 1569813296;
     "Amphetamine" = 937984704;
     # "Bear" = 1091189122;
+    "Brother iPrint&Scan" = 1193539993; # Adds Brother drivers for printer and scanner
     "Cascadea" =1432182561;
     "CloudMounter" = 1130254674; # Mounts: Dropbox, Google Drive, OneDrive, Amazon S3, FTP, SFTP, WebDAV
     "Compressor" = 424390742;
