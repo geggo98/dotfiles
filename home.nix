@@ -107,6 +107,9 @@ in
       "+llt" = "lsd --long --tree --git --ignore-glob .git --ignore-glob node_modules";
       "+lt" = "lsd --tree --ignore-glob .git --ignore-glob node_modules";
 
+      #Utils
+      "+lsusb" = "system_profiler SPUSBDataType";
+
       # YubiKey
       "+ssh-add-yubikey" = "env SSH_AUTH_SOCK={$HOME}.ssh/agent ssh-add {$HOME}/.ssh/id_es255519_sk";
 
