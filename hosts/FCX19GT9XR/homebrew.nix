@@ -32,6 +32,7 @@
     "http-toolkit"
     # "iina" # VLC video player replacement https://iina.io
     "iterm2"
+    "itermai" # AI plugin for iTerm2
     "istat-menus"
     "jetbrains-toolbox"
     "karabiner-elements"
