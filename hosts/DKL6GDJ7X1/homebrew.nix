@@ -47,6 +47,8 @@
     "omnigraffle"
     "openvpn-connect"
     "orbstack"
+    "postman"
+    "postman-cli"
     # "macgpt"
     "macwhisper"
     # "maestral" # Leightweight Dropbox client optimized for M1
