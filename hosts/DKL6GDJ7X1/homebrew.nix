@@ -42,8 +42,9 @@
     "lens" # K8s IDE
     "losslesscut" # Simple video editor: https://github.com/mifi/lossless-cut
     "lunar"
-    "lm-studio"
+    "lm-studio"# Run LLM locally
     "MonitorControl"
+    "msty" # Run LLM locally
     "omnigraffle"
     "openvpn-connect"
     "orbstack"
