@@ -42,9 +42,10 @@
     "lens" # K8s IDE
     "losslesscut" # Simple video editor: https://github.com/mifi/lossless-cut
     "lunar"
-    "lm-studio"
+    "lm-studio"# Run LLM locally
     "localsend/localsend/localsend"
     "MonitorControl"
+    "msty" # Run LLM locally
     "omnigraffle"
     "orbstack"
     # "macgpt"
