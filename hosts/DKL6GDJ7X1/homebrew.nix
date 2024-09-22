@@ -53,6 +53,7 @@
     # "macgpt"
     "macwhisper"
     # "maestral" # Leightweight Dropbox client optimized for M1
+    "moom" # Moom 4
     "monodraw"
     # "mosaic" # Window manager
     # "multipass" # Ubuntu VMs https://multipass.run
@@ -113,7 +114,7 @@
     "Logoist 5" = 6443412717;
     "MainStage" = 634159523;
     "MeetingBar" = 1532419400; # Quickly join online meetings from the menus bar
-    "Moom" = 419330170;
+    # "Moom Classic" = 419330170; # Moom 3
     "Motion" = 434290957;
     "Paste - Clipboard Manager" = 967805235;
     # "PhotoScape X", id: 929507092 

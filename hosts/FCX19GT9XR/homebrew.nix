@@ -45,6 +45,7 @@
     "lunar"
     "lm-studio"# Run LLM locally
     "localsend/localsend/localsend"
+    "moom" # Moom 4
     "MonitorControl"
     "msty" # Run LLM locally
     "omnigraffle"
@@ -121,7 +122,7 @@
     "Logic Pro" = 634148309;
     "Logoist 5" = 6443412717;
     "MainStage" = 634159523;
-    "Moom" = 419330170;
+    # "Moom Classic" = 419330170; # Moom 3
     "MoneyMoney" = 872698314;
     "Motion" = 434290957;
     "Paste - Clipboard Manager" = 967805235;
