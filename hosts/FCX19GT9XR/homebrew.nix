@@ -34,6 +34,7 @@
     "iterm2"
     "itermai" # AI plugin for iTerm2
     "istat-menus"
+    "jdownloader"
     "jetbrains-toolbox"
     "karabiner-elements"
     "keka" # Archive utility, supports encrypted ZIP files, https://www.keka.io/
