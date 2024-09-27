@@ -200,6 +200,7 @@ in
     # Dev stuff
     # (agda.withPackages (p: [ p.standard-library ]))
     asciinema
+    git-absorb # https://github.com/tummychow/git-absorb
     git-branchless
     git-machete
     git-trim
@@ -212,6 +213,7 @@ in
     nodePackages.ts-node
     nodejs
     neovim
+    pandoc
 
     # DevOps tools
     awscli

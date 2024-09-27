@@ -45,6 +45,7 @@
     "lunar"
     "lm-studio"# Run LLM locally
     "localsend/localsend/localsend"
+    "marked" # "Marked 2" markdown viewer. Thsi version supports pandoc
     "moom" # Moom 4
     "MonitorControl"
     "msty" # Run LLM locally
@@ -122,6 +123,7 @@
     "Logic Pro" = 634148309;
     "Logoist 5" = 6443412717;
     "MainStage" = 634159523;
+    # "Marked 2" = 890031187; # Use Homebrew version, it supports pandoc
     # "Moom Classic" = 419330170; # Moom 3
     "MoneyMoney" = 872698314;
     "Motion" = 434290957;
