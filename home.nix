@@ -393,6 +393,11 @@ in
         # Fix for llm-cmd on macOS
         llm install https://github.com/nkkko/llm-cmd/archive/b5ff9c2a970720d57ecd3622bd86d2d99591838b.zip
       fi
+      if test -e ~/.orbstack/run/docker.sock -a ! -e /var/run/docker.sock
+      then
+        echo "Updating Docker socket"
+        sudo ln -s ~/.orbstack/run/docker.sock /var/run/docker.sock
+      fi
     '';
   # home.activation.menuBarSpacing = lib.hm.dag.entryAfter [ "installPackages" ] ''
   #     # Set the menu bar spacing
