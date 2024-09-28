@@ -392,9 +392,9 @@ in
       if command -v llm > /dev/null 2>&1
       then
         echo "Installing or updating LLM plugins"
-        run llm install -U llm-openrouter llm-groq llm-ollama llm-claude-3
+        run  --quiet llm install -U llm-openrouter llm-groq llm-ollama llm-claude-3
         # Fix for llm-cmd on macOS
-        run llm install https://github.com/nkkko/llm-cmd/archive/b5ff9c2a970720d57ecd3622bd86d2d99591838b.zip
+        run --quiet llm install https://github.com/nkkko/llm-cmd/archive/b5ff9c2a970720d57ecd3622bd86d2d99591838b.zip
       fi
       export PATH="$original_path_B541A0A9"
       unset original_path_B541A0A9
