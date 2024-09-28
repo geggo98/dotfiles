@@ -383,20 +383,34 @@ in
     # Doesn't work, because it contains the `%r` placeholder for the sops secrets directory.
     # OPENAI_API_KEY_FILE = config.sops.secrets."openai_api_key".path;
   };
-
+  # See https://nix-community.github.io/home-manager/options.xhtml#opt-home.activation
+  # Uset the `run` helper to support dry run functionality
   home.activation.llm = lib.hm.dag.entryAfter [ "installPackages" ] ''
       # Install or update LLM plugins
+      original_path_B541A0A9="$PATH"
+      export PATH="$PATH:/opt/homebrew/bin"
       if command -v llm > /dev/null 2>&1
       then
         echo "Installing or updating LLM plugins"
-        llm install -U llm-openrouter llm-groq llm-ollama llm-claude-3
+        run llm install -U llm-openrouter llm-groq llm-ollama llm-claude-3
         # Fix for llm-cmd on macOS
-        llm install https://github.com/nkkko/llm-cmd/archive/b5ff9c2a970720d57ecd3622bd86d2d99591838b.zip
+        run llm install https://github.com/nkkko/llm-cmd/archive/b5ff9c2a970720d57ecd3622bd86d2d99591838b.zip
       fi
+      export PATH="$original_path_B541A0A9"
+      unset original_path_B541A0A9
+    '';
+  home.activation.orbstack = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
       if test -e ~/.orbstack/run/docker.sock -a ! -e /var/run/docker.sock
       then
         echo "Updating Docker socket"
-        sudo ln -s ~/.orbstack/run/docker.sock /var/run/docker.sock
+        run sudo ln -s ~/.orbstack/run/docker.sock /var/run/docker.sock
+      fi
+      if test -e /var/run/docker.sock
+      then
+        echo "The Docker socket at /var/run/docker.sock is up to date"
+        ls -l /var/run/docker.sock
+      else
+        echo "The Docker socket at /var/run/docker.sock is missing"
       fi
     '';
   # home.activation.menuBarSpacing = lib.hm.dag.entryAfter [ "installPackages" ] ''
