@@ -54,7 +54,7 @@
           home-manager.darwinModules.home-manager
           
           # WARNING:
-          # Don't import the sops home-maanger module here,
+          # Don't import the sops home-manager module here,
           # it's a NixOS specific plugin and tries to use SystemD.
           # You will get an error message like this:
           # `error: The option `systemd' does not exist. Definition values: ...`

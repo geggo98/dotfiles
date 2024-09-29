@@ -41,6 +41,7 @@ in
       anthropic_api_key = {};
       openrouter_api_key = {};
       groq_api_key = {};
+      gemini_api_key = {};
     };
   };
 
@@ -73,6 +74,11 @@ in
         
         export_nix_sops_secret_path GROQ_API_KEY_PATH "${config.sops.secrets.groq_api_key.path}"
         export_nix_sops_secret_value GROQ_API_KEY "${config.sops.secrets.groq_api_key.path}"
+
+        # llm-openrouter expects the key in the environment variables LLM_GEMINI_KEY
+        export_nix_sops_secret_value LLM_GEMINI_KEY "${config.sops.secrets.gemini_api_key.path}"
+        export_nix_sops_secret_value GEMINI_API_KEY "${config.sops.secrets.gemini_api_key.path}"
+        export_nix_sops_secret_path GEMINI_API_KEY_PATH "${config.sops.secrets.gemini_api_key.path}"
         '';
     plugins = [
       { name = "z"; src = pkgs.fishPlugins.z.src; }
@@ -122,6 +128,9 @@ in
       # Grep
       "+grep" = "ug";
       "+grep-tui" = "ug -Q";
+
+      "+sops-edit-keys" = "env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops -s";
+      "+sops-edit-secrets" = "env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops";
     };
   };
   programs.nix-index.enable = true;
@@ -392,7 +401,7 @@ in
       if command -v llm > /dev/null 2>&1
       then
         echo "Installing or updating LLM plugins"
-        run  --quiet llm install -U llm-openrouter llm-groq llm-ollama llm-claude-3
+        run  --quiet llm install -U llm-openrouter llm-groq llm-ollama llm-claude-3 llm-gemini
         # Fix for llm-cmd on macOS
         run --quiet llm install https://github.com/nkkko/llm-cmd/archive/b5ff9c2a970720d57ecd3622bd86d2d99591838b.zip
       fi
