@@ -236,6 +236,7 @@ in
     kubetail
     lazydocker
     lnav # Log file viewer https://lnav.org/
+    krew # Package manager for kubectl
     mkcert
     mosh
     netcat
@@ -246,6 +247,7 @@ in
     step-cli # https://github.com/smallstep/cli
     socat
     sops
+    telepresence2
     # tor
     # torsocks # https://www.jamieweb.net/blog/tor-is-a-great-sysadmin-tool/
     xxh # ssh with better shell supporton the remote site
