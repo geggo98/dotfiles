@@ -319,6 +319,7 @@ in
     cachix # adding/managing alternative binary caches hosted by Cachix
     devbox # https://www.jetpack.io/devbox/docs/cli_reference/devbox/
     nil # Nix LSP https://github.com/oxalica/nil
+    nixpkgs-fmt # Nix formatter
     nodePackages.node2nix # Convert node packages to Nix
 
 
