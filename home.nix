@@ -223,6 +223,7 @@ in
     nodejs
     neovim
     pandoc
+    vale # Linter for prose
 
     # DevOps tools
     awscli
