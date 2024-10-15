@@ -70,6 +70,7 @@
     # "studio-3t"
     "steam"
     "tripmode"
+    "vlc"
     "vuescan"
     "visual-studio-code"
     "yubico-yubikey-manager"
