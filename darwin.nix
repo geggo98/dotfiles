@@ -1,5 +1,7 @@
 { pkgs, ... }:
 {
+  system.stateVersion = 5;
+
   system.defaults.CustomUserPreferences = {
     "NSGlobalDomain" = {
       "NSQuitAlwaysKeepsWindows" = true;
