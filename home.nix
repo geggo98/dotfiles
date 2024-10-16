@@ -343,6 +343,9 @@ in
       enable = true;
       config = {
         # Program = unstable.ollama/bin/ollama;
+        EnvironmentVariables = {
+            OLLAMA_ORIGINS = "app://obsidian.md*"; # See https://github.com/logancyang/obsidian-copilot/blob/master/local_copilot.md
+        };
         ProgramArguments = [ "${unstable.ollama}/bin/ollama" "serve" ];
         RunAtLoad = true;
         KeepAlive = true;
