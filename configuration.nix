@@ -60,9 +60,10 @@ nix.gc = {
   };
   programs.nix-index.enable = true;
 
-  # Fonts
-  fonts.fontDir.enable = true;
-  fonts.fonts = with pkgs; [
+  # Fonts: `/Library/Fonts/Nix Fonts`.
+  # Legacy fonts are in: `/Library/Fonts`.
+  # Legacy fonts won't get udpates anymore.
+  fonts.packages = with pkgs; [
      recursive
      (nerdfonts.override { fonts = [ "JetBrainsMono" "Iosevka" "IosevkaTerm" "VictorMono" ]; })
      iosevka
