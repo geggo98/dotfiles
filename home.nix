@@ -1,11 +1,11 @@
 { config, pkgs, nixpkgs-unstable, lib, astronvim, sops-nix, nix-index-database, ... }:
 let
-  moreutilsWithoutParallel = pkgs.moreutils.overrideAttrs(oldAttrs: rec {
-        preBuild = oldAttrs.preBuild + ''
-          substituteInPlace Makefile --replace " parallel " " " --replace " parallel.1 " " "
-        '';
-      });
-  unstable = nixpkgs-unstable.legacyPackages.${pkgs.system};
+    moreutilsWithoutParallel = pkgs.moreutils.overrideAttrs (oldAttrs: {
+      preBuild = (oldAttrs.preBuild or "") + ''
+        substituteInPlace Makefile --replace " parallel " " " --replace " parallel.1 " " "
+      '';
+    });
+    unstable = nixpkgs-unstable.legacyPackages.${pkgs.system};
 in
 {
   # This value determines the Home Manager release that your
@@ -105,7 +105,7 @@ in
       "+git-stash-push" = "gsp";
       "+git-stash-viewer" = "gss";
 
-      # lsd dir colors
+      # Use `lsd` for dir colors. Alternative: `eza`, the successor of `exa`. `eza` has more features, `lsd` better compatibility with `ls`.
       "+l" = "lsd";
       "+la" = "lsd -a";
       "+ll" = "lsd -l --git";
@@ -181,6 +181,13 @@ in
   programs.gpg.enable = true;
   programs.k9s.enable = true;
   programs.lsd.enable = true;
+  programs.eza = {
+    enable = true;
+    # Shell integration sets aliases for `ls`, `ll`, `la`, `lt`, `lla`.
+    enableBashIntegration = false;
+    enableZshIntegration = false;
+    enableFishIntegration = false;
+  };
   programs.ripgrep.enable = true;
   
   # Htop
@@ -210,7 +217,7 @@ in
     # (agda.withPackages (p: [ p.standard-library ]))
     asciinema
     git-absorb # https://github.com/tummychow/git-absorb
-    git-branchless
+    # git-branchless # https://github.com/arxanas/git-branchless # Provides `git undo` and `git sync` for updating all non-conflicting branches
     git-machete
     git-trim
     # git-credential-manager # Manages HTTPS tokens for Azure DevOps, Bitbucket, GitHub, and GitLab. `git credential-manager configure`
