@@ -162,8 +162,13 @@ in
     extraConfig = {
       # `echo '*.enc.yaml diff=sopsdiffer' >> .gitattributes`
       diff."sopsdiffer".textconv = "${pkgs.sops}/bin/sops -d";
+      credential = {
+            credentialStore = "keychain"; # See https://github.com/git-ecosystem/git-credential-manager/blob/main/docs/credstores.md
+            helper = "${pkgs.git-credential-manager}/bin/git-credential-manager";
+          };
     };
   };
+  # programs.git-credential-oauth.enable = true;
   programs.gh.enable = true;
   programs.lazygit.enable = true;
   
@@ -220,7 +225,7 @@ in
     # git-branchless # https://github.com/arxanas/git-branchless # Provides `git undo` and `git sync` for updating all non-conflicting branches
     git-machete
     git-trim
-    # git-credential-manager # Manages HTTPS tokens for Azure DevOps, Bitbucket, GitHub, and GitLab. `git credential-manager configure`
+    git-credential-manager # Manages HTTPS tokens for Azure DevOps, Bitbucket, GitHub, and GitLab. `git credential-manager configure`. Alternative: https://github.com/hickford/git-credential-oauth
     # dotnet-runtime_7 # git-credential-manager needs this.
     lazygit
     # gitu # https://github.com/altsem/gitu - GIT TUI client
@@ -246,7 +251,7 @@ in
     lnav # Log file viewer https://lnav.org/
     krew # Package manager for kubectl
     mkcert
-    mosh
+    # mosh
     netcat
     ngrok
     pssh
