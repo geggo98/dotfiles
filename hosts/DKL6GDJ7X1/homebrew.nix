@@ -25,6 +25,7 @@
     "daisydisk"
     "devutils" # https://devutils.app/
     "Dropbox"
+    "elgato-stream-deck"
     "firefox"
     "google-chrome"
     "git-credential-manager" # The version in Nix doesn't find its Dotnet SDK
