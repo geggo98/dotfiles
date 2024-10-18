@@ -25,6 +25,7 @@
     "dash" # Dash 6
     "daisydisk"
     "devutils" # https://devutils.app/
+    "elgato-stream-deck"
     # "Dropbox"
     "firefox"
     "google-chrome"
