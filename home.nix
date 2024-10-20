@@ -223,6 +223,7 @@ in
     asciinema
     git-absorb # https://github.com/tummychow/git-absorb
     # git-branchless # https://github.com/arxanas/git-branchless # Provides `git undo` and `git sync` for updating all non-conflicting branches
+    git-crypt # https://github.com/AGWA/git-crypt
     git-machete
     git-trim
     git-credential-manager # Manages HTTPS tokens for Azure DevOps, Bitbucket, GitHub, and GitLab. `git credential-manager configure`. Alternative: https://github.com/hickford/git-credential-oauth
