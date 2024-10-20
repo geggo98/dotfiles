@@ -29,6 +29,7 @@
     # "Dropbox"
     "firefox"
     "google-chrome"
+    "gpg-suite-no-mail"
     "hammerspoon" # Helper for RCmd with alt-key
     "http-toolkit"
     # "iina" # VLC video player replacement https://iina.io

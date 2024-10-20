@@ -27,6 +27,7 @@
     "Dropbox"
     "elgato-stream-deck"
     "firefox"
+    "gpg-suite-no-mail"
     "google-chrome"
     "git-credential-manager" # The version in Nix doesn't find its Dotnet SDK
     "hammerspoon"
