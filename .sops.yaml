@@ -1,0 +1,28 @@
+# creation rules are evaluated sequentially, the first match wins
+creation_rules:
+    # upon creation of a file that matches the pattern ./secrets/*.env.yaml,
+    # set keys for age and pgp.
+    # FCX19GT9XR:
+    # - Age: age1vyg...
+    # - PGP: ?
+    # DKL6GDJ7X1
+    # - Age: age1ae3...
+    # - PGP: ?
+    # stefan@schwetschke.de:
+    # - PGP:
+    #   - 2997DDECD2E4756ECBE1D4B8F586F998607C3F0B / RSA 4096 bit / 2016
+    # stefan.schwetschke@check24.de
+    #   - 7392BA2E2BF345D85F9180DFA9F7DBEBC56E0F3D / RSA 4096 bit / 2023
+    - path_regex: ^secrets/.*\.enc\..*$
+      age: >-
+        age1vygfenpy584kvfdge57ep2vwqqe33zd4auanwu7frmf0tht5jq0q5ugmgd
+        age1ae3vaq0cwzd8y0eatczdz7dz26m3mpxfnelwfxle9mqdachftd7q96fvaz
+      pgp: >-
+        2997DDECD2E4756ECBE1D4B8F586F998607C3F0B
+        7392BA2E2BF345D85F9180DFA9F7DBEBC56E0F3D
+    # Finally, if the rules above haven't matched, this one is a
+    # catchall that will encrypt the file using PGP
+    # The absence of a path_regex means it will match everything
+    - pgp: >-
+        2997DDECD2E4756ECBE1D4B8F586F998607C3F0B
+        7392BA2E2BF345D85F9180DFA9F7DBEBC56E0F3D
