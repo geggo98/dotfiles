@@ -48,6 +48,7 @@
     "marked" # "Marked 2" markdown viewer. Thsi version supports pandoc
     "MonitorControl"
     "msty" # Run LLM locally
+    "notunes" # Prevents Apple Music from hijacking headset buttons
     "omnigraffle"
     "openvpn-connect"
     "orbstack"
