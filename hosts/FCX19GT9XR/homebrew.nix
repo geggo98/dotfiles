@@ -51,6 +51,7 @@
     "moom" # Moom 4
     "MonitorControl"
     "msty" # Run LLM locally
+    "notunes" # Prevents Apple Music from hijacking headset buttons
     "omnigraffle"
     "orbstack"
     # "macgpt"
