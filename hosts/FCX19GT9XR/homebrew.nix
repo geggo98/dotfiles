@@ -1,4 +1,4 @@
-{ pkgs, ... }:
+{ ... }:
 {
   homebrew.enable = true;
   homebrew.caskArgs = {
@@ -77,9 +77,10 @@
     "vuescan"
     "visual-studio-code"
     "yubico-yubikey-manager"
+    "zed" # Zed code editor
 
     # Display resolution manager
-    # "betterdisplay" # https://github.com/waydabber/BetterDisplay
+    "betterdisplay" # https://github.com/waydabber/BetterDisplay
     # "switchresx"
     
     # Window switcher
