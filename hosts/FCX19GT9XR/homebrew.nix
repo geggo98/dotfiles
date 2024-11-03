@@ -140,14 +140,17 @@
     "Omnivore: Read-it-later" = 1564031042;
     "rcmd" = 1596283165;
     "Shortery" = 1594183810;
+    "Source Files: Git Storage" = 6450856155; # Mount Git repos in the finder
     "Spark Desktop" = 6445813049;
     "SponsorBlock for YouTube - Skip Sponsorships" = 1573461917;
     "Tabby" = 1586203406; # Tab switcher for Safari
-    "Velja" = 1607635845; # Open links in specific browser
-    "Vectornator"= 1219074514; # Linearity Curve / Vectornator
     # "Tabs Switcher" = 1406718335; # Switches browser tabs
     "Tailscale" = 1475387142;
     # "TinyStopwatch" = 1447754003;
+    "UTM" = 1538878817;
+    "Velja" = 1607635845; # Open links in specific browser
+    "Vectornator"= 1219074514; # Linearity Curve / Vectornator
+    "Video Converter" = 1518836004;
   };
   homebrew.onActivation.cleanup = "uninstall";
 }
