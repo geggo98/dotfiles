@@ -131,13 +131,16 @@
     "rcmd" = 1596283165;
     "Shortery" = 1594183810;
     # "Slack for Desktop"= 803453959; # Also available as Homebrew Cask
+    "Source Files: Git Storage" = 6450856155; # Mount Git repos in the finder
     "SponsorBlock for YouTube - Skip Sponsorships" = 1573461917;
     "Tabby" = 1586203406; # Tab switcher for Safari
-    "Vectornator" = 1219074514; # Linearity Curve / Vectornator
-    "Velja" = 1607635845; # Open links in specific browser
     # "Tabs Switcher" = 1406718335; # Switches browser tabs
     "Tailscale" = 1475387142;
     # "TinyStopwatch" = 1447754003;
+    "UTM" = 1538878817;
+    "Vectornator" = 1219074514; # Linearity Curve / Vectornator
+    "Velja" = 1607635845; # Open links in specific browser
+    "Video Converter" = 1518836004;
   };
   homebrew.onActivation.cleanup = "uninstall";
 }
