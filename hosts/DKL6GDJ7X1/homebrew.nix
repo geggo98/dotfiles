@@ -9,6 +9,7 @@
   homebrew.brews = [
     # "chatblade"
     # "jan" # https://jan.ai
+    "hashicorp/tap/boundary"
     "llm" # The Nix version has still problems with plugins
   ];
   homebrew.casks = [
@@ -20,7 +21,6 @@
     "bartender"
     "beardie" # Control Media Keys https://github.com/Stillness-2/beardie
     "bleunlock" # Unlock Mac based on mobile phone presence. https://github.com/ts1/BLEUnlock
-    "hashicorp/tap/boundary"
     "hashicorp/tap/hashicorp-boundary-desktop"
     "brave-browser"
     "dash" # Dash 6
