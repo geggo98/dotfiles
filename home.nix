@@ -225,8 +225,9 @@ in
     # git-branchless # https://github.com/arxanas/git-branchless # Provides `git undo` and `git sync` for updating all non-conflicting branches
     git-crypt # https://github.com/AGWA/git-crypt
     git-machete
-    git-trim
+    git-trim # https://github.com/foriequal0/git-trim
     git-credential-manager # Manages HTTPS tokens for Azure DevOps, Bitbucket, GitHub, and GitLab. `git credential-manager configure`. Alternative: https://github.com/hickford/git-credential-oauth
+    graphviz
     # dotnet-runtime_7 # git-credential-manager needs this.
     lazygit
     # gitu # https://github.com/altsem/gitu - GIT TUI client
@@ -236,6 +237,7 @@ in
     nodejs
     neovim
     pandoc
+    plantuml-c4
     vale # Linter for prose
 
     # DevOps tools
