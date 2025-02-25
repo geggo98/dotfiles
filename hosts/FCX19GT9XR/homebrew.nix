@@ -31,6 +31,7 @@
     "google-chrome"
     "gpg-suite-no-mail"
     "hammerspoon" # Helper for RCmd with alt-key
+    "homerow"
     "http-toolkit"
     # "iina" # VLC video player replacement https://iina.io
     "iterm2"

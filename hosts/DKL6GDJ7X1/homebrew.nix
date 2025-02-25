@@ -18,6 +18,7 @@
     # "affinity-photo"
     # "affinity-publisher"
     "appcleaner"
+    "aptakube"
     "bartender"
     "beardie" # Control Media Keys https://github.com/Stillness-2/beardie
     "bleunlock" # Unlock Mac based on mobile phone presence. https://github.com/ts1/BLEUnlock
@@ -33,6 +34,7 @@
     "google-chrome"
     "git-credential-manager" # The version in Nix doesn't find its Dotnet SDK
     "hammerspoon"
+    "homerow"
     "http-toolkit"
     # "iina" # VLC video player replacement https://iina.io
     "iterm2"
