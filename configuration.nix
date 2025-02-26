@@ -24,6 +24,7 @@
   # nix.package = pkgs.nixUnstable;
   nix.extraOptions = ''
     auto-optimise-store = true
+    download-buffer-size = 1000000000
     experimental-features = nix-command flakes
   '' + lib.optionalString (pkgs.system == "aarch64-darwin") ''
     extra-platforms = x86_64-darwin aarch64-darwin
