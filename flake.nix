@@ -96,7 +96,7 @@
             # `home-manager` config
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
-            home-manager.users."stefan.schwetschke" = import ./home.nix;
+            home-manager.users."stefan.schwetschke" = nixpkgs.lib.mkMerge [ (import ./home.nix) (import ./hosts/DKL6GDJ7X1/home.nix) ];
             home-manager.extraSpecialArgs = inputs;            
           }
         ];
