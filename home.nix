@@ -278,13 +278,13 @@ in
 
     # Password management
     # pkgs._1password
-    pass
-    passExtensions.pass-audit
-    passExtensions.pass-checkup
-    passExtensions.pass-genphrase
-    passExtensions.pass-import
-    passExtensions.pass-otp
-    passExtensions.pass-update
+    #pass
+    #passExtensions.pass-audit
+    #passExtensions.pass-checkup
+    #passExtensions.pass-genphrase
+    #passExtensions.pass-import
+    #passExtensions.pass-otp
+    #passExtensions.pass-update
 
     # Command line helper
     btop
@@ -333,7 +333,7 @@ in
     # Useful nix related tools
     any-nix-shell
     cachix # adding/managing alternative binary caches hosted by Cachix
-    devbox # https://www.jetpack.io/devbox/docs/cli_reference/devbox/
+    unstable.devbox # https://www.jetpack.io/devbox/docs/cli_reference/devbox/
     nil # Nix LSP https://github.com/oxalica/nil
     nixpkgs-fmt # Nix formatter
     nodePackages.node2nix # Convert node packages to Nix
@@ -353,6 +353,7 @@ in
     mas # CLI for the macOS app store
     m-cli # useful macOS CLI commands
   ];
+  # ~/Library/LaunchAgents/
   launchd.agents = {
     ollama = {
       enable = true;
@@ -449,8 +450,8 @@ in
   #     # Needs separate script until https://github.com/LnL7/nix-darwin/pull/872 is merged.
   #     if command -v defaults > /dev/null 2>&1
   #     then
-  #       defaults -currentHost write -globalDomain NSStatusItemSpacing -int 0
-  #       defaults -currentHost write -globalDomain NSStatusItemSelectionPadding -int 0
+  #       defaults -currentHost write -globalDomain NSStatusItemSpacing -int 1
+  #       defaults -currentHost write -globalDomain NSStatusItemSelectionPadding -int 1
   #     fi
   #   '';
 }
