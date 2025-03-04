@@ -3,21 +3,23 @@
 {
   description = "Stefan's darwin system";
 
+  # Update all with: `nix flake update`
+  # Update single input with `nix flake lock --update-input <input-name>`
   inputs = {
     # Package sets
-    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-24.05-darwin"; # https://status.nixos.org/
-    nixpkgs-unstable.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
+    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-24.11-darwin"; # https://status.nixos.org/
+    nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Environment/system management
-    darwin.url = "github:lnl7/nix-darwin/master";
-    darwin.inputs.nixpkgs.follows = "nixpkgs-unstable";
+    darwin.url = "github:lnl7/nix-darwin/nix-darwin-24.11";
+    darwin.inputs.nixpkgs.follows = "nixpkgs";
     
-    home-manager.url = "github:nix-community/home-manager";
-    home-manager.inputs.nixpkgs.follows = "nixpkgs-unstable";
+    home-manager.url = "github:nix-community/home-manager/release-24.11";
+    home-manager.inputs.nixpkgs.follows = "nixpkgs";
     
     # https://github.com/Mic92/sops-nix
     sops-nix.url = "github:Mic92/sops-nix";
-    sops-nix.inputs.nixpkgs.follows = "nixpkgs-unstable";
+    sops-nix.inputs.nixpkgs.follows = "nixpkgs";
     
     # https://github.com/nix-community/nix-index-database
     nix-index-database.url = "github:Mic92/nix-index-database";
@@ -30,7 +32,7 @@
   outputs = { self, darwin, nixpkgs, nixpkgs-unstable, home-manager, sops-nix, nix-index-database, ... }@inputs:
   let 
     inherit (darwin.lib) darwinSystem;
-    inherit (inputs.nixpkgs-unstable.lib) attrValues makeOverridable optionalAttrs singleton;
+    inherit (inputs.nixpkgs.lib) attrValues makeOverridable optionalAttrs singleton;
 
     # Configuration for `nixpkgs`
     nixpkgsConfig = {
@@ -110,7 +112,7 @@
       # Overlay useful on Macs with Apple Silicon
         apple-silicon = final: prev: optionalAttrs (prev.stdenv.system == "aarch64-darwin") {
           # Add access to x86 packages system is running Apple Silicon
-          pkgs-x86 = import inputs.nixpkgs-unstable {
+          pkgs-x86 = import inputs.nixpkgs {
             system = "x86_64-darwin";
             inherit (nixpkgsConfig) config;
           };
