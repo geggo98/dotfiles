@@ -238,6 +238,9 @@ in
     neovim
     pandoc
     plantuml-c4
+    pixi # Python venv manager, https://github.com/prefix-dev/pixi
+    rustup
+    uv # Python package manager, https://docs.astral.sh/uv/guides/tools/
     vale # Linter for prose
 
     # DevOps tools
@@ -450,6 +453,7 @@ in
   #     # Needs separate script until https://github.com/LnL7/nix-darwin/pull/872 is merged.
   #     if command -v defaults > /dev/null 2>&1
   #     then
+  #       # The smallest valid number is "1". DO NOT use "0", it won't work properly
   #       defaults -currentHost write -globalDomain NSStatusItemSpacing -int 1
   #       defaults -currentHost write -globalDomain NSStatusItemSelectionPadding -int 1
   #     fi
