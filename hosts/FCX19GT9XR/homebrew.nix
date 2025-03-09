@@ -22,6 +22,7 @@
     "balenaetcher" # Writing iamges to SD Cards
     "brave-browser"
     "crossover"
+    "chatgpt"
     "dash" # Dash 6
     "daisydisk"
     "devutils" # https://devutils.app/
@@ -31,7 +32,7 @@
     "google-chrome"
     "gpg-suite-no-mail"
     "hammerspoon" # Helper for RCmd with alt-key
-    "homerow"
+    "homerow" # Fast keyboard navigation for any app
     "http-toolkit"
     # "iina" # VLC video player replacement https://iina.io
     "iterm2"
@@ -63,12 +64,14 @@
     # "mosaic" # Window manager
     # "multipass" # Ubuntu VMs https://multipass.run
     "obsidian"
+    "openaudible"
     "raindropio"
     "raycast"
     "resilio-sync"
     "red-canary-mac-monitor" # System event viewer (Process Monitor / procmon), https://github.com/redcanaryco/mac-monitor
     "sf-symbols" # https://developer.apple.com/sf-symbols/
     "shottr"
+    "shortcat" # Command palette for every application, but slower than Homerow
     # "slack"
     # "soundsource"
     # "studio-3t"
@@ -77,6 +80,7 @@
     "vlc"
     "vuescan"
     "visual-studio-code"
+    "wireshark"
     "yubico-yubikey-manager"
     "zed" # Zed code editor
 
@@ -136,6 +140,7 @@
     "Paste - Clipboard Manager" = 967805235;
     # "PhotoScape X", id: 929507092 
     "Pixelmator Pro"= 1289583905;
+    "Plash" =  1494023538; # Use any website as desktop wallpaper
     "PopClip" = 445189367;
     "Save to Raindrop.io" = 1549370672;
     "Omnivore: Read-it-later" = 1564031042;
