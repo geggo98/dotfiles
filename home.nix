@@ -402,7 +402,7 @@ in
       params = {
         author-name = "Stefan Schwetschke"; # config.programs.git.userName;
         author-email = "stefan@schwetschke.de"; # config.programs.git.userEmail;
-        github-username = "geggo99";
+        github-username = "geggo98";
       };
     };
     nix.enable = true;
