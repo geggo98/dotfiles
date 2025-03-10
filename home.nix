@@ -368,8 +368,8 @@ in
         ProgramArguments = [ "${unstable.ollama}/bin/ollama" "serve" ];
         RunAtLoad = true;
         KeepAlive = true;
-        StandardOutPath = "/tmp/ollama_${config.home.username}.out.log";
-        StandardErrorPath = "/tmp/ollama_${config.home.username}.err.log";
+        # Get logs with:
+        # sudo launchctl debug <service-target> --stdout --stderr
       };
     };
   };
