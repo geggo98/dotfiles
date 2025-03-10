@@ -47,9 +47,10 @@
     "lens" # K8s IDE
     "losslesscut" # Simple video editor: https://github.com/mifi/lossless-cut
     "lunar"
+    "launchcontrol" # Debug launch agents
     "lm-studio"# Run LLM locally
     "localsend/localsend/localsend"
-    "marked" # "Marked 2" markdown viewer. Thsi version supports pandoc
+    "marked" # "Marked 2" markdown viewer. This version supports pandoc
     "moom" # Moom 4
     "MonitorControl"
     "msty" # Run LLM locally
