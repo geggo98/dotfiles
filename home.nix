@@ -370,6 +370,9 @@ in
         KeepAlive = true;
         # Get logs with:
         # sudo launchctl debug <service-target> --stdout --stderr
+        # Or redirect stdout/stderr at /Users/stefan/Library/Logs/
+        StandardOutPath = "${config.home.homeDirectory}/Library/Logs/ollama.out.log";
+        StandardErrorPath = "${config.home.homeDirectory}/Library/Logs/ollama.err.log";
       };
     };
   };
@@ -427,9 +430,14 @@ in
       if command -v llm > /dev/null 2>&1
       then
         echo "Installing or updating LLM plugins"
-        run  --quiet llm install -U llm-openrouter llm-groq llm-ollama llm-claude-3 llm-gemini
-        # Fix for llm-cmd on macOS
-        run --quiet llm install https://github.com/nkkko/llm-cmd/archive/b5ff9c2a970720d57ecd3622bd86d2d99591838b.zip
+        run  --quiet llm install -U llm-openrouter llm-groq llm-ollama llm-claude-3 llm-gemini llm-cmd
+        # Fix for llm-cmd on macOS: Should be fixed: https://github.com/simonw/llm-cmd/issues/11
+        # run --quiet llm install https://github.com/nkkko/llm-cmd/archive/b5ff9c2a970720d57ecd3622bd86d2d99591838b.zip
+        # See ~/Library/Application\ Support/io.datasette.llm/aliases.json
+        run --quiet llm aliases set gemini gemini-2.0-pro-exp-02-05
+        run --quiet llm aliases set deepseek openrouter/deepseek/deepseek-r1
+        run --quiet llm aliases set auto openrouter/openrouter/auto
+        run llm models default o3-mini
       fi
       export PATH="$original_path_B541A0A9"
       unset original_path_B541A0A9
