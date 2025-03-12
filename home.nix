@@ -364,6 +364,7 @@ in
         # Program = unstable.ollama/bin/ollama;
         EnvironmentVariables = {
             OLLAMA_ORIGINS = "app://obsidian.md*"; # See https://github.com/logancyang/obsidian-copilot/blob/master/local_copilot.md
+            OLLAMA_CONTEXT_LENGTH="8192"; # Set default context length, see https://github.com/ollama/ollama/blob/main/docs/faq.md#how-can-i-specify-the-context-window-size
         };
         ProgramArguments = [ "${unstable.ollama}/bin/ollama" "serve" ];
         RunAtLoad = true;
