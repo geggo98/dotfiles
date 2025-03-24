@@ -24,6 +24,7 @@
     "bleunlock" # Unlock Mac based on mobile phone presence. https://github.com/ts1/BLEUnlock
     "hashicorp/tap/hashicorp-boundary-desktop"
     "brave-browser"
+    "cursor"
     "dash" # Dash 6
     "daisydisk"
     "devutils" # https://devutils.app/
@@ -75,6 +76,8 @@
     # "studio-3t"
     "tunnelblick"
     "visual-studio-code"
+    "wireshark"
+    "wireshark-chmodbpf"
     "yubico-yubikey-manager"
     "zed" # Zed code editor
 
