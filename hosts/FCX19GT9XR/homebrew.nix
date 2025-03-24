@@ -82,6 +82,7 @@
     "vuescan"
     "visual-studio-code"
     "wireshark"
+    "wireshark-chmodbpf"
     "yubico-yubikey-manager"
     "zed" # Zed code editor
 
