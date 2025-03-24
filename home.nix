@@ -376,6 +376,27 @@ in
         StandardErrorPath = "${config.home.homeDirectory}/Library/Logs/ollama.err.log";
       };
     };
+    "hidutil-key-remapping" = {
+        enable = true;
+        config = {
+          ProgramArguments = [
+            "/usr/bin/hidutil"
+            "property"
+            "--set"
+            # Verify: hidutil property --get "UserKeyMapping"
+            # https://hidutil-generator.netlify.app/
+            # caps_lock -> f19
+            "{\"UserKeyMapping\": [
+                    {
+                        \"HIDKeyboardModifierMappingSrc\":0x700000039,
+                        \"HIDKeyboardModifierMappingDst\":0x70000006E
+                    }
+                ]}"
+          ];
+          RunAtLoad = true;
+          KeepAlive = false;
+        };
+    };
   };
 
   xdg.configFile = {
@@ -411,6 +432,10 @@ in
 
   home.file."Library/Application Support/iTerm2/DynamicProfiles/50_Nix.json" = lib.optionalAttrs (pkgs.system == "aarch64-darwin" || pkgs.system == "x86_64-darwin") {
     source = ./config/iTerm2/DynamicProfiles/50_Nix.json;
+  };
+
+  home.file.".hammerspoon/nix_f19.lua"  = lib.optionalAttrs (pkgs.system == "aarch64-darwin" || pkgs.system == "x86_64-darwin") {
+    source = ./config/hammerspoon/f19.lua;
   };
 
   home.sessionVariables = {
