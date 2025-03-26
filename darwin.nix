@@ -30,6 +30,12 @@
       # Suppress the creation of .DS_Store files on network volumes
       "DSDontWriteNetworkStores" = true;
     };
+    "com.superultra.Homerow"= {
+        "hide-labels-when-nothing-is-searched" = true;
+        "scroll-shortcut" = "\\U2303\\U2325\\U21E7\\U2318J";
+        "search-shortcut" = "\\U2325\\U21E7\\U2318Space";
+        "use-search-predicate" = true;
+    };
   };
   system.defaults.ActivityMonitor.IconType = 5; # CPU Usage
   system.defaults.NSGlobalDomain.AppleInterfaceStyle = "Dark";
