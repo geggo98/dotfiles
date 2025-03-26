@@ -77,7 +77,7 @@
     "tunnelblick"
     "visual-studio-code"
     "wireshark"
-    "wireshark-chmodbpf"
+    # "wireshark-chmodbpf" # Conflicts with "wireshark"
     "yubico-yubikey-manager"
     "zed" # Zed code editor
 
