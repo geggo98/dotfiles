@@ -5,15 +5,21 @@ local f19 = {}
 -- Customize these callback functions for Cmd+F19, Alt+F19, and Shift+F19:
 --------------------------------------------------------------------------------
 local function doSomethingCmdF19()
+    -- Trigger Homerow Search: Command + Alt + Shift + Space
+    hs.eventtap.event.newKeyEvent({"cmd", "alt", "shift"}, "space", true):post()
+    hs.eventtap.event.newKeyEvent({"cmd", "alt", "shift"}, "space", false):post()
+end
+
+local function doSomethingAltF19()
     -- Trigger Homerow: Command + Shift + Space
     hs.eventtap.event.newKeyEvent({"cmd", "shift"}, "space", true):post()
     hs.eventtap.event.newKeyEvent({"cmd", "shift"}, "space", false):post()
 end
 
-local function doSomethingAltF19()
-    -- Trigger Homerow Search: Command + Alt + Shift + Space
-    hs.eventtap.event.newKeyEvent({"cmd", "alt", "shift"}, "space", true):post()
-    hs.eventtap.event.newKeyEvent({"cmd", "alt", "shift"}, "space", false):post()
+local function doSomethingCmdAltF19()
+    -- Trigger Homerow Scroll: Command + Ctrl + Alt + Shift + J
+    hs.eventtap.event.newKeyEvent({"cmd", "ctrl", "alt", "shift"}, "j", true):post()
+    hs.eventtap.event.newKeyEvent({"cmd", "ctrl", "alt", "shift"}, "j", false):post()
 end
 
 local function doSomethingShiftF19()
@@ -72,10 +78,11 @@ f19.eventtap = hs.eventtap.new(
     if keyCode == f19KeyCode then
       -- We have an F19 event
       if isDown then
-        -- Check modifiers exactly for Cmd+F19, Alt+F19, or Shift+F19
+        -- Check modifiers exactly for Cmd+F19, Alt+F19, Shift+F19, or Cmd+Alt+F19
         local isCmdOnly   = (flags.cmd and not flags.alt and not flags.ctrl and not flags.shift)
         local isAltOnly   = (flags.alt and not flags.cmd and not flags.ctrl and not flags.shift)
         local isShiftOnly = (flags.shift and not flags.cmd and not flags.alt and not flags.ctrl)
+        local isCmdAltOnly = (flags.cmd and flags.alt and not flags.ctrl and not flags.shift)
 
         if isCmdOnly then
           -- Cmd+F19
@@ -88,6 +95,10 @@ f19.eventtap = hs.eventtap.new(
         elseif isShiftOnly then
           -- Shift+F19
           doSomethingShiftF19()
+          return true
+        elseif isCmdAltOnly then
+          -- Cmd+Alt+F19
+          doSomethingCmdAltF19()
           return true
         else
           -- No modifiers or multiple modifiers
