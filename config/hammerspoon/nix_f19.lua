@@ -8,7 +8,7 @@
 local f19            = {}
 
 -- Debug and active flags
-f19.isDebug          = true     -- Set to false to silence debug output
+f19.isDebug          = false    -- Set to false to silence debug output
 f19.isActive         = true     -- Set to false to pass through all keys
 
 -- Keep track of whether F19 is down, whether we've pressed another key,
