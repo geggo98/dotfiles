@@ -1,6 +1,3 @@
--- Define our module (optional style)
-local f19 = {}
-
 -- Specification:
 -- - If debug mode is set, print log messages, otherwise mute them
 -- - If the the moeule is not active, pass through all keys. The use can use this to temporarily deactivate the module from the Hammerspoon console
@@ -8,131 +5,129 @@ local f19 = {}
 -- - If the user presses the F19 key with anothe key, the system shoudl act as if the F19 key is the "hyper" modifier  (Cmd+Ctrl+Alt+Shift) for the other key.
 -- - If the user presses a modifier with the F19 key (e.g., Alt+F19), this should be passed through to the system.
 
---------------------------------------------------------------------------------
--- Internal variables and helpers
---------------------------------------------------------------------------------
-f19.isDebug = true
-f19.isActive = true
-f19.isF19Down = false
+local f19            = {}
+
+-- Debug and active flags
+f19.isDebug          = true     -- Set to false to silence debug output
+f19.isActive         = true     -- Set to false to pass through all keys
+
+-- Keep track of whether F19 is down, whether we've pressed another key,
+-- and whether we've already activated "hyper" mode
+f19.isF19Down        = false
 f19.didPressOtherKey = false
-f19.hyperActive = false
+f19.hyperActive      = false
 
+-- Modifiers used for the "hyper" effect
+f19.hyperMods        = { "cmd", "alt", "ctrl", "shift" }
 
--- List of modifiers to hold down for the "hyper" effect:
-f19.hyperMods = { "cmd", "alt", "ctrl", "shift" }
-
-local function debug(...)
+-- Debug print function
+local function debugPrint(...)
     if f19.isDebug then
-        print("[nix_f19] ", ...)
+        print("[F19 Module] ", ...)
     end
 end
 
--- Press the hyper modifiers (called once user presses another key while F19 is held).
+-- Press all "hyper" modifiers
 local function pressHyper()
-    debug(">>> pressHyper")
+    debugPrint("Activating hyper modifiers")
     for _, mod in ipairs(f19.hyperMods) do
         hs.eventtap.event.newKeyEvent(mod, true):post()
     end
-    debug("<<< pressHyper")
+    f19.hyperActive = true
 end
 
--- Release the hyper modifiers.
+-- Release any active "hyper" modifiers
 local function releaseHyper()
-    debug(">>> releaseHyper")
     if f19.hyperActive then
+        debugPrint("Releasing hyper modifiers")
         for _, mod in ipairs(f19.hyperMods) do
             hs.eventtap.event.newKeyEvent(mod, false):post()
         end
         f19.hyperActive = false
     end
-    debug("<<< releaseHyper")
 end
 
--- Send Esc
+-- Send an Escape key press
 local function sendEscape()
-    debug(">>> sendEscape")
+    debugPrint("Sending Escape")
     hs.eventtap.event.newKeyEvent({}, "escape", true):post()
     hs.eventtap.event.newKeyEvent({}, "escape", false):post()
-    debug("<<< sendEscape")
 end
---------------------------------------------------------------------------------
--- Main eventtap to watch for key presses and releases
---------------------------------------------------------------------------------
+
+-- Eventtap to intercept key events
 f19.eventtap = hs.eventtap.new(
     { hs.eventtap.event.types.keyDown, hs.eventtap.event.types.keyUp },
     function(event)
-        if (not f19.isActive) then
+        if not f19.isActive then
+            -- If module is inactive, don't intercept anything
             return false
         end
 
-        local keyCode    = event:getKeyCode()
-        local flags      = event:getFlags()
-        local isFlags = (flags.cmd or flags.alt or flags.ctrl or flags.shift)
-        local isDown     = (event:getType() == hs.eventtap.event.types.keyDown)
-        local isUp       = (event:getType() == hs.eventtap.event.types.keyUp)
-        local f19KeyCode = hs.keycodes.map["f19"]
+        local keyCode      = event:getKeyCode()
+        local flags        = event:getFlags()
+        local isDown       = (event:getType() == hs.eventtap.event.types.keyDown)
+        local isUp         = (event:getType() == hs.eventtap.event.types.keyUp)
+        local f19KeyCode   = hs.keycodes.map["f19"]
+        local hasModifiers = (flags.cmd or flags.alt or flags.ctrl or flags.shift)
 
-        -- debug("nix_f19: ", hs.inspect(f19))
+        -- Handle F19 key events
         if keyCode == f19KeyCode then
-            -- We have an F19 event
             if isDown then
-                -- Check if there are no modifiers
-                if not isFlags then
-                    debug("-> f19, no modfifers")
-                    -- F19 pressed with no modifiers -> Potential "hyper" or "vim escape"
+                if not hasModifiers then
+                    -- F19 pressed alone; might be ESC or might become hyper
                     f19.isF19Down = true
                     f19.didPressOtherKey = false
-                    return true -- Block so macOS doesn't see plain F19
+                    debugPrint("F19 pressed with no modifiers")
+                    -- Block the raw F19 event from reaching the system
+                    return true
                 else
-                    debug("-> f19, with modifiers: pass through")
-                    -- F19 with any modifiers: pass through
+                    -- If F19 is pressed together with any standard modifier
+                    -- (like Alt+F19), pass it straight through
+                    debugPrint("F19 with standard modifier => pass through")
                     f19.didPressOtherKey = false
                     return false
                 end
             elseif isUp then
-                -- Key up for F19
                 if f19.isF19Down then
-                    debug("-> f19 up, after other action")
-                    -- If user never pressed a second key, send escape
+                    -- If no other key was pressed while F19 was down, send Escape
                     if not f19.didPressOtherKey then
+                        debugPrint("F19 released without pressing another key => Escape")
                         sendEscape()
                     end
-                    -- Always release the hyper keys (if pressed)
-                    if f19.hyperActive then
-                        releaseHyper()
-                        f19.hyperActive = false
-                    end
-                    -- Reset state
+                    -- Cleanup state
+                    releaseHyper()
                     f19.isF19Down = false
-                    f19.didPressOtherKey = false
-                else
-                    debug("-> f19 up, no other action")
-                    f19.didPressOtherKey = false
+                    return true
+                end
+            end
+        else
+            -- Any other keys
+            if f19.isF19Down and isDown then
+                -- We've pressed another key while F19 is held, so let's do hyper
+                f19.didPressOtherKey = true
+                pressHyper()
+                -- Post this key event as if hyper modifiers are held
+                local char = hs.keycodes.map[keyCode]
+                if char then
+                    hs.eventtap.event.newKeyEvent(f19.hyperMods, char, true):post()
+                end
+                return true
+            elseif f19.isF19Down and isUp then
+                -- Key up while F19 is held
+                local char = hs.keycodes.map[keyCode]
+                if char then
+                    hs.eventtap.event.newKeyEvent(f19.hyperMods, char, false):post()
                 end
                 return true
             end
-            debug("-> other f19 action")
-            return false
-        else
-            -- Some other key is being pressed or released
-            if isDown and f19.isF19Down and not f19.didPressOtherKey then
-                debug("-> other key, while f19 was down")
-                -- We pressed another key while F19 is held -> "hyper" mode
-                if not f19.hyperActive then
-                    pressHyper()
-                    f19.hyperActive = true
-                end
-
-                f19.didPressOtherKey = true
-            end
         end
 
-        -- By default, don't block events that aren't F19
+        -- If we reach here, pass the event through normally
         return false
     end
 )
 
--- Start listening
+-- Start watching key events
 f19.eventtap:start()
 
 return f19
