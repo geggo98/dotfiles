@@ -143,6 +143,7 @@
     # "PhotoScape X", id: 929507092 
     "Pixelmator Pro"= 1289583905;
     "Plash" =  1494023538; # Use any website as desktop wallpaper
+    "PLIST Editor" = 1157491961;
     "PopClip" = 445189367;
     "Save to Raindrop.io" = 1549370672;
     "Omnivore: Read-it-later" = 1564031042;

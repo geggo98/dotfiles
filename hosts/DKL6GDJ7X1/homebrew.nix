@@ -46,6 +46,7 @@
     "kekaexternalhelper" # Register Keka as default app for archives
     "krita"
     "languagetool"
+    "launchcontrol" # Debug launch agents
     "lens" # K8s IDE
     "losslesscut" # Simple video editor: https://github.com/mifi/lossless-cut
     "lunar"
@@ -84,7 +85,7 @@
     # Display resolution manager
     "betterdisplay" # https://github.com/waydabber/BetterDisplay
     # "switchresx"
-    
+
     # Window switcher
     # "alt-tab"
     # "witch"
@@ -130,8 +131,10 @@
     # "Moom Classic" = 419330170; # Moom 3
     "Motion" = 434290957;
     "Paste - Clipboard Manager" = 967805235;
-    # "PhotoScape X", id: 929507092 
+    # "PhotoScape X", id: 929507092
     "Pixelmator Pro"= 1289583905;
+    "Plash" =  1494023538; # Use any website as desktop wallpaper
+    "PLIST Editor" = 1157491961;
     "PopClip" = 445189367;
     "Save to Raindrop.io" = 1549370672;
     "Omnivore: Read-it-later" = 1564031042;
