@@ -434,8 +434,11 @@ in
     source = ./config/iTerm2/DynamicProfiles/50_Nix.json;
   };
 
+  home.file.".hammerspoon/nix.lua"  = lib.optionalAttrs (pkgs.system == "aarch64-darwin" || pkgs.system == "x86_64-darwin") {
+    source = ./config/hammerspoon/nix.lua;
+  };
   home.file.".hammerspoon/nix_f19.lua"  = lib.optionalAttrs (pkgs.system == "aarch64-darwin" || pkgs.system == "x86_64-darwin") {
-    source = ./config/hammerspoon/f19.lua;
+    source = ./config/hammerspoon/nix_f19.lua;
   };
 
   home.sessionVariables = {
@@ -481,6 +484,19 @@ in
       else
         echo "The Docker socket at /var/run/docker.sock is missing"
       fi
+    '';
+    home.activation.hammerspoon = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        if test -e ~/.hammerspoon/init.lua
+        then
+            if ! grep 'require("nix")' ~/.hammerspoon/init.lua > /dev/null
+            then
+                echo 'Add nix to Hammerspoon config\n'
+                echo "" >> ~/.hammerspoon/init.lua
+                echo "-- Load Nix home manager provided packages" >> ~/.hammerspoon/init.lua
+                echo "require(\"nix\")" >> ~/.hammerspoon/init.lua
+                echo "" >> ~/.hammerspoon/init.lua
+            fi
+        fi
     '';
   # home.activation.menuBarSpacing = lib.hm.dag.entryAfter [ "installPackages" ] ''
   #     # Set the menu bar spacing
