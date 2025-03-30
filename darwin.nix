@@ -32,8 +32,9 @@
     };
     "com.superultra.Homerow"= {
         "hide-labels-when-nothing-is-searched" = true;
-        "scroll-shortcut" = "\\U2303\\U2325\\U21E7\\U2318J";
-        "search-shortcut" = "\\U2325\\U21E7\\U2318Space";
+        "non-search-shortcut" = "⌥F19";
+        "scroll-shortcut" = "⌥⌘F19";
+        "search-shortcut" = "⌘F19";
         "use-search-predicate" = true;
     };
   };
@@ -62,6 +63,9 @@
   system.defaults.trackpad.Dragging = true;
   system.defaults.trackpad.TrackpadRightClick = true;
   system.defaults.trackpad.TrackpadThreeFingerDrag = true;
-  system.keyboard.enableKeyMapping = true;
-  system.keyboard.remapCapsLockToEscape = true;
+  # This doesn't work properly, since it activates only during "darwin-rebuild".
+  # Instead, we'll define a home-manager agent "hidutil-key-remapping".
+  system.keyboard.enableKeyMapping = false;
+  # https://github.com/nix-darwin/nix-darwin/blob/master/modules/system/keyboard.nix
+  # system.keyboard.remapCapsLockToEscape = false;
 }
