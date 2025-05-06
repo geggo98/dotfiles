@@ -116,6 +116,7 @@
     "Cascadea" =1432182561;
     "CloudMounter" = 1130254674; # Mounts: Dropbox, Google Drive, OneDrive, Amazon S3, FTP, SFTP, WebDAV
     "Compressor" = 424390742;
+    "Countdown" = 6744842468;
     "DaVinci Resolve" = 571213070;
     "Display Maid" = 450063525;
     "DockTime" = 508034739;
@@ -135,6 +136,7 @@
     "Logic Pro" = 634148309;
     "Logoist 5" = 6443412717;
     "MainStage" = 634159523;
+    "MenubarX" = 1575588022;
     # "Marked 2" = 890031187; # Use Homebrew version, it supports pandoc
     # "Moom Classic" = 419330170; # Moom 3
     "MoneyMoney" = 872698314;
