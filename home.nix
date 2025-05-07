@@ -54,7 +54,7 @@ in
   programs.direnv.nix-direnv.enable = true;
 
   programs.nix-index-database.comma.enable = true;
-  
+
   programs.zsh.enable = true;
   programs.fish = {
     enable = true;
@@ -62,16 +62,16 @@ in
       + ''
         export_nix_sops_secret_path OPENAI_API_KEY_PATH "${config.sops.secrets.openai_api_key.path}"
         export_nix_sops_secret_value OPENAI_API_KEY "${config.sops.secrets.openai_api_key.path}"
-        
+
         export_nix_sops_secret_path ANTHROPIC_API_KEY_PATH "${config.sops.secrets.anthropic_api_key.path}"
         export_nix_sops_secret_value ANTHROPIC_API_KEY "${config.sops.secrets.anthropic_api_key.path}"
-        
+
         export_nix_sops_secret_path OPENROUTER_API_KEY_PATH "${config.sops.secrets.openrouter_api_key.path}"
         export_nix_sops_secret_value OPENROUTER_API_KEY "${config.sops.secrets.openrouter_api_key.path}"
         # llm-openrouter expects the key in the environment variables LLM_OPENROUTER_KEY and OPENROUTER_KEY.
         export_nix_sops_secret_value LLM_OPENROUTER_KEY "${config.sops.secrets.openrouter_api_key.path}"
         export_nix_sops_secret_value OPENROUTER_KEY "${config.sops.secrets.openrouter_api_key.path}"
-        
+
         export_nix_sops_secret_path GROQ_API_KEY_PATH "${config.sops.secrets.groq_api_key.path}"
         export_nix_sops_secret_value GROQ_API_KEY "${config.sops.secrets.groq_api_key.path}"
 
@@ -171,7 +171,7 @@ in
   # programs.git-credential-oauth.enable = true;
   programs.gh.enable = true;
   programs.lazygit.enable = true;
-  
+
   programs.atuin= {
     enable = true;
     settings = {
@@ -194,7 +194,7 @@ in
     enableFishIntegration = false;
   };
   programs.ripgrep.enable = true;
-  
+
   # Htop
   # https://rycee.gitlab.io/home-manager/options.html#opt-programs.htop.enable
   programs.htop.enable = true;
@@ -439,6 +439,9 @@ in
   };
   home.file.".hammerspoon/nix_f19.lua"  = lib.optionalAttrs (pkgs.system == "aarch64-darwin" || pkgs.system == "x86_64-darwin") {
     source = ./config/hammerspoon/nix_f19.lua;
+  };
+  home.file.".hammerspoon/nix_display_monitor.lua"  = lib.optionalAttrs (pkgs.system == "aarch64-darwin" || pkgs.system == "x86_64-darwin") {
+    source = ./config/hammerspoon/nix_display_monitor.lua;
   };
 
   home.sessionVariables = {
