@@ -19,7 +19,7 @@ displayMonitor.targetDisplays = {
     },
     {
         hammerspoonUuid = "4CD90719-DE57-467E-A396-6D71BE0FF1B6", -- UUID for Hammerspoon matching
-        plashUuid = "4F6FCDF4-FCD2-47D0-97E8-EDE23C763755", -- UUID for Plash defaults
+        plashUuid = "4CD90719-DE57-467E-A396-6D71BE0FF1B6", -- UUID for Plash defaults
         name = "Lenovo p27"
     }
 }
