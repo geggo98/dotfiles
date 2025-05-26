@@ -57,12 +57,12 @@ local function handleTargetDisplay(targetDisplay)
     hs.osascript.applescript('tell application "Plash" to quit')
 
     -- Wait a moment for the application to quit
-    hs.timer.doAfter(1, function()
+    hs.timer.doAfter(2, function()
         -- Set the display preference for Plash
         hs.execute('defaults write com.sindresorhus.Plash display "' .. targetDisplay.plashUuid .. '"')
 
         -- Wait a moment for the preference to be set
-        hs.timer.doAfter(0.5, function()
+        hs.timer.doAfter(2, function()
             -- Activate Plash application
             hs.osascript.applescript('tell application "Plash" to activate')
         end)
