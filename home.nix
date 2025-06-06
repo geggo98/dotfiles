@@ -31,8 +31,8 @@ in
     # SSH keys must be passwordless and in Ed25519 format
     # `ssh-keygen -t ed25519 -f ~/.ssh/id_ed25519_sops_nopw -N ""`
     # Convert them with the ssh-to=age command: `ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw`
-    # Edit secrets in the file with: `env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops secrets/secrets.enc.yaml`
-    # Edit keys in the file: `env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops -s secrets/secrets.enc.yaml`
+    # Edit secrets in the file with: `env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops edit secrets/secrets.enc.yaml`
+    # Edit keys in the file: `env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops -s edit secrets/secrets.enc.yaml`
     # Add key with: `env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops --add-age age1... -r -i secrets/secrets.enc.yaml
     age.sshKeyPaths = [ "${config.home.homeDirectory}/.ssh/id_ed25519_sops_nopw" ];
     defaultSopsFile = ./secrets/secrets.enc.yaml;
@@ -131,8 +131,8 @@ in
       "+grep" = "ug";
       "+grep-tui" = "ug -Q";
 
-      "+sops-edit-keys" = "env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops -s";
-      "+sops-edit-secrets" = "env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops";
+      "+sops-edit-keys" = "env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops -s edit";
+      "+sops-edit-secrets" = "env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops edit";
     };
   };
   programs.nix-index.enable = true;
