@@ -42,8 +42,8 @@ in
       openrouter_api_key = {};
       groq_api_key = {};
       gemini_api_key = {};
-      c24_bi_kfz_test_stefan_schwetschke = {};
-      c24_bi_kfz_prod_stefan_schwetschke = {};
+      "c24_bi_kfz_test_stefan_schwetschke.json" = {};
+      "c24_bi_kfz_prod_stefan_schwetschke.json" = {};
     };
   };
 
