@@ -70,6 +70,7 @@
     "raycast"
     "resilio-sync"
     "red-canary-mac-monitor" # System event viewer (Process Monitor / procmon), https://github.com/redcanaryco/mac-monitor
+    "redis-insight"
     "sf-symbols" # https://developer.apple.com/sf-symbols/
     "shottr"
     "shortcat" # Command palette for every application, but slower than Homerow
@@ -111,6 +112,7 @@
     "1Blocker" = 1365531024;
     "1Password for Safari" = 1569813296;
     "Amphetamine" = 937984704;
+    "AusweisApp Bund" = 948660805;
     # "Bear" = 1091189122;
     "Brother iPrint&Scan" = 1193539993; # Adds Brother drivers for printer and scanner
     "Cascadea" =1432182561;
