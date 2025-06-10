@@ -71,6 +71,7 @@
     "raindropio"
     "raycast"
     "red-canary-mac-monitor" # System event viewer (Process Monitor / procmon), https://github.com/redcanaryco/mac-monitor
+    "redis-insight"
     "sf-symbols" # https://developer.apple.com/sf-symbols/
     "shottr"
     "slack" # Also available via the Mac App Store
