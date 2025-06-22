@@ -76,6 +76,7 @@
     "shottr"
     "slack" # Also available via the Mac App Store
     # "studio-3t"
+    "suspicious-package" # Inspect and unpack PKG files
     "tunnelblick"
     "visual-studio-code"
     "wireshark"

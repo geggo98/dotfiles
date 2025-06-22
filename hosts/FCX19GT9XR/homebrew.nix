@@ -78,6 +78,7 @@
     # "soundsource"
     # "studio-3t"
     "steam"
+    "suspicious-package" # Inspect and unpack PKG files
     "tripmode"
     "vlc"
     "vuescan"
