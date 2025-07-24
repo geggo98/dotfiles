@@ -148,9 +148,32 @@ in
     enable = true; # TUI file manager, start with `ya`. https://yazi-rs.github.io/docs/quick-start
     enableFishIntegration = true;
     enableZshIntegration = true;
-    # enableBashIntegration = true;
-    # enableNushellIntegration = true;
-  };
+    # Plugins don't work at the moment: Home manager expects them to have an `init.lua`, but they have a `main.lua`.
+#    package = unstable.yazi;
+#    plugins = {
+#        git = unstable.yaziPlugins.git; # see https://github.com/yazi-rs/plugins/tree/main/git.yazi
+#    };
+#
+#    initLua = ''
+#      require("git"):setup()
+#    '';
+#    settings = {
+#      plugin = {
+#        prepend_fetchers = [
+#          {
+#            id = "git";
+#            name = "*";
+#            run = "git";
+#          }
+#          {
+#            id = "git";
+#            name = "*/";
+#            run = "git";
+#          }
+#        ];
+#      };
+#    };
+};
 
   programs.git = {
     enable = true;
@@ -335,7 +358,9 @@ in
     # File explorers
     # broot
     # nnn
+    edir # https://github.com/bulletmark/edir
     ranger
+    trash-cli # https://github.com/andreafrancia/trash-cli
     vifm
 
     # Useful nix related tools
