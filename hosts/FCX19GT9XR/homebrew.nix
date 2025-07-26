@@ -119,6 +119,7 @@
     "Cascadea" =1432182561;
     "CloudMounter" = 1130254674; # Mounts: Dropbox, Google Drive, OneDrive, Amazon S3, FTP, SFTP, WebDAV
     "Compressor" = 424390742;
+    "Corner Time" = 6746757189;
     "Countdown" = 6744842468;
     "DaVinci Resolve" = 571213070;
     "Display Maid" = 450063525;
