@@ -134,6 +134,19 @@ in
       "+grep" = "ug";
       "+grep-tui" = "ug -Q";
 
+      # Gemini CLI 
+      "+gemini" = "npx -y github:google-gemini/gemini-cli"; # To use a specific version, run: npx -y github:google-gemini/gemini-cli@v0.5.0
+      "+gemini-with-api-key" = ''
+        if test -z "$GEMINI_API_KEY"
+          if test -n "$GEMINI_API_KEY_PATH"
+            export GEMINI_API_KEY=(cat "$GEMINI_API_KEY_PATH")
+          else
+            export GEMINI_API_KEY=(cat "$HOME/.config/sops-nix/secrets/gemini_api_key")
+          end
+        end
+        npx -y github:google-gemini/gemini-cli
+      '';
+
       "+sops-edit-keys" = "env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops -s edit";
       "+sops-edit-secrets" = "env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops edit";
     };
