@@ -84,13 +84,14 @@
   # Legacy fonts are in: `/Library/Fonts`.
   # Legacy fonts won't get udpates anymore.
   fonts.packages = with pkgs; [
-     recursive
-     (nerdfonts.override { fonts = [ "JetBrainsMono" "Iosevka" "IosevkaTerm" "VictorMono" ]; })
+     nerd-fonts.jetbrains-mono
+     nerd-fonts.iosevka
+     nerd-fonts.victor-mono
      iosevka
      jetbrains-mono
      victor-mono
    ];
 
   # Add ability to used TouchID for sudo authentication
-  security.pam.enableSudoTouchIdAuth = true;
+  security.pam.services.sudo_local.touchIdAuth = true;
 }
