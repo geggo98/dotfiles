@@ -25,17 +25,11 @@
     nix-index-database.url = "github:Mic92/nix-index-database";
     nix-index-database.inputs.nixpkgs.follows = "nixpkgs";
 
-    # https://github.com/chaotic-cx/nyx
-    nyx = {
-      url = "github:chaotic-cx/nyx";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-
     # External dependencies
     astronvim = { url = "github:AstroNvim/AstroNvim/v3.40.1"; flake = false; };
   };
 
-  outputs = { self, darwin, nixpkgs, nixpkgs-unstable, home-manager, sops-nix, nix-index-database, nyx, ... }@inputs:
+  outputs = { self, darwin, nixpkgs, nixpkgs-unstable, home-manager, sops-nix, nix-index-database, ... }@inputs:
   let 
     inherit (darwin.lib) darwinSystem;
     inherit (inputs.nixpkgs.lib) attrValues makeOverridable optionalAttrs singleton;
@@ -122,10 +116,7 @@
             system = "x86_64-darwin";
             inherit (nixpkgsConfig) config;
           };
-        };
-      nyx = final: prev: optionalAttrs (prev.stdenv.system == "aarch64-linux" || prev.stdenv.system == "x86_64-linux" || prev.stdenv.system == "aarch64-darwin") {
-        yt-dlp_git = nyx.packages.${prev.stdenv.system}.yt-dlp_git;
-      };
+        }; 
       };
  };
 }
