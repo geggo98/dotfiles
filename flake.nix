@@ -7,14 +7,14 @@
   # Update single input with `nix flake lock --update-input <input-name>`
   inputs = {
     # Package sets
-    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-24.11-darwin"; # https://status.nixos.org/
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05"; # https://status.nixos.org/
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Environment/system management
-    darwin.url = "github:lnl7/nix-darwin/nix-darwin-24.11";
+    darwin.url = "github:lnl7/nix-darwin/nix-darwin-25.05";
     darwin.inputs.nixpkgs.follows = "nixpkgs";
     
-    home-manager.url = "github:nix-community/home-manager/release-24.11";
+    home-manager.url = "github:nix-community/home-manager/release-25.05";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
     
     # https://github.com/Mic92/sops-nix
