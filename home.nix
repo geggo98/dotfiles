@@ -244,6 +244,7 @@ in
   programs.aria2.enable = true;
   programs.yt-dlp = {
     enable = true;
+    package = unstable.yt-dlp;
     settings = {
       embed-thumbnail = true;
       embed-subs = true;
