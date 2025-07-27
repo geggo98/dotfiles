@@ -22,7 +22,7 @@ in
   # Import home-manager modules
   # Import them here instead of in the flake input to avoid importing NixOS modules not compatible with macOS Darwin
   imports = [
-    nix-index-database.hmModules.nix-index
+    nix-index-database.homeModules.nix-index
     sops-nix.homeManagerModules.sops
   ];
 
@@ -86,7 +86,7 @@ in
       { name = "z"; src = pkgs.fishPlugins.z.src; }
       { name = "fzf"; src = pkgs.fishPlugins.fzf-fish.src; }
       { name = "forgit"; src = pkgs.fishPlugins.forgit.src; }
-      { name = "github-copilot-cli"; src = pkgs.fishPlugins.github-copilot-cli-fish.src; }
+      
       { name = "bass"; src = pkgs.fishPlugins.bass.src; }
     ];
     shellAbbrs = {
@@ -162,30 +162,30 @@ in
     enableFishIntegration = true;
     enableZshIntegration = true;
     # Plugins don't work at the moment: Home manager expects them to have an `init.lua`, but they have a `main.lua`.
-#    package = unstable.yazi;
-#    plugins = {
-#        git = unstable.yaziPlugins.git; # see https://github.com/yazi-rs/plugins/tree/main/git.yazi
-#    };
-#
-#    initLua = ''
-#      require("git"):setup()
-#    '';
-#    settings = {
-#      plugin = {
-#        prepend_fetchers = [
-#          {
-#            id = "git";
-#            name = "*";
-#            run = "git";
-#          }
-#          {
-#            id = "git";
-#            name = "*/";
-#            run = "git";
-#          }
-#        ];
-#      };
-#    };
+    package = pkgs.yazi;
+    plugins = {
+        git = pkgs.yaziPlugins.git; # see https://github.com/yazi-rs/plugins/tree/main/git.yazi
+    };
+
+    initLua = ''
+      require("git"):setup()
+    '';
+    settings = {
+      plugin = {
+        prepend_fetchers = [
+          {
+            id = "git";
+            name = "*";
+            run = "git";
+          }
+          {
+            id = "git";
+            name = "*/";
+            run = "git";
+          }
+        ];
+      };
+    };
 };
 
   programs.git = {
@@ -319,7 +319,7 @@ in
     q-text-as-data
     # sc-im # Has open CVE in libxls-1.6.2
     visidata
-    xsv
+    xan
 
     # Password management
     # pkgs._1password
@@ -345,7 +345,7 @@ in
     pueue # Task manager https://github.com/Nukesor/pueue
     parallel
     pv
-    python39Packages.ftfy # Fix broken unicode encoding
+    python312Packages.ftfy # Fix broken unicode encoding
     rename
     tmuxp # Tmuxinator like session manager
     tldr-hs # TLDR client with local cache
@@ -391,7 +391,7 @@ in
     unstable.aichat
     # The Nix version has problems with plugins, use the Brew version instead
     # (unstable.llm.withPlugins([])) # https://llm.datasette.io/ like chatblade, but also for local models
-    github-copilot-cli # ??/!! git?/git! gh?/gh!
+    gh-copilot # ??/!! git?/git! gh?/gh!
     unstable.ollama
     # k8sgpt
     # shell_gpt

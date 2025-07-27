@@ -8,4 +8,5 @@
 
   # For home-manager
   users.users.stefan.home = /Users/stefan;
+  system.primaryUser = "stefan";
 }
