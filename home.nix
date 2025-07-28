@@ -42,6 +42,7 @@ in
       openrouter_api_key = {};
       groq_api_key = {};
       gemini_api_key = {};
+      slack_c24_api_key = {};
       "c24_bi_kfz_test_stefan_schwetschke.json" = {};
       "c24_bi_kfz_prod_stefan_schwetschke.json" = {};
     };
@@ -81,6 +82,8 @@ in
         export_nix_sops_secret_value LLM_GEMINI_KEY "${config.sops.secrets.gemini_api_key.path}"
         export_nix_sops_secret_value GEMINI_API_KEY "${config.sops.secrets.gemini_api_key.path}"
         export_nix_sops_secret_path GEMINI_API_KEY_PATH "${config.sops.secrets.gemini_api_key.path}"
+
+        export_nix_sops_secret_value SLACK_C24_API_KEY "${config.sops.secrets.slack_c24_api_key.path}"
         '';
     plugins = [
       { name = "z"; src = pkgs.fishPlugins.z.src; }
