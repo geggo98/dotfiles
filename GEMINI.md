@@ -20,29 +20,48 @@ The **header** is mandatory and has a special format that includes a **type**, a
 
 The type must be one of the following:
 
-*   **feat**: A new feature
-*   **fix**: A bug fix
-*   **docs**: Documentation only changes
-*   **style**: Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons, etc)
-*   **refactor**: A code change that neither fixes a bug nor adds a feature
-*   **perf**: A code change that improves performance
-*   **test**: Adding missing tests or correcting existing tests
-*   **build**: Changes that affect the build system or external dependencies (example scopes: gulp, broccoli, npm)
-*   **ci**: Changes to our CI configuration files and scripts (example scopes: Travis, Circle, BrowserStack, SauceLabs)
-*   **chore**: Other changes that don't modify src or test files
-*   **revert**: Reverts a previous commit
+-   **feat**: A new feature
+-   **fix**: A bug fix
+-   **docs**: Documentation only changes
+-   **style**: Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons, etc)
+-   **refactor**: A code change that neither fixes a bug nor adds a feature
+-   **perf**: A code change that improves performance
+-   **test**: Adding missing tests or correcting existing tests
+-   **build**: Changes that affect the build system or external dependencies (example scopes: gulp, broccoli, npm)
+-   **ci**: Changes to our CI configuration files and scripts (example scopes: Travis, Circle, BrowserStack, SauceLabs)
+-   **chore**: Other changes that don't modify src or test files
+-   **revert**: Reverts a previous commit
 
 ### Scope
 
-The scope provides contextual information and is contained within parenthesis, e.g., `feat(parser):`. It can be anything specifying the place of the commit change.
+The scope provides contextual information and is contained within parenthesis, e.g., `feat(nix):`. It can be anything specifying the place of the commit change.
+
+Here is a list of scopes already used in this project:
+
+-   **project**: Changes related to the project setup, configuration, management, and tools configuration (including editors, IDEs, AI assistants, and other development tools).
+-   **packages**: Changes related to software packages, dependencies, and their configuration.
+-   **flake**: Changes related to Nix Flakes, which are a new way to manage Nix expressions.
+-   **nix**: Changes related to the Nix package manager and its configuration.
+-   **home-manager**: Changes related to the home-manager configuration, which manages user-level packages and dotfiles.
+-   **homebrew**: Changes related to the Homebrew package manager and its configuration.
+-   **secrets**: Changes related to managing secrets and encrypted files.
+-   **hammerspoon**: Changes related to Hammerspoon, a tool for powerful automation of macOS.
+-   **darwin**: Changes related to macOS specific configuration using nix-darwin.
+-   **docs**: Changes related to documentation.
+-   **setup**: Changes related to the project setup and installation scripts.
+-   **env**: Changes related to environment variables and shell environment.
+-   **channels**: Changes related to Nix channels, which are used to manage package versions.
+-   **macos**: Changes related to macOS specific settings and preferences.
+
+Try to use one of the listed scopes if possible. If you'll have to introduce a new scope, please add it to the list above.
 
 ### Subject
 
 The subject contains a succinct description of the change:
 
-*   use the imperative, present tense: "change" not "changed" nor "changes"
-*   don't capitalize the first letter
-*   no dot (.) at the end
+-   use the imperative, present tense: "change" not "changed" nor "changes"
+-   don't capitalize the first letter
+-   no dot (.) at the end
 
 ## Body
 
@@ -50,12 +69,21 @@ The body is used to provide additional context and information about the code ch
 
 ## Footer
 
-The footer is used to reference issues or pull requests that the commit closes or relates to.
+The footer is used to reference issues or pull requests that the commit closes or relates to. Usually it's a markdown style list of changes.
 
 ## Example
 
 ```
 feat(home): Add alias for Gemini CLI
 
-This commit adds a new alias `g` for the Gemini CLI to make it easier to use.
+- Adds a new alias `g` for the Gemini CLI to make it easier to use.
+- Documents this alias in the README.md
 ```
+
+# Git
+
+- You can use the `git` command to manage your changes.
+- Commit intermediate changes using `git commit -m "fixup! Literal copy of previous commit message"`, so we can later squash them into a single commit.
+- Don't push your changes, use `git push --dry-run` to test your changes. Only push when the user explicitly requests it.
+- Don't rewrite history (rebase, amend), except if the user explicitly requests it.
+- Don't force push or merge, except if the user explicitly requests it.
