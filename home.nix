@@ -459,6 +459,10 @@ in
     "starship.toml" = {
       source = ./config/starship-preset-bracketed-segments.toml;
     };
+    "raycast/script_commands" = {
+      source = ./config/raycast/script_commands;
+      recursive = true;
+    };
   };
 
 
