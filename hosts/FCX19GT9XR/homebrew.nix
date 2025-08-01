@@ -158,8 +158,8 @@
     "Source Files: Git Storage" = 6450856155; # Mount Git repos in the finder
     "Spark Desktop" = 6445813049;
     "SponsorBlock for YouTube - Skip Sponsorships" = 1573461917;
-    "Tabby" = 1586203406; # Tab switcher for Safari
-    # "Tabs Switcher" = 1406718335; # Switches browser tabs
+    # "Tabby" = 1586203406; # Tab switcher for Safari
+    "Tabs Switcher" = 1406718335; # Switches browser tabs
     "Tailscale" = 1475387142;
     # "TinyStopwatch" = 1447754003;
     "UTM" = 1538878817;
