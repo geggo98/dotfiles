@@ -138,6 +138,7 @@
     "Paste - Clipboard Manager" = 967805235;
     # "PhotoScape X", id: 929507092
     "Pixelmator Pro"= 1289583905;
+    "Pointer" = 6736710502; # adds a virtual laser pointer and virtual white board for presentations
     "Plash" =  1494023538; # Use any website as desktop wallpaper
     "PLIST Editor" = 1157491961;
     "PopClip" = 445189367;
@@ -147,6 +148,7 @@
     "Shortery" = 1594183810;
     # "Slack for Desktop"= 803453959; # Also available as Homebrew Cask
     "Source Files: Git Storage" = 6450856155; # Mount Git repos in the finder
+    "StopTheMadness Pro" = 6471380298; # Ad blocker
     "SponsorBlock for YouTube - Skip Sponsorships" = 1573461917;
     # "Tabby" = 1586203406; # Tab switcher for Safari
     "Tabs Switcher" = 1406718335; # Switches browser tabs
