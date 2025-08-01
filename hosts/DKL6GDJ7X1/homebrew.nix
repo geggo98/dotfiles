@@ -14,7 +14,6 @@
     "cursor"
     "Dropbox"
     "git-credential-manager" # The version in Nix doesn't find its Dotnet SDK
-    "languagetool"
     "openvpn-connect"
     "postman"
     "postman-cli"

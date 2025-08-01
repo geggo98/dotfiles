@@ -33,16 +33,19 @@
     "keka" # Archive utility, supports encrypted ZIP files, https://www.keka.io/
     "kekaexternalhelper" # Register Keka as default app for archives
     "krita"
+    "languagetool-desktop"
     "launchcontrol" # Debug launch agents
     "lens" # K8s IDE
     "losslesscut" # Simple video editor: https://github.com/mifi/lossless-cut
     "lunar"
     "lm-studio"# Run LLM locally
-    "marked" # "Marked 2" markdown viewer. Thsi version supports pandoc
+    "marked-app" # "Marked 2" markdown viewer. Thsi version supports pandoc
+    "marta" # Orthodox file manager
     "MonitorControl"
     "msty" # Run LLM locally
     "notunes" # Prevents Apple Music from hijacking headset buttons
     "omnigraffle"
+    "orion" # Kagi Orion Browser
     "orbstack"
     # "macgpt"
     "macwhisper"
@@ -61,7 +64,7 @@
     # "studio-3t"
     "suspicious-package" # Inspect and unpack PKG files
     "visual-studio-code"
-    "wireshark"
+    "wireshark-app"
     # "wireshark-chmodbpf" # Conflicts with "wireshark"
     "yubico-yubikey-manager"
     "zed" # Zed code editor
