@@ -87,3 +87,8 @@ feat(home): Add alias for Gemini CLI
 - Don't push your changes, use `git push --dry-run` to test your changes. Only push when the user explicitly requests it.
 - Don't rewrite history (rebase, amend), except if the user explicitly requests it.
 - Don't force push or merge, except if the user explicitly requests it.
+
+# Nix
+
+- You can test your changes by building the project as a flake.
+- If Nix cannot find a file you created, you'll probably have to add it in Git (not commit, just stage), so Nix copies it over during the build.
