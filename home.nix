@@ -45,6 +45,8 @@ in
       slack_c24_api_key = {};
       "c24_bi_kfz_test_stefan_schwetschke.json" = {};
       "c24_bi_kfz_prod_stefan_schwetschke.json" = {};
+      "c24_bi_kfz_test_liquibase.json" = {};
+      "c24_bi_kfz_prod_liquibase.json" = {};
     };
   };
 
