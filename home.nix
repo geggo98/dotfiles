@@ -324,7 +324,7 @@ in
     q-text-as-data
     # sc-im # Has open CVE in libxls-1.6.2
     visidata
-    xan
+    xan # alternative to xsv and csvkit
 
     # Password management
     # pkgs._1password
