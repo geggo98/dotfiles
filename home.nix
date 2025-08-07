@@ -43,6 +43,7 @@ in
       groq_api_key = {};
       gemini_api_key = {};
       slack_c24_api_key = {};
+      atlassian_c24_bitbucket_api_token = {};
       "c24_bi_kfz_test_stefan_schwetschke.json" = {};
       "c24_bi_kfz_prod_stefan_schwetschke.json" = {};
       "c24_bi_kfz_test_liquibase.json" = {};
@@ -86,6 +87,9 @@ in
         export_nix_sops_secret_path GEMINI_API_KEY_PATH "${config.sops.secrets.gemini_api_key.path}"
 
         export_nix_sops_secret_value SLACK_C24_API_KEY "${config.sops.secrets.slack_c24_api_key.path}"
+
+        export_nix_sops_secret_value ATLASSIAN_C24_BITBUCKET_API_TOKEN "${config.sops.secrets.atlassian_c24_bitbucket_api_token.path}"
+        export_nix_sops_secret_value ATLASSIAN_API_TOKEN "${config.sops.secrets.atlassian_c24_bitbucket_api_token.path}"
         '';
     plugins = [
       { name = "z"; src = pkgs.fishPlugins.z.src; }
