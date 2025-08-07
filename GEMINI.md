@@ -90,5 +90,5 @@ feat(home): Add alias for Gemini CLI
 
 # Nix
 
-- You can test your changes by building the project as a flake.
+- You can test your changes by building the project as a flake: `darwin-rebuild build --flake ~/.config/nix-darwin/` (no sudo required)
 - If Nix cannot find a file you created, you'll probably have to add it in Git (not commit, just stage), so Nix copies it over during the build.
