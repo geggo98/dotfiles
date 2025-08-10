@@ -45,7 +45,7 @@
     darwinConfigurations = {
       FCX19GT9XR = darwinSystem {
         system = "aarch64-darwin";
-        modules = [ 
+        modules = [
           # Main `nix-darwin` config
           ./configuration.nix
           ./darwin.nix
@@ -64,7 +64,7 @@
           # Instead, import it in the `home.nix` file.
 
           {
-            nixpkgs = nixpkgsConfig;
+            nixpkgs = nixpkgsConfig // { overlays = [ self.overlays.update-comma ]; };
             # `home-manager` config
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
@@ -75,7 +75,7 @@
       };
       DKL6GDJ7X1 = darwinSystem {
         system = "aarch64-darwin";
-        modules = [ 
+        modules = [
           # Main `nix-darwin` config
           ./configuration.nix
           ./darwin.nix
@@ -94,7 +94,7 @@
           # Instead, import it in the `home.nix` file.
 
           {
-            nixpkgs = nixpkgsConfig;
+            nixpkgs = nixpkgsConfig // { overlays = [ self.overlays.update-comma ]; };
             # `home-manager` config
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
@@ -116,7 +116,11 @@
             system = "x86_64-darwin";
             inherit (nixpkgsConfig) config;
           };
-        }; 
+        };
+      # Update comma to the latest version from nixpkgs-unstable
+      update-comma = final: prev: {
+        comma = inputs.nixpkgs-unstable.legacyPackages.${prev.system}.comma;
       };
+    };
  };
 }
