@@ -522,7 +522,7 @@ in
         run --quiet llm aliases set gemini gemini-2.0-pro-exp-02-05
         run --quiet llm aliases set deepseek openrouter/deepseek/deepseek-r1
         run --quiet llm aliases set auto openrouter/openrouter/auto
-        run llm models default o3-mini
+        run llm models default gpt-5-mini
       fi
       export PATH="$original_path_B541A0A9"
       unset original_path_B541A0A9
