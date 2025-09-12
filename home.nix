@@ -197,6 +197,15 @@ in
     };
 };
 
+  programs.helix = {
+    enable = true;
+    settings = {
+      editor = {
+        bufferline = "multiple";
+      };
+    };
+  };
+
   programs.git = {
     enable = true;
     userName = "stefan.schwetschke";
