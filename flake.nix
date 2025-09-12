@@ -1,4 +1,6 @@
-# darwin-rebuild switch --flake ~/.config/nix-darwin
+# nix build --flake .#darwinConfigurations.DKL6GDJ7X1.system
+# darwin-rebuild build --flake ~/.config/nix-darwin
+# sudo darwin-rebuild switch --flake ~/.config/nix-darwin
 # git add . && nix --extra-experimental-features "nix-command flakes"  run nix-darwin -- switch --flake ~/.config/nix-darwin
 {
   description = "Stefan's darwin system";
