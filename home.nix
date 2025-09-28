@@ -37,6 +37,10 @@ in
     age.sshKeyPaths = [ "${config.home.homeDirectory}/.ssh/id_ed25519_sops_nopw" ];
     defaultSopsFile = ./secrets/secrets.enc.yaml;
     secrets = {
+      "aws/credentials".path = "${config.home.homeDirectory}/.aws/credentials";
+      "aws/credentials".mode = "0600";
+      "aws/config".path = "${config.home.homeDirectory}/.aws/config";
+      "aws/config".mode = "0600";
       openai_api_key = {};
       anthropic_api_key = {};
       openrouter_api_key = {};
