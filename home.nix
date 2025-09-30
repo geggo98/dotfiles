@@ -46,6 +46,9 @@ in
       openrouter_api_key = {};
       groq_api_key = {};
       gemini_api_key = {};
+      context7_api_key = {};
+      ollama_api_key = {};
+      travily_api_key = {};
       slack_c24_api_key = {};
       atlassian_c24_bitbucket_api_token = {};
       "c24_bi_kfz_test_stefan_schwetschke.json" = {};
@@ -89,6 +92,15 @@ in
         export_nix_sops_secret_value LLM_GEMINI_KEY "${config.sops.secrets.gemini_api_key.path}"
         export_nix_sops_secret_value GEMINI_API_KEY "${config.sops.secrets.gemini_api_key.path}"
         export_nix_sops_secret_path GEMINI_API_KEY_PATH "${config.sops.secrets.gemini_api_key.path}"
+
+        export_nix_sops_secret_path CONTEXT7_API_KEY_PATH "${config.sops.secrets.context7_api_key.path}"
+        export_nix_sops_secret_value CONTEXT7_API_KEY "${config.sops.secrets.context7_api_key.path}"
+
+        export_nix_sops_secret_path OLLAMA_API_KEY_PATH "${config.sops.secrets.ollama_api_key.path}"
+        export_nix_sops_secret_value OLLAMA_API_KEY "${config.sops.secrets.ollama_api_key.path}"
+
+        export_nix_sops_secret_path TRAVILY_API_KEY_PATH "${config.sops.secrets.travily_api_key.path}"
+        export_nix_sops_secret_value TRAVILY_API_KEY "${config.sops.secrets.travily_api_key.path}"
 
         export_nix_sops_secret_value SLACK_C24_API_KEY "${config.sops.secrets.slack_c24_api_key.path}"
 
