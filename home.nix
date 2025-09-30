@@ -24,6 +24,7 @@ in
   imports = [
     nix-index-database.homeModules.nix-index
     sops-nix.homeManagerModules.sops
+    ./modules/aichat.nix
   ];
 
   sops = {
@@ -158,6 +159,11 @@ in
       # Grep
       "+grep" = "ug";
       "+grep-tui" = "ug -Q";
+
+      # Codex CLI
+      "+codex" = ", codex";
+      "+codex-sandbox" = ", codex --full-auto";
+      "+codex-danger-delete-all-my-files-and-trash-my-computer" = ", codex --dangerously-bypass-approvals-and-sandbox";
 
       # Gemini CLI 
       "+gemini" = "npx -y github:google-gemini/gemini-cli"; # To use a specific version, run: npx -y github:google-gemini/gemini-cli@v0.5.0
