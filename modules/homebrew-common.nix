@@ -29,6 +29,7 @@
     "iterm2"
     "itermai" # AI plugin for iTerm2
     "istat-menus"
+    "jdk-mission-control"
     "jetbrains-toolbox"
     "keka" # Archive utility, supports encrypted ZIP files, https://www.keka.io/
     "kekaexternalhelper" # Register Keka as default app for archives
