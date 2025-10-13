@@ -142,6 +142,7 @@ in
       "+lt" = "lsd --tree --ignore-glob .git --ignore-glob node_modules";
 
       #Utils
+      "+rm" = "trash";
       "+lsusb" = "system_profiler SPUSBDataType";
       "+bus-pirate" = ", tio -b 115200 -d 8 -p none -s 1 -f none (find /dev -maxdepth 2 -path '/dev/cu.usbmodem*' -o -path '/dev/serial/by-id/*' 2>/dev/null | fzf --prompt='Select Bus Pirate device > ')";
       "+usb-serial-autoconnect-latest" = ", tio -a latest";
@@ -374,6 +375,7 @@ in
     # Command line helper
     btop
     bottom # Was "ytop", now "btm": https://github.com/ClementTsang/bottom
+    edir # edit directories https://github.com/bulletmark/edir , see also https://github.com/trapd00r/vidir
     fd
     findutils # xargs
     hexyl
@@ -389,6 +391,7 @@ in
     rename
     tmuxp # Tmuxinator like session manager
     tldr-hs # TLDR client with local cache
+    trash-cli # move files to trash https://github.com/andreafrancia/trash-cli
     ugrep
     viddy # A modern watch alternative
     watchexec
