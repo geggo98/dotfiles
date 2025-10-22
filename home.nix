@@ -138,8 +138,8 @@ in
       "+la" = "lsd -a";
       "+ll" = "lsd -l --git";
       "+lla" = "lsd -la --git";
-      "+llt" = "lsd --long --tree --git --ignore-glob .git --ignore-glob node_modules";
-      "+lt" = "lsd --tree --ignore-glob .git --ignore-glob node_modules";
+      "+llt" = "lsd --long --tree --git --ignore-glob .git --ignore-glob node_modules --ignore-glob __pycache__";
+      "+lt" = "lsd --tree --ignore-glob .git --ignore-glob node_modules --ignore-glob __pycache__";
 
       #Utils
       "+rm" = "trash";
