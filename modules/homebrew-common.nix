@@ -90,7 +90,7 @@
     "1Password for Safari" = 1569813296;
     "Amphetamine" = 937984704;
     # "Bear" = 1091189122;
-    "Cascadea" = 1432182561;
+    # "Cascadea" = 1432182561; # Seems to be missing from the App store
     "CloudMounter" = 1130254674; # Mounts: Dropbox, Google Drive, OneDrive, Amazon S3, FTP, SFTP, WebDAV
     "Compressor" = 424390742;
     "Corner Time" = 6746757189;
@@ -124,7 +124,7 @@
     "Pointer" = 6736710502; # adds a virtual laser pointer and virtual white board for presentations
     "Plash" =  1494023538; # Use any website as desktop wallpaper
     "PLIST Editor" = 1157491961;
-    "PopClip" = 445189367;
+    # "PopClip" = 445189367; # Seems to be missing from the App store
     "Save to Raindrop.io" = 1549370672;
     "Omnivore: Read-it-later" = 1564031042;
     "rcmd" = 1596283165;
