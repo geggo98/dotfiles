@@ -59,6 +59,82 @@ in
     };
   };
 
+  # Needs newer home manager to work properly
+#  programs.claude-code = {
+#      enable = true;
+#
+#      # MCP servers -> written by HM into Claude Code's MCP config
+#      mcpServers = {
+#        # 1) GitHub (containerized stdio)
+#        github = {
+#          type = "stdio";
+#          command = "docker";
+#          args = [
+#            "run" "-i" "--rm"
+#            "-e" "GITHUB_PERSONAL_ACCESS_TOKEN"
+#            "ghcr.io/github/github-mcp-server"
+#          ];
+#          # No secrets here; docker -e forwards from your shell env.
+#        };
+#
+#        # 2) Atlassian (remote SSE) — use HTTP if they offer it; SSE is second-class
+#        atlassian = {
+#          type = "sse";
+#          url = "https://mcp.atlassian.com/v1/sse";
+#        };
+#
+#        # 3) javadocs.dev (remote HTTP)
+#        javadocs = {
+#          type = "http";
+#          url = "https://www.javadocs.dev/mcp";
+#        };
+#
+#        # 4) Upstash Context7 (local stdio via npx)
+#        context7 = {
+#          type = "stdio";
+#          command = "npx";
+#          args = [ "-y" "@upstash/context7-mcp" ];
+#          env = {
+#            # expanded at runtime by Claude Code
+#            CONTEXT7_API_KEY = "\${CONTEXT7_API_KEY}";
+#          };
+#        };
+#
+#        # 5) NixOS (local stdio via uvx)
+#        nixos = {
+#          type = "stdio";
+#          command = "uvx";
+#          args = [ "mcp-nixos" ];
+#        };
+#
+#        # 6) Tavily (remote HTTP) — prefer header if supported; else query param
+#        tavily = {
+#          type = "http";
+#          # If Tavily supports headers for you, use the headers block below and set url without query:
+#          # url = "https://mcp.tavily.com/mcp/";
+#          # headers = { Authorization = "Bearer ${TAVILY_API_KEY}"; };
+#          # Otherwise keep query-param style:
+#          url = "https://mcp.tavily.com/mcp/?tavilyApiKey=\${TAVILY_API_KEY}";
+#        };
+#
+#        # 7) Google Programmable Search (local stdio via npx)
+#        google-pse = {
+#          type = "stdio";
+#          command = "npx";
+#          args = [
+#            "-y" "google-pse-mcp"
+#            "https://www.googleapis.com/customsearch"
+#            "\${GOOGLE_CSE_ID}"    # engine ID (cx)
+#            # If the tool needs the API key as an arg, add: "${GOOGLE_API_KEY}"
+#          ];
+#          env = {
+#            GOOGLE_API_KEY = "\${GOOGLE_API_KEY}";
+#            GOOGLE_CSE_ID  = "\${GOOGLE_CSE_ID}";
+#          };
+#        };
+#      };
+#  };
+
   # https://github.com/malob/nixpkgs/blob/master/home/default.nix
 
   # Direnv, load and unload environment variables depending on the current directory.
