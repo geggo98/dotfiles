@@ -53,7 +53,12 @@ format = '\[[$symbol($version)]($style)\]'
 format = '\[[$symbol$branch]($style)\]'
 
 [gcloud]
-format = '\[[$symbol$account(@$domain)(\($region\))]($style)\]'
+# format = '\[[$symbol$account(@$domain)(\($region\))]($style)\]'
+format = '\[[$symbol$active]($style)\]'
+
+[gcloud.project_aliases]
+c24-bi-kfz-test = 'kfz-test'
+c24-bi-kfz-prod = 'kfz-prod'
 
 [git_branch]
 format = '\[[$symbol$branch]($style)\]'
