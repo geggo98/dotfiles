@@ -50,6 +50,7 @@ in
       context7_api_key = {};
       ollama_api_key = {};
       travily_api_key = {};
+      z_ai_api_key = {};
       slack_c24_api_key = {};
       atlassian_c24_bitbucket_api_token = {};
       "c24_bi_kfz_test_stefan_schwetschke.json" = {};
@@ -178,6 +179,9 @@ in
 
         export_nix_sops_secret_path TRAVILY_API_KEY_PATH "${config.sops.secrets.travily_api_key.path}"
         export_nix_sops_secret_value TRAVILY_API_KEY "${config.sops.secrets.travily_api_key.path}"
+
+        export_nix_sops_secret_path Z_AI_API_KEY_PATH "${config.sops.secrets.z_ai_api_key.path}"
+        export_nix_sops_secret_value Z_AI_API_KEY "${config.sops.secrets.z_ai_api_key.path}"
 
         export_nix_sops_secret_value SLACK_C24_API_KEY "${config.sops.secrets.slack_c24_api_key.path}"
 
