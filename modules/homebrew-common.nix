@@ -58,12 +58,13 @@
     "obsidian"
     "raindropio"
     "raycast"
-    "red-canary-mac-monitor" # System event viewer (Process Monitor / procmon), https://github.com/redcanaryco/mac-monitor
+    "mac-monitor" # System event viewer (Process Monitor / procmon), https://github.com/redcanaryco/mac-monitor
     "redis-insight"
     "sf-symbols" # https://developer.apple.com/sf-symbols/
     "shottr"
     # "studio-3t"
     "suspicious-package" # Inspect and unpack PKG files
+    "stratoshark" # Wireshark for system calls on Linux, viewer UI for macOS
     "visual-studio-code"
     "wireshark-app"
     # "wireshark-chmodbpf" # Conflicts with "wireshark"
