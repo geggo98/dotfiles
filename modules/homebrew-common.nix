@@ -15,6 +15,8 @@
     "bartender"
     "beardie" # Control Media Keys https://github.com/Stillness-2/beardie
     "brave-browser"
+    "claude-code" # Terminal AI coding angent. Deactivate auto updates with `claude config set autoUpdates false`
+    "conductor" # UI for Claude code
     "dash" # Dash 6
     "daisydisk"
     "devutils" # https://devutils.app/
@@ -28,6 +30,7 @@
     # "iina" # VLC video player replacement https://iina.io
     "iterm2"
     "itermai" # AI plugin for iTerm2
+    "itermbrowserplugin" # Browser tabs in iTerm
     "istat-menus"
     "jdk-mission-control"
     "jetbrains-toolbox"
@@ -40,7 +43,7 @@
     "losslesscut" # Simple video editor: https://github.com/mifi/lossless-cut
     "lunar"
     "lm-studio"# Run LLM locally
-    "marked-app" # "Marked 2" markdown viewer. Thsi version supports pandoc
+    "marked-app" # "Marked 2" markdown viewer. This version supports pandoc
     "marta" # Orthodox file manager
     "MonitorControl"
     "msty" # Run LLM locally
