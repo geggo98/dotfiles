@@ -200,9 +200,50 @@ in
       { name = "z"; src = pkgs.fishPlugins.z.src; }
       { name = "fzf"; src = pkgs.fishPlugins.fzf-fish.src; }
       { name = "forgit"; src = pkgs.fishPlugins.forgit.src; }
-      
+
       { name = "bass"; src = pkgs.fishPlugins.bass.src; }
     ];
+
+    functions = {
+      "+git-ignore-generator" = {
+        body = ''
+          # Generate .gitignore files for multiple frameworks/languages
+          # Usage: +git-ignore-generator <technology1> [technology2] [technology3]...
+          # Example: +git-ignore-generator gradle java
+          #          +git-ignore-generator node typescript react
+          #
+          # This function:
+          # 1. Takes one or more technology names as arguments
+          # 2. Joins them with commas
+          # 3. URL encodes the result
+          # 4. Makes a curl request to gitignore.io API
+          # 5. Prints the resulting .gitignore content
+
+          # Check if we have arguments
+          if test (count $argv) -eq 0
+            echo "Error: At least one technology name required"
+            echo ""
+            echo "Usage: +git-ignore-generator <technology1> [technology2] [technology3]..."
+            echo ""
+            echo "Examples:"
+            echo "  +git-ignore-generator gradle java"
+            echo "  +git-ignore-generator node typescript react"
+            echo "  +git-ignore-generator python go"
+            echo ""
+            echo "See https://www.toptal.com/developers/gitignore for available technologies"
+            return 1
+          end
+
+          # Join all arguments with commas
+          set --local joined_args (string join "," $argv)
+
+          # Make the curl request to gitignore.io API
+          # Note: Fish shell handles URL encoding automatically when passing arguments
+          curl -L -s "https://www.toptal.com/developers/gitignore/api/$joined_args"
+        '';
+        description = "Generate .gitignore files for multiple technologies via gitignore.io API";
+      };
+    };
     shellAbbrs = {
       # Abbreviations for "forgit": https://github.com/wfxr/forgit
       # You can also use completion on "forgit::"
@@ -214,7 +255,7 @@ in
       "+git-commit-fixup" = "gfu";
       "+git-delete-branch-interactive" = "gbd";
       "+git-diff-interactive" = "gd";
-      "+git-ignore-generator" = "gi";
+      # "+git-ignore-generator" = "gi"; # Replaced with Fish function
       "+git-log-viewer" = "glo";
       "+git-reset-head" = "grh";
       "+git-revert-commit" = "grc";
