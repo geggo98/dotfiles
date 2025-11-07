@@ -53,6 +53,8 @@ in
       z_ai_api_key = {};
       slack_c24_api_key = {};
       atlassian_c24_bitbucket_api_token = {};
+      absence_io_api_id = {};
+      absence_io_api_key = {};
       "c24_bi_kfz_test_stefan_schwetschke.json" = {};
       "c24_bi_kfz_prod_stefan_schwetschke.json" = {};
       "c24_bi_kfz_test_liquibase.json" = {};
@@ -182,6 +184,12 @@ in
 
         export_nix_sops_secret_path Z_AI_API_KEY_PATH "${config.sops.secrets.z_ai_api_key.path}"
         export_nix_sops_secret_value Z_AI_API_KEY "${config.sops.secrets.z_ai_api_key.path}"
+
+        export_nix_sops_secret_path ABSENCE_IO_API_ID_PATH "${config.sops.secrets.absence_io_api_id.path}"
+        export_nix_sops_secret_value ABSENCE_IO_API_ID "${config.sops.secrets.absence_io_api_id.path}"
+
+        export_nix_sops_secret_path ABSENCE_IO_API_KEY_PATH "${config.sops.secrets.absence_io_api_key.path}"
+        export_nix_sops_secret_value ABSENCE_IO_API_KEY "${config.sops.secrets.absence_io_api_key.path}"
 
         export_nix_sops_secret_value SLACK_C24_API_KEY "${config.sops.secrets.slack_c24_api_key.path}"
 
