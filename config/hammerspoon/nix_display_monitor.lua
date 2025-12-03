@@ -64,7 +64,7 @@ local function handleTargetDisplay(targetDisplay)
         -- Wait a moment for the preference to be set
         hs.timer.doAfter(2, function()
             -- Activate Plash application
-            hs.osascript.applescript('tell application "Plash" to activate')
+            -- hs.osascript.applescript('tell application "Plash" to activate')
         end)
     end)
 end
