@@ -6,6 +6,8 @@ let
       '';
     });
     unstable = nixpkgs-unstable.legacyPackages.${pkgs.system};
+    # Prefer docker-client if available in this nixpkgs, else fallback to docker
+    dockerPkg = if builtins.hasAttr "docker-client" pkgs then pkgs."docker-client" else pkgs.docker;
 in
 {
   # This value determines the Home Manager release that your
@@ -578,6 +580,77 @@ in
     # k8sgpt
     # shell_gpt
     # tabnine
+
+    # Utility scripts -----------------------------------------------------------------------------{{{
+    (pkgs.writeShellApplication {
+      name = "+mcp-atlassian";
+      # Use Docker client from Nix; still requires a running Docker daemon.
+      runtimeInputs = [ dockerPkg ];
+
+      # Hint: Escape `${` with the sequence `''${`, don't use `\${` or `\\$}`.
+      text = ''
+        # Secrets directory (respects XDG_CONFIG_HOME if set)
+        SECRETS_DIR="''${XDG_CONFIG_HOME:-$HOME/.config}/sops-nix/secrets"
+
+        # Helper: if VAR is empty, try loading it from $SECRETS_DIR/<file>
+        load_from_secret() {
+          local var_name="$1" file_name="$2"
+          # Bash indirect expansion: ''${!var_name}
+          local current_val="''${!var_name-}"
+          if [[ -z "''${current_val}" && -r "''${SECRETS_DIR}/''${file_name}" ]]; then
+            local val
+            val="$(<"''${SECRETS_DIR}/''${file_name}")"
+            if [[ -n "''${val}" ]]; then
+              export "''${var_name}=''${val}"
+            fi
+          fi
+        }
+
+        # Load Atlassian credentials (only if not already set in env)
+        load_from_secret CONFLUENCE_URL       confluence_url
+        load_from_secret CONFLUENCE_USERNAME  confluence_username
+        load_from_secret CONFLUENCE_API_TOKEN confluence_api_token
+        load_from_secret JIRA_URL             jira_url
+        load_from_secret JIRA_USERNAME        jira_username
+        load_from_secret JIRA_API_TOKEN       jira_api_token
+
+        # Validate required variables
+        missing=()
+        for k in CONFLUENCE_URL CONFLUENCE_USERNAME CONFLUENCE_API_TOKEN \
+                 JIRA_URL JIRA_USERNAME JIRA_API_TOKEN; do
+          if [[ -z "''${!k-}" ]]; then
+            missing+=("$k")
+          fi
+        done
+
+        if (( ''${#missing[@]} > 0 )); then
+          echo "[mcp-atlassian] Missing required env vars: ''${missing[*]}" >&2
+          echo "[mcp-atlassian] Provide them via environment or secrets in: $SECRETS_DIR" >&2
+          exit 1
+        fi
+
+        # Allow image override; default to the official image
+        IMAGE="''${MCP_ATLASSIAN_IMAGE:-ghcr.io/sooperset/mcp-atlassian:latest}"
+
+        # Build docker args (keep -i like the original command)
+        args=(
+          run -i --rm
+          -e CONFLUENCE_URL
+          -e CONFLUENCE_USERNAME
+          -e CONFLUENCE_API_TOKEN
+          -e JIRA_URL
+          -e JIRA_USERNAME
+          -e JIRA_API_TOKEN
+          "$IMAGE"
+        )
+
+        # Exec docker; forward any extra args provided to the script
+        exec docker "''${args[@]}" "$@"
+      '';
+
+      # Optional: adjust shellcheck if needed
+      # excludeShellChecks = [ "SC2154" ];
+    })
   ] ++ lib.optionals stdenv.isDarwin [
     mas # CLI for the macOS app store
     m-cli # useful macOS CLI commands
