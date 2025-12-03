@@ -53,6 +53,12 @@ in
       z_ai_api_key = {};
       slack_c24_api_key = {};
       atlassian_c24_bitbucket_api_token = {};
+      confluence_url = {};
+      confluence_username = {};
+      confluence_api_token = {};
+      jira_url = {};
+      jira_username = {};
+      jira_api_token = {};
       absence_io_api_id = {};
       absence_io_api_key = {};
       "c24_bi_kfz_test_stefan_schwetschke.json" = {};
