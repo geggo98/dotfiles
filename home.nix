@@ -633,6 +633,7 @@ in
         IMAGE="''${MCP_ATLASSIAN_IMAGE:-ghcr.io/sooperset/mcp-atlassian:latest}"
 
         # Build docker args (keep -i like the original command)
+        # See https://github.com/sooperset/mcp-atlassian
         args=(
           run -i --rm
           -e CONFLUENCE_URL
@@ -641,6 +642,7 @@ in
           -e JIRA_URL
           -e JIRA_USERNAME
           -e JIRA_API_TOKEN
+          -e "ENABLED_TOOLS=jira_get_issue,jira_get_sprint_issues,jira_search,jira_transition_issue,jira_add_comment,confluence_get_page,confluence_get_page_children,confluence_get_labels,confluence_search"
           "$IMAGE"
         )
 
