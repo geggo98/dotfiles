@@ -57,7 +57,7 @@ in
       atlassian_c24_bitbucket_api_token = {};
       confluence_url = {};
       confluence_username = {};
-      confluence_api_token = {};
+      confluence_personal_token = {};
       jira_url = {};
       jira_username = {};
       jira_api_token = {};
@@ -609,14 +609,14 @@ in
         # Load Atlassian credentials (only if not already set in env)
         load_from_secret CONFLUENCE_URL       confluence_url
         load_from_secret CONFLUENCE_USERNAME  confluence_username
-        load_from_secret CONFLUENCE_API_TOKEN confluence_api_token
+        load_from_secret CONFLUENCE_PERSONAL_TOKEN confluence_personal_token
         load_from_secret JIRA_URL             jira_url
         load_from_secret JIRA_USERNAME        jira_username
         load_from_secret JIRA_API_TOKEN       jira_api_token
 
         # Validate required variables
         missing=()
-        for k in CONFLUENCE_URL CONFLUENCE_USERNAME CONFLUENCE_API_TOKEN \
+        for k in CONFLUENCE_URL CONFLUENCE_USERNAME CONFLUENCE_PERSONAL_TOKEN \
                  JIRA_URL JIRA_USERNAME JIRA_API_TOKEN; do
           if [[ -z "''${!k-}" ]]; then
             missing+=("$k")
@@ -638,11 +638,16 @@ in
           run -i --rm
           -e CONFLUENCE_URL
           -e CONFLUENCE_USERNAME
-          -e CONFLUENCE_API_TOKEN
+          -e CONFLUENCE_PERSONAL_TOKEN
+          # -e "CONFLUENCE_SSL_VERIFY=false"
           -e JIRA_URL
           -e JIRA_USERNAME
           -e JIRA_API_TOKEN
           -e "ENABLED_TOOLS=jira_get_issue,jira_get_sprint_issues,jira_search,jira_transition_issue,jira_add_comment,confluence_get_page,confluence_get_page_children,confluence_get_labels,confluence_search"
+          # -e "CONFLUENCE_SPACES_FILTER=KFZ,WDSSO,C24OITSUPPORT,HSM,MESA,C24HRPE,C24APPS,VSPROD"
+          -e "JIRA_PROJECTS_FILTER=VUKFZIF,VUKFZOPS,VUKFZCORE"
+          # -e MCP_VERBOSE=true
+          # -e MCP_VERY_VERBOSE=true
           "$IMAGE"
         )
 
