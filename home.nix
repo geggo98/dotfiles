@@ -302,18 +302,6 @@ in
       "+agent-codex" = ", codex";
       "+agent-codex-sandbox" = ", codex --full-auto";
       "+agent-codex-danger-delete-all-my-files-and-trash-my-computer" = ", codex --dangerously-bypass-approvals-and-sandbox";
-      # "+-agent-gemini" = "npx -y github:google-gemini/gemini-cli"; # To use a specific version, run: npx -y github:google-gemini/gemini-cli@v0.5.0
-      "+-agent-gemini" = ", gemini";
-      "+agent-gemini-with-api-key" = ''
-        if test -z "$GEMINI_API_KEY"
-          if test -n "$GEMINI_API_KEY_PATH"
-            export GEMINI_API_KEY=(cat "$GEMINI_API_KEY_PATH")
-          else
-            export GEMINI_API_KEY=(cat "$HOME/.config/sops-nix/secrets/gemini_api_key")
-          end
-        end
-        , gemini
-      '';
       "+agent-claude" = ", claude";
       "+agent-cline" = "npx -y cline";
       "+agent-opencode" = ", opencode";
@@ -653,6 +641,77 @@ in
 
         # Exec docker; forward any extra args provided to the script
         exec docker "''${args[@]}" "$@"
+      '';
+
+      # Optional: adjust shellcheck if needed
+      # excludeShellChecks = [ "SC2154" ];
+    })
+    (pkgs.writeShellApplication {
+      name = "+agent-gemini";
+      runtimeInputs = [ nodejs_24 comma ]; # TODO: Add `unstable.gemini` after switch to Nix 25.11
+
+      # Hint: Escape `${` with the sequence `''${`, don't use `\${` or `\\$}`.
+      text = ''
+        # Secrets directory (respects XDG_CONFIG_HOME if set)
+        SECRETS_DIR="''${XDG_CONFIG_HOME:-$HOME/.config}/sops-nix/secrets"
+
+        # Helper: if VAR is empty, try loading it from $SECRETS_DIR/<file>
+        load_from_secret() {
+          local var_name="$1" file_name="$2"
+          # Bash indirect expansion: ''${!var_name}
+          local current_val="''${!var_name-}"
+          if [[ -z "''${current_val}" && -r "''${SECRETS_DIR}/''${file_name}" ]]; then
+            local val
+            val="$(<"''${SECRETS_DIR}/''${file_name}")"
+            if [[ -n "''${val}" ]]; then
+              export "''${var_name}=''${val}"
+            fi
+          fi
+          if [[ -z "''${var_name}" ]]; then
+            echo "ERROR: Secret ''${var_name} not found" >&2
+            exit 1
+          fi
+        }
+
+        # Load Gemini API key secrets
+        load_from_secret GEMINI_API_KEY  gemini_api_key
+        # npx -y github:google-gemini/gemini-cli"; # To use a specific version, run: npx -y github:google-gemini/gemini-cli@v0.5.0
+        exec comma gemini "$@"
+      '';
+
+      # Optional: adjust shellcheck if needed
+      # excludeShellChecks = [ "SC2154" ];
+    })
+    (pkgs.writeShellApplication {
+      name = "+agent-claude-apiKeyHelper";
+      runtimeInputs = [  ];
+
+      # Hint: Escape `${` with the sequence `''${`, don't use `\${` or `\\$}`.
+      text = ''
+        # Secrets directory (respects XDG_CONFIG_HOME if set)
+        SECRETS_DIR="''${XDG_CONFIG_HOME:-$HOME/.config}/sops-nix/secrets"
+
+        # Helper: if VAR is empty, try loading it from $SECRETS_DIR/<file>
+        load_from_secret() {
+          local var_name="$1" file_name="$2"
+          # Bash indirect expansion: ''${!var_name}
+          local current_val="''${!var_name-}"
+          if [[ -z "''${current_val}" && -r "''${SECRETS_DIR}/''${file_name}" ]]; then
+            local val
+            val="$(<"''${SECRETS_DIR}/''${file_name}")"
+            if [[ -n "''${val}" ]]; then
+              export "''${var_name}=''${val}"
+            fi
+          fi
+          if [[ -z "''${var_name}" ]]; then
+            echo "ERROR: Secret ''${var_name} not found" >&2
+            exit 1
+          fi
+        }
+
+        # Load Claude or GLM API key secrets
+        load_from_secret CLAUDE_API_KEY z_ai_api_key
+        echo -n "''${CLAUDE_API_KEY}"
       '';
 
       # Optional: adjust shellcheck if needed
