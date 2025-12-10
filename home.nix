@@ -5,7 +5,7 @@ let
         substituteInPlace Makefile --replace " parallel " " " --replace " parallel.1 " " "
       '';
     });
-    unstable = nixpkgs-unstable.legacyPackages.${pkgs.system};
+    unstable = nixpkgs-unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system};
     # Prefer docker-client if available in this nixpkgs, else fallback to docker
     dockerPkg = if builtins.hasAttr "docker-client" pkgs then pkgs."docker-client" else pkgs.docker;
 in
@@ -19,7 +19,7 @@ in
   # the Home Manager release notes for a list of state version
   # changes in each release.
   # https://nix-community.github.io/home-manager/release-notes.xhtml
-  home.stateVersion = "22.05";
+  home.stateVersion = "25.11";
 
   # Import home-manager modules
   # Import them here instead of in the flake input to avoid importing NixOS modules not compatible with macOS Darwin
@@ -359,24 +359,25 @@ in
 
   programs.git = {
     enable = true;
-    userName = "stefan.schwetschke";
-    userEmail = "stefan@schwetschke.de";
-    lfs = {
-      enable = true;
-    };
-    difftastic = {
-      # Note: For big files, use "delta" instead. 
-      # It's faster, also has syntax highlightning, but doesn't interpret structure.
-      enable = true;
-    };
-    extraConfig = {
+    lfs.enable = true;
+    settings = {
+      user = {
+        name = "stefan.schwetschke";
+        email = "stefan@schwetschke.de";
+      };
       # `echo '*.enc.yaml diff=sopsdiffer' >> .gitattributes`
       diff."sopsdiffer".textconv = "${pkgs.sops}/bin/sops -d";
       credential = {
-            credentialStore = "keychain"; # See https://github.com/git-ecosystem/git-credential-manager/blob/main/docs/credstores.md
-            helper = "${pkgs.git-credential-manager}/bin/git-credential-manager";
-          };
+        credentialStore = "keychain"; # See https://github.com/git-ecosystem/git-credential-manager/blob/main/docs/credstores.md
+        helper = "${pkgs.git-credential-manager}/bin/git-credential-manager";
+      };
     };
+  };
+  programs.difftastic = {
+    # Note: For big files, use "delta" instead. 
+    # It's faster, also has syntax highlightning, but doesn't interpret structure.
+    enable = true;
+    git.enable = true;
   };
   # programs.git-credential-oauth.enable = true;
   programs.gh.enable = true;
@@ -444,7 +445,6 @@ in
     # gitu # https://github.com/altsem/gitu - GIT TUI client
     # tig # https://jonas.github.io/tig/
     nodePackages.typescript
-    nodePackages.ts-node
     nodejs
     neovim
     pandoc
@@ -470,7 +470,7 @@ in
     mkcert
     # mosh
     netcat
-    ngrok
+    # ngrok
     pssh
     shellcheck
     step-ca
@@ -559,15 +559,8 @@ in
 
 
     # AI Tools
-    unstable.chatblade
     unstable.aichat
-    # The Nix version has problems with plugins, use the Brew version instead
-    # (unstable.llm.withPlugins([])) # https://llm.datasette.io/ like chatblade, but also for local models
-    gh-copilot # ??/!! git?/git! gh?/gh!
     unstable.ollama
-    # k8sgpt
-    # shell_gpt
-    # tabnine
 
     # Utility scripts -----------------------------------------------------------------------------{{{
     (pkgs.writeShellApplication {
@@ -648,7 +641,7 @@ in
     })
     (pkgs.writeShellApplication {
       name = "+agent-gemini";
-      runtimeInputs = [ nodejs_24 comma ]; # TODO: Add `unstable.gemini` after switch to Nix 25.11
+      runtimeInputs = [ nodejs_24 ]; # TODO: Add `unstable.gemini` after switch to Nix 25.11
 
       # Hint: Escape `${` with the sequence `''${`, don't use `\${` or `\\$}`.
       text = ''
@@ -675,8 +668,9 @@ in
 
         # Load Gemini API key secrets
         load_from_secret GEMINI_API_KEY  gemini_api_key
-        # npx -y github:google-gemini/gemini-cli"; # To use a specific version, run: npx -y github:google-gemini/gemini-cli@v0.5.0
-        exec comma gemini "$@"
+        # To use a specific version, run: npx -y github:google-gemini/gemini-cli@v0.5.0
+        exec npx -y "github:google-gemini/gemini-cli" "$@"
+        # exec comma gemini "$@"
       '';
 
       # Optional: adjust shellcheck if needed
@@ -799,17 +793,17 @@ in
     nix.enable = true;
   };
 
-  home.file."Library/Application Support/iTerm2/DynamicProfiles/50_Nix.json" = lib.optionalAttrs (pkgs.system == "aarch64-darwin" || pkgs.system == "x86_64-darwin") {
+  home.file."Library/Application Support/iTerm2/DynamicProfiles/50_Nix.json" = lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "aarch64-darwin" || pkgs.stdenv.hostPlatform.system == "x86_64-darwin") {
     source = ./config/iTerm2/DynamicProfiles/50_Nix.json;
   };
 
-  home.file.".hammerspoon/nix.lua"  = lib.optionalAttrs (pkgs.system == "aarch64-darwin" || pkgs.system == "x86_64-darwin") {
+  home.file.".hammerspoon/nix.lua"  = lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "aarch64-darwin" || pkgs.stdenv.hostPlatform.system == "x86_64-darwin") {
     source = ./config/hammerspoon/nix.lua;
   };
-  home.file.".hammerspoon/nix_f19.lua"  = lib.optionalAttrs (pkgs.system == "aarch64-darwin" || pkgs.system == "x86_64-darwin") {
+  home.file.".hammerspoon/nix_f19.lua"  = lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "aarch64-darwin" || pkgs.stdenv.hostPlatform.system == "x86_64-darwin") {
     source = ./config/hammerspoon/nix_f19.lua;
   };
-  home.file.".hammerspoon/nix_display_monitor.lua"  = lib.optionalAttrs (pkgs.system == "aarch64-darwin" || pkgs.system == "x86_64-darwin") {
+  home.file.".hammerspoon/nix_display_monitor.lua"  = lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "aarch64-darwin" || pkgs.stdenv.hostPlatform.system == "x86_64-darwin") {
     source = ./config/hammerspoon/nix_display_monitor.lua;
   };
 
@@ -870,14 +864,4 @@ in
             fi
         fi
     '';
-  # home.activation.menuBarSpacing = lib.hm.dag.entryAfter [ "installPackages" ] ''
-  #     # Set the menu bar spacing
-  #     # Needs separate script until https://github.com/LnL7/nix-darwin/pull/872 is merged.
-  #     if command -v defaults > /dev/null 2>&1
-  #     then
-  #       # The smallest valid number is "1". DO NOT use "0", it won't work properly
-  #       defaults -currentHost write -globalDomain NSStatusItemSpacing -int 1
-  #       defaults -currentHost write -globalDomain NSStatusItemSelectionPadding -int 1
-  #     fi
-  #   '';
 }
