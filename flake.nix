@@ -9,14 +9,14 @@
   # Update single input with `nix flake lock --update-input <input-name>`
   inputs = {
     # Package sets
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05"; # https://status.nixos.org/
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11"; # https://status.nixos.org/
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
 
     # Environment/system management
-    darwin.url = "github:lnl7/nix-darwin/nix-darwin-25.05";
+    darwin.url = "github:lnl7/nix-darwin/nix-darwin-25.11";
     darwin.inputs.nixpkgs.follows = "nixpkgs";
     
-    home-manager.url = "github:nix-community/home-manager/release-25.05";
+    home-manager.url = "github:nix-community/home-manager/release-25.11";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
     
     # https://github.com/Mic92/sops-nix
@@ -46,8 +46,8 @@
       
     darwinConfigurations = {
       FCX19GT9XR = darwinSystem {
-        system = "aarch64-darwin";
         modules = [
+          { nixpkgs.hostPlatform = "aarch64-darwin"; }
           # Main `nix-darwin` config
           ./configuration.nix
           ./darwin.nix
@@ -66,8 +66,6 @@
           # Instead, import it in the `home.nix` file.
 
           {
-            nixpkgs = nixpkgsConfig // { overlays = [ self.overlays.update-comma ]; };
-            # `home-manager` config
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
             home-manager.users.stefan = import ./home.nix;
@@ -76,8 +74,8 @@
         ];
       };
       DKL6GDJ7X1 = darwinSystem {
-        system = "aarch64-darwin";
         modules = [
+          { nixpkgs.hostPlatform = "aarch64-darwin"; }
           # Main `nix-darwin` config
           ./configuration.nix
           ./darwin.nix
@@ -96,8 +94,6 @@
           # Instead, import it in the `home.nix` file.
 
           {
-            nixpkgs = nixpkgsConfig // { overlays = [ self.overlays.update-comma ]; };
-            # `home-manager` config
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
             home-manager.users."stefan.schwetschke" = nixpkgs.lib.mkMerge [ (import ./home.nix) (import ./hosts/DKL6GDJ7X1/home.nix) ];
@@ -112,17 +108,13 @@
 
     overlays = {
       # Overlay useful on Macs with Apple Silicon
-        apple-silicon = final: prev: optionalAttrs (prev.stdenv.system == "aarch64-darwin") {
+        apple-silicon = final: prev: optionalAttrs (prev.stdenv.hostPlatform.system == "aarch64-darwin") {
           # Add access to x86 packages system is running Apple Silicon
           pkgs-x86 = import inputs.nixpkgs {
             system = "x86_64-darwin";
             inherit (nixpkgsConfig) config;
           };
         };
-      # Update comma to the latest version from nixpkgs-unstable
-      update-comma = final: prev: {
-        comma = inputs.nixpkgs-unstable.legacyPackages.${prev.system}.comma;
-      };
     };
  };
 }

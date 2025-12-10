@@ -574,7 +574,7 @@ link-to-aichat() {
 # @cmd Run mcp command
 # @arg args~[?`_choice_mcp_args`] The mcp command and arguments
 mcp() {
-    bash ./scripts/mcp.sh "$@"
+    test -x ./scipts/mcp.sh && ./scripts/mcp.sh "$@"
 }
 
 # @cmd Create a boilplate tool script
