@@ -15,52 +15,6 @@
   # Put custom parameters into `/etc/nix/nix.custom.conf`
   nix.enable = false;
 
-  # #  Nix configuration ------------------------------------------------------------------------------
-  # nix.settings.substituters = [
-  #   "https://cache.nixos.org/"
-  # ];
-  # nix.settings.extra-trusted-public-keys = [
-  #   "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
-  # ];
-  # nix.settings.trusted-users = [
-  #   "@admin"
-  # ];
-  # # Enable the Linux builder
-  # #   # Example:
-  # #   $ nix build \
-  # #   --impure \
-  # #   --expr '(with import <nixpkgs> { system = "aarch64-linux"; }; runCommand "foo" {} "uname -a > $out")'
-  # #   $ cat result
-  # #   Linux localhost 6.1.72 #1-NixOS SMP Wed Jan 10 16:10:37 UTC 2024 aarch64 GNU/Linux
-  # nix.linux-builder.enable = true;
-  # nix.configureBuildUsers = true;
-  #
-  # # Enable experimental nix command and flakes
-  # # Alternatives:
-  # # - pkgs.nixVersions.latest
-  # # - pkgs.nixVersions.git.legacyPackages.${pkgs.system};
-  # # - pkgs.nixVersions.git
-  # # nix.package = pkgs.nixUnstable;
-  #
-  # nix.extraOptions = ''
-  #   auto-optimise-store = true
-  #   download-buffer-size = 1000000000
-  #   experimental-features = nix-command flakes
-  # '' + lib.optionalString (pkgs.system == "aarch64-darwin") ''
-  #   extra-platforms = x86_64-darwin aarch64-darwin
-  # '';
-  # # Extra platforms allow to build for Intel and ARM on Apple Silicon:
-  # # ```bash
-  # # $ nix run nixpkgs#legacyPackages.aarch64-darwin.hello
-  # # Hello, world!
-  # # $ nix run nixpkgs#legacyPackages.x86_64-darwin.hello
-  # # Hello, world!
-  # # ```
-  # nix.gc = {
-  #   automatic = true;
-  #   options = "--delete-older-than 30d";
-  # };
-
   # Create /etc/bashrc that loads the nix-darwin environment.
   programs.zsh.enable = true;
   programs.fish.enable = true;
