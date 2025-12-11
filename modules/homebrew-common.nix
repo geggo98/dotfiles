@@ -48,7 +48,6 @@
     "MonitorControl"
     "msty" # Run LLM locally
     "notunes" # Prevents Apple Music from hijacking headset buttons
-    "ngrok"
     "omnigraffle"
     "orion" # Kagi Orion Browser
     "orbstack"
