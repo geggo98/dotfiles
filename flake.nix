@@ -2,6 +2,7 @@
 # darwin-rebuild build --flake ~/.config/nix-darwin
 # sudo darwin-rebuild switch --flake ~/.config/nix-darwin
 # git add . && nix --extra-experimental-features "nix-command flakes"  run nix-darwin -- switch --flake ~/.config/nix-darwin
+# sudo determinate-nixd upgrade # --version 3.6.2
 {
   description = "Stefan's darwin system";
 
@@ -37,7 +38,7 @@
     inherit (inputs.nixpkgs.lib) attrValues makeOverridable optionalAttrs singleton;
 
     # Configuration for `nixpkgs`
-    nixpkgsConfig = {
+    nixpkgsUnfreeConfig = {
       config = { allowUnfree = true; };
     }; 
   in
@@ -55,21 +56,19 @@
           ./hosts/FCX19GT9XR/configuration.nix
           ./hosts/FCX19GT9XR/homebrew.nix
           # `home-manager` module
-          home-manager.darwinModules.home-manager
-          
-          # WARNING:
-          # Don't import the sops home-manager module here,
-          # it's a NixOS specific plugin and tries to use SystemD.
-          # You will get an error message like this:
-          # `error: The option `systemd' does not exist. Definition values: ...`
-          # So don't do this: `sops-nix.homeManagerModules.sops`
-          # Instead, import it in the `home.nix` file.
-
-          {
+          home-manager.darwinModules.home-manager {
+            # WARNING:
+            # Don't import the sops home-manager module here,
+            # it's a NixOS specific plugin and tries to use SystemD.
+            # You will get an error message like this:
+            # `error: The option `systemd' does not exist. Definition values: ...`
+            # So don't do this: `sops-nix.homeManagerModules.sops`
+            # Instead, import it in the `home.nix` file.
+            nixpkgs = nixpkgsUnfreeConfig;
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
             home-manager.users.stefan = import ./home.nix;
-            home-manager.extraSpecialArgs = inputs;            
+            home-manager.extraSpecialArgs = inputs;
           }
         ];
       };
@@ -83,17 +82,15 @@
           ./hosts/DKL6GDJ7X1/configuration.nix
           ./hosts/DKL6GDJ7X1/homebrew.nix
           # `home-manager` module
-          home-manager.darwinModules.home-manager
-          
-          # WARNING:
-          # Don't import the sops home-maanger module here,
-          # it's a NixOS specific plugin and tries to use SystemD.
-          # You will get an error message like this:
-          # `error: The option `systemd' does not exist. Definition values: ...`
-          # So don't do this: `sops-nix.homeManagerModules.sops`
-          # Instead, import it in the `home.nix` file.
-
-          {
+          home-manager.darwinModules.home-manager {
+            # WARNING:
+            # Don't import the sops home-manager module here,
+            # it's a NixOS specific plugin and tries to use SystemD.
+            # You will get an error message like this:
+            # `error: The option `systemd' does not exist. Definition values: ...`
+            # So don't do this: `sops-nix.homeManagerModules.sops`
+            # Instead, import it in the `home.nix` file.
+            nixpkgs = nixpkgsUnfreeConfig;
             home-manager.useGlobalPkgs = true;
             home-manager.useUserPackages = true;
             home-manager.users."stefan.schwetschke" = nixpkgs.lib.mkMerge [ (import ./home.nix) (import ./hosts/DKL6GDJ7X1/home.nix) ];
@@ -112,7 +109,7 @@
           # Add access to x86 packages system is running Apple Silicon
           pkgs-x86 = import inputs.nixpkgs {
             system = "x86_64-darwin";
-            inherit (nixpkgsConfig) config;
+            inherit (nixpkgsUnfreeConfig) config;
           };
         };
     };
