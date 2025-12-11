@@ -1,4 +1,4 @@
-{ config, pkgs, nixpkgs-unstable, lib, astronvim, sops-nix, nix-index-database, ... }:
+{ config, pkgs, nixpkgs-unstable, lib, astronvim, sops-nix, nix-index-database, nixpkgs-llm-agents, ... }:
 let
     moreutilsWithoutParallel = pkgs.moreutils.overrideAttrs (oldAttrs: {
       preBuild = (oldAttrs.preBuild or "") + ''
@@ -6,6 +6,7 @@ let
       '';
     });
     unstable = nixpkgs-unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system};
+    llm-agents = nixpkgs-llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
     # Prefer docker-client if available in this nixpkgs, else fallback to docker
     dockerPkg = if builtins.hasAttr "docker-client" pkgs then pkgs."docker-client" else pkgs.docker;
 in
@@ -299,12 +300,8 @@ in
       "+grep-tui" = "ug -Q";
 
       # AI Agents
-      "+agent-codex" = ", codex";
-      "+agent-codex-sandbox" = ", codex --full-auto";
-      "+agent-codex-danger-delete-all-my-files-and-trash-my-computer" = ", codex --dangerously-bypass-approvals-and-sandbox";
-      "+agent-claude" = ", claude";
-      "+agent-cline" = "npx -y cline";
-      "+agent-opencode" = ", opencode";
+      "+agent-codex-sandbox" = "+agent-codex --full-auto";
+      "+agent-codex-danger-delete-all-my-files-and-trash-my-computer" = "+agent-codex --dangerously-bypass-approvals-and-sandbox";
 
       # SOPS Encryption
       "+sops-edit-keys" = "env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops -s edit";
@@ -641,8 +638,91 @@ in
       # excludeShellChecks = [ "SC2154" ];
     })
     (pkgs.writeShellApplication {
+      name = "+agent-claude";
+      runtimeInputs = [ llm-agents.claude-code llm-agents.claude-code-acp ];
+
+      # Hint: Escape `${` with the sequence `''${`, don't use `\${` or `\\$}`.
+      text = ''
+        # Secrets directory (respects XDG_CONFIG_HOME if set)
+        SECRETS_DIR="''${XDG_CONFIG_HOME:-$HOME/.config}/sops-nix/secrets"
+
+        # Helper: if VAR is empty, try loading it from $SECRETS_DIR/<file>
+        load_from_secret() {
+          local var_name="$1" file_name="$2"
+          # Bash indirect expansion: ''${!var_name}
+          local current_val="''${!var_name-}"
+          if [[ -z "''${current_val}" && -r "''${SECRETS_DIR}/''${file_name}" ]]; then
+            local val
+            val="$(<"''${SECRETS_DIR}/''${file_name}")"
+            if [[ -n "''${val}" ]]; then
+              export "''${var_name}=''${val}"
+            fi
+          fi
+          if [[ -z "''${var_name}" ]]; then
+            echo "ERROR: Secret ''${var_name} not found" >&2
+            exit 1
+          fi
+        }
+
+        # Load ZAI key secrets
+        # load_from_secret ANTHROPIC_AUTH_TOKEN  zai_api_key
+        export ANTHROPIC_BASE_URL=https://api.z.ai/api/anthropic
+        export API_TIMEOUT_MS=3000000
+        export CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC=1
+
+        if (( $# > 0 )) && [[ "''${1}" == "--acp" ]]; then
+          shift # Remove --acp from args
+          exec claude-code-acp "$@"
+        fi
+        exec claude "$@"
+      '';
+
+      # Optional: adjust shellcheck if needed
+      # excludeShellChecks = [ "SC2154" ];
+    })
+    (pkgs.writeShellApplication {
+      name = "+agent-codex";
+      runtimeInputs = [ llm-agents.codex llm-agents.codex-acp ];
+
+      # Hint: Escape `${` with the sequence `''${`, don't use `\${` or `\\$}`.
+      text = ''
+        # Secrets directory (respects XDG_CONFIG_HOME if set)
+        SECRETS_DIR="''${XDG_CONFIG_HOME:-$HOME/.config}/sops-nix/secrets"
+
+        # Helper: if VAR is empty, try loading it from $SECRETS_DIR/<file>
+        load_from_secret() {
+          local var_name="$1" file_name="$2"
+          # Bash indirect expansion: ''${!var_name}
+          local current_val="''${!var_name-}"
+          if [[ -z "''${current_val}" && -r "''${SECRETS_DIR}/''${file_name}" ]]; then
+            local val
+            val="$(<"''${SECRETS_DIR}/''${file_name}")"
+            if [[ -n "''${val}" ]]; then
+              export "''${var_name}=''${val}"
+            fi
+          fi
+          if [[ -z "''${var_name}" ]]; then
+            echo "ERROR: Secret ''${var_name} not found" >&2
+            exit 1
+          fi
+        }
+
+        # Load OpenAI API key secrets
+        load_from_secret OPENAI_API_KEY  openai_api_key
+
+        if (( $# > 0 )) && [[ "''${1}" == "--acp" ]]; then
+          shift # Remove --acp from args
+          exec codex-acp "$@"
+        fi
+        exec codex "$@"
+      '';
+
+      # Optional: adjust shellcheck if needed
+      # excludeShellChecks = [ "SC2154" ];
+    })
+    (pkgs.writeShellApplication {
       name = "+agent-gemini";
-      runtimeInputs = [ nodejs_24 ]; # TODO: Add `unstable.gemini` after switch to Nix 25.11
+      runtimeInputs = [ llm-agents.gemini-cli ];
 
       # Hint: Escape `${` with the sequence `''${`, don't use `\${` or `\\$}`.
       text = ''
@@ -670,8 +750,13 @@ in
         # Load Gemini API key secrets
         load_from_secret GEMINI_API_KEY  gemini_api_key
         # To use a specific version, run: npx -y github:google-gemini/gemini-cli@v0.5.0
-        exec npx -y "github:google-gemini/gemini-cli" "$@"
-        # exec comma gemini "$@"
+        # exec npx -y "github:google-gemini/gemini-cli" "$@"
+        if (( $# > 0 )) && [[ "''${1}" == "--acp" ]]; then
+          shift # Remove --acp from args
+          exec gemini --experimental-acp "$@"
+        fi
+
+        exec gemini "$@"
       '';
 
       # Optional: adjust shellcheck if needed
