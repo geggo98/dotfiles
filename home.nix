@@ -470,7 +470,7 @@ in
     mkcert
     # mosh
     netcat
-    # ngrok
+    ngrok
     pssh
     shellcheck
     step-ca
@@ -478,15 +478,16 @@ in
     socat
     sops
     telepresence2
-    # tor
-    # torsocks # https://www.jamieweb.net/blog/tor-is-a-great-sysadmin-tool/
+    # https://www.jamieweb.net/blog/tor-is-a-great-sysadmin-tool/
+    tor # Run tor in one window, in the other: `env ALL_PROXY=socks5h://127.0.0.1:9050 ...`
+    # torsocks # Doesn't work on macOS
     xxh # ssh with better shell supporton the remote site
 
     # CSV processing
     jless
     miller
     q-text-as-data
-    # sc-im # Has open CVE in libxls-1.6.2
+    sc-im
     visidata
     xan # alternative to xsv and csvkit
 
