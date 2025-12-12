@@ -1,7 +1,7 @@
 { pkgs, ... }:
 {
   imports = [
-    ../../modules/boundary-pm2.nix
+    ./boundary-pm2.sec.nix
   ];
 
   # This module appends to the existing home.packages list
