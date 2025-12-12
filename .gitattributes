@@ -1,4 +1,2 @@
 *.enc.yaml diff=sopsdiffer
-hosts/DKL6GDJ7X1/scripts/boundary_auth.sh filter=git-crypt diff=git-crypt
-hosts/DKL6GDJ7X1/scripts/boundary_connect_defaults.sh filter=git-crypt diff=git-crypt
 *.sec.* filter=git-crypt diff=git-crypt
