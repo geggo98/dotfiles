@@ -71,7 +71,6 @@ in
     };
   };
 
-  # Needs newer home manager to work properly
 #  programs.claude-code = {
 #      enable = true;
 #
@@ -89,62 +88,6 @@ in
 #          # No secrets here; docker -e forwards from your shell env.
 #        };
 #
-#        # 2) Atlassian (remote SSE) — use HTTP if they offer it; SSE is second-class
-#        atlassian = {
-#          type = "sse";
-#          url = "https://mcp.atlassian.com/v1/sse";
-#        };
-#
-#        # 3) javadocs.dev (remote HTTP)
-#        javadocs = {
-#          type = "http";
-#          url = "https://www.javadocs.dev/mcp";
-#        };
-#
-#        # 4) Upstash Context7 (local stdio via npx)
-#        context7 = {
-#          type = "stdio";
-#          command = "npx";
-#          args = [ "-y" "@upstash/context7-mcp" ];
-#          env = {
-#            # expanded at runtime by Claude Code
-#            CONTEXT7_API_KEY = "\${CONTEXT7_API_KEY}";
-#          };
-#        };
-#
-#        # 5) NixOS (local stdio via uvx)
-#        nixos = {
-#          type = "stdio";
-#          command = "uvx";
-#          args = [ "mcp-nixos" ];
-#        };
-#
-#        # 6) Tavily (remote HTTP) — prefer header if supported; else query param
-#        tavily = {
-#          type = "http";
-#          # If Tavily supports headers for you, use the headers block below and set url without query:
-#          # url = "https://mcp.tavily.com/mcp/";
-#          # headers = { Authorization = "Bearer ${TAVILY_API_KEY}"; };
-#          # Otherwise keep query-param style:
-#          url = "https://mcp.tavily.com/mcp/?tavilyApiKey=\${TAVILY_API_KEY}";
-#        };
-#
-#        # 7) Google Programmable Search (local stdio via npx)
-#        google-pse = {
-#          type = "stdio";
-#          command = "npx";
-#          args = [
-#            "-y" "google-pse-mcp"
-#            "https://www.googleapis.com/customsearch"
-#            "\${GOOGLE_CSE_ID}"    # engine ID (cx)
-#            # If the tool needs the API key as an arg, add: "${GOOGLE_API_KEY}"
-#          ];
-#          env = {
-#            GOOGLE_API_KEY = "\${GOOGLE_API_KEY}";
-#            GOOGLE_CSE_ID  = "\${GOOGLE_CSE_ID}";
-#          };
-#        };
-#      };
 #  };
 
   # https://github.com/malob/nixpkgs/blob/master/home/default.nix
@@ -562,82 +505,6 @@ in
 
     # Utility scripts -----------------------------------------------------------------------------{{{
     (pkgs.writeShellApplication {
-      name = "+mcp-atlassian";
-      # Use Docker client from Nix; still requires a running Docker daemon.
-      runtimeInputs = [ dockerPkg ];
-
-      # Hint: Escape `${` with the sequence `''${`, don't use `\${` or `\\$}`.
-      text = ''
-        # Secrets directory (respects XDG_CONFIG_HOME if set)
-        SECRETS_DIR="''${XDG_CONFIG_HOME:-$HOME/.config}/sops-nix/secrets"
-
-        # Helper: if VAR is empty, try loading it from $SECRETS_DIR/<file>
-        load_from_secret() {
-          local var_name="$1" file_name="$2"
-          # Bash indirect expansion: ''${!var_name}
-          local current_val="''${!var_name-}"
-          if [[ -z "''${current_val}" && -r "''${SECRETS_DIR}/''${file_name}" ]]; then
-            local val
-            val="$(<"''${SECRETS_DIR}/''${file_name}")"
-            if [[ -n "''${val}" ]]; then
-              export "''${var_name}=''${val}"
-            fi
-          fi
-        }
-
-        # Load Atlassian credentials (only if not already set in env)
-        load_from_secret CONFLUENCE_URL       confluence_url
-        load_from_secret CONFLUENCE_USERNAME  confluence_username
-        load_from_secret CONFLUENCE_PERSONAL_TOKEN confluence_personal_token
-        load_from_secret JIRA_URL             jira_url
-        load_from_secret JIRA_USERNAME        jira_username
-        load_from_secret JIRA_API_TOKEN       jira_api_token
-
-        # Validate required variables
-        missing=()
-        for k in CONFLUENCE_URL CONFLUENCE_USERNAME CONFLUENCE_PERSONAL_TOKEN \
-                 JIRA_URL JIRA_USERNAME JIRA_API_TOKEN; do
-          if [[ -z "''${!k-}" ]]; then
-            missing+=("$k")
-          fi
-        done
-
-        if (( ''${#missing[@]} > 0 )); then
-          echo "[mcp-atlassian] Missing required env vars: ''${missing[*]}" >&2
-          echo "[mcp-atlassian] Provide them via environment or secrets in: $SECRETS_DIR" >&2
-          exit 1
-        fi
-
-        # Allow image override; default to the official image
-        IMAGE="''${MCP_ATLASSIAN_IMAGE:-ghcr.io/sooperset/mcp-atlassian:latest}"
-
-        # Build docker args (keep -i like the original command)
-        # See https://github.com/sooperset/mcp-atlassian
-        args=(
-          run -i --rm
-          -e CONFLUENCE_URL
-          -e CONFLUENCE_USERNAME
-          -e CONFLUENCE_PERSONAL_TOKEN
-          # -e "CONFLUENCE_SSL_VERIFY=false"
-          -e JIRA_URL
-          -e JIRA_USERNAME
-          -e JIRA_API_TOKEN
-          -e "ENABLED_TOOLS=jira_get_issue,jira_get_sprint_issues,jira_search,jira_transition_issue,jira_add_comment,confluence_get_page,confluence_get_page_children,confluence_get_labels,confluence_search"
-          # -e "CONFLUENCE_SPACES_FILTER=KFZ,WDSSO,C24OITSUPPORT,HSM,MESA,C24HRPE,C24APPS,VSPROD"
-          -e "JIRA_PROJECTS_FILTER=VUKFZIF,VUKFZOPS,VUKFZCORE"
-          # -e MCP_VERBOSE=true
-          # -e MCP_VERY_VERBOSE=true
-          "$IMAGE"
-        )
-
-        # Exec docker; forward any extra args provided to the script
-        exec docker "''${args[@]}" "$@"
-      '';
-
-      # Optional: adjust shellcheck if needed
-      # excludeShellChecks = [ "SC2154" ];
-    })
-    (pkgs.writeShellApplication {
       name = "+agent-claude";
       runtimeInputs = [ llm-agents.claude-code llm-agents.claude-code-acp ];
 
@@ -792,6 +659,168 @@ in
         # Load Claude or GLM API key secrets
         load_from_secret CLAUDE_API_KEY z_ai_api_key
         echo -n "''${CLAUDE_API_KEY}"
+      '';
+
+      # Optional: adjust shellcheck if needed
+      # excludeShellChecks = [ "SC2154" ];
+    })
+    (pkgs.writeShellApplication {
+      name = "+mcp-atlassian";
+      # Use Docker client from Nix; still requires a running Docker daemon.
+      runtimeInputs = [ dockerPkg ];
+
+      # Hint: Escape `${` with the sequence `''${`, don't use `\${` or `\\$}`.
+      text = ''
+        # Secrets directory (respects XDG_CONFIG_HOME if set)
+        SECRETS_DIR="''${XDG_CONFIG_HOME:-$HOME/.config}/sops-nix/secrets"
+
+        # Helper: if VAR is empty, try loading it from $SECRETS_DIR/<file>
+        load_from_secret() {
+          local var_name="$1" file_name="$2"
+          # Bash indirect expansion: ''${!var_name}
+          local current_val="''${!var_name-}"
+          if [[ -z "''${current_val}" && -r "''${SECRETS_DIR}/''${file_name}" ]]; then
+            local val
+            val="$(<"''${SECRETS_DIR}/''${file_name}")"
+            if [[ -n "''${val}" ]]; then
+              export "''${var_name}=''${val}"
+            fi
+          fi
+        }
+
+        # Load Atlassian credentials (only if not already set in env)
+        load_from_secret CONFLUENCE_URL       confluence_url
+        load_from_secret CONFLUENCE_USERNAME  confluence_username
+        load_from_secret CONFLUENCE_PERSONAL_TOKEN confluence_personal_token
+        load_from_secret JIRA_URL             jira_url
+        load_from_secret JIRA_USERNAME        jira_username
+        load_from_secret JIRA_API_TOKEN       jira_api_token
+
+        # Validate required variables
+        missing=()
+        for k in CONFLUENCE_URL CONFLUENCE_USERNAME CONFLUENCE_PERSONAL_TOKEN \
+                 JIRA_URL JIRA_USERNAME JIRA_API_TOKEN; do
+          if [[ -z "''${!k-}" ]]; then
+            missing+=("$k")
+          fi
+        done
+
+        if (( ''${#missing[@]} > 0 )); then
+          echo "[mcp-atlassian] Missing required env vars: ''${missing[*]}" >&2
+          echo "[mcp-atlassian] Provide them via environment or secrets in: $SECRETS_DIR" >&2
+          exit 1
+        fi
+
+        # Allow image override; default to the official image
+        IMAGE="''${MCP_ATLASSIAN_IMAGE:-ghcr.io/sooperset/mcp-atlassian:latest}"
+
+        # Build docker args (keep -i like the original command)
+        # See https://github.com/sooperset/mcp-atlassian
+        args=(
+          run -i --rm
+          -e CONFLUENCE_URL
+          -e CONFLUENCE_USERNAME
+          -e CONFLUENCE_PERSONAL_TOKEN
+          # -e "CONFLUENCE_SSL_VERIFY=false"
+          -e JIRA_URL
+          -e JIRA_USERNAME
+          -e JIRA_API_TOKEN
+          -e "ENABLED_TOOLS=jira_get_issue,jira_get_sprint_issues,jira_search,jira_transition_issue,jira_add_comment,confluence_get_page,confluence_get_page_children,confluence_get_labels,confluence_search"
+          # -e "CONFLUENCE_SPACES_FILTER=KFZ,WDSSO,C24OITSUPPORT,HSM,MESA,C24HRPE,C24APPS,VSPROD"
+          -e "JIRA_PROJECTS_FILTER=VUKFZIF,VUKFZOPS,VUKFZCORE"
+          # -e MCP_VERBOSE=true
+          # -e MCP_VERY_VERBOSE=true
+          "$IMAGE"
+        )
+
+        # Exec docker; forward any extra args provided to the script
+        exec docker "''${args[@]}" "$@"
+      '';
+
+      # Optional: adjust shellcheck if needed
+      # excludeShellChecks = [ "SC2154" ];
+    })
+    (pkgs.writeShellApplication {
+      name = "+mcp-context7";
+      runtimeInputs = [ nodejs_24 ];
+
+      # Hint: Escape `${` with the sequence `''${`, don't use `\${` or `\\$}`.
+      text = ''
+        load_from_secret() {
+          local var_name="$1" file_name="$2"
+          # Bash indirect expansion: ''${!var_name}
+          local current_val="''${!var_name-}"
+          if [[ -z "''${current_val}" && -r "''${SECRETS_DIR}/''${file_name}" ]]; then
+            local val
+            val="$(<"''${SECRETS_DIR}/''${file_name}")"
+            if [[ -n "''${val}" ]]; then
+              export "''${var_name}=''${val}"
+            fi
+          fi
+          if [[ -z "''${var_name}" ]]; then
+            echo "ERROR: Secret ''${var_name} not found" >&2
+            exit 1
+          fi
+        }
+        # Load Context7 API key secret
+        load_from_secret CONTEXT7_API_KEY context7_api_key
+
+        exec npx -y @upstash/context7-mcp@v1.0.30 --api-key "''${CONTEXT7_API_KEY}"
+      '';
+
+      # Optional: adjust shellcheck if needed
+      # excludeShellChecks = [ "SC2154" ];
+    })
+    (pkgs.writeShellApplication {
+      name = "+mcp-javadocs";
+      runtimeInputs = [ nodejs_24 ];
+
+      # Hint: Escape `${` with the sequence `''${`, don't use `\${` or `\\$}`.
+      text = ''
+        exec npx -y mcp-remote@0.1.29 https://www.javadocs.dev/mcp
+      '';
+
+      # Optional: adjust shellcheck if needed
+      # excludeShellChecks = [ "SC2154" ];
+    })
+    (pkgs.writeShellApplication {
+      name = "+mcp-nixos";
+      runtimeInputs = [ unstable.mcp-nixos ];
+
+      # Hint: Escape `${` with the sequence `''${`, don't use `\${` or `\\$}`.
+      text = ''
+        exec mcp-nixos "$@"
+      '';
+
+      # Optional: adjust shellcheck if needed
+      # excludeShellChecks = [ "SC2154" ];
+    })
+    (pkgs.writeShellApplication {
+      name = "+mcp-travily";
+      runtimeInputs = [ nodejs_24 ];
+
+      # Hint: Escape `${` with the sequence `''${`, don't use `\${` or `\\$}`.
+      text = ''
+        load_from_secret() {
+          local var_name="$1" file_name="$2"
+          # Bash indirect expansion: ''${!var_name}
+          local current_val="''${!var_name-}"
+          if [[ -z "''${current_val}" && -r "''${SECRETS_DIR}/''${file_name}" ]]; then
+            local val
+            val="$(<"''${SECRETS_DIR}/''${file_name}")"
+            if [[ -n "''${val}" ]]; then
+              export "''${var_name}=''${val}"
+            fi
+          fi
+          if [[ -z "''${var_name}" ]]; then
+            echo "ERROR: Secret ''${var_name} not found" >&2
+            exit 1
+          fi
+        }
+        # Load Travily API key secret
+        load_from_secret TRAVILY_API_KEY travily_api_key
+
+        exec npx -y mcp-remote@0.1.29 "https://mcp.tavily.com/mcp/?tavilyApiKey=''${TRAVILY_API_KEY}"
       '';
 
       # Optional: adjust shellcheck if needed
