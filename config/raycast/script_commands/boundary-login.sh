@@ -10,7 +10,7 @@
 # @raycast.packageName Boundary
 
 # Documentation:
-# @raycast.author Stefan Schwetschke
+# @raycast.author stefan.schwetschke
 # @raycast.authorURL https://github.com/geggo98
 # @raycast.description Login with Boundary CLI, opens a web browser.
 
