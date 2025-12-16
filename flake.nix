@@ -80,6 +80,8 @@
               home-manager.useUserPackages = true;
               home-manager.users.stefan = import ./home.nix;
               home-manager.extraSpecialArgs = inputs;
+              # On activation move existing files by appending the given file extension rather than exiting with an error.
+              home-manager.backupFileExtension = "hm.bak";
             }
           ];
         };
@@ -107,6 +109,8 @@
               home-manager.useUserPackages = true;
               home-manager.users."stefan.schwetschke" = nixpkgs.lib.mkMerge [ (import ./home.nix) (import ./hosts/DKL6GDJ7X1/home.nix) ];
               home-manager.extraSpecialArgs = inputs;
+              # On activation move existing files by appending the given file extension rather than exiting with an error.
+              home-manager.backupFileExtension = "hm.bak";
             }
           ];
         };
