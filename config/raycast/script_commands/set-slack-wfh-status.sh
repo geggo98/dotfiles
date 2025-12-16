@@ -5,7 +5,7 @@
 # Parameters
 
 # Required parameters:
-# @raycast.schemaVeimagesrsion 1
+# @raycast.schemaVersion 1
 # @raycast.title Set WFH Status in Slack
 # @raycast.mode silent
 
