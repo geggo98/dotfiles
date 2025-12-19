@@ -2,10 +2,10 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#   "google-genai>=1.0.0",
+#   "google-genai>=1.56.0",
 # ]
 # [tools.uv]
-# exclude-newer = "2025-11-05T00:00:00Z"
+# exclude-newer = "2025-12-17T00:00:00Z"
 # ///
 
 """
@@ -13,8 +13,9 @@ Usage:
   chmod +x gemini_search
   GEMINI_API_KEY=... ./gemini_search "What happened at Web Summit 2025?"
   # optional flags:
-  #   --model gemini-2.5-pro
-  #   --flash  (use Gemini 2.5 Flash model)
+  #   --model gemini-3-pro-preview (use the given model, must be available on the Gemini API, e.g. "gemini-2.5-pro" or "gemini-2.5-flash" for the older models)
+  #   --deep  (use Gemini Pro model)
+  #   --flash  (use Gemini Flash model)
   #   --json  (emit raw JSON with grounding metadata)
 """
 
@@ -100,9 +101,9 @@ def main():
         epilog="""
 Examples:
   GEMINI_API_KEY=... ./gemini_search "What happened at Web Summit 2025?"
-  ./gemini_search --model gemini-2.5-pro "Latest news about AI"
-  ./gemini_search --flash "Quick AI overview"  # Uses Gemini 2.5 Flash
-  ./gemini_search --deep "Detailed analysis"  # Uses Gemini 2.5 Pro (default)
+  ./gemini_search --model gemini-3-pro-preview "Latest news about AI"
+  ./gemini_search --flash "Quick AI overview"  # Uses Gemini 3 Flash
+  ./gemini_search --deep "Detailed analysis"  # Uses Gemini 3 Pro (default)
   ./gemini_search --json "Climate change impacts"  # Shows raw JSON response
 
 API Key:
@@ -111,12 +112,12 @@ API Key:
         """.strip()
     )
     p.add_argument("prompt", nargs="*", help="User query to search and answer")
-    p.add_argument("--model", default="gemini-2.5-pro", help="Gemini model to use (default: gemini-2.5-pro)")
+    p.add_argument("--model", default="gemini-3-pro-preview", help="Gemini model to use (default: gemini-3-pro-preview)")
     p.add_argument(
-        "--flash", action="store_true", help="Use Gemini 2.5 Flash model for faster responses"
+        "--flash", action="store_true", help="Use Gemini 3 Flash model for faster responses"
     )
     p.add_argument(
-        "--deep", action="store_true", help="Use Gemini 2.5 Pro model for deeper analysis (default behavior)"
+        "--deep", action="store_true", help="Use Gemini 3 Pro model for deeper analysis (default behavior)"
     )
     p.add_argument(
         "--json", action="store_true", help="Print raw JSON response with grounding metadata"
@@ -147,9 +148,9 @@ API Key:
 
     # Determine which model to use
     if args.flash:
-        model = "gemini-2.5-flash"
+        model = "gemini-3-flash-preview"
     elif args.deep:
-        model = "gemini-2.5-pro"
+        model = "gemini-3-pro-preview"
     else:
         model = args.model
 
