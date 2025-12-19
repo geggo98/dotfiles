@@ -723,7 +723,7 @@ in
     mcp-context7
     mcp-javadocs
     mcp-nixos
-    mcp-nixos
+    mcp-travily
 
     # Utility scripts -----------------------------------------------------------------------------{{{
     (pkgs.writeShellApplication {
