@@ -606,33 +606,173 @@ in
 
         # Visuals
         visuals = {
+          nvim-scrollbar.enable = true;  # Maximal only
           nvim-web-devicons.enable = true;
           nvim-cursorline.enable = true;
+          cinnamon-nvim.enable = true;   # Not in current config
           fidget-nvim.enable = true;
+          highlight-undo.enable = true;  # Not in current config
           indent-blankline.enable = true;
         };
 
         # Essential Utilities
         telescope.enable = true;
-        autocomplete.nvim-cmp.enable = true;
         filetree.neo-tree.enable = true;
 
         # Basic Language Support
         languages = {
-          enableLSP = true;
-          enableTreesitter = true;
           enableFormat = true;
+          enableTreesitter = true;
           enableExtraDiagnostics = true;
+          # Languages that are enabled in the maximal configuration
+          bash.enable = true;
+          clang.enable = true;
+          css.enable = true;
+          html.enable = true;
+          json.enable = true;
+          sql.enable = true;
+          java.enable = true;
+          kotlin.enable = true;
+          ts.enable = true;
+          go.enable = true;
+          lua.enable = true;
+          zig.enable = true;
+          python.enable = true;
+          typst.enable = true;
+          rust = {
+            enable = true;
+            extensions.crates-nvim.enable = true;
+          };
         };
+
+        # LSP Configuration
+        lsp = {
+          enable = true;
+          formatOnSave = true;
+          lspkind.enable = false;
+          lightbulb.enable = true;
+          lspsaga.enable = false;
+          trouble.enable = true;
+          lspSignature.enable = false;  # Disabled in maximal (conflicts with blink)
+          otter-nvim.enable = true;     # Maximal only
+          nvim-docs-view.enable = true; # Maximal only
+          harper-ls.enable = true;      # Maximal only
+        };
+
+        # Autocomplete
+        autocomplete = {
+          nvim-cmp.enable = false;  # Disabled in maximal
+          blink-cmp.enable = true;  # Enabled in maximal
+        };
+
+        # Additional Essential Features
+        autopairs.nvim-autopairs.enable = true;
+        snippets.luasnip.enable = true;
+        tabline.nvimBufferline.enable = true;
+        treesitter.context.enable = true;
+        comments.comment-nvim.enable = true;
 
         # Developer Tools
         git.enable = true;
         git.gitsigns.enable = true;
+        git.gitsigns.codeActions.enable = false; # throws an annoying debug message
+        git.neogit.enable = true;         # Maximal only
 
         # Keybinding helpers
         binds = {
           whichKey.enable = true;
           cheatsheet.enable = true;
+        };
+
+        # UI Components
+        ui = {
+          borders.enable = true;         # Not in current config
+          noice.enable = true;           # Not in current config
+          colorizer.enable = true;       # Not in current config
+          illuminate.enable = true;      # Not in current config
+          breadcrumbs = {
+            enable = true;               # Maximal only
+            navbuddy.enable = true;      # Maximal only
+          };
+          smartcolumn = {                # Not in current config
+            enable = true;
+            setupOpts.custom_colorcolumn = {
+              # this is a freeform module, it's `buftype = int;` for configuring column position
+              nix = "110";
+              ruby = "120";
+              java = "130";
+              go = ["90" "130"];
+            };
+          };
+          fastaction.enable = true;      # Not in current config
+        };
+
+        # File Management Tools
+        minimap = {
+          minimap-vim.enable = false;
+          codewindow.enable = true;     # Maximal only
+        };
+
+        dashboard = {
+          dashboard-nvim.enable = false;
+          alpha.enable = true;          # Maximal only
+        };
+
+        # Notification System
+        notify.nvim-notify.enable = true;  # Not in current config
+
+        # Project Management
+        projects.project-nvim.enable = true;  # Maximal only
+
+        # Terminal
+        terminal.toggleterm = {
+          enable = true;
+          lazygit.enable = true;
+        };
+
+        # Utility Tools
+        utility = {
+          ccc.enable = false;
+          vim-wakatime.enable = false;
+          diffview-nvim.enable = true;   # Not in current config
+          yanky-nvim.enable = false;
+          qmk-nvim.enable = false;
+          icon-picker.enable = true;     # Maximal only
+          surround.enable = true;        # Maximal only
+          leetcode-nvim.enable = true;   # Maximal only
+          multicursors.enable = true;    # Maximal only
+          smart-splits.enable = true;    # Maximal only
+          undotree.enable = true;        # Maximal only
+          nvim-biscuits.enable = true;   # Maximal only
+          motion = {
+            hop.enable = true;           # Not in current config
+            leap.enable = true;          # Not in current config
+            precognition.enable = true;  # Maximal only
+          };
+          images = {
+            image-nvim.enable = false;
+            img-clip.enable = true;      # Maximal only
+          };
+        };
+
+        # Note-taking Tools
+        notes = {
+          obsidian.enable = false;
+          neorg.enable = false;
+          orgmode.enable = false;
+          mind-nvim.enable = true;       # Maximal only
+          todo-comments.enable = true;   # Not in current config
+        };
+
+        # AI Assistant Tools
+        assistant = {
+          chatgpt.enable = false;
+          copilot = {
+            enable = false;
+            cmp.enable = true;           # Maximal only
+          };
+          codecompanion-nvim.enable = false;
+          avante-nvim.enable = true;     # Maximal only
         };
 
         # Extra plugins
