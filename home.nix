@@ -1,4 +1,4 @@
-{ config, pkgs, nixpkgs-unstable, lib, astronvim, sops-nix, nix-index-database, nixpkgs-llm-agents, ... }:
+{ config, pkgs, nixpkgs-unstable, lib, sops-nix, nix-index-database, nixpkgs-llm-agents, nvf, ... }:
 let
   moreutilsWithoutParallel = pkgs.moreutils.overrideAttrs (oldAttrs: {
     preBuild = (oldAttrs.preBuild or "") + ''
@@ -224,6 +224,7 @@ in
   imports = [
     nix-index-database.homeModules.nix-index
     sops-nix.homeManagerModules.sops
+    nvf.homeManagerModules.default
     ./modules/aichat.nix
   ];
 
@@ -579,6 +580,75 @@ in
     };
   };
 
+  programs.nvf = {
+    enable = true;
+
+    settings = {
+      vim = {
+        # Core Settings
+        viAlias = true;
+        vimAlias = true;
+
+        # Clipboard settings
+        clipboard = {
+          registers = ["unnamedplus"];
+        };
+
+        # Theme - Catppuccin Mocha
+        theme = {
+          enable = true;
+          name = "catppuccin";
+          style = "mocha";
+        };
+
+        # Statusline
+        statusline.lualine.enable = true;
+
+        # Visuals
+        visuals = {
+          nvim-web-devicons.enable = true;
+          nvim-cursorline.enable = true;
+          fidget-nvim.enable = true;
+          indent-blankline.enable = true;
+        };
+
+        # Essential Utilities
+        telescope.enable = true;
+        autocomplete.nvim-cmp.enable = true;
+        filetree.neo-tree.enable = true;
+
+        # Basic Language Support
+        languages = {
+          enableLSP = true;
+          enableTreesitter = true;
+          enableFormat = true;
+          enableExtraDiagnostics = true;
+        };
+
+        # Developer Tools
+        git.enable = true;
+        git.gitsigns.enable = true;
+
+        # Keybinding helpers
+        binds = {
+          whichKey.enable = true;
+          cheatsheet.enable = true;
+        };
+
+        # Extra plugins
+        startPlugins = [
+          pkgs.vimPlugins.vim-gnupg
+        ];
+
+        # vim-gnupg setup
+        luaConfigRC.gnupg_setup = ''
+          -- vim-gnupg requires GPG_TTY environment variable
+          -- Already configured in user's shell
+        '';
+      };
+    };
+  };
+
   home.packages = with pkgs; [
     # Some basics
     coreutils-prefixed # Command line utils with more options than their macOS / BSD counterparts.
@@ -873,14 +943,6 @@ in
 
   xdg.configFile = {
     # See https://github.com/maxbrunet/dotfiles/blob/ebd85ceb40cbe79ebd5453bce63d384c1b49274a/nix/home.nix#L62
-    astronvim = {
-      onChange = "PATH=$PATH:${pkgs.git}/bin ${pkgs.neovim}/bin/nvim --headless +quitall";
-      source = ./config/astronvim;
-    };
-    nvim = {
-      onChange = "PATH=$PATH:${pkgs.git}/bin ${pkgs.neovim}/bin/nvim --headless +quitall";
-      source = astronvim;
-    };
     "starship.toml" = {
       source = ./config/starship-preset-bracketed-segments.toml;
     };
