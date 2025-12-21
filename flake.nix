@@ -32,7 +32,10 @@
     nixpkgs-llm-agents.url = "github:numtide/llm-agents.nix";
 
     # External dependencies
-    astronvim = { url = "github:AstroNvim/AstroNvim/v3.40.1"; flake = false; };
+    nvf = {
+      url = "github:NotAShelf/nvf";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   nixConfig = {
@@ -42,7 +45,7 @@
     extra-trusted-public-keys = [ "numtide.cachix.org-1:2ps1kLBUWjxIneOy1Ik6cQjb41X0iXVXeHigGmycPPE=" ];
   };
 
-  outputs = { self, darwin, nixpkgs, nixpkgs-unstable, home-manager, sops-nix, nix-index-database, nixpkgs-llm-agents, ... }@inputs:
+  outputs = { self, darwin, nixpkgs, nixpkgs-unstable, home-manager, sops-nix, nix-index-database, nixpkgs-llm-agents, nvf, ... }@inputs:
     let
       inherit (darwin.lib) darwinSystem;
       inherit (inputs.nixpkgs.lib) attrValues makeOverridable optionalAttrs singleton;
