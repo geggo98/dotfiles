@@ -22,8 +22,8 @@ Run before:
 
 | Script                                    | Purpose                          | Quick Mode | Deep Mode |
 | ----------------------------------------- | -------------------------------- | ---------- | --------- |
-| `scripts/perplexity_open_router_research` | General-purpose quick research.  | Default    | `--deep`  |
-| `scripts/gemini_research`                 | Deep research via Google Gemini. | `--flash`  | Default   |
+| `scripts/gemini_research.sh`              | General-purpose quick research.  | Default    | `--deep`  |
+| `scripts/gemini_research.sh`              | Deep research via Google Gemini. | `--flash`  | Default   |
 
 ### Arguments
 
@@ -33,36 +33,35 @@ Run before:
 
 ## 4. Examples
 
-Run the scripts with `uv run ...`, e.g., `uv run scripts/perplexity_open_router_research`.
 
 ### Quick Search
 
 ```bash
-gemini_research --flash "Which Python HTTP client libraries support caching headers, and with which backends?"
+gemini_research.sh --flash "Which Python HTTP client libraries support caching headers, and with which backends?"
 ```
 
 ### API Research
 
 ```bash
-perplexity_open_router_research "Write a Python best-practice manual for using the Atlassian Confluence API."
+perplexity_open_router_research.sh "Write a Python best-practice manual for using the Atlassian Confluence API."
 gemini_research "Same as above."
-perplexity_open_router_research --deep "Give a second opinion on the Atlassian API usage. Alternatives and tradeoffs?"
+perplexity_open_router_researchi.sh --deep "Give a second opinion on the Atlassian API usage. Alternatives and tradeoffs?"
 ```
 
 ### Library Research
 
 ```bash
-perplexity_open_router_research "Best practices for using the os-lib library in Scala."
-gemini_research "Manual for using os-lib in Scala."
-perplexity_open_router_research --deep "Second opinion on using os-lib in Scala. Alternatives and tradeoffs?"
+perplexity_open_router_research.sh "Best practices for using the os-lib library in Scala."
+gemini_research.sh "Manual for using os-lib in Scala."
+perplexity_open_router_research.sh --deep "Second opinion on using os-lib in Scala. Alternatives and tradeoffs?"
 ```
 
 ### Implementation Planning
 
 ```bash
-perplexity_open_router_research "How to parse cron expressions in Rust, using stdlib or third-party crates?"
-gemini_research "Manual for parsing cron expressions in Rust with the cron crate."
-perplexity_open_router_research --deep "Evaluate the cron crate. Alternatives and tradeoffs?"
+perplexity_open_router_research.sh "How to parse cron expressions in Rust, using stdlib or third-party crates?"
+gemini_research.sh "Manual for parsing cron expressions in Rust with the cron crate."
+perplexity_open_router_research.sh --deep "Evaluate the cron crate. Alternatives and tradeoffs?"
 ```
 
 ## 5. Tool Modes
