@@ -643,6 +643,8 @@ in
             enable = true;
             extensions.crates-nvim.enable = true;
           };
+          scala.enable = true;
+          just.enable = true;
         };
 
         # LSP Configuration
