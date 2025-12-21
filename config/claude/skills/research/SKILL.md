@@ -34,6 +34,8 @@ Run before:
 ## 4. Examples
 
 
+Always start with `--flash`. If the result doesn't work or if important parts are missing, use `--deep` to get more information.
+
 ### Quick Search
 
 ```bash
