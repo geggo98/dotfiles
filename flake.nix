@@ -63,6 +63,7 @@
 
       darwinConfigurations = {
         FCX19GT9XR = darwinSystem {
+        specialArgs = { inherit inputs; };
           modules = [
             { nixpkgs.hostPlatform = "aarch64-darwin"; }
             # Main `nix-darwin` config
@@ -71,14 +72,7 @@
             # Host specific packages
             ./hosts/FCX19GT9XR/configuration.nix
             ./hosts/FCX19GT9XR/homebrew.nix
-            inputs.determinate.darwinModules.default
-            ({
-              nix.enable = false; # Let Determinate manage Nix
-              determinate-nix.customSettings = {
-                # settings get written into /etc/nix/nix.custom.conf
-                "download-buffer-size" = "1073741824"; # 1 GiB
-              };
-            })
+            ./determinate.nix
             # `home-manager` module
             home-manager.darwinModules.home-manager
             {
@@ -100,6 +94,7 @@
           ];
         };
         DKL6GDJ7X1 = darwinSystem {
+        specialArgs = { inherit inputs; };
           modules = [
             { nixpkgs.hostPlatform = "aarch64-darwin"; }
             # Main `nix-darwin` config
@@ -108,14 +103,7 @@
             # Host specific packages
             ./hosts/DKL6GDJ7X1/configuration.nix
             ./hosts/DKL6GDJ7X1/homebrew.nix
-            inputs.determinate.darwinModules.default
-            ({
-              nix.enable = false; # Let Determinate manage Nix
-              determinate-nix.customSettings = {
-                # settings get written into /etc/nix/nix.custom.conf
-                "download-buffer-size" = "1073741824"; # 1 GiB
-              };
-            })
+            ./determinate.nix
             # `home-manager` module
             home-manager.darwinModules.home-manager
             {
