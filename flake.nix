@@ -17,6 +17,9 @@
     darwin.url = "github:lnl7/nix-darwin/nix-darwin-25.11";
     darwin.inputs.nixpkgs.follows = "nixpkgs";
 
+    # Determinate Nix module for Nix Darwin
+    determinate.url = "https://flakehub.com/f/DeterminateSystems/determinate/3";
+
     home-manager.url = "github:nix-community/home-manager/release-25.11";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
 
@@ -45,7 +48,7 @@
     extra-trusted-public-keys = [ "numtide.cachix.org-1:2ps1kLBUWjxIneOy1Ik6cQjb41X0iXVXeHigGmycPPE=" ];
   };
 
-  outputs = { self, darwin, nixpkgs, nixpkgs-unstable, home-manager, sops-nix, nix-index-database, nixpkgs-llm-agents, nvf, ... }@inputs:
+  outputs = { self, darwin, nixpkgs, nixpkgs-unstable, home-manager, sops-nix, nix-index-database, nixpkgs-llm-agents, nvf, determinate, ... }@inputs:
     let
       inherit (darwin.lib) darwinSystem;
       inherit (inputs.nixpkgs.lib) attrValues makeOverridable optionalAttrs singleton;
@@ -68,6 +71,14 @@
             # Host specific packages
             ./hosts/FCX19GT9XR/configuration.nix
             ./hosts/FCX19GT9XR/homebrew.nix
+            inputs.determinate.darwinModules.default
+            ({
+              nix.enable = false; # Let Determinate manage Nix
+              determinate-nix.customSettings = {
+                # settings get written into /etc/nix/nix.custom.conf
+                "download-buffer-size" = "1073741824"; # 1 GiB
+              };
+            })
             # `home-manager` module
             home-manager.darwinModules.home-manager
             {
@@ -97,6 +108,14 @@
             # Host specific packages
             ./hosts/DKL6GDJ7X1/configuration.nix
             ./hosts/DKL6GDJ7X1/homebrew.nix
+            inputs.determinate.darwinModules.default
+            ({
+              nix.enable = false; # Let Determinate manage Nix
+              determinate-nix.customSettings = {
+                # settings get written into /etc/nix/nix.custom.conf
+                "download-buffer-size" = "1073741824"; # 1 GiB
+              };
+            })
             # `home-manager` module
             home-manager.darwinModules.home-manager
             {
