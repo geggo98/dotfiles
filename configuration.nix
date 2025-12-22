@@ -64,7 +64,7 @@
   system.defaults.CustomUserPreferences = {
     NSGlobalDomain = {
       NSUserKeyEquivalents = {
-        "Emoji &amp; Symbols" = "@^~$e";
+        "Emoji & Symbols" = "@^~$e";
       };
     };
   };
