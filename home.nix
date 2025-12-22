@@ -580,6 +580,8 @@ in
     };
   };
 
+  # https://github.com/NotAShelf/nvf
+  # https://notashelf.github.io/nvf/options.html
   programs.nvf = {
     enable = true;
 
@@ -591,7 +593,7 @@ in
 
         # Clipboard settings
         clipboard = {
-          registers = ["unnamedplus"];
+          registers = [ "unnamedplus" ];
         };
 
         # Theme - Catppuccin Mocha
@@ -606,12 +608,12 @@ in
 
         # Visuals
         visuals = {
-          nvim-scrollbar.enable = true;  # Maximal only
+          nvim-scrollbar.enable = true; # Maximal only
           nvim-web-devicons.enable = true;
           nvim-cursorline.enable = true;
-          cinnamon-nvim.enable = true;   # Not in current config
+          cinnamon-nvim.enable = true; # Not in current config
           fidget-nvim.enable = true;
-          highlight-undo.enable = true;  # Not in current config
+          highlight-undo.enable = true; # Not in current config
           indent-blankline.enable = true;
         };
 
@@ -643,6 +645,7 @@ in
             enable = true;
             extensions.crates-nvim.enable = true;
           };
+          # Additional languages
           scala.enable = true;
           just.enable = true;
         };
@@ -655,16 +658,16 @@ in
           lightbulb.enable = true;
           lspsaga.enable = false;
           trouble.enable = true;
-          lspSignature.enable = false;  # Disabled in maximal (conflicts with blink)
-          otter-nvim.enable = true;     # Maximal only
+          lspSignature.enable = false; # Disabled in maximal (conflicts with blink)
+          otter-nvim.enable = true; # Maximal only
           nvim-docs-view.enable = true; # Maximal only
-          harper-ls.enable = true;      # Maximal only
+          harper-ls.enable = true; # Maximal only
         };
 
         # Autocomplete
         autocomplete = {
-          nvim-cmp.enable = false;  # Disabled in maximal
-          blink-cmp.enable = true;  # Enabled in maximal
+          nvim-cmp.enable = false; # Disabled in maximal
+          blink-cmp.enable = true; # Enabled in maximal
         };
 
         # Additional Essential Features
@@ -678,7 +681,7 @@ in
         git.enable = true;
         git.gitsigns.enable = true;
         git.gitsigns.codeActions.enable = false; # throws an annoying debug message
-        git.neogit.enable = true;         # Maximal only
+        git.neogit.enable = true; # Maximal only
 
         # Keybinding helpers
         binds = {
@@ -688,43 +691,44 @@ in
 
         # UI Components
         ui = {
-          borders.enable = true;         # Not in current config
-          noice.enable = true;           # Not in current config
-          colorizer.enable = true;       # Not in current config
-          illuminate.enable = true;      # Not in current config
+          borders.enable = true; # Not in current config
+          noice.enable = true; # Not in current config
+          colorizer.enable = true; # Not in current config
+          illuminate.enable = true; # Not in current config
           breadcrumbs = {
-            enable = true;               # Maximal only
-            navbuddy.enable = true;      # Maximal only
+            enable = true; # Maximal only
+            navbuddy.enable = true; # Maximal only
           };
-          smartcolumn = {                # Not in current config
+          smartcolumn = {
+            # Not in current config
             enable = true;
             setupOpts.custom_colorcolumn = {
               # this is a freeform module, it's `buftype = int;` for configuring column position
               nix = "110";
               ruby = "120";
               java = "130";
-              go = ["90" "130"];
+              go = [ "90" "130" ];
             };
           };
-          fastaction.enable = true;      # Not in current config
+          fastaction.enable = true; # Not in current config
         };
 
         # File Management Tools
         minimap = {
           minimap-vim.enable = false;
-          codewindow.enable = true;     # Maximal only
+          codewindow.enable = true; # Maximal only
         };
 
         dashboard = {
           dashboard-nvim.enable = false;
-          alpha.enable = true;          # Maximal only
+          alpha.enable = true; # Maximal only
         };
 
         # Notification System
-        notify.nvim-notify.enable = true;  # Not in current config
+        notify.nvim-notify.enable = true; # Not in current config
 
         # Project Management
-        projects.project-nvim.enable = true;  # Maximal only
+        projects.project-nvim.enable = true; # Maximal only
 
         # Terminal
         terminal.toggleterm = {
@@ -736,24 +740,24 @@ in
         utility = {
           ccc.enable = false;
           vim-wakatime.enable = false;
-          diffview-nvim.enable = true;   # Not in current config
+          diffview-nvim.enable = true; # Not in current config
           yanky-nvim.enable = false;
           qmk-nvim.enable = false;
-          icon-picker.enable = true;     # Maximal only
-          surround.enable = true;        # Maximal only
-          leetcode-nvim.enable = true;   # Maximal only
-          multicursors.enable = true;    # Maximal only
-          smart-splits.enable = true;    # Maximal only
-          undotree.enable = true;        # Maximal only
-          nvim-biscuits.enable = true;   # Maximal only
+          icon-picker.enable = true; # Maximal only
+          surround.enable = true; # Maximal only
+          leetcode-nvim.enable = true; # Maximal only
+          multicursors.enable = true; # Maximal only
+          smart-splits.enable = true; # Maximal only
+          undotree.enable = true; # Maximal only
+          nvim-biscuits.enable = true; # Maximal only
           motion = {
-            hop.enable = true;           # Not in current config
-            leap.enable = true;          # Not in current config
-            precognition.enable = true;  # Maximal only
+            hop.enable = true; # https://github.com/smoka7/hop.nvim
+            leap.enable = true; # https://codeberg.org/andyg/leap.nvim
+            precognition.enable = true; #
           };
           images = {
             image-nvim.enable = false;
-            img-clip.enable = true;      # Maximal only
+            img-clip.enable = true; # Maximal only
           };
         };
 
@@ -762,8 +766,8 @@ in
           obsidian.enable = false;
           neorg.enable = false;
           orgmode.enable = false;
-          mind-nvim.enable = true;       # Maximal only
-          todo-comments.enable = true;   # Not in current config
+          mind-nvim.enable = true; # Maximal only
+          todo-comments.enable = true; # Not in current config
         };
 
         # AI Assistant Tools
@@ -771,10 +775,10 @@ in
           chatgpt.enable = false;
           copilot = {
             enable = false;
-            cmp.enable = true;           # Maximal only
+            cmp.enable = true; # Maximal only
           };
           codecompanion-nvim.enable = false;
-          avante-nvim.enable = true;     # Maximal only
+          avante-nvim.enable = true; # Maximal only
         };
 
         # Extra plugins
@@ -787,6 +791,19 @@ in
           -- vim-gnupg requires GPG_TTY environment variable
           -- Already configured in user's shell
         '';
+        # https://notashelf.github.io/nvf/options.html#option-vim-keymaps
+        keymaps = [
+          {
+            key = "<S-F19>";
+            mode = [ "n" "x" "o" ];
+            # See https://codeberg.org/andyg/leap.nvim/src/branch/main/plugin/init.lua for examples
+            # TODO: Remove deprecated `target_windows`, as soon as leap is at the most current version.
+            action = "function () require('leap').leap { target_windows = require('leap.util').get_focusable_windows(), windows = require('leap.util').get_focusable_windows(), inclusive = true } end";
+            lua = true;
+            desc = "Leap (anywhere)";
+            silent = true;
+          }
+        ];
       };
     };
   };
