@@ -15,7 +15,7 @@
     "bartender"
     "beardie" # Control Media Keys https://github.com/Stillness-2/beardie
     "brave-browser"
-    "claude-code" # Terminal AI coding angent. Deactivate auto updates with `claude config set autoUpdates false`
+    # "claude-code" # Terminal AI coding angent. Deactivate auto updates with `claude config set autoUpdates false`
     "conductor" # UI for Claude code
     "dash" # Dash 6
     "daisydisk"

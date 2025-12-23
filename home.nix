@@ -370,7 +370,7 @@ in
   # https://nix-community.github.io/home-manager/options.xhtml#opt-programs.claude-code.enable
   programs.claude-code = {
     enable = true;
-    # MCP servers -> written by HM into Claude Code's MCP config
+    # MCP servers -> Home Manager creates wrapper that calls clause like: `.claude-wrapped  --mcp-config /nix/store/...claude-code-mcp-config.json $@`
     mcpServers = {
       atlassian = {
         type = "stdio";
@@ -582,6 +582,7 @@ in
       "+grep-tui" = "ug -Q";
 
       # AI Agents
+      "+agent-claude-hm" = "/etc/profiles/per-user/{$USER}/bin/claude"; # This uses the home manager wrapper. It adds additional flags to configure MCP servers for this session.
       "+agent-codex-sandbox" = "+agent-codex --full-auto";
       "+agent-codex-danger-delete-all-my-files-and-trash-my-computer" = "+agent-codex --dangerously-bypass-approvals-and-sandbox";
 
@@ -1087,6 +1088,8 @@ in
 
       # Hint: Escape `${` with the sequence `''${`, don't use `\${` or `\\$}`.
       text = ''
+        export DISABLE_AUTOUPDATER='1'
+        echo "WARNING: This misses MCP servers configured with home-manager."
         if (( $# > 0 )) && [[ "''${1}" == "--acp" ]]; then
           shift # Remove --acp from args
           exec claude-code-acp "$@"
