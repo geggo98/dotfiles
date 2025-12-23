@@ -206,6 +206,104 @@ let
     # Optional: adjust shellcheck if needed
     # excludeShellChecks = [ "SC2154" ];
   });
+  mcp-zai-search = (pkgs.writeShellApplication {
+    name = "+mcp-zai-search";
+    runtimeInputs = [ pkgs.nodejs_24 ];
+
+    # Hint: Escape `${` with the sequence `''${`, don't use `\${` or `\\$}`.
+    # https://docs.z.ai/devpack/mcp/search-mcp-server
+    text = ''
+      load_from_secret() {
+        local var_name="$1" file_name="$2"
+        # Bash indirect expansion: ''${!var_name}
+        local current_val="''${!var_name-}"
+        if [[ -z "''${current_val}" && -r "''${SECRETS_DIR}/''${file_name}" ]]; then
+          local val
+          val="$(<"''${SECRETS_DIR}/''${file_name}")"
+          if [[ -n "''${val}" ]]; then
+            export "''${var_name}=''${val}"
+          fi
+        fi
+        if [[ -z "''${var_name}" ]]; then
+          echo "ERROR: Secret ''${var_name} not found" >&2
+          exit 1
+        fi
+      }
+      # Load z.ai API key secret
+      load_from_secret Z_AI_API_KEY z_ai_api_key
+
+      exec npx -y mcp-remote@0.1.29 "https://api.z.ai/api/mcp/web_search_prime/mcp" "--header" "Authorization: Bearer ''${Z_AI_API_KEY}"
+    '';
+
+    # Optional: adjust shellcheck if needed
+    # excludeShellChecks = [ "SC2154" ];
+  });
+  mcp-zai-vision = (pkgs.writeShellApplication {
+    name = "+mcp-zai-vision";
+    runtimeInputs = [ pkgs.nodejs_24 ];
+
+    # Hint: Escape `${` with the sequence `''${`, don't use `\${` or `\\$}`.
+    # https://docs.z.ai/devpack/mcp/vision-mcp-server
+    # https://www.npmjs.com/package/@z_ai/mcp-server
+    text = ''
+      load_from_secret() {
+        local var_name="$1" file_name="$2"
+        # Bash indirect expansion: ''${!var_name}
+        local current_val="''${!var_name-}"
+        if [[ -z "''${current_val}" && -r "''${SECRETS_DIR}/''${file_name}" ]]; then
+          local val
+          val="$(<"''${SECRETS_DIR}/''${file_name}")"
+          if [[ -n "''${val}" ]]; then
+            export "''${var_name}=''${val}"
+          fi
+        fi
+        if [[ -z "''${var_name}" ]]; then
+          echo "ERROR: Secret ''${var_name} not found" >&2
+          exit 1
+        fi
+      }
+      # Load z.ai API key secret
+      load_from_secret Z_AI_API_KEY z_ai_api_key
+
+      export Z_AI_MODE=ZAI
+      exec npx -y "@z_ai/mcp-server@0.1.2"
+    '';
+
+    # Optional: adjust shellcheck if needed
+    # excludeShellChecks = [ "SC2154" ];
+  });
+  mcp-zai-web-reader = (pkgs.writeShellApplication {
+    name = "+mcp-zai-web-reader";
+    runtimeInputs = [ pkgs.nodejs_24 ];
+
+    # Hint: Escape `${` with the sequence `''${`, don't use `\${` or `\\$}`.
+    # https://api.z.ai/api/mcp/web_reader/mcp
+    text = ''
+      load_from_secret() {
+        local var_name="$1" file_name="$2"
+        # Bash indirect expansion: ''${!var_name}
+        local current_val="''${!var_name-}"
+        if [[ -z "''${current_val}" && -r "''${SECRETS_DIR}/''${file_name}" ]]; then
+          local val
+          val="$(<"''${SECRETS_DIR}/''${file_name}")"
+          if [[ -n "''${val}" ]]; then
+            export "''${var_name}=''${val}"
+          fi
+        fi
+        if [[ -z "''${var_name}" ]]; then
+          echo "ERROR: Secret ''${var_name} not found" >&2
+          exit 1
+        fi
+      }
+      # Load z.ai API key secret
+      load_from_secret Z_AI_API_KEY z_ai_api_key
+
+      exec npx -y mcp-remote@0.1.29 "https://api.z.ai/api/mcp/web_reader/mcp" "--header" "Authorization: Bearer ''${Z_AI_API_KEY}"
+    '';
+
+    # Optional: adjust shellcheck if needed
+    # excludeShellChecks = [ "SC2154" ];
+  });
 in
 {
   # This value determines the Home Manager release that your
@@ -269,6 +367,7 @@ in
     };
   };
 
+  # https://nix-community.github.io/home-manager/options.xhtml#opt-programs.claude-code.enable
   programs.claude-code = {
     enable = true;
     # MCP servers -> written by HM into Claude Code's MCP config
@@ -276,22 +375,42 @@ in
       atlassian = {
         type = "stdio";
         command = "${mcp-atlassian}/bin/+mcp-atlassian";
+        args = [];
       };
       context7 = {
         type = "stdio";
         command = "${mcp-context7}/bin/+mcp-context7";
+        args = [];
       };
       javadocs = {
         type = "stdio";
         command = "${mcp-javadocs}/bin/+mcp-javadocs";
+        args = [];
       };
       nixos = {
         type = "stdio";
         command = "${mcp-nixos}/bin/+mcp-nixos";
+        args = [];
       };
       travily = {
         type = "stdio";
         command = "${mcp-travily}/bin/+mcp-travily";
+        args = [];
+      };
+      zai-search = {
+        type = "stdio";
+        command = "${mcp-zai-search}/bin/+mcp-zai-search";
+        args = [];
+      };
+      zai-vision = {
+        type = "stdio";
+        command = "${mcp-zai-vision}/bin/+mcp-zai-vision";
+        args = [];
+      };
+      zai-web-reader = {
+        type = "stdio";
+        command = "${mcp-zai-web-reader}/bin/+mcp-zai-web-reader";
+        args = [];
       };
     };
     skillsDir = ./config/claude/skills;
@@ -301,6 +420,10 @@ in
         "ANTHROPIC_BASE_URL" = "https://api.z.ai/api/anthropic";
         "API_TIMEOUT_MS" = "3000000";
         "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC" = "1";
+        "ANTHROPIC_DEFAULT_HAIKU_MODEL" = "glm-4.7"; # Cheapest model, alternative: "glm-*-air
+        "ANTHROPIC_DEFAULT_MODEL" = "glm-4.7";
+        "ANTHROPIC_DEFAULT_OPUS_MODEL" = "glm-4.7"; # Heavy thinking model
+        "ANTHROPIC_DEFAULT_SONNET_MODEL" = "glm-4.7"; # Balanced model
       };
       "alwaysThinkingEnabled" = true;
     };
@@ -953,6 +1076,9 @@ in
     mcp-javadocs
     mcp-nixos
     mcp-travily
+    mcp-zai-search
+    mcp-zai-vision
+    mcp-zai-web-reader
 
     # Utility scripts -----------------------------------------------------------------------------{{{
     (pkgs.writeShellApplication {
