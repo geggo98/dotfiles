@@ -370,6 +370,7 @@ in
   # https://nix-community.github.io/home-manager/options.xhtml#opt-programs.claude-code.enable
   programs.claude-code = {
     enable = true;
+    package = llm-agents.claude-code;
     # MCP servers -> Home Manager creates wrapper that calls clause like: `.claude-wrapped  --mcp-config /nix/store/...claude-code-mcp-config.json $@`
     mcpServers = {
       atlassian = {
@@ -582,7 +583,6 @@ in
       "+grep-tui" = "ug -Q";
 
       # AI Agents
-      "+agent-claude-hm" = "/etc/profiles/per-user/{$USER}/bin/claude"; # This uses the home manager wrapper. It adds additional flags to configure MCP servers for this session.
       "+agent-codex-sandbox" = "+agent-codex --full-auto";
       "+agent-codex-danger-delete-all-my-files-and-trash-my-computer" = "+agent-codex --dangerously-bypass-approvals-and-sandbox";
 
@@ -1084,17 +1084,17 @@ in
     # Utility scripts -----------------------------------------------------------------------------{{{
     (pkgs.writeShellApplication {
       name = "+agent-claude";
-      runtimeInputs = [ llm-agents.claude-code llm-agents.claude-code-acp ];
+      runtimeInputs = [ llm-agents.claude-code-acp ];
 
       # Hint: Escape `${` with the sequence `''${`, don't use `\${` or `\\$}`.
       text = ''
         export DISABLE_AUTOUPDATER='1'
-        echo "WARNING: This misses MCP servers configured with home-manager."
         if (( $# > 0 )) && [[ "''${1}" == "--acp" ]]; then
+          export CLAUDE_CODE_EXECUTABLE="/etc/profiles/per-user/''${USER}/bin/claude"
           shift # Remove --acp from args
           exec claude-code-acp "$@"
         fi
-        exec claude "$@"
+        exec "/etc/profiles/per-user/''${USER}/bin/claude" "$@"
       '';
 
       # Optional: adjust shellcheck if needed
