@@ -2,7 +2,8 @@
 # darwin-rebuild build --flake ~/.config/nix-darwin
 # sudo darwin-rebuild switch --flake ~/.config/nix-darwin
 # git add . && nix --extra-experimental-features "nix-command flakes"  run nix-darwin -- switch --flake ~/.config/nix-darwin
-# sudo determinate-nixd upgrade # --version 3.6.2
+# sudo determinate-nixd upgrade # --version 3.15.1
+# determinate-nixd version # Shows featires, see https://dtr.mn/features
 {
   description = "Stefan's darwin system";
 
