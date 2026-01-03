@@ -10,7 +10,7 @@
     "affinity-designer"
     "affinity-photo"
     "affinity-publisher"
-    "balenaetcher" # Writing iamges to SD Cards
+    "balenaetcher" # Writing images to SD Cards
     "crossover"
     "chatgpt"
     "jdownloader"
@@ -18,7 +18,9 @@
     "localsend/localsend/localsend"
     "microsoft-office"
     "openaudible"
+    "parallels"
     "resilio-sync"
+    "saleae-logic"
     "shortcat" # Command palette for every application, but slower than Homerow
     # "slack"
     # "soundsource"
