@@ -569,6 +569,10 @@ in
       "+usb-serial-autoconnect-latest" = ", tio -a latest";
       "+usb-serial-list" = ", tio --list";
 
+      # Power saving mode
+      "+pmset-standby-ram" = "sudo pmset -a hibernatemode 3";
+      "+pmset-hibernate-disk" = "sudo pmset -a hibernatemode 25";
+
       # YubiKey
       "+ssh-add-yubikey" = "env SSH_AUTH_SOCK={$HOME}.ssh/agent ssh-add {$HOME}/.ssh/id_es255519_sk";
 
