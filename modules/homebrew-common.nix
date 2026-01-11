@@ -48,6 +48,7 @@
     "MonitorControl"
     "msty" # Run LLM locally
     "notunes" # Prevents Apple Music from hijacking headset buttons
+    "octarine" # Markdown note keeping, Obsidian alternative
     "omnigraffle"
     "orion" # Kagi Orion Browser
     "orbstack"
