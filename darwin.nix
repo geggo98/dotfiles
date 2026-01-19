@@ -15,6 +15,26 @@
       # "NSStatusItemPadding" = 0;
       # "NSStatusItemSeparation" = 0;
     };
+    universalaccess = {
+      # Reduce transparency
+      reduceTransparency = true;
+
+      # Increase contrast (checkbox)
+      increaseContrast = true;
+
+      # Differentiate without color
+      differentiateWithoutColor = true;
+
+      # Show window title icons
+      showWindowTitlebarIcons = true;
+
+      # Reduce motion
+      # reduceMotion = true;
+
+      # Invert colors
+      # invertDisplay = true;
+    };
+
     # For this work, you have to add Terminal to apps with Full Disk Access in Security And Privacy
     "com.apple.Safari" = {
       # Enable debug menu and web inspector
@@ -30,12 +50,12 @@
       # Suppress the creation of .DS_Store files on network volumes
       "DSDontWriteNetworkStores" = true;
     };
-    "com.superultra.Homerow"= {
-        "hide-labels-when-nothing-is-searched" = true;
-        "non-search-shortcut" = "⌥F19";
-        "scroll-shortcut" = "⌥⌘F19";
-        "search-shortcut" = "⌘F19";
-        "use-search-predicate" = true;
+    "com.superultra.Homerow" = {
+      "hide-labels-when-nothing-is-searched" = true;
+      "non-search-shortcut" = "⌥F19";
+      "scroll-shortcut" = "⌥⌘F19";
+      "search-shortcut" = "⌘F19";
+      "use-search-predicate" = true;
     };
   };
   system.defaults.ActivityMonitor.IconType = 5; # CPU Usage
@@ -43,7 +63,7 @@
   system.defaults.NSGlobalDomain.AppleKeyboardUIMode = 3;
   system.defaults.NSGlobalDomain.InitialKeyRepeat = 15;
   system.defaults.NSGlobalDomain.KeyRepeat = 2;
-  
+
   # 1 turns on F1,F2, etc. as standard function keys; 0 sets them as special-purpose keys
   system.defaults.NSGlobalDomain."com.apple.keyboard.fnState" = true;
   system.defaults.NSGlobalDomain."com.apple.mouse.tapBehavior" = 1;
