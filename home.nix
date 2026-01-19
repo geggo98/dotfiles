@@ -991,6 +991,7 @@ in
     socat
     sops
     telepresence2
+    topgrade # Update everything, including docker images and containers
     # https://www.jamieweb.net/blog/tor-is-a-great-sysadmin-tool/
     tor # Run tor in one window, in the other: `env ALL_PROXY=socks5h://127.0.0.1:9050 ...`
     # torsocks # Doesn't work on macOS
@@ -1242,6 +1243,9 @@ in
     "raycast/script_commands" = {
       source = ./config/raycast/script_commands;
       recursive = true;
+    };
+    "topgrade.toml" = {
+        source = ./config/topgrade.toml;
     };
   };
 
