@@ -29,7 +29,8 @@
     sops-nix.inputs.nixpkgs.follows = "nixpkgs";
 
     # https://github.com/nix-community/nix-index-database
-    nix-index-database.url = "github:Mic92/nix-index-database";
+    # Fix tag, because newer versions have a corrupt `flake.lock` file
+    nix-index-database.url = "github:nix-community/nix-index-database/2025-12-07-035007";
     nix-index-database.inputs.nixpkgs.follows = "nixpkgs";
 
     # https://github.com/numtide/llm-agents.nix
@@ -49,7 +50,7 @@
     extra-trusted-public-keys = [ "numtide.cachix.org-1:2ps1kLBUWjxIneOy1Ik6cQjb41X0iXVXeHigGmycPPE=" ];
   };
 
-  outputs = { self, darwin, nixpkgs, nixpkgs-unstable, home-manager, sops-nix, nix-index-database, nixpkgs-llm-agents, nvf, determinate, ... }@inputs:
+  outputs = { self, darwin, nixpkgs, nixpkgs-unstable, home-manager, nix-index-database, sops-nix, nixpkgs-llm-agents, nvf, determinate, ... }@inputs:
     let
       inherit (darwin.lib) darwinSystem;
       inherit (inputs.nixpkgs.lib) attrValues makeOverridable optionalAttrs singleton;
