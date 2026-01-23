@@ -66,6 +66,7 @@
     "redis-insight"
     "sf-symbols" # https://developer.apple.com/sf-symbols/
     "shottr"
+    "soundsource"
     # "studio-3t"
     "suspicious-package" # Inspect and unpack PKG files
     "stratoshark" # Wireshark for system calls on Linux, viewer UI for macOS
