@@ -1,4 +1,4 @@
-{ config, pkgs, nixpkgs-unstable, lib, sops-nix, nix-index-database, nixpkgs-llm-agents, nvf, ... }:
+{ config, pkgs, nixpkgs-unstable, lib, nix-index-database, sops-nix, nixpkgs-llm-agents, nvf, ... }:
 let
   moreutilsWithoutParallel = pkgs.moreutils.overrideAttrs (oldAttrs: {
     preBuild = (oldAttrs.preBuild or "") + ''
