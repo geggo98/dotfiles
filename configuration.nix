@@ -32,7 +32,7 @@
   environment.variables = {
     # TERMINFO_DIRS = "${pkgs.kitty.terminfo.outPath}/share/terminfo";
   };
-  programs.nix-index.enable = true;
+  # programs.nix-index.enable = true;
 
   # Fonts: `/Library/Fonts/Nix Fonts`.
   # Legacy fonts are in: `/Library/Fonts`.
