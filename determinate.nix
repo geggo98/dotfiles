@@ -8,6 +8,7 @@
   determinate-nix.customSettings = {
     # settings get written into /etc/nix/nix.custom.conf
     "download-buffer-size" = "1073741824"; # 1 GiB
+    "trusted-users" = "root stefan stefan.schwetschke";
     # https://determinate.systems/blog/changelog-determinate-nix-384/
     # https://dtr.mn/features 
     # "extra-experimental-features" = "external-builders";
