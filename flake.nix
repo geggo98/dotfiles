@@ -46,8 +46,8 @@
   nixConfig = {
     # Caches ----------------------------------------------------------------- {{{
     # https://github.com/numtide/llm-agents.nix/blob/main/flake.nix
-    extra-substituters = [ "https://numtide.cachix.org" ];
-    extra-trusted-public-keys = [ "numtide.cachix.org-1:2ps1kLBUWjxIneOy1Ik6cQjb41X0iXVXeHigGmycPPE=" ];
+    extra-substituters = [ "https://numtide.cachix.org" "https://devenv.cachix.org"];
+    extra-trusted-public-keys = [ "numtide.cachix.org-1:2ps1kLBUWjxIneOy1Ik6cQjb41X0iXVXeHigGmycPPE=" "devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw="];
   };
 
   outputs = { self, darwin, nixpkgs, nixpkgs-unstable, home-manager, nix-index-database, sops-nix, nixpkgs-llm-agents, nvf, determinate, ... }@inputs:
