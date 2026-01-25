@@ -945,6 +945,7 @@ in
     # Dev stuff
     # (agda.withPackages (p: [ p.standard-library ]))
     asciinema
+    devenv # https://devenv.sh/getting-started/#1-install-nix
     git-absorb # https://github.com/tummychow/git-absorb
     # git-branchless # https://github.com/arxanas/git-branchless # Provides `git undo` and `git sync` for updating all non-conflicting branches
     git-crypt # https://github.com/AGWA/git-crypt
