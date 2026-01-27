@@ -8,6 +8,7 @@
   };
   homebrew.brews = [
     "llm" # The Nix version has still problems with plugins
+    "gildas/tap/bitbucket-cli"
   ];
   homebrew.casks = [
     "1password"
