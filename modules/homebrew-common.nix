@@ -6,6 +6,10 @@
     # require_sha = true;
     # no_quarantine = true;
   };
+  
+  homebrew.taps= [
+    "gildas/tap" # bitbucket-cli
+  ];
   homebrew.brews = [
     "llm" # The Nix version has still problems with plugins
     "gildas/tap/bitbucket-cli"
