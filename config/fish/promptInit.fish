@@ -43,14 +43,13 @@ if command -v lsd > /dev/null
     set -x FZF_PREVIEW_DIR_CMD "lsd -a"
 end
 
-if test -f ~/.config/nvim/init.lua > /dev/null
+if command -v nvim > /dev/null
+    set -x EDITOR nvim
     set -x VISUAL nvim
     set -x GIT_EDITOR nvim
-else if command -v {$HOME}/.local/bin/lvim > /dev/null
-    alias lvim {$HOME}/.local/bin/lvim
-    set -x VISUAL /{$HOME}/.local/bin/lvim
-    set -x GIT_EDITOR /{$HOME}/.local/bin/lvim
 else
+    set -x EDITOR vim
+    set -x VISUAL vim
     set -x GIT_EDITOR vim
 end
 
