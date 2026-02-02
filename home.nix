@@ -1286,6 +1286,7 @@ in
     SOPS_AGE_RECIPIENTS = "age1vygfenpy584kvfdge57ep2vwqqe33zd4auanwu7frmf0tht5jq0q5ugmgd," # FCX19GT9XR
       + "age1ae3vaq0cwzd8y0eatczdz7dz26m3mpxfnelwfxle9mqdachftd7q96fvaz"; # DKL6GDJ7X1
     EDITOR = "${pkgs.neovim}/bin/nvim";
+    VISUAL = "${pkgs.neovim}/bin/nvim";
     # Doesn't work, because it contains the `%r` placeholder for the sops secrets directory.
     # OPENAI_API_KEY_FILE = config.sops.secrets."openai_api_key".path;
   };
