@@ -538,21 +538,32 @@ in
     };
     shellAbbrs = {
       # Abbreviations for "forgit": https://github.com/wfxr/forgit
-      # You can also use completion on "forgit::"
-      "+git-add-interactive" = "ga";
-      "+git-checkout-branch" = "gcb";
-      "+git-checkout-commit" = "gco";
-      "+git-checkout-file" = "gcf";
-      "+git-checkout-tag" = "gct";
-      "+git-commit-fixup" = "gfu";
-      "+git-delete-branch-interactive" = "gbd";
-      "+git-diff-interactive" = "gd";
-      # "+git-ignore-generator" = "gi"; # Replaced with Fish function
-      "+git-log-viewer" = "glo";
-      "+git-reset-head" = "grh";
-      "+git-revert-commit" = "grc";
-      "+git-stash-push" = "gsp";
-      "+git-stash-viewer" = "gss";
+      # Using git-forgit <command> syntax
+      "+git-add-interactive" = "git forgit add";
+      "+git-checkout-branch" = "git forgit checkout_branch";
+      "+git-checkout-commit" = "git forgit checkout_commit";
+      "+git-checkout-file" = "git forgit checkout_file";
+      "+git-checkout-tag" = "git forgit checkout_tag";
+      "+git-commit-fixup" = "git forgit fixup";
+      "+git-delete-branch-interactive" = "git forgit branch_delete";
+      "+git-diff-interactive" = "git forgit diff";
+      # "+git-ignore-generator" = "git forgit ignore"; # Using custom +git-ignore-generator function instead
+      "+git-log-viewer" = "git forgit log";
+      "+git-reset-head" = "git forgit reset_head";
+      "+git-revert-commit" = "git forgit revert_commit";
+      "+git-stash-push" = "git forgit stash_push";
+      "+git-stash-viewer" = "git forgit stash_show";
+      # Additional forgit commands (no alias assigned yet):
+      # git forgit blame
+      # git forgit cherry_pick
+      # git forgit cherry_pick_from_branch
+      # git forgit clean
+      # git forgit attributes
+      # git forgit rebase
+      # git forgit show
+      # git forgit reflog
+      # git forgit squash
+      # git forgit reword
 
       # Use `lsd` for dir colors. Alternative: `eza`, the successor of `exa`. `eza` has more features, `lsd` better compatibility with `ls`.
       "+l" = "lsd";
@@ -1073,7 +1084,7 @@ in
     nixd # Nix language server https://github.com/nix-community/nixd
     nixpkgs-fmt # Nix formatter
     nodePackages.node2nix # Convert node packages to Nix
-
+    zsh-forgit # Git forgit for zsh
 
     # AI Tools
     unstable.aichat
