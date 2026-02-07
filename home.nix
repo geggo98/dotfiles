@@ -497,7 +497,7 @@ in
     ];
 
     functions = {
-      "+git-ignore-generator" = {
+      "+git-ignore-generator2" = {
         body = ''
           # Generate .gitignore files for multiple frameworks/languages
           # Usage: +git-ignore-generator <technology1> [technology2] [technology3]...
@@ -547,7 +547,7 @@ in
       "+git-commit-fixup" = "git forgit fixup";
       "+git-delete-branch-interactive" = "git forgit branch_delete";
       "+git-diff-interactive" = "git forgit diff";
-      # "+git-ignore-generator" = "git forgit ignore"; # Using custom +git-ignore-generator function instead
+      "+git-ignore-generator" = "git forgit ignore";
       "+git-log-viewer" = "git forgit log";
       "+git-reset-head" = "git forgit reset_head";
       "+git-revert-commit" = "git forgit revert_commit";
