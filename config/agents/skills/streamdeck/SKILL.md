@@ -52,9 +52,9 @@ The schema cannot reliably verify files on disk. This tool adds:
 
 ---
 
-## Tools
+## Scripts
 
-- `tools/streamdeck_manifest.sh` — CLI entrypoint.
+- `scripts/streamdeck_manifest.sh` — CLI entrypoint.
   - Output is **JSON by default** (easy for agents to parse).
   - Pass `--timeout DURATION` to override the global execution timeout (default: `1m`). Format follows GNU coreutils (e.g. `30s`, `2m`, `1h`).
 
@@ -65,7 +65,7 @@ The schema cannot reliably verify files on disk. This tool adds:
 ### Validate a manifest
 
 ```bash
-./tools/streamdeck_manifest.sh validate path/to/manifest.json
+./scripts/streamdeck_manifest.sh validate path/to/manifest.json
 ```
 
 Behavior:
@@ -91,19 +91,19 @@ JSON output shape:
 ### Fix JSONC / trailing commas
 
 ```bash
-./tools/streamdeck_manifest.sh validate manifest.json --fix-jsonc --write
+./scripts/streamdeck_manifest.sh validate manifest.json --fix-jsonc --write
 ```
 
 ### Format / normalize
 
 ```bash
-./tools/streamdeck_manifest.sh fmt manifest.json --write
+./scripts/streamdeck_manifest.sh fmt manifest.json --write
 ```
 
 ### Scaffold a new plugin folder
 
 ```bash
-./tools/streamdeck_manifest.sh init ./MyPlugin.sdPlugin \
+./scripts/streamdeck_manifest.sh init ./MyPlugin.sdPlugin \
   --name "My Plugin" \
   --uuid "com.example.myplugin" \
   --author "Example" \
@@ -113,7 +113,7 @@ JSON output shape:
 ### Add an action to an existing manifest
 
 ```bash
-./tools/streamdeck_manifest.sh add-action ./MyPlugin.sdPlugin/manifest.json \
+./scripts/streamdeck_manifest.sh add-action ./MyPlugin.sdPlugin/manifest.json \
   --name "My Action"
 ```
 
