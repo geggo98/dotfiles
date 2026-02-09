@@ -1,6 +1,13 @@
 ---
 name: research
-description: Researches how to use an API, library, or reference architecture. Fallback when the WebSearch tool fails.
+description: Researches thoroughly how to use an API, library, or reference architecture. FCan be used as fallback when the WebSearch tool fails.
+context: fork
+agent: Explore
+allowed-tools:
+    - "Bash(./scripts/gemini_research.sh)"
+    - "Bash(bash ./scripts/gemini_research.sh)"
+    - "Bash(./scripts/perplexity_open_router_research.sh)"
+    - "Bash(bash ./scripts/perplexity_open_router_research.py)"
 ---
 
 # Research Skill

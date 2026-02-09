@@ -1,4 +1,4 @@
-#!/usr/bin/env -S deno run --allow-read --allow-write --allow-net
+#!/usr/bin/env -S deno run --lock streamdeck_manifest.deno.lock --allow-read --allow-write --allow-net
 
 // Stream Deck manifest helper CLI
 //
@@ -21,7 +21,8 @@ import {
 } from "./streamdeck_manifest_lib.ts";
 
 function printHelp(): void {
-  const txt = `Stream Deck manifest toolkit\n\n` +
+  const txt =
+    `Stream Deck manifest toolkit\n\n` +
     `Usage:\n` +
     `  streamdeck_manifest.ts validate <manifest.json> [--schema <url>] [--refresh-schema] [--cache-dir <dir>] [--no-assets] [--fail-on-warn] [--fix-jsonc] [--write]\n` +
     `  streamdeck_manifest.ts fmt <manifest.json> [--write]\n` +
@@ -109,10 +110,15 @@ function parseArgs(argv: string[]): ParsedArgs {
 }
 
 function jsonOut(value: unknown): void {
-  Deno.stdout.writeSync(new TextEncoder().encode(JSON.stringify(value, null, 2) + "\n"));
+  Deno.stdout.writeSync(
+    new TextEncoder().encode(JSON.stringify(value, null, 2) + "\n"),
+  );
 }
 
-function requireFlag(flags: Record<string, string | boolean>, name: string): string {
+function requireFlag(
+  flags: Record<string, string | boolean>,
+  name: string,
+): string {
   const v = flags[name];
   if (typeof v !== "string" || v.length === 0) {
     throw new Error(`Missing required flag: --${name}`);
@@ -120,12 +126,18 @@ function requireFlag(flags: Record<string, string | boolean>, name: string): str
   return v;
 }
 
-function flagString(flags: Record<string, string | boolean>, name: string): string | undefined {
+function flagString(
+  flags: Record<string, string | boolean>,
+  name: string,
+): string | undefined {
   const v = flags[name];
   return typeof v === "string" ? v : undefined;
 }
 
-function flagBool(flags: Record<string, string | boolean>, name: string): boolean {
+function flagBool(
+  flags: Record<string, string | boolean>,
+  name: string,
+): boolean {
   return flags[name] === true;
 }
 
@@ -133,7 +145,10 @@ function errorOut(message: string, details?: unknown): void {
   jsonOut({ ok: false, error: message, details });
 }
 
-async function cmdValidate(positionals: string[], flags: Record<string, string | boolean>): Promise<number> {
+async function cmdValidate(
+  positionals: string[],
+  flags: Record<string, string | boolean>,
+): Promise<number> {
   const manifestPath = positionals[0];
   if (!manifestPath) throw new Error("validate requires <manifest.json>");
 
@@ -160,7 +175,10 @@ async function cmdValidate(positionals: string[], flags: Record<string, string |
   return result.ok ? 0 : 1;
 }
 
-async function cmdFmt(positionals: string[], flags: Record<string, string | boolean>): Promise<number> {
+async function cmdFmt(
+  positionals: string[],
+  flags: Record<string, string | boolean>,
+): Promise<number> {
   const manifestPath = positionals[0];
   if (!manifestPath) throw new Error("fmt requires <manifest.json>");
 
@@ -175,7 +193,10 @@ async function cmdFmt(positionals: string[], flags: Record<string, string | bool
   return 0;
 }
 
-async function cmdInit(positionals: string[], flags: Record<string, string | boolean>): Promise<number> {
+async function cmdInit(
+  positionals: string[],
+  flags: Record<string, string | boolean>,
+): Promise<number> {
   const dir = positionals[0];
   if (!dir) throw new Error("init requires <pluginDir.sdPlugin>");
 
@@ -207,7 +228,10 @@ async function cmdInit(positionals: string[], flags: Record<string, string | boo
   return 0;
 }
 
-async function cmdAddAction(positionals: string[], flags: Record<string, string | boolean>): Promise<number> {
+async function cmdAddAction(
+  positionals: string[],
+  flags: Record<string, string | boolean>,
+): Promise<number> {
   const manifestPath = positionals[0];
   if (!manifestPath) throw new Error("add-action requires <manifest.json>");
 
