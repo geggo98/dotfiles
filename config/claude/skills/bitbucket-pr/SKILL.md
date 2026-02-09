@@ -1,3 +1,12 @@
+---
+name: pr-bb
+description: Fetches review comments for a given Bitbucket pull request
+argument-hint: [issue-number]
+allowed-tools:
+    - "Bash(./scripts/bitbucket_pr_comments.sh)"
+    - "Bash(bash ./scripts/bitbucket_pr_comments.sh)"
+---
+
 # Bitbucket Pull Request Skill
 
 ## 1. Purpose

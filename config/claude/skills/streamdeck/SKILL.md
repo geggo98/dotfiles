@@ -1,3 +1,11 @@
+---
+name: stream-deck
+description: Helper to safely edit manifest files when developing plugin for Elgato Stream Deck
+allowed-tools:
+    - "Bash(./scripts/streamdeck_manifest.sh)"
+    - "Bash(bash ./scripts/streamdeck_manifest.sh)"
+---
+
 # Stream Deck Manifest Toolkit
 
 Validate, repair, format, and scaffold **Elgato Stream Deck** `manifest.json` files.
