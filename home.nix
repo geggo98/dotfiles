@@ -440,6 +440,9 @@ in
 
   programs.nix-index-database.comma.enable = true;
 
+  # Auto-jump to recently visited directories with `z ...` https://github.com/skywind3000/z.lua
+  programs.z-lua.enable = true;
+
   programs.zsh.enable = true;
   programs.fish = {
     enable = true;
