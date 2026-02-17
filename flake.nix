@@ -1,9 +1,10 @@
 # nix build --flake .#darwinConfigurations.DKL6GDJ7X1.system
+# sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake .#DKL6GDJ7X1
 # darwin-rebuild build --flake ~/.config/nix-darwin
 # sudo darwin-rebuild switch --flake ~/.config/nix-darwin
 # git add . && nix --extra-experimental-features "nix-command flakes"  run nix-darwin -- switch --flake ~/.config/nix-darwin
 # sudo determinate-nixd upgrade # --version 3.15.1
-# determinate-nixd version # Shows featires, see https://dtr.mn/features
+# determinate-nixd version # Shows features, see https://dtr.mn/features
 {
   description = "Stefan's darwin system";
 
