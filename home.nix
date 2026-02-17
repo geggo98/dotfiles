@@ -490,6 +490,9 @@ in
 
       export_nix_sops_secret_value ATLASSIAN_C24_BITBUCKET_API_TOKEN "${config.sops.secrets.atlassian_c24_bitbucket_api_token.path}"
       export_nix_sops_secret_value ATLASSIAN_API_TOKEN "${config.sops.secrets.atlassian_c24_bitbucket_api_token.path}"
+
+      # set theme for current session https://fishshell.com/docs/current/cmds/fish_config.html
+      fish_config theme choose "Dracula" --color-theme=dark
     '';
     plugins = [
       { name = "z"; src = pkgs.fishPlugins.z.src; }
