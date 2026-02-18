@@ -90,7 +90,7 @@
               home-manager.useGlobalPkgs = true;
               home-manager.useUserPackages = true;
               home-manager.users.stefan = import ./home.nix;
-              home-manager.extraSpecialArgs = inputs;
+              home-manager.extraSpecialArgs = inputs // { hostId = "FCX19GT9XR"; };
               # On activation move existing files by appending the given file extension rather than exiting with an error.
               home-manager.backupFileExtension = "hm.bak";
             }
@@ -120,8 +120,11 @@
               nixpkgs = nixpkgsUnfreeConfig;
               home-manager.useGlobalPkgs = true;
               home-manager.useUserPackages = true;
-              home-manager.users."stefan.schwetschke" = nixpkgs.lib.mkMerge [ (import ./home.nix) (import ./hosts/DKL6GDJ7X1/home.nix) ];
-              home-manager.extraSpecialArgs = inputs;
+              home-manager.users."stefan.schwetschke" = nixpkgs.lib.mkMerge [
+                (import ./home.nix)
+                (import ./hosts/DKL6GDJ7X1/home.nix)
+              ];
+              home-manager.extraSpecialArgs = inputs // { hostId = "DKL6GDJ7X1"; };
               # On activation move existing files by appending the given file extension rather than exiting with an error.
               home-manager.backupFileExtension = "hm.bak";
             }

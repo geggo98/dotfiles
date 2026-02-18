@@ -1,5 +1,55 @@
-{ config, pkgs, nixpkgs-unstable, lib, nix-index-database, sops-nix, nixpkgs-llm-agents, nvf, ... }:
+{ config, pkgs, nixpkgs-unstable, lib, nix-index-database, sops-nix, nixpkgs-llm-agents, nvf, hostId ? null, ... }:
 let
+  globalSopsFile = ./secrets/secrets.enc.yaml;
+  hostSecretsFile =
+    if hostId == null then null else ./. + "/hosts/${hostId}/secrets.enc.yaml";
+  hostSecretsModule =
+    if hostId == null then null else ./. + "/hosts/${hostId}/secrets.nix";
+  hasHostSecretsFile = hostSecretsFile != null && builtins.pathExists hostSecretsFile;
+  hostSecretsFileContent =
+    if hasHostSecretsFile then builtins.readFile hostSecretsFile else "";
+  hostSecrets =
+    if hostSecretsModule != null && builtins.pathExists hostSecretsModule then import hostSecretsModule else { };
+  # Only point secrets at the host-specific file when that file actually contains the key.
+  # If the key is missing we fall back to the global secrets file to avoid build failures.
+  hostSecretsPresent =
+    if hasHostSecretsFile then
+      lib.filterAttrs (name: _: lib.hasInfix "${name}:" hostSecretsFileContent || lib.hasPrefix "${name}:" hostSecretsFileContent) hostSecrets
+    else
+      { };
+  hostSecretsWithFile =
+    lib.mapAttrs (_: secret: secret // {
+      sopsFile = if secret ? sopsFile then secret.sopsFile else hostSecretsFile;
+    }) hostSecretsPresent;
+  baseSecrets = {
+    "aws/credentials".path = "${config.home.homeDirectory}/.aws/credentials";
+    "aws/credentials".mode = "0600";
+    "aws/config".path = "${config.home.homeDirectory}/.aws/config";
+    "aws/config".mode = "0600";
+    openai_api_key = { };
+    anthropic_api_key = { };
+    openrouter_api_key = { };
+    groq_api_key = { };
+    gemini_api_key = { };
+    context7_api_key = { };
+    ollama_api_key = { };
+    travily_api_key = { };
+    z_ai_api_key = { };
+    slack_c24_api_key = { };
+    atlassian_c24_bitbucket_api_token = { };
+    confluence_url = { };
+    confluence_username = { };
+    confluence_personal_token = { };
+    jira_url = { };
+    jira_username = { };
+    jira_api_token = { };
+    absence_io_api_id = { };
+    absence_io_api_key = { };
+    "c24_bi_kfz_test_stefan_schwetschke.json" = { };
+    "c24_bi_kfz_prod_stefan_schwetschke.json" = { };
+    "c24_bi_kfz_test_liquibase.json" = { };
+    "c24_bi_kfz_prod_liquibase.json" = { };
+  };
   moreutilsWithoutParallel = pkgs.moreutils.overrideAttrs (oldAttrs: {
     preBuild = (oldAttrs.preBuild or "") + ''
       substituteInPlace Makefile --replace " parallel " " " --replace " parallel.1 " " "
@@ -335,36 +385,11 @@ in
     # Edit keys in the file: `env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops -s edit secrets/secrets.enc.yaml`
     # Add key with: `env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops --add-age age1... -r -i secrets/secrets.enc.yaml
     age.sshKeyPaths = [ "${config.home.homeDirectory}/.ssh/id_ed25519_sops_nopw" ];
-    defaultSopsFile = ./secrets/secrets.enc.yaml;
-    secrets = {
-      "aws/credentials".path = "${config.home.homeDirectory}/.aws/credentials";
-      "aws/credentials".mode = "0600";
-      "aws/config".path = "${config.home.homeDirectory}/.aws/config";
-      "aws/config".mode = "0600";
-      openai_api_key = { };
-      anthropic_api_key = { };
-      openrouter_api_key = { };
-      groq_api_key = { };
-      gemini_api_key = { };
-      context7_api_key = { };
-      ollama_api_key = { };
-      travily_api_key = { };
-      z_ai_api_key = { };
-      slack_c24_api_key = { };
-      atlassian_c24_bitbucket_api_token = { };
-      confluence_url = { };
-      confluence_username = { };
-      confluence_personal_token = { };
-      jira_url = { };
-      jira_username = { };
-      jira_api_token = { };
-      absence_io_api_id = { };
-      absence_io_api_key = { };
-      "c24_bi_kfz_test_stefan_schwetschke.json" = { };
-      "c24_bi_kfz_prod_stefan_schwetschke.json" = { };
-      "c24_bi_kfz_test_liquibase.json" = { };
-      "c24_bi_kfz_prod_liquibase.json" = { };
-    };
+    defaultSopsFile = globalSopsFile;
+    # Host secrets (if present) override global secrets. A host can provide:
+    #  - hosts/<hostId>/secrets.enc.yaml (encrypted values)
+    #  - hosts/<hostId>/secrets.nix      (per-secret overrides)
+    secrets = lib.recursiveUpdate baseSecrets hostSecretsWithFile;
   };
 
   # https://nix-community.github.io/home-manager/options.xhtml#opt-programs.claude-code.enable
@@ -492,7 +517,7 @@ in
       export_nix_sops_secret_value ATLASSIAN_API_TOKEN "${config.sops.secrets.atlassian_c24_bitbucket_api_token.path}"
 
       # set theme for current session https://fishshell.com/docs/current/cmds/fish_config.html
-      fish_config theme choose "Dracula" --color-theme=dark
+      fish_config theme choose "Dracula" # --color-theme=dark
     '';
     plugins = [
       { name = "z"; src = pkgs.fishPlugins.z.src; }
@@ -608,7 +633,7 @@ in
       "+agent-codex-danger-delete-all-my-files-and-trash-my-computer" = "+agent-codex --dangerously-bypass-approvals-and-sandbox";
 
       # SOPS Encryption
-      "+sops-edit-keys" = "env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops -s edit";
+      "+sops-edit-keys" = "env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops edit -s";
       "+sops-edit-secrets" = "env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops edit";
     };
   };
