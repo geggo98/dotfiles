@@ -9,10 +9,12 @@
   
   homebrew.taps= [
     "gildas/tap" # bitbucket-cli
+    "hashicorp/tap" # Vault CLI
   ];
   homebrew.brews = [
     "llm" # The Nix version has still problems with plugins
     "gildas/tap/bitbucket-cli"
+    "hashicorp/tap/vault"
   ];
   homebrew.casks = [
     "1password"
