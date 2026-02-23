@@ -455,6 +455,99 @@ in
     };
   };
 
+  programs.opencode = {
+    enable = true;
+    package = llm-agents.opencode;
+    settings = {
+      autoupdate = false;
+      mcp = {
+        atlassian = {
+          type = "local";
+          command = [ "${mcp-atlassian}/bin/+mcp-atlassian" ];
+          enabled = true;
+        };
+        context7 = {
+          type = "local";
+          command = [ "${mcp-context7}/bin/+mcp-context7" ];
+          enabled = true;
+        };
+        javadocs = {
+          type = "local";
+          command = [ "${mcp-javadocs}/bin/+mcp-javadocs" ];
+          enabled = true;
+        };
+        nixos = {
+          type = "local";
+          command = [ "${mcp-nixos}/bin/+mcp-nixos" ];
+          enabled = true;
+        };
+        travily = {
+          type = "local";
+          command = [ "${mcp-travily}/bin/+mcp-travily" ];
+          enabled = true;
+        };
+        zai-search = {
+          type = "local";
+          command = [ "${mcp-zai-search}/bin/+mcp-zai-search" ];
+          enabled = true;
+        };
+        zai-vision = {
+          type = "local";
+          command = [ "${mcp-zai-vision}/bin/+mcp-zai-vision" ];
+          enabled = true;
+        };
+        zai-web-reader = {
+          type = "local";
+          command = [ "${mcp-zai-web-reader}/bin/+mcp-zai-web-reader" ];
+          enabled = true;
+        };
+      };
+    };
+    rules = ./AGENTS.md;
+  };
+
+  programs.codex = {
+    enable = true;
+    package = llm-agents.codex;
+    settings = {
+      mcp_servers = {
+        atlassian = {
+          command = "${mcp-atlassian}/bin/+mcp-atlassian";
+          args = [];
+        };
+        context7 = {
+          command = "${mcp-context7}/bin/+mcp-context7";
+          args = [];
+        };
+        javadocs = {
+          command = "${mcp-javadocs}/bin/+mcp-javadocs";
+          args = [];
+        };
+        nixos = {
+          command = "${mcp-nixos}/bin/+mcp-nixos";
+          args = [];
+        };
+        travily = {
+          command = "${mcp-travily}/bin/+mcp-travily";
+          args = [];
+        };
+        "zai-search" = {
+          command = "${mcp-zai-search}/bin/+mcp-zai-search";
+          args = [];
+        };
+        "zai-vision" = {
+          command = "${mcp-zai-vision}/bin/+mcp-zai-vision";
+          args = [];
+        };
+        "zai-web-reader" = {
+          command = "${mcp-zai-web-reader}/bin/+mcp-zai-web-reader";
+          args = [];
+        };
+      };
+    };
+    custom-instructions = builtins.readFile ./AGENTS.md;
+  };
+
   # https://github.com/malob/nixpkgs/blob/master/home/default.nix
 
   # Direnv, load and unload environment variables depending on the current directory.
@@ -1151,8 +1244,21 @@ in
       # excludeShellChecks = [ "SC2154" ];
     })
     (pkgs.writeShellApplication {
+      name = "+agent-opencode";
+      runtimeInputs = [ ];
+
+      # Hint: Escape `${` with the sequence `''${`, don't use `\${` or `\\$}`.
+      text = ''
+        export DISABLE_AUTOUPDATER='1'
+        exec "/etc/profiles/per-user/''${USER}/bin/opencode" "$@"
+      '';
+
+      # Optional: adjust shellcheck if needed
+      # excludeShellChecks = [ "SC2154" ];
+    })
+    (pkgs.writeShellApplication {
       name = "+agent-codex";
-      runtimeInputs = [ llm-agents.codex llm-agents.codex-acp ];
+      runtimeInputs = [ llm-agents.codex-acp ];
 
       # Hint: Escape `${` with the sequence `''${`, don't use `\${` or `\\$}`.
       text = ''
