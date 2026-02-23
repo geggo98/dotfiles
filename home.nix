@@ -439,7 +439,7 @@ in
         args = [];
       };
     };
-    skillsDir = ./config/claude/skills;
+    skillsDir = ./config/agents/skills;
     settings = {
       "apiKeyHelper" = "${agent-claude-api-key-helper}/bin/+agent-claude-apiKeyHelper";
       "env" = {
@@ -1383,6 +1383,11 @@ in
         KeepAlive = false;
       };
     };
+  };
+
+  home.file.".agents/skills" = {
+    source = ./config/agents/skills;
+    recursive = true;
   };
 
   xdg.configFile = {
