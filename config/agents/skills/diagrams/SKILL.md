@@ -28,7 +28,7 @@ The helper script lives at `scripts/render_diagrams.sh`.
 
 Run:
 
-- `scripts/render_diagrams.sh $ARGUMENTS`
+- `scripts/render_diagrams.sh $ARGUMENTS` 
 
 ### If the user pasted diagram text instead of giving a path
 
@@ -44,6 +44,7 @@ Pipe the text to stdin and add `--stdin` (do not create a persistent file unless
 2. If the user wants images written, require an explicit `--out-dir <dir>` and write there.
 3. Always report the generated HTML path to the user (the script prints it to stdout).
 4. If any diagram fails, the preview must still include an image for it where the **error text is rendered into the image**.
+5. You can get structured JSON output with `--json` (default: minimal, omitting source/bytes). Use `--detail full` for full output.
 
 ## Selecting which diagrams to render
 
