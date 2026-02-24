@@ -1250,6 +1250,35 @@ in
       # Hint: Escape `${` with the sequence `''${`, don't use `\${` or `\\$}`.
       text = ''
         export DISABLE_AUTOUPDATER='1'
+        SECRETS_DIR="''${XDG_CONFIG_HOME:-$HOME/.config}/sops-nix/secrets"
+
+        # Helper: if VAR is empty, try loading it from $SECRETS_DIR/<file>
+        load_from_secret() {
+          local var_name="$1" file_name="$2"
+          # Bash indirect expansion: ''${!var_name}
+          local current_val="''${!var_name-}"
+          if [[ -z "''${current_val}" && -r "''${SECRETS_DIR}/''${file_name}" ]]; then
+            local val
+            val="$(<"''${SECRETS_DIR}/''${file_name}")"
+            if [[ -n "''${val}" ]]; then
+              export "''${var_name}=''${val}"
+            fi
+          fi
+          if [[ -z "''${var_name}" ]]; then
+            echo "ERROR: Secret ''${var_name} not found" >&2
+            exit 1
+          fi
+        }
+
+        # Load OpenAI API key secrets
+        load_from_secret GEMINI_API_KEY      gemini_api_key
+        load_from_secret OPENAI_API_KEY      openai_api_key
+        load_from_secret OPENROUTER_API_KEY  openrouter_api_key
+        load_from_secret Z_AI_API_KEY        z_ai_api_key
+        if (( $# > 0 )) && [[ "''${1}" == "--acp" ]]; then
+          shift # Remove --acp from args
+          exec "/etc/profiles/per-user/''${USER}/bin/opencode" acp "$@"
+        fi
         exec "/etc/profiles/per-user/''${USER}/bin/opencode" "$@"
       '';
 
