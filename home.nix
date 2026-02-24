@@ -1094,6 +1094,7 @@ in
     # gitu # https://github.com/altsem/gitu - GIT TUI client
     # tig # https://jonas.github.io/tig/
     python313Packages.markitdown # Convert PDF, Office, HTML, EPUB, etc. to Markdown
+    mermaid-cli
     nodePackages.typescript
     nodejs
     neovim
