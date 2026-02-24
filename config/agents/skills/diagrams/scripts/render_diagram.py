@@ -1,8 +1,8 @@
 #!/usr/bin/env -S uv --quiet run --script
 # /// script
-# requires-python = ">=3.10"
+# requires-python = ">=3.12"
 # dependencies = [
-#
+#   "pydantic",
 # ]
 # [tool.uv]
 # exclude-newer = "2026-02-01T00:00:00Z"
@@ -35,8 +35,8 @@ from __future__ import annotations
 
 import argparse
 import base64
-import dataclasses
 import html
+import json
 import os
 import re
 import shutil
@@ -48,9 +48,12 @@ import time
 from pathlib import Path
 from typing import Iterable, List, Optional, Sequence, Tuple
 
+from pydantic import BaseModel, ConfigDict
 
-@dataclasses.dataclass(frozen=True)
-class DiagramBlock:
+
+class DiagramBlock(BaseModel):
+    model_config = ConfigDict(frozen=True)
+
     id: int
     language: str          # "plantuml" | "mermaid"
     origin: str            # "startuml" | "fenced"
@@ -60,12 +63,13 @@ class DiagramBlock:
     source: str
 
 
-@dataclasses.dataclass
-class RenderResult:
+class RenderResult(BaseModel):
+    model_config = ConfigDict(frozen=False)
+
     block: DiagramBlock
     ok: bool
     fmt: str               # "png" | "svg"
-    bytes: bytes
+    bytes: bytes           # serialised as base64 in JSON output
     renderer: str          # "plantuml" | "mmdc" | "npx:@mermaid-js/mermaid-cli" | "error"
     stderr: str = ""
     stdout: str = ""
@@ -74,6 +78,7 @@ class RenderResult:
 
 
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+# noinspection SpellCheckingInspection
 FALLBACK_PNG_1X1 = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+XK6UAAAAASUVORK5CYII="
 )
@@ -93,7 +98,7 @@ def _ensure_plantuml_wrapped(body: str) -> str:
 
 def extract_startuml_blocks(text: str) -> List[Tuple[str, int, int]]:
     """
-    Returns list of tuples: (source, start_line, end_line) with 1-based line numbers.
+    Returns a list of tuples: (source, start_line, end_line) with 1-based line numbers.
     """
     blocks: List[Tuple[str, int, int]] = []
     for m in re.finditer(r"@startuml\b.*?@enduml\b", text, flags=re.IGNORECASE | re.DOTALL):
@@ -108,7 +113,7 @@ _FENCE_OPEN_RE = re.compile(r"^[ \t]*(`{3,}|~{3,})[ \t]*([A-Za-z0-9_+\-]+)?[ \t]
 
 def extract_fenced_blocks(text: str) -> List[Tuple[str, str, int, int]]:
     """
-    Returns list of tuples: (language, source, start_line, end_line)
+    Returns a list of tuples: (language, source, start_line, end_line)
     start_line/end_line are 1-based line numbers of the fenced block *content*.
     """
     lines = text.splitlines()
@@ -186,7 +191,7 @@ def _make_error_png(title: str, message: str, width_px: int = 1200) -> bytes:
     """
     try:
         from PIL import Image, ImageDraw, ImageFont  # type: ignore
-    except Exception:
+    except ImportError:
         return FALLBACK_PNG_1X1
 
     font = ImageFont.load_default()
@@ -236,14 +241,14 @@ def _find_plantuml_base_cmd() -> Tuple[List[str], str]:
     """
     plantuml = shutil.which("plantuml")
     if plantuml:
-        return ([plantuml], "plantuml")
+        return [str(plantuml)], "plantuml"
 
     jar = os.environ.get("PLANTUML_JAR") or os.environ.get("PLANTUML_JAR_PATH")
     if jar and Path(jar).exists():
         java = shutil.which("java")
         if not java:
-            return ([], "missing-java")
-        return ([java, "-jar", jar], "java-plantuml-jar")
+            return [], "missing-java"
+        return [str(java), "-jar", jar], "java-plantuml-jar"
 
     candidates = [
         Path.cwd() / "plantuml.jar",
@@ -256,10 +261,10 @@ def _find_plantuml_base_cmd() -> Tuple[List[str], str]:
     if jar_path:
         java = shutil.which("java")
         if not java:
-            return ([], "missing-java")
-        return ([java, "-jar", str(jar_path)], "java-plantuml-jar")
+            return [], "missing-java"
+        return [str(java), "-jar", str(jar_path)], "java-plantuml-jar"
 
-    return ([], "missing-plantuml")
+    return [], "missing-plantuml"
 
 
 def _find_mmdc_base_cmd() -> Tuple[List[str], str]:
@@ -272,13 +277,13 @@ def _find_mmdc_base_cmd() -> Tuple[List[str], str]:
     """
     mmdc = shutil.which("mmdc")
     if mmdc:
-        return ([mmdc], "mmdc")
+        return [str(mmdc)], "mmdc"
 
     npx = shutil.which("npx")
     if npx:
-        return ([npx, "-y", "@mermaid-js/mermaid-cli"], "npx:@mermaid-js/mermaid-cli")
+        return [str(npx), "-y", "@mermaid-js/mermaid-cli"], "npx:@mermaid-js/mermaid-cli"
 
-    return ([], "missing-mmdc")
+    return [], "missing-mmdc"
 
 
 def _run_cmd(cmd: List[str], *, input_bytes: bytes, timeout_s: int) -> Tuple[int, bytes, bytes]:
@@ -398,12 +403,7 @@ def _mime_for(fmt: str) -> str:
 
 
 def build_html(results: Sequence[RenderResult], *, embed: bool, title: str) -> str:
-    parts: List[str] = []
-    parts.append("<!doctype html>")
-    parts.append("<html><head><meta charset='utf-8'>")
-    parts.append(f"<title>{html.escape(title)}</title>")
-    parts.append(
-        """
+    parts: List[str] = ["<!doctype html>", "<html><head><meta charset='utf-8'>", f"<title>{html.escape(title)}</title>", """
 <style>
 body { font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif; margin: 16px; }
 .card { border: 1px solid #ddd; border-radius: 10px; padding: 12px; margin: 12px 0; }
@@ -415,10 +415,7 @@ details { margin-top: 8px; }
 .badge.ok { background: #e6ffed; }
 .badge.err { background: #ffeef0; }
 </style>
-"""
-    )
-    parts.append("</head><body>")
-    parts.append(f"<h1>{html.escape(title)}</h1>")
+""", "</head><body>", f"<h1>{html.escape(title)}</h1>"]
 
     ok_count = sum(1 for r in results if r.ok)
     err_count = len(results) - ok_count
@@ -465,9 +462,12 @@ details { margin-top: 8px; }
     return "\n".join(parts)
 
 
-def list_blocks(blocks: Sequence[DiagramBlock]) -> None:
+def list_blocks(blocks: Sequence[DiagramBlock], *, as_json: bool = False) -> None:
     if not blocks:
         print("No matching diagram blocks found.", file=sys.stderr)
+        return
+    if as_json:
+        print(json.dumps([{k: v for k, v in b.model_dump().items() if k != "source"} for b in blocks], indent=2, ensure_ascii=False))
         return
     print("ID\tLANG\tORIGIN\tFILE:LINES")
     for b in blocks:
@@ -487,7 +487,7 @@ def iter_input_files(paths: Sequence[str]) -> Iterable[Path]:
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
     ap = argparse.ArgumentParser(prog="render_diagrams.py")
-    ap.add_argument("paths", nargs="*", help="Files or directories to scan. If empty, reads from stdin.")
+    ap.add_argument("paths", nargs="*", help="Files or directories to scan.")
     ap.add_argument("--stdin", action="store_true", help="Read input from stdin (useful for pasted snippets).")
     ap.add_argument("--select", choices=["plantuml", "mermaid", "both"], default="both",
                     help="Which diagram language(s) to render.")
@@ -499,8 +499,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     ap.add_argument("--out-dir", default=None, help="Write images to this directory (optional).")
     ap.add_argument("--html", default=None, help="Write HTML preview to this path (default: temp file).")
     ap.add_argument("--no-html", action="store_true", help="Do not write an HTML preview.")
+    ap.add_argument("--json", action="store_true", default=False,
+                    help="Print results as JSON to stdout. Implies --no-html unless --html is set explicitly.")
+    ap.add_argument("--detail", choices=["full", "minimal"], default="minimal",
+                    help="Detail level for --json output: 'minimal' (default, omits source/bytes) or 'full'.")
     ap.add_argument("--timeout", type=int, default=60, help="Per-diagram render timeout (seconds).")
     args = ap.parse_args(argv)
+
+    if not args.paths and not args.stdin:
+        ap.print_help()
+        return 0
 
     select_langs = {"plantuml", "mermaid"} if args.select == "both" else {args.select}
     block_kinds = {"startuml", "fenced"} if args.blocks == "all" else {args.blocks}
@@ -508,13 +516,13 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     extracted: List[DiagramBlock] = []
     next_id = 1
 
-    def add_block(language: str, origin: str, file_label: str, start_line: int, end_line: int, source: str) -> None:
+    def add_block(language: str, origin: str, file: str, start_line: int, end_line: int, source: str) -> None:
         nonlocal next_id
         extracted.append(DiagramBlock(
             id=next_id,
             language=language,
             origin=origin,
-            file=file_label,
+            file=file,
             start_line=start_line,
             end_line=end_line,
             source=source,
@@ -551,7 +559,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     extracted = [b for b in extracted if b.language in select_langs]
 
     if args.list:
-        list_blocks(extracted)
+        list_blocks(extracted, as_json=args.json)
         return 0
 
     if not extracted:
@@ -586,7 +594,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             out_file.write_bytes(r.bytes)
             r.output_path = out_file.name  # HTML uses relative path (same folder)
 
-    if not args.no_html:
+    # `--json` suppresses the HTML preview unless `--html` was given explicitly.
+    suppress_html = args.no_html or (args.json and not args.html)
+
+    if not suppress_html:
         if args.html:
             html_path = Path(args.html).expanduser().resolve()
         else:
@@ -598,11 +609,35 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
         html_doc = build_html(results, embed=embed, title="Diagram preview (PlantUML + Mermaid)")
         html_path.write_text(html_doc, encoding="utf-8")
-        print(str(html_path))
+        if not args.json:
+            print(str(html_path))
 
     ok_count = sum(1 for r in results if r.ok)
     err_count = len(results) - ok_count
-    print(f"Rendered {len(results)} diagrams: OK={ok_count}, ERRORS={err_count}", file=sys.stderr)
+
+    if args.json:
+        full_json = args.detail == "full"
+
+        def _result_to_dict(r: RenderResult) -> dict:
+            d = r.model_dump()
+            if full_json:
+                d["bytes"] = base64.b64encode(r.bytes).decode("ascii")
+            else:
+                del d["bytes"]
+                d["block"] = {k: v for k, v in d["block"].items() if k != "source"}
+            return d
+
+        payload = {
+            "summary": {
+                "total": len(results),
+                "ok": ok_count,
+                "errors": err_count,
+            },
+            "results": [_result_to_dict(r) for r in results],
+        }
+        print(json.dumps(payload, indent=2, ensure_ascii=False))
+    else:
+        print(f"Rendered {len(results)} diagrams: OK={ok_count}, ERRORS={err_count}", file=sys.stderr)
 
     return 1 if had_errors else 0
 
