@@ -16,7 +16,7 @@ render_diagrams.py
 Extract and render PlantUML and Mermaid blocks from files, directories, or stdin.
 
 Supported sources:
-  - PlantUML blocks delimited by @startuml ... @enduml
+  - PlantUML blocks delimited by @startXYZ ... @endXYZ (e.g., @startuml/@enduml, @startditaa/@endditaa)
   - Markdown fenced code blocks:
       ```plantuml / ```puml / ```uml
       ```mermaid
@@ -56,7 +56,7 @@ class DiagramBlock(BaseModel):
 
     id: int
     language: str          # "plantuml" | "mermaid"
-    origin: str            # "startuml" | "fenced"
+    origin: str            # "start<xyz>" (e.g. "startuml", "startditaa") | "fenced"
     file: str              # path or "<stdin>"
     start_line: int
     end_line: int
@@ -120,21 +120,24 @@ def _line_number(text: str, idx: int) -> int:
 
 
 def _ensure_plantuml_wrapped(body: str) -> str:
-    if re.search(r"(?mi)^[ \t]*@startuml\b", body):
+    if re.search(r"(?mi)^[ \t]*@start\w+", body):
         return body
     body_stripped = body.strip("\n")
     return f"@startuml\n{body_stripped}\n@enduml\n"
 
 
-def extract_startuml_blocks(text: str) -> List[Tuple[str, int, int]]:
+def extract_start_blocks(text: str) -> List[Tuple[str, str, int, int]]:
     """
-    Returns a list of tuples: (source, start_line, end_line) with 1-based line numbers.
+    Returns a list of tuples: (start_tag, source, start_line, end_line) with 1-based line numbers.
+    start_tag is the matched word after @start, e.g. "uml", "ditaa", "gantt".
+    Matches @startXYZ ... @endXYZ where XYZ is \\w+ (backreference ensures start/end tags match).
     """
-    blocks: List[Tuple[str, int, int]] = []
-    for m in re.finditer(r"@startuml\b.*?@enduml\b", text, flags=re.IGNORECASE | re.DOTALL):
+    blocks: List[Tuple[str, str, int, int]] = []
+    for m in re.finditer(r"@start(\w+)\b.*?@end\1\b", text, flags=re.IGNORECASE | re.DOTALL):
+        start_tag = m.group(1).lower()
         start = _line_number(text, m.start())
         end = _line_number(text, m.end())
-        blocks.append((m.group(0), start, end))
+        blocks.append((start_tag, m.group(0), start, end))
     return blocks
 
 
@@ -572,8 +575,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
             return 2
         file_label = "<stdin>"
         if "startuml" in block_kinds:
-            for src, sl, el in extract_startuml_blocks(data):
-                add_block("plantuml", "startuml", file_label, sl, el, src)
+            for tag, src, sl, el in extract_start_blocks(data):
+                add_block("plantuml", f"start{tag}", file_label, sl, el, src)
         if "fenced" in block_kinds:
             for lang, src, sl, el in extract_fenced_blocks(data):
                 add_block(lang, "fenced", file_label, sl, el, src)
@@ -586,8 +589,8 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
 
             file_label = str(file_path)
             if "startuml" in block_kinds:
-                for src, sl, el in extract_startuml_blocks(text):
-                    add_block("plantuml", "startuml", file_label, sl, el, src)
+                for tag, src, sl, el in extract_start_blocks(text):
+                    add_block("plantuml", f"start{tag}", file_label, sl, el, src)
             if "fenced" in block_kinds:
                 for lang, src, sl, el in extract_fenced_blocks(text):
                     add_block(lang, "fenced", file_label, sl, el, src)
