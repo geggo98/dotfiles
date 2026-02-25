@@ -1,9 +1,10 @@
 ---
 name: diagram-render
 description: Render PlantUML (@startuml…@enduml) and Mermaid fenced blocks to a self-contained HTML preview; if rendering fails, the error text must be embedded in the output image.
-argument-hint: "[paths...] [--select plantuml|mermaid|both] [--blocks startuml|fenced|all] [--only 1,3-5] [--out-dir DIR] [--format png|svg]"
-disable-model-invocation: true
-allowed-tools: Bash, Read, Glob, Grep
+argument-hint: "[paths...] [--stdin] [--select plantuml|mermaid|both] [--blocks startuml|fenced|all] [--only 1,3-5] [--out-dir DIR] [--format png|svg] [--json]"
+allowed-tools:
+  - "Bash(./scripts/render_diagram.sh)"
+  - "Bash(bash ./scripts/render_diagram.sh)"
 dependencies: python>=3.8, Pillow>=10
 ---
 
@@ -55,7 +56,7 @@ Pipe the text to stdin and add `--stdin` (do not create a persistent file unless
 
 ## Examples
 
-- Render everything found in a markdown doc:
+- Render everything found in a Markdown doc:
     - `scripts/render_diagrams.sh docs/architecture.md`
 - Only Mermaid blocks from multiple files:
     - `scripts/render_diagrams.sh docs/*.md --select mermaid`
