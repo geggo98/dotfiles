@@ -75,9 +75,39 @@ class RenderResult(BaseModel):
     stdout: str = ""
     exit_code: int = 0
     output_path: Optional[str] = None  # relative path (for HTML) if written to disk
+    width: Optional[int] = None
+    height: Optional[int] = None
 
 
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+
+
+def _get_image_dimensions(fmt: str, data: bytes) -> Tuple[Optional[int], Optional[int]]:
+    """Return (width, height) in pixels for PNG or SVG data, or (None, None) if undetectable."""
+    if fmt == "png" and len(data) >= 24:
+        import struct
+        w, h = struct.unpack(">II", data[16:24])
+        return w, h
+    if fmt == "svg":
+        text = data[:4096].decode("utf-8", errors="replace")
+        w = h = None
+        m = re.search(r'<svg[^>]+\bwidth=["\']([0-9]+(?:\.[0-9]+)?)', text, re.IGNORECASE)
+        if m:
+            w = int(float(m.group(1)))
+        m = re.search(r'<svg[^>]+\bheight=["\']([0-9]+(?:\.[0-9]+)?)', text, re.IGNORECASE)
+        if m:
+            h = int(float(m.group(1)))
+        if w is None or h is None:
+            # viewBox fallback: viewBox="minX minY width height"
+            m = re.search(r'<svg[^>]+\bviewBox=["\']([0-9.]+)[ ,]+([0-9.]+)[ ,]+([0-9.]+)[ ,]+([0-9.]+)', text, re.IGNORECASE)
+            if m:
+                vw, vh = int(float(m.group(3))), int(float(m.group(4)))
+                w = w if w is not None else vw
+                h = h if h is not None else vh
+        return w, h
+    return None, None
+
+
 # noinspection SpellCheckingInspection
 FALLBACK_PNG_1X1 = base64.b64decode(
     "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+XK6UAAAAASUVORK5CYII="
@@ -375,6 +405,8 @@ def render_block(block: DiagramBlock, fmt: str, timeout_s: int) -> RenderResult:
     if renderer == "error":
         actual_fmt = "png"  # error images are PNGs
 
+    width, height = _get_image_dimensions(actual_fmt, out_bytes)
+
     return RenderResult(
         block=block,
         ok=ok,
@@ -384,6 +416,8 @@ def render_block(block: DiagramBlock, fmt: str, timeout_s: int) -> RenderResult:
         stderr=stderr,
         stdout=stdout,
         exit_code=rc,
+        width=width,
+        height=height,
     )
 
 
@@ -425,13 +459,15 @@ details { margin-top: 8px; }
         b = r.block
         status = "ok" if r.ok else "err"
         parts.append("<div class='card'>")
+        dims = f"{r.width}×{r.height}px" if r.width is not None and r.height is not None else "unknown"
         parts.append(
             "<div class='meta'>"
             f"<span class='badge {status}'>{'OK' if r.ok else 'ERROR'}</span> "
             f"&nbsp;# {b.id} &nbsp;|&nbsp; {html.escape(b.language)} ({html.escape(b.origin)}) "
             f"&nbsp;|&nbsp; {html.escape(b.file)}:{b.start_line}-{b.end_line} "
             f"&nbsp;|&nbsp; renderer: {html.escape(r.renderer)} "
-            f"&nbsp;|&nbsp; exit: {r.exit_code}"
+            f"&nbsp;|&nbsp; exit: {r.exit_code} "
+            f"&nbsp;|&nbsp; dimensions: {dims}"
             "</div>"
         )
 
