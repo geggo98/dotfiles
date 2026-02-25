@@ -23,19 +23,19 @@ Extract diagrams from the provided inputs:
 
 ## How to run (always use the helper script)
 
-The helper script lives at `scripts/render_diagrams.sh`.
+The helper script lives at `scripts/render_diagram.sh`.
 
 ### If the user passes file/dir paths
 
 Run:
 
-- `scripts/render_diagrams.sh $ARGUMENTS` 
+- `scripts/render_diagram.sh $ARGUMENTS` 
 
 ### If the user pasted diagram text instead of giving a path
 
 Pipe the text to stdin and add `--stdin` (do not create a persistent file unless the user asks):
 
-- `cat <<'EOF' | scripts/render_diagrams.sh --stdin <other flags>`
+- `cat <<'EOF' | scripts/render_diagram.sh --stdin <other flags>`
 - *(paste the user’s text, containing @startuml..@enduml and/or fenced blocks)*
 - `EOF`
 
@@ -50,20 +50,20 @@ Pipe the text to stdin and add `--stdin` (do not create a persistent file unless
 ## Selecting which diagrams to render
 
 - To list extracted blocks and their IDs:
-    - `scripts/render_diagrams.sh <paths...> --list`
+    - `scripts/render_diagram.sh <paths...> --list`
 - To render a subset by ID:
-    - `scripts/render_diagrams.sh <paths...> --only 2,5-7`
+    - `scripts/render_diagram.sh <paths...> --only 2,5-7`
 
 ## Examples
 
 - Render everything found in a Markdown doc:
-    - `scripts/render_diagrams.sh docs/architecture.md`
+    - `scripts/render_diagram.sh docs/architecture.md`
 - Only Mermaid blocks from multiple files:
-    - `scripts/render_diagrams.sh docs/*.md --select mermaid`
+    - `scripts/render_diagram.sh docs/*.md --select mermaid`
 - Only PlantUML `@startuml ... @enduml` blocks:
-    - `scripts/render_diagrams.sh src/diagrams --blocks startuml`
+    - `scripts/render_diagram.sh src/diagrams --blocks startuml`
 - Persist images for CI artifacts:
-    - `scripts/render_diagrams.sh docs/architecture.md --out-dir out/diagrams`
+    - `scripts/render_diagram.sh docs/architecture.md --out-dir out/diagrams`
 
 ## Tooling expectations
 
