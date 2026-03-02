@@ -14,4 +14,4 @@ cleanup() {
 
 SCRIPT_DIR="${0:A:h}"
 
-exec "${SCRIPT_DIR}/eval_notebook.py" "$@"
+exec gtimeout 15m "${SCRIPT_DIR}/eval_notebook.py" "$@"
