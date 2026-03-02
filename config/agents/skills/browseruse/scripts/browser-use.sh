@@ -14,4 +14,4 @@ cleanup() {
 
 SCRIPT_DIR="${0:A:h}"
 
-exec "${SCRIPT_DIR}/browser-use.py" "$@"
+exec gtimeout 5m "${SCRIPT_DIR}/browser-use.py" "$@"
