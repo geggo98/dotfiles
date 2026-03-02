@@ -440,19 +440,19 @@ in
       };
     };
     skillsDir = ./config/agents/skills;
-    settings = {
-      "apiKeyHelper" = "${agent-claude-api-key-helper}/bin/+agent-claude-apiKeyHelper";
-      "env" = {
-        "ANTHROPIC_BASE_URL" = "https://api.z.ai/api/anthropic";
-        "API_TIMEOUT_MS" = "3000000";
-        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC" = "1";
-        "ANTHROPIC_DEFAULT_HAIKU_MODEL" = "glm-5"; # Cheapest model, alternative: "glm-*-air
-        "ANTHROPIC_DEFAULT_MODEL" = "glm-5";
-        "ANTHROPIC_DEFAULT_OPUS_MODEL" = "glm-5"; # Heavy thinking model
-        "ANTHROPIC_DEFAULT_SONNET_MODEL" = "glm-5"; # Balanced model
-      };
-      "alwaysThinkingEnabled" = true;
-    };
+#    settings = {
+#      "apiKeyHelper" = "${agent-claude-api-key-helper}/bin/+agent-claude-apiKeyHelper";
+#      "env" = {
+#        "ANTHROPIC_BASE_URL" = "https://api.z.ai/api/anthropic";
+#        "API_TIMEOUT_MS" = "3000000";
+#        "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC" = "1";
+#        "ANTHROPIC_DEFAULT_HAIKU_MODEL" = "glm-5"; # Cheapest model, alternative: "glm-*-air
+#        "ANTHROPIC_DEFAULT_MODEL" = "glm-5";
+#        "ANTHROPIC_DEFAULT_OPUS_MODEL" = "glm-5"; # Heavy thinking model
+#        "ANTHROPIC_DEFAULT_SONNET_MODEL" = "glm-5"; # Balanced model
+#      };
+#      "alwaysThinkingEnabled" = true;
+#    };
   };
 
   programs.opencode = {
