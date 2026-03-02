@@ -14,4 +14,4 @@ cleanup() {
 
 SCRIPT_DIR="${0:A:h}"
 
-exec "${SCRIPT_DIR}/render_diagram.py" "$@"
+exec gtimeout 5m "${SCRIPT_DIR}/render_diagram.py" "$@"
