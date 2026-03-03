@@ -14,4 +14,13 @@ cleanup() {
 
 SCRIPT_DIR="${0:A:h}"
 
-exec gtimeout 15m "${SCRIPT_DIR}/eval_notebook.py" "$@"
+timeout="15m"
+args=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --timeout) timeout="$2"; shift 2 ;;
+    *) args+=("$1"); shift ;;
+  esac
+done
+
+exec gtimeout "$timeout" "${SCRIPT_DIR}/eval_notebook.py" "${args[@]}"
