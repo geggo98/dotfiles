@@ -1105,6 +1105,14 @@ in
     uv # Python package manager, https://docs.astral.sh/uv/guides/tools/
     vale # Linter for prose
 
+    # Language server vor Vim and AI llm-agents:
+    gopls
+    jdt-language-server
+    lua-language-server
+    pyright
+    # rust-analyzer # lsp is already part of `rustup`
+    typescript-language-server
+
     # DevOps tools
     awscli
     dive # Inspect Docker images
