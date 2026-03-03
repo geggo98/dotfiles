@@ -79,6 +79,7 @@ perplexity_open_router_research.sh --deep "Evaluate the cron crate. Alternatives
 | ------------------------ | ------------------------------------------------- |
 | `--flash`                | Fast, shallow lookup for immediate results.       |
 | `--deep`                 | Multi-step synthesis with broader exploration.    |
+| `--timeout DURATION`     | Global execution timeout (default: `5m`). Format follows GNU coreutils (e.g. `30s`, `5m`, `1h`). |
 | `perplexity_open_router` | Breadth-first research across multiple sources.   |
 | `gemini_research`        | Depth-first synthesis for comprehensive analysis. |
 

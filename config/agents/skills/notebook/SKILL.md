@@ -27,6 +27,8 @@ Run before:
 |--------|---------|-----------|
 | `scripts/eval_notebook.sh` | Entry point that delegates to Python evaluator | Forwards all arguments to `eval_notebook.py` |
 
+The wrapper script enforces a global execution timeout via `gtimeout` (default: `15m`). Pass `--timeout DURATION` to override it. The duration format follows GNU coreutils (e.g. `30s`, `5m`, `1h`). This is separate from the per-notebook `--timeout SECONDS` option handled by the Python evaluator.
+
 ### Arguments
 
 - **Required:** One or more paths to `.ipynb notebook files`

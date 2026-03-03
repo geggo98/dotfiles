@@ -1,7 +1,7 @@
 ---
 name: diagram-render
 description: Render PlantUML (@startuml…@enduml) and Mermaid fenced blocks to a self-contained HTML preview; if rendering fails, the error text must be embedded in the output image.
-argument-hint: "[paths...] [--stdin] [--select plantuml|mermaid|both] [--blocks startuml|fenced|all] [--only 1,3-5] [--out-dir DIR] [--format png|svg] [--json]"
+argument-hint: "[paths...] [--stdin] [--select plantuml|mermaid|both] [--blocks startuml|fenced|all] [--only 1,3-5] [--out-dir DIR] [--format png|svg] [--json] [--timeout DURATION]"
 allowed-tools:
   - "Bash(./scripts/render_diagram.sh)"
   - "Bash(bash ./scripts/render_diagram.sh)"
@@ -38,6 +38,14 @@ Pipe the text to stdin and add `--stdin` (do not create a persistent file unless
 - `cat <<'EOF' | scripts/render_diagram.sh --stdin <other flags>`
 - *(paste the user’s text, containing @startuml..@enduml and/or fenced blocks)*
 - `EOF`
+
+## Timeout
+
+The wrapper script enforces a global timeout via `gtimeout`. Pass `--timeout DURATION` to override it (default: `5m`). The duration format follows GNU coreutils (e.g. `30s`, `5m`, `1h`).
+
+```bash
+scripts/render_diagram.sh docs/architecture.md --timeout 10m
+```
 
 ## Output rules
 
