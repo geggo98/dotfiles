@@ -35,10 +35,14 @@ check_prerequisites() {
 cmd_search() {
   local json_mode=false
   local term=""
+  local timeout="5m"
 
   while [[ $# -gt 0 ]]; do
     case "$1" in
       --json) json_mode=true; shift ;;
+      --timeout)
+        if [[ $# -lt 2 ]]; then log_error "--timeout requires a duration (e.g. 5m)"; exit 1; fi
+        timeout="$2"; shift 2 ;;
       -*)     log_error "Unknown option: $1"; show_usage; exit 1 ;;
       *)
         if [[ -z "$term" ]]; then
@@ -61,7 +65,7 @@ cmd_search() {
   log_info "Searching nixpkgs for '$term'..."
 
   local output
-  if ! output=$(gtimeout 5m "$NIX" search nixpkgs "$term" --json 2>/dev/null); then
+  if ! output=$(gtimeout "$timeout" "$NIX" search nixpkgs "$term" --json 2>/dev/null); then
     log_error "nix search failed."
     exit 3
   fi
@@ -208,7 +212,7 @@ cmd_run() {
   log_info "Running in nix shell with: ${nix_pkgs[*]}"
 
   # exec replaces this process so the exit code passes through
-  exec "$NIX" shell "${nix_pkgs[@]}" --command "${cmd_args[@]}"
+  exec "$NIX" shell --no-write-lock-file "${nix_pkgs[@]}" --command "${cmd_args[@]}"
 }
 
 # --- Usage ---------------------------------------------------------------
@@ -218,8 +222,8 @@ show_usage() {
 Usage: nix_shell.sh <command> [args...]
 
 Commands:
-  search <term> [--json]                          Search nixpkgs for packages by name
-  locate <pattern> [-t TYPE] [-n N] [--timeout S]  Find which package provides a file/binary
+  search <term> [--json] [--timeout DURATION]       Search nixpkgs for packages by name
+  locate <pattern> [-t TYPE] [-n N] [--timeout S]   Find which package provides a file/binary
   run <packages...> -- <cmd> [args]                Run a command with nix packages on PATH
 
 Examples:

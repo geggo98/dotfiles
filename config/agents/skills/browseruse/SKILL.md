@@ -408,14 +408,15 @@ Use cloud sessions to run autonomous browser agents in parallel.
 
 ## Global Options
 
-| Option           | Description                                                                                                                                 |
-|------------------|---------------------------------------------------------------------------------------------------------------------------------------------|
-| `--session NAME` | Use named session (default: "default")                                                                                                      |
-| `--browser MODE` | Browser mode: chromium, real, remote                                                                                                        |
-| `--headed`       | Show browser window (chromium mode)                                                                                                         |
-| `--profile NAME` | Browser profile (local name or cloud ID). Works with `open`, `session create`, etc. — does NOT work with `run` (use `--session-id` instead) |
-| `--json`         | Output as JSON                                                                                                                              |
-| `--mcp`          | Run as MCP server via stdin/stdout                                                                                                          |
+| Option              | Description                                                                                                                                 |
+|---------------------|---------------------------------------------------------------------------------------------------------------------------------------------|
+| `--session NAME`    | Use named session (default: "default")                                                                                                      |
+| `--browser MODE`    | Browser mode: chromium, real, remote                                                                                                        |
+| `--headed`          | Show browser window (chromium mode)                                                                                                         |
+| `--profile NAME`    | Browser profile (local name or cloud ID). Works with `open`, `session create`, etc. — does NOT work with `run` (use `--session-id` instead) |
+| `--json`            | Output as JSON                                                                                                                              |
+| `--mcp`             | Run as MCP server via stdin/stdout                                                                                                          |
+| `--timeout DURATION`| Global execution timeout (default: `5m`). Format follows GNU coreutils (e.g. `30s`, `5m`, `1h`).                                            |
 
 **Session behavior**: All commands without `--session` use the same "default" session. The browser stays open and is reused across commands. Use `--session NAME` to run multiple browsers in parallel.
 
