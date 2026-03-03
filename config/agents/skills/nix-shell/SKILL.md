@@ -31,12 +31,13 @@ Run when:
 
 ## 4. Subcommands
 
-### `search <term> [--json]`
+### `search <term> [--json] [--timeout DURATION]`
 
 Search nixpkgs for packages matching `<term>`.
 
 - **Default output:** Clean table with package name, version, and description.
 - **`--json`:** Raw JSON output from `nix search`.
+- **`--timeout DURATION`:** Override the search timeout (default: `5m`). Format follows GNU coreutils (e.g. `30s`, `5m`, `1h`).
 - If no packages match, prints a message and exits 0.
 
 ### `locate <pattern> [-t TYPE] [-n LIMIT] [--timeout SECS] [-w]`

@@ -14,4 +14,13 @@ cleanup() {
 
 SCRIPT_DIR="${0:A:h}"
 
-exec gtimeout 5m "${SCRIPT_DIR}/render_diagram.py" "$@"
+timeout="5m"
+args=()
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --timeout) timeout="$2"; shift 2 ;;
+    *) args+=("$1"); shift ;;
+  esac
+done
+
+exec gtimeout "$timeout" "${SCRIPT_DIR}/render_diagram.py" "${args[@]}"

@@ -56,6 +56,7 @@ The schema cannot reliably verify files on disk. This tool adds:
 
 - `tools/streamdeck_manifest.sh` — CLI entrypoint.
   - Output is **JSON by default** (easy for agents to parse).
+  - Pass `--timeout DURATION` to override the global execution timeout (default: `1m`). Format follows GNU coreutils (e.g. `30s`, `2m`, `1h`).
 
 ---
 
