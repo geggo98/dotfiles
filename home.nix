@@ -439,7 +439,7 @@ in
         args = [];
       };
     };
-    skillsDir = ./config/agents/skills;
+    skillsDir = ./modules/ai/_files/skills;
 #    settings = {
 #      "apiKeyHelper" = "${agent-claude-api-key-helper}/bin/+agent-claude-apiKeyHelper";
 #      "env" = {
@@ -545,7 +545,7 @@ in
         };
       };
     };
-    custom-instructions = builtins.readFile ./AGENTS.md;
+    # custom-instructions = builtins.readFile ./AGENTS.md;
   };
 
   # https://github.com/malob/nixpkgs/blob/master/home/default.nix
@@ -564,7 +564,7 @@ in
   programs.zsh.enable = true;
   programs.fish = {
     enable = true;
-    interactiveShellInit = (builtins.readFile ./config/fish/promptInit.fish)
+    interactiveShellInit = (builtins.readFile ./modules/_files/shell/promptInit.fish)
       + ''
       export_nix_sops_secret_path OPENAI_API_KEY_PATH "${config.sops.secrets.openai_api_key.path}"
       export_nix_sops_secret_value OPENAI_API_KEY "${config.sops.secrets.openai_api_key.path}"
@@ -1081,7 +1081,7 @@ in
     # (agda.withPackages (p: [ p.standard-library ]))
     asciinema
     deno
-    devenv # https://devenv.sh/getting-started/#1-install-nix
+    unstable.devenv # https://devenv.sh/getting-started/#1-install-nix
     git-absorb # https://github.com/tummychow/git-absorb
     # git-branchless # https://github.com/arxanas/git-branchless # Provides `git undo` and `git sync` for updating all non-conflicting branches
     git-crypt # https://github.com/AGWA/git-crypt
@@ -1424,21 +1424,21 @@ in
   };
 
   home.file.".agents/skills" = {
-    source = ./config/agents/skills;
+    source = ./modules/ai/_files/skills;
     recursive = true;
   };
 
   xdg.configFile = {
     # See https://github.com/maxbrunet/dotfiles/blob/ebd85ceb40cbe79ebd5453bce63d384c1b49274a/nix/home.nix#L62
     "starship.toml" = {
-      source = ./config/starship-preset-bracketed-segments.toml;
+      source = ./modules/_files/darwin/starship-preset-bracketed-segments.toml;
     };
     "raycast/script_commands" = {
-      source = ./config/raycast/script_commands;
+      source = ./modules/_files/darwin/raycast/script_commands;
       recursive = true;
     };
     "topgrade.toml" = {
-        source = ./config/topgrade.toml;
+        source = ./modules/_files/tools/topgrade.toml;
     };
   };
 
@@ -1459,17 +1459,17 @@ in
   };
 
   home.file."Library/Application Support/iTerm2/DynamicProfiles/50_Nix.json" = lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "aarch64-darwin" || pkgs.stdenv.hostPlatform.system == "x86_64-darwin") {
-    source = ./config/iTerm2/DynamicProfiles/50_Nix.json;
+    source = ./modules/_files/darwin/iTerm2/DynamicProfiles/50_Nix.json;
   };
 
   home.file.".hammerspoon/nix.lua" = lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "aarch64-darwin" || pkgs.stdenv.hostPlatform.system == "x86_64-darwin") {
-    source = ./config/hammerspoon/nix.lua;
+    source = ./modules/_files/darwin/hammerspoon/nix.lua;
   };
   home.file.".hammerspoon/nix_f19.lua" = lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "aarch64-darwin" || pkgs.stdenv.hostPlatform.system == "x86_64-darwin") {
-    source = ./config/hammerspoon/nix_f19.lua;
+    source = ./modules/_files/darwin/hammerspoon/nix_f19.lua;
   };
   home.file.".hammerspoon/nix_display_monitor.lua" = lib.optionalAttrs (pkgs.stdenv.hostPlatform.system == "aarch64-darwin" || pkgs.stdenv.hostPlatform.system == "x86_64-darwin") {
-    source = ./config/hammerspoon/nix_display_monitor.lua;
+    source = ./modules/_files/darwin/hammerspoon/nix_display_monitor.lua;
   };
 
   home.sessionVariables = {

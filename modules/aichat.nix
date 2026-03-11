@@ -36,5 +36,5 @@ in
     executable = true;
   };
 
-  xdg.configFile."aichat/config.yaml".source = ./aichat-config.yaml;
+  xdg.configFile."aichat/config.yaml".source = ./_files/ai/aichat-config.yaml;
 }
