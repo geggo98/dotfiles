@@ -185,39 +185,6 @@ The Python session maintains state across commands. The `browser` object provide
 ./scripts/browser-use.sh task logs <task-id>           # Get task execution logs
 ```
 
-### Cloud Session Management
-```bash
-./scripts/browser-use.sh session list                  # List cloud sessions
-./scripts/browser-use.sh session list --limit 20       # Show more sessions
-./scripts/browser-use.sh session list --status active  # Filter by status
-./scripts/browser-use.sh session list --json           # JSON output
-
-./scripts/browser-use.sh session get <session-id>      # Get session details + live URL
-./scripts/browser-use.sh session get <session-id> --json
-
-./scripts/browser-use.sh session stop <session-id>     # Stop a session
-./scripts/browser-use.sh session stop --all            # Stop all active sessions
-
-./scripts/browser-use.sh session create                          # Create with defaults
-./scripts/browser-use.sh session create --profile <id>           # With cloud profile
-./scripts/browser-use.sh session create --proxy-country uk       # With geographic proxy
-./scripts/browser-use.sh session create --start-url https://example.com
-./scripts/browser-use.sh session create --screen-size 1920x1080
-./scripts/browser-use.sh session create --keep-alive
-./scripts/browser-use.sh session create --persist-memory
-
-./scripts/browser-use.sh session share <session-id>              # Create public share URL
-./scripts/browser-use.sh session share <session-id> --delete     # Delete public share
-```
-
-### Tunnels
-```bash
-./scripts/browser-use.sh tunnel <port>           # Start tunnel (returns URL)
-./scripts/browser-use.sh tunnel <port>           # Idempotent - returns existing URL
-./scripts/browser-use.sh tunnel list             # Show active tunnels
-./scripts/browser-use.sh tunnel stop <port>      # Stop tunnel
-./scripts/browser-use.sh tunnel stop --all       # Stop all tunnels
-```
 
 ### Session Management
 ```bash
@@ -235,15 +202,8 @@ The Python session maintains state across commands. The `browser` object provide
 ```
 
 #### Cloud Profiles (`--browser remote`)
-```bash
-./scripts/browser-use.sh -b remote profile list            # List cloud profiles
-./scripts/browser-use.sh -b remote profile list --page 2 --page-size 50
-./scripts/browser-use.sh -b remote profile get <id>        # Get profile details
-./scripts/browser-use.sh -b remote profile create          # Create new cloud profile
-./scripts/browser-use.sh -b remote profile create --name "My Profile"
-./scripts/browser-use.sh -b remote profile update <id> --name "New"
-./scripts/browser-use.sh -b remote profile delete <id>
-```
+
+Remote profiles are not available at the moment.
 
 #### Syncing
 ```bash
@@ -266,7 +226,7 @@ Use when a task requires browsing a site the user is already logged into (e.g. G
 **Core workflow:** Check existing profiles → ask user which profile and browser mode → browse with that profile. Only sync cookies if no suitable profile exists.
 
 **Before browsing an authenticated site, the agent MUST:**
-1. Ask the user whether to use **real** (local Chrome) or **remote** (cloud) browser
+1. Ask the user whether to use **real** (local Chrome) or **remote** (cloud, not available) browser
 2. List available profiles for that mode
 3. Ask which profile to use
 4. If no profile has the right cookies, offer to sync (see below)
@@ -274,16 +234,10 @@ Use when a task requires browsing a site the user is already logged into (e.g. G
 #### Step 1: Check existing profiles
 
 ```bash
-# Option A: Local Chrome profiles (--browser real)
+# Local Chrome profiles (--browser real)
 ./scripts/browser-use.sh -b real profile list
 # → Default: Person 1 (user@gmail.com)
 # → Profile 1: Work (work@company.com)
-
-# Option B: Cloud profiles (--browser remote)
-./scripts/browser-use.sh -b remote profile list
-# → abc-123: "Chrome - Default (github.com)"
-# → def-456: "Work profile"
-```
 
 #### Step 2: Browse with the chosen profile
 
@@ -291,89 +245,9 @@ Use when a task requires browsing a site the user is already logged into (e.g. G
 # Real browser — uses local Chrome with existing login sessions
 ./scripts/browser-use.sh --browser real --profile "Default" open https://github.com
 
-# Cloud browser — uses cloud profile with synced cookies
-./scripts/browser-use.sh --browser remote --profile abc-123 open https://github.com
-```
 
 The user is already authenticated — no login needed.
 
-**Note:** Cloud profile cookies can expire over time. If authentication fails, re-sync cookies from the local Chrome profile.
-
-#### Step 3: Syncing cookies (only if needed)
-
-If the user wants to use a cloud browser but no cloud profile has the right cookies, sync them from a local Chrome profile.
-
-**Before syncing, the agent MUST:**
-1. Ask which local Chrome profile to use
-2. Ask which domain(s) to sync — do NOT default to syncing the full profile
-3. Confirm before proceeding
-
-**Check what cookies a local profile has:**
-```bash
-./scripts/browser-use.sh -b real profile cookies "Default"
-# → youtube.com: 23
-# → google.com: 18
-# → github.com: 2
-```
-
-**Domain-specific sync (recommended):**
-```bash
-./scripts/browser-use.sh profile sync --from "Default" --domain github.com
-# Creates new cloud profile: "Chrome - Default (github.com)"
-# Only syncs github.com cookies
-```
-
-**Full profile sync (use with caution):**
-```bash
-./scripts/browser-use.sh profile sync --from "Default"
-# Syncs ALL cookies — includes sensitive data, tracking cookies, every session token
-```
-Only use when the user explicitly needs their entire browser state.
-
-**Fine-grained control (advanced):**
-```bash
-# Export cookies to file, manually edit, then import
-./scripts/browser-use.sh --browser real --profile "Default" cookies export /tmp/cookies.json
-./scripts/browser-use.sh --browser remote --profile <id> cookies import /tmp/cookies.json
-```
-
-**Use the synced profile:**
-```bash
-./scripts/browser-use.sh --browser remote --profile <id> open https://github.com
-```
-
-### Running Subagents
-
-Use cloud sessions to run autonomous browser agents in parallel.
-
-**Core workflow:** Launch task(s) with `run` → poll with `task status` → collect results → clean up sessions.
-
-- **Session = Agent**: Each cloud session is a browser agent with its own state
-- **Task = Work**: Jobs given to an agent; an agent can run multiple tasks sequentially
-- **Session lifecycle**: Once stopped, a session cannot be revived — start a new one
-
-#### Launching Tasks
-
-```bash
-# Single task (async by default — returns immediately)
-./scripts/browser-use.sh -b remote run "Search for AI news and summarize top 3 articles"
-# → task_id: task-abc, session_id: sess-123
-
-# Parallel tasks — each gets its own session
-./scripts/browser-use.sh -b remote run "Research competitor A pricing"
-# → task_id: task-1, session_id: sess-a
-./scripts/browser-use.sh -b remote run "Research competitor B pricing"
-# → task_id: task-2, session_id: sess-b
-./scripts/browser-use.sh -b remote run "Research competitor C pricing"
-# → task_id: task-3, session_id: sess-c
-
-# Sequential tasks in same session (reuses cookies, login state, etc.)
-./scripts/browser-use.sh -b remote run "Log into example.com" --keep-alive
-# → task_id: task-1, session_id: sess-123
-./scripts/browser-use.sh task status task-1  # Wait for completion
-./scripts/browser-use.sh -b remote run "Export settings" --session-id sess-123
-# → task_id: task-2, session_id: sess-123 (same session)
-```
 
 #### Managing & Stopping
 
@@ -408,15 +282,15 @@ Use cloud sessions to run autonomous browser agents in parallel.
 
 ## Global Options
 
-| Option              | Description                                                                                                                                 |
-|---------------------|---------------------------------------------------------------------------------------------------------------------------------------------|
-| `--session NAME`    | Use named session (default: "default")                                                                                                      |
-| `--browser MODE`    | Browser mode: chromium, real, remote                                                                                                        |
-| `--headed`          | Show browser window (chromium mode)                                                                                                         |
-| `--profile NAME`    | Browser profile (local name or cloud ID). Works with `open`, `session create`, etc. — does NOT work with `run` (use `--session-id` instead) |
-| `--json`            | Output as JSON                                                                                                                              |
-| `--mcp`             | Run as MCP server via stdin/stdout                                                                                                          |
-| `--timeout DURATION`| Global execution timeout (default: `5m`). Format follows GNU coreutils (e.g. `30s`, `5m`, `1h`).                                            |
+| Option               | Description                                                                                                                                 |
+|----------------------|---------------------------------------------------------------------------------------------------------------------------------------------|
+| `--session NAME`     | Use named session (default: "default")                                                                                                      |
+| `--browser MODE`     | Browser mode: chromium, real, remote                                                                                                        |
+| `--headed`           | Show browser window (chromium mode)                                                                                                         |
+| `--profile NAME`     | Browser profile (local name or cloud ID). Works with `open`, `session create`, etc. — does NOT work with `run` (use `--session-id` instead) |
+| `--json`             | Output as JSON                                                                                                                              |
+| `--mcp`              | Run as MCP server via stdin/stdout                                                                                                          |
+| `--timeout DURATION` | Global execution timeout (default: `5m`). Format follows GNU coreutils (e.g. `30s`, `5m`, `1h`).                                            |
 
 **Session behavior**: All commands without `--session` use the same "default" session. The browser stays open and is reused across commands. Use `--session NAME` to run multiple browsers in parallel.
 
@@ -476,3 +350,13 @@ If you stop a task and try to reuse its session, the new task may get stuck at "
 ./scripts/browser-use.sh session stop --all        # Stop cloud sessions (if any)
 ./scripts/browser-use.sh tunnel stop --all         # Stop tunnels (if any)
 ```
+
+# Additional resources
+
+## File download
+
+See [file download](./references/file_download.md) for more details.
+
+## File upload
+
+See [file upload](./references/file_upload.md) for more details.
