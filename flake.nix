@@ -1,9 +1,6 @@
-# nix build --flake .#darwinConfigurations.DKL6GDJ7X1.system
-# sudo nix run nix-darwin/master#darwin-rebuild -- switch --flake .#DKL6GDJ7X1
 # darwin-rebuild build --flake ~/.config/nix-darwin
 # sudo darwin-rebuild switch --flake ~/.config/nix-darwin
-# git add . && nix --extra-experimental-features "nix-command flakes"  run nix-darwin -- switch --flake ~/.config/nix-darwin
-# sudo determinate-nixd upgrade # --version 3.15.1
+# sudo determinate-nixd upgrade
 # determinate-nixd version # Shows features, see https://dtr.mn/features
 {
   description = "Stefan's darwin system";
@@ -14,6 +11,10 @@
     # Package sets
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11"; # https://status.nixos.org/
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
+
+    # Flake structure
+    flake-parts.url = "github:hercules-ci/flake-parts";
+    import-tree.url = "github:vic/import-tree";
 
     # Environment/system management
     darwin.url = "github:lnl7/nix-darwin/nix-darwin-25.11";
@@ -45,112 +46,13 @@
   };
 
   nixConfig = {
-    # Caches ----------------------------------------------------------------- {{{
     # https://github.com/numtide/llm-agents.nix/blob/main/flake.nix
-    extra-substituters = [ "https://numtide.cachix.org" "https://devenv.cachix.org"];
-    extra-trusted-public-keys = [ "numtide.cachix.org-1:2ps1kLBUWjxIneOy1Ik6cQjb41X0iXVXeHigGmycPPE=" "devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw="];
+    extra-substituters = [ "https://numtide.cachix.org" "https://devenv.cachix.org" ];
+    extra-trusted-public-keys = [ "numtide.cachix.org-1:2ps1kLBUWjxIneOy1Ik6cQjb41X0iXVXeHigGmycPPE=" "devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw=" ];
   };
 
-  outputs = { self, darwin, nixpkgs, nixpkgs-unstable, home-manager, nix-index-database, sops-nix, nixpkgs-llm-agents, nvf, determinate, ... }@inputs:
-    let
-      inherit (darwin.lib) darwinSystem;
-      inherit (inputs.nixpkgs.lib) attrValues makeOverridable optionalAttrs singleton;
-
-      # Configuration for `nixpkgs`
-      nixpkgsUnfreeConfig = {
-        config = { allowUnfree = true; };
-      };
-    in
-    {
-      # My `nix-darwin` configs
-
-      darwinConfigurations = {
-        FCX19GT9XR = darwinSystem {
-        specialArgs = { inherit inputs; };
-          modules = [
-            { nixpkgs.hostPlatform = "aarch64-darwin"; }
-            # Main `nix-darwin` config
-            ./configuration.nix
-            ./darwin.nix
-            # Host specific packages
-            ./hosts/FCX19GT9XR/configuration.nix
-            ./hosts/FCX19GT9XR/homebrew.nix
-            ./determinate.nix
-            # `home-manager` module
-            home-manager.darwinModules.home-manager
-            {
-              # WARNING:
-              # Don't import the sops home-manager module here,
-              # it's a NixOS specific plugin and tries to use SystemD.
-              # You will get an error message like this:
-              # `error: The option `systemd' does not exist. Definition values: ...`
-              # So don't do this: `sops-nix.homeManagerModules.sops`
-              # Instead, import it in the `home.nix` file.
-              nixpkgs = nixpkgsUnfreeConfig;
-              home-manager.useGlobalPkgs = true;
-              home-manager.useUserPackages = true;
-              home-manager.users.stefan = import ./home.nix;
-              home-manager.extraSpecialArgs = inputs // { hostId = "FCX19GT9XR"; };
-              # On activation move existing files by appending the given file extension rather than exiting with an error.
-              home-manager.backupFileExtension = "hm.bak";
-            }
-          ];
-        };
-        DKL6GDJ7X1 = darwinSystem {
-        specialArgs = { inherit inputs; };
-          modules = [
-            { nixpkgs.hostPlatform = "aarch64-darwin"; }
-            # Main `nix-darwin` config
-            ./configuration.nix
-            ./darwin.nix
-            # Host specific packages
-            ./hosts/DKL6GDJ7X1/configuration.nix
-            ./hosts/DKL6GDJ7X1/homebrew.nix
-            ./determinate.nix
-            # `home-manager` module
-            home-manager.darwinModules.home-manager
-            {
-              # WARNING:
-              # Don't import the sops home-manager module here,
-              # it's a NixOS specific plugin and tries to use SystemD.
-              # You will get an error message like this:
-              # `error: The option `systemd' does not exist. Definition values: ...`
-              # So don't do this: `sops-nix.homeManagerModules.sops`
-              # Instead, import it in the `home.nix` file.
-              nixpkgs = nixpkgsUnfreeConfig;
-              home-manager.useGlobalPkgs = true;
-              home-manager.useUserPackages = true;
-              home-manager.users."stefan.schwetschke" = nixpkgs.lib.mkMerge [
-                (import ./home.nix)
-                (import ./hosts/DKL6GDJ7X1/home.nix)
-              ];
-              home-manager.extraSpecialArgs = inputs // { hostId = "DKL6GDJ7X1"; };
-              # On activation move existing files by appending the given file extension rather than exiting with an error.
-              home-manager.backupFileExtension = "hm.bak";
-            }
-          ];
-        };
-
-      };
-
-      formatter = {
-        aarch64-darwin = nixpkgs.legacyPackages.aarch64-darwin.alejandra;
-        x86_64-darwin = nixpkgs.legacyPackages.x86_64-darwin.alejandra;
-        aarch64-linux = nixpkgs.legacyPackages.aarch64-linux.alejandra;
-        x86_64-linux = nixpkgs.legacyPackages.x86_64-linux.alejandra;
-      };
-
-      # Overlays --------------------------------------------------------------- {{{
-
-      overlays = {
-        # Overlay useful on Macs with Apple Silicon
-        apple-silicon = final: prev: optionalAttrs (prev.stdenv.hostPlatform.system == "aarch64-darwin") {
-          # Add access to x86 packages system is running Apple Silicon
-          pkgs-x86 = import inputs.nixpkgs {
-            system = "x86_64-darwin";
-            inherit (nixpkgsUnfreeConfig) config;
-          };
-        };
-      };
+  outputs = inputs:
+    inputs.flake-parts.lib.mkFlake { inherit inputs; } {
+      imports = [ (inputs.import-tree ./modules) ];
     };
 }
