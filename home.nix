@@ -725,6 +725,10 @@ in
       "+agent-codex-sandbox" = "+agent-codex --full-auto";
       "+agent-codex-danger-delete-all-my-files-and-trash-my-computer" = "+agent-codex --dangerously-bypass-approvals-and-sandbox";
 
+      # TAR with zstd
+      "+tar-zstd" = "tar \"-Izstd -10 -T0\"";
+      "+tar-zstd-max" = "tar \"-Izstd -19 -T0\"";
+
       # SOPS Encryption
       "+sops-edit-keys" = "env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops edit -s";
       "+sops-edit-secrets" = "env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops edit";
