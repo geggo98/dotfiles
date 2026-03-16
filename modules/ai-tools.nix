@@ -19,7 +19,7 @@
             if (( $# > 0 )) && [[ "''${1}" == "--acp" ]]; then
               export CLAUDE_CODE_EXECUTABLE="/etc/profiles/per-user/''${USER}/bin/claude"
               shift
-              exec claude-code-acp "$@"
+              exec claude-agent-acp "$@"
             fi
             exec "/etc/profiles/per-user/''${USER}/bin/claude" "$@"
           '';
