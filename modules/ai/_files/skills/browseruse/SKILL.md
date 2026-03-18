@@ -360,3 +360,11 @@ See [file download](./references/file_download.md) for more details.
 ## File upload
 
 See [file upload](./references/file_upload.md) for more details.
+
+## Architecture
+
+See [architecture](./references/ARCHITECTURE.md) for details on the browser-use architecture (C4 model).
+
+## Integration guide
+
+See [integration guide](./references/integration_guide.md) for comparing integration approaches (Skill CLI, Python Library, etc.).
