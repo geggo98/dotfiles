@@ -369,6 +369,33 @@ def render_plantuml(source: str, fmt: str, timeout_s: int) -> Tuple[bool, str, b
     return False, "error", _make_error_png("PlantUML render failed", detail or "No output produced."), stderr, stdout_text, rc
 
 
+def _find_chrome_executable() -> Optional[str]:
+    """Find a Chrome/Chromium executable for Puppeteer."""
+    # Explicit env override
+    env_path = os.environ.get("PUPPETEER_EXECUTABLE_PATH")
+    if env_path and Path(env_path).exists():
+        return env_path
+
+    candidates = [
+        # macOS application bundles
+        "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome",
+        "/Applications/Chromium.app/Contents/MacOS/Chromium",
+        "/Applications/Google Chrome Canary.app/Contents/MacOS/Google Chrome Canary",
+        # Nix / Linux / Homebrew
+        "chromium",
+        "google-chrome-stable",
+        "google-chrome",
+    ]
+    for c in candidates:
+        p = Path(c)
+        if p.is_absolute() and p.exists():
+            return str(p)
+        found = shutil.which(c)
+        if found:
+            return found
+    return None
+
+
 def render_mermaid(source: str, fmt: str, timeout_s: int) -> Tuple[bool, str, bytes, str, str, int]:
     base_cmd, name = _find_mmdc_base_cmd()
     if not base_cmd:
@@ -378,22 +405,59 @@ def render_mermaid(source: str, fmt: str, timeout_s: int) -> Tuple[bool, str, by
         )
         return False, "error", _make_error_png("Mermaid not available", msg), msg, "", 127
 
-    # mmdc needs --outputFormat when writing to stdout ("-") because it can't infer it from an extension.
-    cmd = base_cmd + ["--input", "-", "--output", "-", "--outputFormat", fmt, "--quiet"]
-    rc, out, err = _run_cmd(cmd, input_bytes=source.encode("utf-8"), timeout_s=timeout_s)
-    stderr = err.decode("utf-8", errors="replace")
+    # mmdc works most reliably with temp files (Puppeteer can have issues with stdin/stdout piping).
+    with tempfile.TemporaryDirectory(prefix="mermaid-") as tmpdir:
+        in_file = Path(tmpdir) / "input.mmd"
+        out_file = Path(tmpdir) / f"output.{fmt}"
+        in_file.write_text(source, encoding="utf-8")
 
-    if fmt == "png" and rc == 0 and out.startswith(PNG_MAGIC):
-        return True, name, out, stderr, "", rc
+        cmd = base_cmd + ["--input", str(in_file), "--output", str(out_file), "--outputFormat", fmt, "--quiet"]
 
-    if fmt == "svg" and rc == 0 and out.lstrip().startswith(b"<"):
-        return True, name, out, stderr, "", rc
+        # Puppeteer needs a Chrome binary; set PUPPETEER_EXECUTABLE_PATH if not already set.
+        env = None
+        if not os.environ.get("PUPPETEER_EXECUTABLE_PATH"):
+            chrome = _find_chrome_executable()
+            if chrome:
+                env = {**os.environ, "PUPPETEER_EXECUTABLE_PATH": chrome}
 
-    stdout_text = out[:4000].decode("utf-8", errors="replace")
-    detail = (stderr or "").strip()
-    if stdout_text.strip():
-        detail = (detail + "\n\n--- stdout ---\n" + stdout_text).strip()
-    return False, "error", _make_error_png("Mermaid render failed", detail or "No output produced."), stderr, stdout_text, rc
+        try:
+            proc = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=timeout_s,
+                check=False,
+                env=env,
+            )
+            rc = proc.returncode
+            err = proc.stderr
+            out_stdout = proc.stdout
+        except subprocess.TimeoutExpired as e:
+            err = (e.stderr or b"") + b"\n[timeout]"
+            out_stdout = e.stdout or b""
+            rc = 124
+        except FileNotFoundError:
+            err = b"command not found"
+            out_stdout = b""
+            rc = 127
+
+        stderr = err.decode("utf-8", errors="replace")
+        stdout_text = out_stdout.decode("utf-8", errors="replace") if out_stdout else ""
+
+        # Read the output file if it was created
+        if out_file.exists():
+            out_bytes = out_file.read_bytes()
+
+            if fmt == "png" and out_bytes.startswith(PNG_MAGIC):
+                return rc == 0, name, out_bytes, stderr, stdout_text, rc
+
+            if fmt == "svg" and out_bytes.lstrip().startswith(b"<"):
+                return rc == 0, name, out_bytes, stderr, stdout_text, rc
+
+        detail = (stderr or "").strip()
+        if stdout_text.strip():
+            detail = (detail + "\n\n--- stdout ---\n" + stdout_text).strip()
+        return False, "error", _make_error_png("Mermaid render failed", detail or "No output produced."), stderr, stdout_text, rc
 
 
 def render_block(block: DiagramBlock, fmt: str, timeout_s: int) -> RenderResult:
