@@ -4,10 +4,8 @@ description: Researches thoroughly how to use an API, library, or reference arch
 context: fork
 agent: Explore
 allowed-tools:
-    - "Bash(./scripts/gemini_research.sh)"
-    - "Bash(bash ./scripts/gemini_research.sh)"
-    - "Bash(./scripts/perplexity_open_router_research.sh)"
-    - "Bash(bash ./scripts/perplexity_open_router_research.py)"
+    - "Bash(./scripts/gemini_research.sh*)"
+    - "Bash(./scripts/perplexity_open_router_research.sh*)"
 ---
 
 # Research Skill
@@ -16,6 +14,8 @@ allowed-tools:
 
 Use this skill to research APIs, libraries, or design patterns before implementation.
 It produces concise best-practice summaries, alternatives, and tradeoffs.
+
+> **Important:** Run scripts directly (`./scripts/gemini_research.sh`, `./scripts/perplexity_open_router_research.sh`). Do **not** prefix with `bash` — the scripts require zsh and will fail under bash.
 
 ## 2. Usage Scenarios
 

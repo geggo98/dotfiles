@@ -3,8 +3,7 @@ name: nix-shell
 description: Search Nix packages and run commands with packages from nixpkgs that are not installed locally
 argument-hint: "search <term> | locate <pattern> | run <packages...> -- <command> [args...]"
 allowed-tools:
-  - "Bash(./scripts/nix_shell.sh)"
-  - "Bash(bash ./scripts/nix_shell.sh)"
+  - "Bash(./scripts/nix_shell.sh*)"
 ---
 
 # Nix Shell Skill

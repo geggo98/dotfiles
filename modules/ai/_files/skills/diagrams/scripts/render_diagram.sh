@@ -1,4 +1,9 @@
 #!/bin/zsh
+if [ -n "$BASH_VERSION" ]; then
+  echo >&2 "ERROR: This script requires zsh but is running under bash."
+  echo >&2 "Run it directly (./scripts/render_diagram.sh) or with: zsh scripts/render_diagram.sh"
+  exit 1
+fi
 set -eEuo pipefail
 die() {
   echo >&2 "ERROR: $*"

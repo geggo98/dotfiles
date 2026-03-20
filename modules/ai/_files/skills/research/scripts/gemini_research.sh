@@ -1,5 +1,9 @@
-#! /bin/zsh
-
+#!/bin/zsh
+if [ -n "$BASH_VERSION" ]; then
+  echo >&2 "ERROR: This script requires zsh but is running under bash."
+  echo >&2 "Run it directly (./scripts/gemini_research.sh) or with: zsh scripts/gemini_research.sh"
+  exit 1
+fi
 set -euo pipefail
 
 # Absolute directory of this script, even when sourced or symlinked
