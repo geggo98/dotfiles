@@ -41,6 +41,7 @@ in
       useUserPackages = true;
       backupFileExtension = "hm.bak";
       users."stefan.schwetschke" = {
+        programs.git.settings.user.email = "stefan.schwetschke@check24.de";
         imports = [
           homeManager.shell
           homeManager.git
