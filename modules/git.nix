@@ -1,18 +1,24 @@
 { ... }:
 {
-  flake.modules.homeManager.git = { pkgs, ... }: {
+  flake.modules.homeManager.git = { lib, pkgs, ... }: {
     programs.git = {
       enable = true;
       lfs.enable = true;
       settings = {
+        init.defaultBranch = "main";
+        core.autocrlf = "input";
         user = {
           name = "stefan.schwetschke";
-          email = "stefan@schwetschke.de";
+          email = lib.mkDefault "stefan@schwetschke.de";
         };
         diff."sopsdiffer".textconv = "${pkgs.sops}/bin/sops -d";
         credential = {
           credentialStore = "keychain";
           helper = "${pkgs.git-credential-manager}/bin/git-credential-manager";
+        };
+        rerere = {
+          enabled = true;
+          autoUpdate = true;
         };
       };
     };
