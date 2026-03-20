@@ -2,8 +2,7 @@
 name: stream-deck
 description: Helper to safely edit manifest files when developing plugin for Elgato Stream Deck
 allowed-tools:
-    - "Bash(./scripts/streamdeck_manifest.sh)"
-    - "Bash(bash ./scripts/streamdeck_manifest.sh)"
+    - "Bash(./scripts/streamdeck_manifest.sh*)"
 ---
 
 # Stream Deck Manifest Toolkit
@@ -16,6 +15,8 @@ This skill is designed to shorten the feedback loop when an agent generates or e
 - **Scaffolding/editing helpers** to keep manifests consistent and less error-prone.
 
 ---
+
+> **Important:** Run the script directly (`./scripts/streamdeck_manifest.sh`). Do **not** prefix with `bash` — the script requires zsh and will fail under bash.
 
 ## What this skill does
 
