@@ -70,6 +70,17 @@
       ];
 
       functions = {
+        "+cd-groot" = {
+          body = ''
+            set -l toplevel (git rev-parse --show-toplevel 2>/dev/null)
+            if test $status -ne 0
+              echo "Error: Not inside a git repository"
+              return 1
+            end
+            cd $toplevel
+          '';
+          description = "Change to the root directory of the current git repository";
+        };
         "+git-ignore-generator2" = {
           body = ''
             if test (count $argv) -eq 0
