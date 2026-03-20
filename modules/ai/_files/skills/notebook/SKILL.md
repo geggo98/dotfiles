@@ -3,8 +3,7 @@ name: eval-notebook
 description: Execute .ipynb notebooks (Python, Kotlin, or any Jupyter kernel) without overwriting; return LLM-friendly JSON with outputs and errors
 argument-hint: [notebook.ipynb]
 allowed-tools:
-    - "Bash(./scripts/eval_notebook.sh)"
-    - "Bash(bash ./scripts/eval_notebook.sh)"
+    - "Bash(./scripts/eval_notebook.sh*)"
 ---
 
 # Notebook Evaluator
@@ -12,6 +11,8 @@ allowed-tools:
 ## 1. Purpose
 
 Use this skill to execute Jupyter notebooks (.ipynb) safely without modifying the original file. It evaluates notebooks using their configured kernel and returns structured JSON output with execution results, captured outputs, and any errors—perfect for LLM consumption and automated testing.
+
+> **Important:** Run the script directly (`./scripts/eval_notebook.sh`). Do **not** prefix with `bash` — the script requires zsh and will fail under bash.
 
 ## 2. Usage Scenarios
 

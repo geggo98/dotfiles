@@ -2,8 +2,7 @@
 name: browser-use
 description: Automates browser interactions for web testing, form filling, screenshots, and data extraction. Use when the user needs to navigate websites, interact with web pages, fill forms, take screenshots, or extract information from web pages.
 allowed-tools:
-  - "Bash(./scripts/browser-use.sh:*)"
-  - "Bash(bash ./scripts/browser-use.sh:*)"
+  - "Bash(./scripts/browser-use.sh*)"
 
 ---
 
@@ -12,6 +11,8 @@ allowed-tools:
 The `./scripts/browser-use.sh` command provides fast, persistent browser automation. It maintains browser sessions across commands, enabling complex multi-step workflows.
 
 For more information, see https://github.com/browser-use/browser-use/blob/main/browser_use/skill_cli/README.md
+
+> **Important:** Run the script directly (`./scripts/browser-use.sh`). Do **not** prefix with `bash` — the script requires zsh and will fail under bash.
 
 ## Core Workflow
 
