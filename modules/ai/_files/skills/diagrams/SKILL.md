@@ -1,10 +1,10 @@
 ---
 name: diagram-render
-description: Render PlantUML (@startuml…@enduml) and Mermaid fenced blocks to a self-contained HTML preview; if rendering fails, the error text must be embedded in the output image.
+description: "Render PlantUML (@startuml…@enduml) and Mermaid fenced blocks to a self-contained HTML preview; if rendering fails, the error text must be embedded in the output image. Use when the user asks to render, preview, or export diagrams."
 argument-hint: "[paths...] [--stdin] [--select plantuml|mermaid|both] [--blocks startuml|fenced|all] [--only 1,3-5] [--out-dir DIR] [--format png|svg] [--json] [--timeout DURATION]"
 allowed-tools:
   - "Bash(./scripts/render_diagram.sh*)"
-dependencies: python>=3.8, Pillow>=10
+dependencies: "uv, plantuml, mmdc (Mermaid CLI), gtimeout"
 ---
 
 # Diagram renderer (PlantUML + Mermaid)

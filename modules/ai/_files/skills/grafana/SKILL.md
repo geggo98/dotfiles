@@ -1,10 +1,10 @@
 ---
 name: grafana
-description: Manage Grafana dashboards, datasources, folders, alerting, and annotations via the HTTP API. Use when creating, editing, or querying Grafana resources programmatically.
+description: "Manage Grafana dashboards, datasources, folders, alerting, and annotations via the HTTP API. Use when creating, editing, or querying Grafana resources programmatically."
 argument-hint: "<command> [args...] | help"
 allowed-tools:
   - "Bash(./scripts/grafana.sh*)"
-dependencies: python>=3.10, httpx>=0.27
+dependencies: "uv, gtimeout"
 ---
 
 # Grafana Skill
