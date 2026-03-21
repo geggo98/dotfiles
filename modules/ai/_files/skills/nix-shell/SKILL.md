@@ -1,9 +1,10 @@
 ---
 name: nix-shell
-description: Search Nix packages and run commands with packages from nixpkgs that are not installed locally
+description: "Search Nix packages and run commands with packages from nixpkgs that are not installed locally. Use when you need a package not available locally or want to search nixpkgs."
 argument-hint: "search <term> | locate <pattern> | run <packages...> -- <command> [args...]"
 allowed-tools:
   - "Bash(./scripts/nix_shell.sh*)"
+dependencies: "nix"
 ---
 
 # Nix Shell Skill
