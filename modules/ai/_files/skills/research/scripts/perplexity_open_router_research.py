@@ -2,10 +2,10 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#   "openai>=1.51.0",
+#   "openai>=2.29.0",
 # ]
 # [tool.uv]
-# exclude-newer = "2025-11-05T00:00:00Z"
+# exclude-newer = "2026-03-21T00:00:00Z"
 # ///
 
 """
@@ -30,7 +30,7 @@ def get_api_key_from_filesystem(key_name: str) -> str:
     """Read API key from ~/.config/sops-nix/secrets/ directory."""
     key_file = os.path.expanduser(f"~/.config/sops-nix/secrets/{key_name}")
     try:
-        with open(key_file, 'r') as f:
+        with open(key_file, "r") as f:
             return f.read().strip()
     except (FileNotFoundError, IOError):
         return None
@@ -154,13 +154,23 @@ Model options:
   --flash     Uses perplexity/sonar-pro (default)
   --deep      Uses perplexity/sonar-reasoning-pro
   --deeper    Uses perplexity/sonar-deep-research
-"""
+""",
     )
     ap.add_argument("prompt", nargs="*", help="Query")
-    ap.add_argument("--model", default="perplexity/sonar-pro", help="OpenRouter model id (default: perplexity/sonar-pro)")
-    ap.add_argument("--deep", action="store_true", help="Use perplexity/sonar-reasoning-pro model")
-    ap.add_argument("--deeper", action="store_true", help="Use perplexity/sonar-deep-research model")
-    ap.add_argument("--flash", action="store_true", help="Use perplexity/sonar-pro model (default)")
+    ap.add_argument(
+        "--model",
+        default="perplexity/sonar-pro",
+        help="OpenRouter model id (default: perplexity/sonar-pro)",
+    )
+    ap.add_argument(
+        "--deep", action="store_true", help="Use perplexity/sonar-reasoning-pro model"
+    )
+    ap.add_argument(
+        "--deeper", action="store_true", help="Use perplexity/sonar-deep-research model"
+    )
+    ap.add_argument(
+        "--flash", action="store_true", help="Use perplexity/sonar-pro model (default)"
+    )
     ap.add_argument("--json", action="store_true", help="Print raw JSON response")
     ap.add_argument("--no-sources", action="store_true", help="Hide the source list")
     args = ap.parse_args()
@@ -184,7 +194,10 @@ Model options:
         api_key = get_api_key_from_filesystem("openrouter_api_key")
 
     if not api_key:
-        print("Error: set OPENROUTER_API_KEY, or place key in ~/.config/sops-nix/secrets/openrouter_api_key", file=sys.stderr)
+        print(
+            "Error: set OPENROUTER_API_KEY, or place key in ~/.config/sops-nix/secrets/openrouter_api_key",
+            file=sys.stderr,
+        )
         sys.exit(2)
 
     client = OpenAI(
