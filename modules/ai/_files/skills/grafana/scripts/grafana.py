@@ -552,10 +552,6 @@ ENVIRONMENT:
   GRAFANA_URL      Grafana base URL (e.g. https://myinstance.grafana.net)
   GRAFANA_TOKEN    Service account token
   GRAFANA_ORG_ID   Organization ID (optional)
-
-  Legacy aliases (mapped automatically):
-  GRAFANA_INSTANCE                 Hostname, auto-prefixed with https://
-  GRAFANA_SERVICE_ACCOUNT_TOKEN    Mapped to GRAFANA_TOKEN
 """
 
 
@@ -568,10 +564,10 @@ def main() -> None:
     base_url = os.environ.get("GRAFANA_URL")
     token = os.environ.get("GRAFANA_TOKEN")
     if not base_url:
-        print("GRAFANA_URL is required (use --url <url> or --env-file <path>)", file=sys.stderr)
+        print("GRAFANA_URL is required (use --url or --env-file)", file=sys.stderr)
         sys.exit(1)
     if not token:
-        print("GRAFANA_TOKEN is required (use --env-file <path> or set GRAFANA_TOKEN)", file=sys.stderr)
+        print("GRAFANA_TOKEN is required (use --env-file or set GRAFANA_TOKEN)", file=sys.stderr)
         sys.exit(1)
 
     org_id = int(os.environ["GRAFANA_ORG_ID"]) if os.environ.get("GRAFANA_ORG_ID") else None
