@@ -17,14 +17,27 @@ The helper script lives at `scripts/grafana.sh`.
 
 > **Important:** Run the script directly (`./scripts/grafana.sh`). Do **not** prefix with `bash` — the script requires zsh and will fail under bash.
 
-The script auto-loads credentials from `.env.local` (GRAFANA_INSTANCE and GRAFANA_SERVICE_ACCOUNT_TOKEN) and maps them to GRAFANA_URL and GRAFANA_TOKEN.
+## Connection
+
+Pass credentials via `--env-file` or environment variables. The `--url` flag sets the base URL directly (useful for non-secret host names).
+
+```bash
+# Load credentials from an env file
+./scripts/grafana.sh --env-file ~/.config/grafana/prod.env list
+
+# Or set URL directly and token via env var
+GRAFANA_TOKEN=glsa_... ./scripts/grafana.sh --url https://myinstance.grafana.net list
+
+# Multiple env files (later overrides earlier)
+./scripts/grafana.sh --env-file base.env --env-file prod.env health
+```
 
 ## Timeout
 
 The wrapper enforces a global timeout via `gtimeout`. Pass `--timeout DURATION` to override (default: `5m`).
 
 ```bash
-./scripts/grafana.sh list --timeout 2m
+./scripts/grafana.sh --timeout 2m list
 ```
 
 ## Commands
@@ -92,17 +105,29 @@ For any endpoint not covered by a dedicated command, use `raw`:
 ./scripts/grafana.sh raw DELETE /api/annotations/123
 ```
 
+## Wrapper Options
+
+| Option | Description |
+|--------|-------------|
+| `--url <url>` | Grafana base URL (overrides `GRAFANA_URL`) |
+| `--org-id <id>` | Organization ID (overrides `GRAFANA_ORG_ID`) |
+| `--env-file <path>` | Load env vars from file (repeatable, later wins) |
+| `--timeout <duration>` | Global timeout (default: `5m`) |
+
 ## Environment Variables
 
 | Variable | Description |
 |----------|-------------|
-| `GRAFANA_URL` | Full Grafana URL (e.g. `https://myinstance.grafana.net`) |
+| `GRAFANA_URL` | Grafana base URL (e.g. `https://myinstance.grafana.net`) |
 | `GRAFANA_TOKEN` | Service account token |
-| `GRAFANA_INSTANCE` | Instance name — auto-prefixed with `https://` if GRAFANA_URL not set |
-| `GRAFANA_SERVICE_ACCOUNT_TOKEN` | Mapped to GRAFANA_TOKEN if not set |
 | `GRAFANA_ORG_ID` | Organization ID (optional, for multi-org setups) |
 
-The `.env.local` file in the skill directory is auto-sourced by the wrapper script.
+Legacy aliases (mapped automatically):
+
+| Variable | Maps to |
+|----------|---------|
+| `GRAFANA_INSTANCE` | `GRAFANA_URL` (auto-prefixed with `https://`) |
+| `GRAFANA_SERVICE_ACCOUNT_TOKEN` | `GRAFANA_TOKEN` |
 
 ## Exit Codes
 
