@@ -2,22 +2,11 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#   "google-genai>=1.56.0",
+#   "google-genai>=1.68.0",
 # ]
 # [tools.uv]
-# exclude-newer = "2025-12-17T00:00:00Z"
+# exclude-newer = "2026-03-21T00:00:00Z"
 # ///
-
-"""
-Usage:
-  chmod +x gemini_search
-  GEMINI_API_KEY=... ./gemini_search "What happened at Web Summit 2025?"
-  # optional flags:
-  #   --model gemini-3.1-pro-preview (use the given model, must be available on the Gemini API, e.g. "gemini-2.5-pro" or "gemini-2.5-flash" for the older models)
-  #   --deep  (use Gemini Pro model)
-  #   --flash  (use Gemini Flash model)
-  #   --json  (emit raw JSON with grounding metadata)
-"""
 
 import argparse
 import os
@@ -27,12 +16,15 @@ from typing import List
 from google import genai
 from google.genai import types
 
+MODEL_PRO = "gemini-3.1-pro-preview"
+MODEL_FLASH = "gemini-3.1-flash-lite-preview"
+
 
 def get_api_key_from_filesystem(key_name: str) -> str:
     """Read API key from ~/.config/sops-nix/secrets/ directory."""
     key_file = os.path.expanduser(f"~/.config/sops-nix/secrets/{key_name}")
     try:
-        with open(key_file, 'r') as f:
+        with open(key_file, "r") as f:
             return f.read().strip()
     except (FileNotFoundError, IOError):
         return None
@@ -57,9 +49,7 @@ def add_citations(response) -> str:
     chunks = getattr(gmeta, "grounding_chunks", []) or []
 
     # Avoid shifting indices by inserting from the end.
-    supports_sorted = sorted(
-        supports, key=lambda s: s.segment.end_index, reverse=True
-    )
+    supports_sorted = sorted(supports, key=lambda s: s.segment.end_index, reverse=True)
     for s in supports_sorted:
         end_index = s.segment.end_index
         idxs: List[int] = list(getattr(s, "grounding_chunk_indices", []) or [])
@@ -96,31 +86,28 @@ def list_sources(response) -> List[str]:
 
 def main():
     p = argparse.ArgumentParser(
-        add_help=True,
         description="Google Search-powered AI assistant using Gemini models with grounding and citations",
-        epilog="""
-Examples:
-  GEMINI_API_KEY=... ./gemini_search "What happened at Web Summit 2025?"
-  ./gemini_search --model gemini-3.1-pro-preview "Latest news about AI"
-  ./gemini_search --flash "Quick AI overview"  # Uses Gemini 3.1 Flash
-  ./gemini_search --deep "Detailed analysis"  # Uses Gemini 3.1 Pro (default)
-  ./gemini_search --json "Climate change impacts"  # Shows raw JSON response
-
-API Key:
-  Set GEMINI_API_KEY or GOOGLE_API_KEY environment variable,
-  or place key in ~/.config/sops-nix/secrets/gemini_api_key
-        """.strip()
     )
     p.add_argument("prompt", nargs="*", help="User query to search and answer")
-    p.add_argument("--model", default="gemini-3.1-pro-preview", help="Gemini model to use (default: gemini-3.1-pro-preview)")
     p.add_argument(
-        "--flash", action="store_true", help="Use Gemini 3.1 Flash model for faster responses"
+        "--model",
+        default=MODEL_PRO,
+        help=f"Gemini model to use (default: {MODEL_PRO})",
     )
     p.add_argument(
-        "--deep", action="store_true", help="Use Gemini 3.1 Pro model for deeper analysis (default behavior)"
+        "--flash",
+        action="store_true",
+        help=f"Use {MODEL_FLASH} for faster responses",
     )
     p.add_argument(
-        "--json", action="store_true", help="Print raw JSON response with grounding metadata"
+        "--deep",
+        action="store_true",
+        help=f"Use {MODEL_PRO} for deeper analysis (default)",
+    )
+    p.add_argument(
+        "--json",
+        action="store_true",
+        help="Print raw JSON response with grounding metadata",
     )
     args = p.parse_args()
 
@@ -137,7 +124,10 @@ API Key:
         api_key = get_api_key_from_filesystem("gemini_api_key")
 
     if not api_key:
-        print("Error: set GEMINI_API_KEY or GOOGLE_API_KEY, or place key in ~/.config/sops-nix/secrets/gemini_api_key", file=sys.stderr)
+        print(
+            "Error: set GEMINI_API_KEY or GOOGLE_API_KEY, or place key in ~/.config/sops-nix/secrets/gemini_api_key",
+            file=sys.stderr,
+        )
         sys.exit(2)
 
     client = genai.Client(api_key=api_key)
@@ -146,11 +136,10 @@ API Key:
     grounding_tool = types.Tool(google_search=types.GoogleSearch())
     config = types.GenerateContentConfig(tools=[grounding_tool])
 
-    # Determine which model to use
     if args.flash:
-        model = "gemini-3.1-flash-preview"
+        model = MODEL_FLASH
     elif args.deep:
-        model = "gemini-3.1-pro-preview"
+        model = MODEL_PRO
     else:
         model = args.model
 
@@ -178,7 +167,7 @@ API Key:
         import json
 
         print("\n--- RAW RESPONSE JSON ---")
-        print(json.dumps(resp.to_dict(), indent=2))
+        print(json.dumps(resp.model_dump(mode="json"), indent=2))
 
 
 if __name__ == "__main__":
