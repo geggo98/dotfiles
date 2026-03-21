@@ -122,13 +122,6 @@ For any endpoint not covered by a dedicated command, use `raw`:
 | `GRAFANA_TOKEN` | Service account token |
 | `GRAFANA_ORG_ID` | Organization ID (optional, for multi-org setups) |
 
-Legacy aliases (mapped automatically):
-
-| Variable | Maps to |
-|----------|---------|
-| `GRAFANA_INSTANCE` | `GRAFANA_URL` (auto-prefixed with `https://`) |
-| `GRAFANA_SERVICE_ACCOUNT_TOKEN` | `GRAFANA_TOKEN` |
-
 ## Exit Codes
 
 | Code | Meaning |
