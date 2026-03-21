@@ -3,7 +3,10 @@ revision = 3
 requires-python = ">=3.10"
 
 [manifest]
-requirements = [{ name = "google-genai", specifier = ">=1.68.0" }]
+requirements = [
+    { name = "google-genai", specifier = ">=1.68.0" },
+    { name = "requests", specifier = ">=2.31.0" },
+]
 
 [[package]]
 name = "annotated-types"
