@@ -1,6 +1,6 @@
 ---
-name: research
-description: Researches thoroughly how to use an API, library, or reference architecture. FCan be used as fallback when the WebSearch tool fails.
+name: web-research
+description: Researches the web thoroughly, e.g., how to use an API, library, or reference architecture. Can also be used as fallback when the WebSearch tool fails. Use when the user asks to research a complex topic.
 context: fork
 agent: Explore
 allowed-tools:
@@ -12,8 +12,8 @@ allowed-tools:
 
 ## 1. Purpose
 
-Use this skill to research APIs, libraries, or design patterns before implementation.
-It produces concise best-practice summaries, alternatives, and tradeoffs.
+Use this skill to research the web, e.g, for APIs, libraries, or design patterns before implementation.
+It produces concise best-practice summaries, including alternatives, and tradeoffs. It produces a Markdown-formatted doocument containing the research results, including references as URLs.
 
 > **Important:** Run scripts directly (`./scripts/gemini_research.sh`, `./scripts/perplexity_open_router_research.sh`). Do **not** prefix with `bash` — the scripts require zsh and will fail under bash.
 
