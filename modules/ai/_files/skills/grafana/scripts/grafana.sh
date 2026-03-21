@@ -17,10 +17,10 @@ cleanup() {
 SCRIPT_DIR="${0:A:h}"
 SKILL_DIR="${SCRIPT_DIR:h}"
 
-# Source .env if present (GRAFANA_INSTANCE, GRAFANA_SERVICE_ACCOUNT_TOKEN)
-if [[ -f "${SKILL_DIR}/.env" ]]; then
+# Source .env.local if present (GRAFANA_INSTANCE, GRAFANA_SERVICE_ACCOUNT_TOKEN)
+if [[ -f "${SKILL_DIR}/.env.local" ]]; then
   set -a
-  source "${SKILL_DIR}/.env"
+  source "${SKILL_DIR}/.env.local"
   set +a
 fi
 

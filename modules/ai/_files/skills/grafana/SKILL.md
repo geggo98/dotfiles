@@ -17,7 +17,7 @@ The helper script lives at `scripts/grafana.sh`.
 
 > **Important:** Run the script directly (`./scripts/grafana.sh`). Do **not** prefix with `bash` — the script requires zsh and will fail under bash.
 
-The script auto-loads credentials from `.env` (GRAFANA_INSTANCE and GRAFANA_SERVICE_ACCOUNT_TOKEN) and maps them to GRAFANA_URL and GRAFANA_TOKEN.
+The script auto-loads credentials from `.env.local` (GRAFANA_INSTANCE and GRAFANA_SERVICE_ACCOUNT_TOKEN) and maps them to GRAFANA_URL and GRAFANA_TOKEN.
 
 ## Timeout
 
@@ -102,7 +102,7 @@ For any endpoint not covered by a dedicated command, use `raw`:
 | `GRAFANA_SERVICE_ACCOUNT_TOKEN` | Mapped to GRAFANA_TOKEN if not set |
 | `GRAFANA_ORG_ID` | Organization ID (optional, for multi-org setups) |
 
-The `.env` file in the skill directory is auto-sourced by the wrapper script.
+The `.env.local` file in the skill directory is auto-sourced by the wrapper script.
 
 ## Exit Codes
 
