@@ -1,8 +1,10 @@
 ---
 name: stream-deck
-description: Helper to safely edit manifest files when developing plugin for Elgato Stream Deck
+description: "Helper to safely edit manifest files when developing plugin for Elgato Stream Deck. Use when creating, validating, or repairing Stream Deck manifest.json files."
+argument-hint: "validate|scaffold|add-action|fix-jsonc [manifest.json]"
 allowed-tools:
-    - "Bash(./scripts/streamdeck_manifest.sh*)"
+  - "Bash(./scripts/streamdeck_manifest.sh*)"
+dependencies: "deno, gtimeout"
 ---
 
 # Stream Deck Manifest Toolkit
