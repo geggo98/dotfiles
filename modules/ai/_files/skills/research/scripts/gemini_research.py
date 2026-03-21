@@ -3,6 +3,7 @@
 # requires-python = ">=3.10"
 # dependencies = [
 #   "google-genai>=1.68.0",
+#   "requests>=2.31.0",
 # ]
 # [tools.uv]
 # exclude-newer = "2026-03-21T00:00:00Z"
@@ -11,10 +12,51 @@
 import argparse
 import os
 import sys
-from typing import List
+from concurrent.futures import ThreadPoolExecutor
+from typing import Dict, List
 
+import requests
 from google import genai
 from google.genai import types
+
+GROUNDING_REDIRECT = "vertexaisearch.cloud.google.com/grounding-api-redirect/"
+
+_session = requests.Session()
+
+
+def resolve_grounding_url(url: str) -> str:
+    if GROUNDING_REDIRECT not in url:
+        return url
+    try:
+        resp = _session.head(url, allow_redirects=True, timeout=5)
+        return resp.url
+    except requests.RequestException:
+        return url
+
+
+def resolve_urls(urls: List[str], max_workers: int = 5) -> List[str]:
+    with ThreadPoolExecutor(max_workers=max_workers) as pool:
+        return list(pool.map(resolve_grounding_url, urls))
+
+
+def build_url_map(response, max_workers: int = 5) -> Dict[str, str]:
+    """Collect all grounding URLs from the response and resolve them in one batch."""
+    cands = getattr(response, "candidates", None)
+    if not cands or not cands[0]:
+        return {}
+    gmeta = getattr(cands[0], "grounding_metadata", None)
+    if not gmeta:
+        return {}
+    chunks = getattr(gmeta, "grounding_chunks", []) or []
+    raw_urls = []
+    for ch in chunks:
+        web = getattr(ch, "web", None)
+        if web and getattr(web, "uri", None):
+            raw_urls.append(web.uri)
+    if not raw_urls:
+        return {}
+    resolved = resolve_urls(raw_urls, max_workers=max_workers)
+    return dict(zip(raw_urls, resolved))
 
 MODEL_PRO = "gemini-3.1-pro-preview"
 MODEL_FLASH = "gemini-3.1-flash-lite-preview"
@@ -30,7 +72,7 @@ def get_api_key_from_filesystem(key_name: str) -> str:
         return None
 
 
-def add_citations(response) -> str:
+def add_citations(response, url_map: Dict[str, str] | None = None) -> str:
     """
     Insert inline citation markers after grounded segments.
     Format: text ...[1](url)[3](url)...
@@ -60,14 +102,15 @@ def add_citations(response) -> str:
             if 0 <= i < len(chunks):
                 web = getattr(chunks[i], "web", None)
                 if web and getattr(web, "uri", None):
-                    links.append(f"[{i+1}]({web.uri})")
+                    uri = url_map.get(web.uri, web.uri) if url_map else web.uri
+                    links.append(f"[{i+1}]({uri})")
         if links:
             citation_str = "".join(links)
             text = text[:end_index] + citation_str + text[end_index:]
     return text
 
 
-def list_sources(response) -> List[str]:
+def list_sources(response, url_map: Dict[str, str] | None = None) -> List[str]:
     cands = getattr(response, "candidates", None)
     if not cands or not cands[0]:
         return []
@@ -79,8 +122,9 @@ def list_sources(response) -> List[str]:
     for i, ch in enumerate(chunks, start=1):
         web = getattr(ch, "web", None)
         if web and getattr(web, "uri", None):
-            title = getattr(web, "title", "") or web.uri
-            out.append(f"[{i}] {title} — {web.uri}")
+            uri = url_map.get(web.uri, web.uri) if url_map else web.uri
+            title = getattr(web, "title", "") or uri
+            out.append(f"[{i}] {title} — {uri}")
     return out
 
 
@@ -108,6 +152,18 @@ def main():
         "--json",
         action="store_true",
         help="Print raw JSON response with grounding metadata",
+    )
+    p.add_argument(
+        "--no-resolve",
+        action="store_true",
+        help="Skip resolving shortened grounding redirect URLs",
+    )
+    p.add_argument(
+        "--resolve-workers",
+        type=int,
+        default=5,
+        metavar="N",
+        help="Max parallel workers for URL resolution (default: 5)",
     )
     args = p.parse_args()
 
@@ -151,12 +207,17 @@ def main():
         print(f"Request failed: {e}", file=sys.stderr)
         sys.exit(1)
 
+    # Resolve shortened grounding URLs in one batch.
+    url_map = None
+    if not args.no_resolve:
+        url_map = build_url_map(resp, max_workers=args.resolve_workers)
+
     # Pretty print with inline citations.
-    text_with_citations = add_citations(resp)
+    text_with_citations = add_citations(resp, url_map=url_map)
     print(text_with_citations.strip())
 
     # Also show deduplicated source list.
-    sources = list_sources(resp)
+    sources = list_sources(resp, url_map=url_map)
     if sources:
         print("\nSources:")
         for line in sources:
