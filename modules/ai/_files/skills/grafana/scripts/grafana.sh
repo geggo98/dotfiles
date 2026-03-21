@@ -42,12 +42,4 @@ done
 [[ -n "$cli_url" ]]    && export GRAFANA_URL="$cli_url"
 [[ -n "$cli_org_id" ]] && export GRAFANA_ORG_ID="$cli_org_id"
 
-# Map legacy/convenience names to canonical env vars
-if [[ -z "${GRAFANA_URL:-}" && -n "${GRAFANA_INSTANCE:-}" ]]; then
-  export GRAFANA_URL="https://${GRAFANA_INSTANCE}"
-fi
-if [[ -z "${GRAFANA_TOKEN:-}" && -n "${GRAFANA_SERVICE_ACCOUNT_TOKEN:-}" ]]; then
-  export GRAFANA_TOKEN="${GRAFANA_SERVICE_ACCOUNT_TOKEN}"
-fi
-
 exec gtimeout "$timeout" uv run --script "${SCRIPT_DIR}/grafana.py" "${args[@]}"
