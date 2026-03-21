@@ -8,7 +8,7 @@ allowed-tools:
     - "Bash(./scripts/perplexity_open_router_research.sh*)"
 ---
 
-# Research Skill
+# Web Research Skill
 
 ## 1. Purpose
 
@@ -27,10 +27,10 @@ Run before:
 
 ## 3. Helper Scripts
 
-| Script                                    | Purpose                          | Quick Mode | Deep Mode |
-| ----------------------------------------- | -------------------------------- | ---------- | --------- |
-| `scripts/gemini_research.sh`              | General-purpose quick research.  | Default    | `--deep`  |
-| `scripts/gemini_research.sh`              | Deep research via Google Gemini. | `--flash`  | Default   |
+| Script                                       | Purpose                          | Quick Mode | Deep Mode |
+| -------------------------------------------- | -------------------------------- | ---------- | --------- |
+| `scripts/perplexity_open_router_research.sh` | General-purpose quick research.  | Default    | `--deep`  |
+| `scripts/gemini_research.sh`                 | Deep research via Google Gemini. | `--flash`  | Default   |
 
 ### Arguments
 
@@ -40,28 +40,27 @@ Run before:
 
 ## 4. Examples
 
-
 Always start with `--flash`. If the result doesn't work or if important parts are missing, use `--deep` to get more information.
 
 ### Quick Search
 
 ```bash
-gemini_research.sh --flash "Which Python HTTP client libraries support caching headers, and with which backends?"
+scripts/gemini_research.sh --flash "Which Python HTTP client libraries support caching headers, and with which backends?"
 ```
 
 ### API Research
 
 ```bash
-perplexity_open_router_research.sh "Write a Python best-practice manual for using the Atlassian Confluence API."
-gemini_research "Same as above."
-perplexity_open_router_researchi.sh --deep "Give a second opinion on the Atlassian API usage. Alternatives and tradeoffs?"
+scripts/perplexity_open_router_research.sh "Research Python best-practices for using the Atlassian Confluence API."
+scripts/gemini_research "Write a Python best-practice manual for using the Atlassian Confluence API."
+scripts/perplexity_open_router_researchi.sh --deep "Give a second opinion on the Atlassian API usage. Alternatives and tradeoffs?"
 ```
 
 ### Library Research
 
 ```bash
 perplexity_open_router_research.sh "Best practices for using the os-lib library in Scala."
-gemini_research.sh "Manual for using os-lib in Scala."
+gemini_research.sh "Create a manual for using os-lib in Scala with up-to-date best-practices."
 perplexity_open_router_research.sh --deep "Second opinion on using os-lib in Scala. Alternatives and tradeoffs?"
 ```
 
@@ -122,6 +121,7 @@ Ensure network access and required API keys are configured.
 | Problem                       | Possible Cause                    | Fix                           |
 | ----------------------------- | --------------------------------- | ----------------------------- |
 | `Error: No response from API` | Connectivity issue or invalid key | Check internet or credentials |
+| `Error: Model not found`      | Backend API changed               | Use different script          |
 | `Output incomplete`           | Timeout or token limit            | Retry with `--deep`           |
 | `Invalid topic format`        | Missing sentence structure        | Use full sentences            |
 
