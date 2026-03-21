@@ -521,7 +521,13 @@ COMMANDS = {
 USAGE = """\
 Grafana API CLI
 
-USAGE: grafana.sh <command> [args...]
+USAGE: grafana.sh [options] <command> [args...]
+
+OPTIONS (handled by wrapper):
+  --url <url>            Grafana base URL (overrides GRAFANA_URL)
+  --org-id <id>          Organization ID (overrides GRAFANA_ORG_ID)
+  --env-file <path>      Load env vars from file (repeatable, later wins)
+  --timeout <duration>   Global timeout (default: 5m)
 
 COMMANDS:
   health                           Check Grafana health
@@ -543,9 +549,13 @@ COMMANDS:
   raw <METHOD> <endpoint>          Raw API call
 
 ENVIRONMENT:
-  GRAFANA_URL      Grafana instance URL (or set GRAFANA_INSTANCE)
+  GRAFANA_URL      Grafana base URL (e.g. https://myinstance.grafana.net)
   GRAFANA_TOKEN    Service account token
   GRAFANA_ORG_ID   Organization ID (optional)
+
+  Legacy aliases (mapped automatically):
+  GRAFANA_INSTANCE                 Hostname, auto-prefixed with https://
+  GRAFANA_SERVICE_ACCOUNT_TOKEN    Mapped to GRAFANA_TOKEN
 """
 
 
@@ -558,10 +568,10 @@ def main() -> None:
     base_url = os.environ.get("GRAFANA_URL")
     token = os.environ.get("GRAFANA_TOKEN")
     if not base_url:
-        print("GRAFANA_URL (or GRAFANA_INSTANCE in .env) is required", file=sys.stderr)
+        print("GRAFANA_URL is required (use --url <url> or --env-file <path>)", file=sys.stderr)
         sys.exit(1)
     if not token:
-        print("GRAFANA_TOKEN (or GRAFANA_SERVICE_ACCOUNT_TOKEN in .env) is required", file=sys.stderr)
+        print("GRAFANA_TOKEN is required (use --env-file <path> or set GRAFANA_TOKEN)", file=sys.stderr)
         sys.exit(1)
 
     org_id = int(os.environ["GRAFANA_ORG_ID"]) if os.environ.get("GRAFANA_ORG_ID") else None
