@@ -9,7 +9,7 @@ dependencies: "uv, gtimeout"
 
 # Grafana Skill
 
-Manage Grafana resources via the HTTP API using a Python CLI tool. Supports dashboard CRUD, folder management, datasource inspection, annotations, alerting, and raw API access.
+Manage Grafana resources via the HTTP API using a Python CLI tool. Supports dashboard CRUD, folder management, datasource inspection, annotations, alerting, format conversion, structural diffing, three-way merge with conflict resolution, and raw API access.
 
 ## How to run (always use the helper script)
 
@@ -32,6 +32,30 @@ GRAFANA_TOKEN=glsa_... ./scripts/grafana.sh --url https://myinstance.grafana.net
 ./scripts/grafana.sh --env-file base.env --env-file prod.env health
 ```
 
+## API Modes
+
+The CLI supports two Grafana API styles:
+
+| Mode | API | OCC Token | When Used |
+|------|-----|-----------|-----------|
+| `legacy` | `/api/dashboards/...` | `version` (integer) | All Grafana versions |
+| `k8s` | `/apis/dashboard.grafana.app/v1beta1/...` | `resourceVersion` (string) | Grafana 12.x+ |
+| `auto` | Probes K8s endpoint, falls back to legacy | Depends on detected mode | Default |
+
+Set via `--api` flag or `GRAFANA_API_MODE` env var:
+
+```bash
+./scripts/grafana.sh --api legacy list     # force legacy API
+./scripts/grafana.sh --api k8s list        # force K8s API
+./scripts/grafana.sh --api auto health     # auto-detect (default)
+```
+
+The K8s API requires a `--namespace` (default: `default`):
+
+```bash
+./scripts/grafana.sh --api k8s --namespace my-org list
+```
+
 ## Timeout
 
 The wrapper enforces a global timeout via `gtimeout`. Pass `--timeout DURATION` to override (default: `5m`).
@@ -47,13 +71,16 @@ The wrapper enforces a global timeout via `gtimeout`. Pass `--timeout DURATION` 
 | `health` | Check Grafana instance health | `./scripts/grafana.sh health` |
 | `list` | Search/list dashboards | `./scripts/grafana.sh list --query prod --tag monitoring` |
 | `get <uid>` | Get dashboard details | `./scripts/grafana.sh get abc123 --json` |
-| `export <uid>` | Export dashboard to JSON file | `./scripts/grafana.sh export abc123 --output dash.json` |
+| `export <uid>` | Export dashboard to JSON + base sidecar | `./scripts/grafana.sh export abc123 --output dash.json` |
 | `create` | Create dashboard from JSON | `./scripts/grafana.sh create --file dash.json --folder my-folder` |
-| `update <uid>` | Update dashboard from JSON | `./scripts/grafana.sh update abc123 --file dash.json` |
+| `update <uid>` | Update with OCC and auto-merge on conflict | `./scripts/grafana.sh update abc123 --file dash.json` |
 | `delete <uid>` | Delete dashboard | `./scripts/grafana.sh delete abc123` |
 | `clone <uid>` | Clone existing dashboard | `./scripts/grafana.sh clone abc123 --title "Copy"` |
 | `versions <uid>` | List version history | `./scripts/grafana.sh versions abc123` |
 | `restore <uid>` | Restore to specific version | `./scripts/grafana.sh restore abc123 --version 5` |
+| `diff <uid>` | Structural diff: local file vs server | `./scripts/grafana.sh diff abc123 --file dash.json` |
+| `merge <uid>` | Three-way merge: local vs server | `./scripts/grafana.sh merge abc123 --file dash.json` |
+| `convert` | Convert between legacy and K8s format | `./scripts/grafana.sh convert --file dash.json --to k8s` |
 | `folders` | List all folders | `./scripts/grafana.sh folders --json` |
 | `datasources` | List all datasources | `./scripts/grafana.sh datasources --json` |
 | `annotations` | Query annotations | `./scripts/grafana.sh annotations --dashboard abc123 --tag deploy` |
@@ -70,25 +97,81 @@ The wrapper enforces a global timeout via `gtimeout`. Pass `--timeout DURATION` 
 | `--query <q>` | list | Filter by title |
 | `--tag <t>` | list, annotations | Filter by tag |
 | `--folder <uid>` | list, create, clone | Target folder UID |
-| `--file <path>` | create, update | Input JSON file |
-| `--output <path>` | export | Output file path (default: `<uid>.json`) |
+| `--file <path>` | create, update, diff, merge, convert | Input JSON file |
+| `--output <path>` | export, merge, convert | Output file path |
 | `--title <t>` | create, clone | Override dashboard title |
 | `--message <m>` | create, update | Commit message for version history |
-| `--overwrite` | create, update | Force overwrite |
+| `--force` | update | Force overwrite, bypass OCC |
+| `--overwrite` | create | Force overwrite (alias for `--force` in create) |
+| `--no-base` | export | Skip writing the `.base.json` sidecar |
+| `--format <legacy\|k8s>` | export | Export in specific format |
+| `--to <legacy\|k8s>` | convert | Target format for conversion |
+| `--base <path>` | merge | Explicit base file (overrides sidecar) |
 | `--limit <n>` | list, versions, annotations | Limit results |
 | `--version <n>` | restore | Version number to restore |
 | `--active` | alerts | Show active (firing) alerts instead of rules |
 
+## Conflict Resolution
+
+The `update` command uses optimistic concurrency control (OCC) by default:
+
+1. **Export** creates `<uid>.json` (working copy) and `<uid>.base.json` (base snapshot with OCC metadata)
+2. **Edit** the working copy locally
+3. **Update** sends the change with the OCC token from the base sidecar
+4. If the server version has changed (412/409), and a `.base.json` exists, the CLI attempts a **three-way merge**:
+   - **Clean merge**: auto-saves and updates the sidecar
+   - **Conflicts**: writes `<uid>.merged.json`, prints conflict details, exits with code 2
+5. Use `--force` to bypass OCC entirely (equivalent to the old `--overwrite`)
+
+### Workflow
+
+```bash
+# 1. Export (creates working copy + base sidecar)
+./scripts/grafana.sh export abc123
+
+# 2. Edit locally
+$EDITOR abc123.json
+
+# 3. Update (OCC-safe, auto-merges on conflict)
+./scripts/grafana.sh update abc123 --file abc123.json --message "My changes"
+
+# If conflicts: resolve abc123.merged.json, then retry with --force
+./scripts/grafana.sh update abc123 --file abc123.merged.json --force --message "Resolved"
+```
+
+### Explicit merge
+
+```bash
+./scripts/grafana.sh merge abc123 --file abc123.json --output merged.json
+```
+
 ## Creating Dashboards from JSON
 
-When creating a dashboard, provide a JSON file with the standard Grafana dashboard model. The script accepts both:
+When creating a dashboard, provide a JSON file with the standard Grafana dashboard model. The script accepts:
 
 - **Bare dashboard object** — `{"title": "...", "panels": [...]}`
 - **Wrapped format** — `{"dashboard": {"title": "...", "panels": [...]}, "folderUid": "..."}`
+- **K8s format** — `{"apiVersion": "dashboard.grafana.app/v1beta1", "kind": "Dashboard", ...}`
 
-The `id` and `uid` fields are set to `null` automatically for new dashboards.
+The input format is auto-detected and converted as needed. The `id` and `uid` fields are set to `null` automatically for new dashboards.
 
 See `references/dashboard-json-structure.md` for the annotated JSON schema and `examples/` for sample dashboard JSON files.
+
+## Format Conversion
+
+Convert between legacy and K8s dashboard formats without any API calls:
+
+```bash
+# Legacy to K8s
+./scripts/grafana.sh convert --file dash.json --to k8s --output k8s-dash.json
+
+# K8s to legacy
+./scripts/grafana.sh convert --file k8s-dash.json --to legacy
+
+# Roundtrip test
+./scripts/grafana.sh convert --file dash.json --to k8s --output /tmp/k8s.json
+./scripts/grafana.sh convert --file /tmp/k8s.json --to legacy --output /tmp/rt.json
+```
 
 ## Raw API Access
 
@@ -111,6 +194,8 @@ For any endpoint not covered by a dedicated command, use `raw`:
 |--------|-------------|
 | `--url <url>` | Grafana base URL (overrides `GRAFANA_URL`) |
 | `--org-id <id>` | Organization ID (overrides `GRAFANA_ORG_ID`) |
+| `--api <auto\|legacy\|k8s>` | API mode (overrides `GRAFANA_API_MODE`, default: `auto`) |
+| `--namespace <ns>` | K8s namespace (overrides `GRAFANA_NAMESPACE`, default: `default`) |
 | `--env-file <path>` | Load env vars from file (repeatable, later wins) |
 | `--timeout <duration>` | Global timeout (default: `5m`) |
 
@@ -121,6 +206,8 @@ For any endpoint not covered by a dedicated command, use `raw`:
 | `GRAFANA_URL` | Grafana base URL (e.g. `https://myinstance.grafana.net`) |
 | `GRAFANA_TOKEN` | Service account token |
 | `GRAFANA_ORG_ID` | Organization ID (optional, for multi-org setups) |
+| `GRAFANA_API_MODE` | API mode: `auto`, `legacy`, `k8s` (default: `auto`) |
+| `GRAFANA_NAMESPACE` | K8s namespace (default: `default`) |
 
 ## Exit Codes
 
@@ -128,6 +215,7 @@ For any endpoint not covered by a dedicated command, use `raw`:
 |------|---------|
 | 0 | Success |
 | 1 | Error (invalid args, API error, missing prerequisites) |
+| 2 | Unresolved merge conflicts |
 | 124 | Timeout (killed by gtimeout) |
 
 ## Reference Documentation
@@ -136,13 +224,13 @@ For any endpoint not covered by a dedicated command, use `raw`:
 |----------|-------------|
 | `references/dashboard-json-structure.md` | Annotated dashboard JSON schema (panels, gridPos, targets, variables, fieldConfig) |
 | `references/dashboard-design.md` | Dashboard design principles (RED/USE methods, layout, best practices) |
-| `references/api-dashboards.md` | Dashboard API endpoints (search, get, create, update, delete, versions, permissions) |
+| `references/api-dashboards.md` | Dashboard API endpoints (legacy + K8s-style, OCC, versions, permissions) |
 | `references/api-datasources.md` | Datasource API (list, get, create, query, health check) |
 | `references/api-alerting.md` | Alerting API (rules, contact points, notification policies, silences, templates) |
 | `references/api-folders.md` | Folder API (CRUD, permissions, nested folders) |
 | `references/api-annotations.md` | Annotations API (query, create, update, delete, tags) |
 | `references/api-users-teams.md` | Users, teams, service accounts, organizations |
-| `references/api-common-patterns.md` | Error handling, pagination, rate limiting, client examples |
+| `references/api-common-patterns.md` | Error handling, pagination, conflict handling, three-way merge patterns |
 | `references/api-workflow.md` | Step-by-step workflows for common dashboard operations |
 
 ## Example Dashboards
@@ -177,6 +265,20 @@ done
 **Clone a dashboard to a different folder:**
 ```bash
 ./scripts/grafana.sh clone abc123 --title "Staging Copy" --folder staging-folder
+```
+
+**Export, edit, and update with OCC:**
+```bash
+./scripts/grafana.sh export abc123
+$EDITOR abc123.json
+./scripts/grafana.sh update abc123 --file abc123.json --message "Updated thresholds"
+```
+
+**Diff local changes against server:**
+```bash
+./scripts/grafana.sh export abc123
+# ... edit abc123.json ...
+./scripts/grafana.sh diff abc123 --file abc123.json
 ```
 
 **Add a deploy annotation:**

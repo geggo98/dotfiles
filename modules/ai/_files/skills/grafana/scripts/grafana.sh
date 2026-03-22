@@ -21,14 +21,18 @@ timeout="5m"
 env_files=()
 cli_url=""
 cli_org_id=""
+cli_api=""
+cli_namespace=""
 args=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
-    --timeout)   timeout="$2"; shift 2 ;;
-    --env-file)  env_files+=("$2"); shift 2 ;;
-    --url)       cli_url="$2"; shift 2 ;;
-    --org-id)    cli_org_id="$2"; shift 2 ;;
-    *)           args+=("$1"); shift ;;
+    --timeout)     timeout="$2"; shift 2 ;;
+    --env-file)    env_files+=("$2"); shift 2 ;;
+    --url)         cli_url="$2"; shift 2 ;;
+    --org-id)      cli_org_id="$2"; shift 2 ;;
+    --api)         cli_api="$2"; shift 2 ;;
+    --namespace)   cli_namespace="$2"; shift 2 ;;
+    *)             args+=("$1"); shift ;;
   esac
 done
 
@@ -39,7 +43,9 @@ for ef in "${env_files[@]}"; do
 done
 
 # CLI flags override env files
-[[ -n "$cli_url" ]]    && export GRAFANA_URL="$cli_url"
-[[ -n "$cli_org_id" ]] && export GRAFANA_ORG_ID="$cli_org_id"
+[[ -n "$cli_url" ]]       && export GRAFANA_URL="$cli_url"
+[[ -n "$cli_org_id" ]]    && export GRAFANA_ORG_ID="$cli_org_id"
+[[ -n "$cli_api" ]]       && export GRAFANA_API_MODE="$cli_api"
+[[ -n "$cli_namespace" ]] && export GRAFANA_NAMESPACE="$cli_namespace"
 
 exec gtimeout "$timeout" uv run --script "${SCRIPT_DIR}/grafana.py" "${args[@]}"

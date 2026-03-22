@@ -353,3 +353,131 @@ PATCH /api/dashboards/uid/:uid/public-dashboards/:publicDashboardUid
 ```http
 DELETE /api/dashboards/uid/:uid/public-dashboards/:publicDashboardUid
 ```
+
+---
+
+## K8s-Style API (Grafana 12.x+)
+
+Grafana 12.x introduced a Kubernetes-style API that will replace the legacy REST API. It uses standard K8s resource semantics with `resourceVersion` for optimistic concurrency control.
+
+### Base URL
+
+```
+/apis/dashboard.grafana.app/v1beta1/namespaces/{namespace}/dashboards
+```
+
+### List Dashboards
+
+```http
+GET /apis/dashboard.grafana.app/v1beta1/namespaces/{namespace}/dashboards
+```
+
+**Query Parameters:**
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| labelSelector | string | K8s label selector (e.g. `app=myapp`) |
+| limit | integer | Maximum items to return |
+| continue | string | Continuation token for pagination |
+
+**Example Response:**
+
+```json
+{
+  "apiVersion": "dashboard.grafana.app/v1beta1",
+  "kind": "DashboardList",
+  "metadata": {
+    "resourceVersion": "12345"
+  },
+  "items": [
+    {
+      "apiVersion": "dashboard.grafana.app/v1beta1",
+      "kind": "Dashboard",
+      "metadata": {
+        "name": "cIBgcSjkk",
+        "namespace": "default",
+        "resourceVersion": "678",
+        "creationTimestamp": "2024-01-15T10:30:00Z",
+        "annotations": {
+          "grafana.app/folder": "l3KqBxCMz",
+          "grafana.app/schemaVersion": "38"
+        }
+      },
+      "spec": {
+        "title": "Production Overview",
+        "tags": ["monitoring", "production"],
+        "panels": [...]
+      }
+    }
+  ]
+}
+```
+
+### Get Dashboard
+
+```http
+GET /apis/dashboard.grafana.app/v1beta1/namespaces/{namespace}/dashboards/{name}
+```
+
+The `{name}` is the dashboard UID.
+
+### Create Dashboard
+
+```http
+POST /apis/dashboard.grafana.app/v1beta1/namespaces/{namespace}/dashboards
+```
+
+**Request Body:**
+
+```json
+{
+  "apiVersion": "dashboard.grafana.app/v1beta1",
+  "kind": "Dashboard",
+  "metadata": {
+    "annotations": {
+      "grafana.app/folder": "l3KqBxCMz"
+    }
+  },
+  "spec": {
+    "title": "New Dashboard",
+    "tags": ["tag1"],
+    "panels": [...]
+  }
+}
+```
+
+### Update Dashboard
+
+```http
+PUT /apis/dashboard.grafana.app/v1beta1/namespaces/{namespace}/dashboards/{name}
+```
+
+The request body **must** include `metadata.resourceVersion` for optimistic concurrency control. If the `resourceVersion` does not match the server's current version, the request fails with **409 Conflict**.
+
+### Delete Dashboard
+
+```http
+DELETE /apis/dashboard.grafana.app/v1beta1/namespaces/{namespace}/dashboards/{name}
+```
+
+---
+
+## OCC Comparison
+
+| Aspect | Legacy API | K8s-Style API |
+|--------|-----------|---------------|
+| OCC token | `dashboard.version` (integer) | `metadata.resourceVersion` (string) |
+| Conflict status | 412 Precondition Failed | 409 Conflict |
+| Bypass OCC | `"overwrite": true` | Fetch current `resourceVersion`, then PUT |
+| Token source | `GET /api/dashboards/uid/:uid` → `meta.version` | `GET .../dashboards/{name}` → `metadata.resourceVersion` |
+
+### Format Conversion Field Mapping
+
+| Legacy Field | K8s Field | Notes |
+|-------------|-----------|-------|
+| `dashboard.uid` | `metadata.name` | Dashboard identifier |
+| `dashboard.version` | `metadata.resourceVersion` | OCC token (not equivalent values) |
+| `dashboard.schemaVersion` | `metadata.annotations["grafana.app/schemaVersion"]` | Schema version |
+| `meta.folderUid` | `metadata.annotations["grafana.app/folder"]` | Parent folder |
+| `dashboard.*` (other fields) | `spec.*` | Dashboard body lives under `spec` |
+| `dashboard.id` | *(not present)* | Server-assigned numeric ID, legacy only |
