@@ -449,3 +449,98 @@ response=$(curl -s -X POST \
 
 echo "$response" | jq .
 ```
+
+---
+
+## Conflict Detection Patterns
+
+### Legacy API (412 Precondition Failed)
+
+The legacy API returns HTTP 412 when the `dashboard.version` in the request does not match the server's current version:
+
+```json
+{
+  "message": "The dashboard has been changed by someone else",
+  "status": "version-mismatch"
+}
+```
+
+**How to handle:**
+1. Fetch the latest dashboard to get the current `version`
+2. Apply changes to the latest version
+3. Retry the save with the updated `version`
+
+### K8s-Style API (409 Conflict)
+
+The K8s API returns HTTP 409 when `metadata.resourceVersion` in the PUT request does not match:
+
+```json
+{
+  "kind": "Status",
+  "apiVersion": "v1",
+  "metadata": {},
+  "status": "Failure",
+  "message": "Operation cannot be fulfilled on dashboards.dashboard.grafana.app \"abc123\": the object has been modified",
+  "reason": "Conflict",
+  "code": 409
+}
+```
+
+**How to handle:** Same as legacy — fetch latest, merge, retry.
+
+---
+
+## Three-Way Merge Workflow
+
+When a conflict is detected during update, a three-way merge can resolve it automatically if changes are non-overlapping.
+
+### Sidecar File Pattern
+
+The CLI uses a sidecar `.base.json` file to store the original version (base) alongside the working copy:
+
+```
+abc123.json       # Working copy (your edits)
+abc123.base.json  # Base snapshot (original export + OCC metadata)
+```
+
+The base file contains the dashboard body plus an `_occ_meta` field:
+
+```json
+{
+  "title": "My Dashboard",
+  "panels": [...],
+  "_occ_meta": {
+    "version": 15,
+    "api_mode": "legacy"
+  }
+}
+```
+
+### Merge Algorithm
+
+Given three versions — **base** (original export), **ours** (local edits), **theirs** (current server):
+
+1. **List fields** (panels, variables, annotations) are merged by identity key:
+   - Panels: keyed by `id`
+   - Variables: keyed by `name`
+   - Annotations: keyed by `name`
+   - Items added by one side are kept
+   - Items deleted by one side (unchanged by other) are removed
+   - Items modified by both sides: conflict if different
+2. **Scalar fields** (title, tags, timezone, etc.): if both sides changed to different values → conflict
+3. **Conflicts** are reported with path, base value, our value, and their value
+
+### Conflict Types
+
+| Type | Meaning |
+|------|---------|
+| `BothModified` | Both sides changed the same field/item to different values |
+| `DeleteModify` | One side deleted an item, the other modified it |
+| `BothAdded` | Both sides added an item with the same key but different content |
+
+### Exit Codes
+
+| Code | Meaning |
+|------|---------|
+| 0 | Clean merge or successful operation |
+| 2 | Unresolved conflicts (merged output written with theirs as default) |
