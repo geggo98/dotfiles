@@ -225,6 +225,10 @@ class GrafanaClient:
     def health_check_datasource(self, uid: str) -> dict:
         return self.get(f"/api/datasources/uid/{uid}/health")
 
+    def query_datasource(self, queries: list[dict], time_from: str = "now-1h", time_to: str = "now") -> dict:
+        """Execute queries via POST /api/ds/query."""
+        return self.post("/api/ds/query", json_body={"from": time_from, "to": time_to, "queries": queries})
+
     # -- annotations ------------------------------------------------------
 
     def query_annotations(self, dashboard_uid: str | None = None, tags: list[str] | None = None,
@@ -701,6 +705,285 @@ def _format_conflicts(conflicts: list[Conflict]) -> str:
             lines.append(f"    ours:   {json.dumps(c.our_val, ensure_ascii=False)[:120]}")
             lines.append(f"    theirs: {json.dumps(c.their_val, ensure_ascii=False)[:120]}")
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Query Helpers
+# ---------------------------------------------------------------------------
+
+def _resolve_variables(obj: Any, variables: dict[str, str]) -> Any:
+    """Recursively replace $var and ${var} placeholders in strings.
+
+    Skips names starting with ``__`` to protect Grafana macros like
+    ``$__timeFilter``, ``$__rate_interval``, etc.
+    """
+    import re
+
+    if isinstance(obj, str):
+        for var_name, var_value in variables.items():
+            if var_name.startswith("__"):
+                continue
+            obj = obj.replace(f"${{{var_name}}}", str(var_value))
+            obj = re.sub(rf"\${var_name}\b", str(var_value), obj)
+        return obj
+    elif isinstance(obj, dict):
+        return {k: _resolve_variables(v, variables) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [_resolve_variables(item, variables) for item in obj]
+    return obj
+
+
+def _parse_frames(result: dict, ref_id: str = "A") -> tuple[list[dict], list[tuple]]:
+    """Parse Grafana Data Frame response into (columns, rows).
+
+    ``columns`` is a list of ``{"name": str, "type": str}`` dicts.
+    ``rows`` is a list of tuples aligned to those columns.
+    """
+    frames = result.get("results", {}).get(ref_id, {}).get("frames", [])
+    if not frames:
+        return [], []
+
+    label_names: set[str] = set()
+    data_columns: list[dict] = []
+    seen_data: set[str] = set()
+
+    for frame in frames:
+        fields = frame.get("schema", {}).get("fields", [])
+        for field in fields:
+            if field.get("labels"):
+                label_names.update(field["labels"].keys())
+            fname = field["name"]
+            if fname not in seen_data:
+                seen_data.add(fname)
+                data_columns.append({"name": fname, "type": field.get("type", "string")})
+
+    label_cols = [{"name": n, "type": "string"} for n in sorted(label_names)]
+    all_columns = label_cols + data_columns
+
+    all_rows: list[tuple] = []
+    for frame in frames:
+        fields = frame.get("schema", {}).get("fields", [])
+        values = frame.get("data", {}).get("values", [])
+        if not fields or not values:
+            continue
+
+        frame_labels: dict[str, str] = {}
+        for field in fields:
+            if field.get("labels"):
+                frame_labels.update(field["labels"])
+
+        field_names = [f["name"] for f in fields]
+        num_rows = len(values[0]) if values else 0
+        for i in range(num_rows):
+            row: list[Any] = []
+            for lc in label_cols:
+                row.append(frame_labels.get(lc["name"], ""))
+            for dc in data_columns:
+                idx = None
+                for fi, fn in enumerate(field_names):
+                    if fn == dc["name"]:
+                        idx = fi
+                        break
+                if idx is not None and i < len(values[idx]):
+                    row.append(values[idx][i])
+                else:
+                    row.append(None)
+            all_rows.append(tuple(row))
+
+    return all_columns, all_rows
+
+
+def _frames_to_rows(result: dict, ref_id: str = "A") -> list[dict]:
+    """Parse frames into a list of dicts (row-oriented)."""
+    columns, rows = _parse_frames(result, ref_id)
+    col_names = [c["name"] for c in columns]
+    return [dict(zip(col_names, row)) for row in rows]
+
+
+def _export_parquet(columns: list[dict], rows: list[tuple], path: str) -> str:
+    """Export to Parquet with Snappy compression. Requires pyarrow."""
+    try:
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+    except ImportError:
+        print("ERROR: pyarrow is required for Parquet export.\n"
+              "Install with:  uv pip install pyarrow\n"
+              "Or use --format tsv / --format jsonl instead.", file=sys.stderr)
+        sys.exit(1)
+
+    arrow_arrays = []
+    arrow_fields = []
+    for ci, col in enumerate(columns):
+        col_values = [row[ci] for row in rows]
+        if col["type"] == "time":
+            arr = pa.array(col_values, type=pa.int64())
+            ts_arr = arr.cast(pa.timestamp("ms", tz="UTC"))
+            arrow_arrays.append(ts_arr)
+            arrow_fields.append(pa.field(col["name"], pa.timestamp("ms", tz="UTC")))
+        elif col["type"] == "number":
+            arrow_arrays.append(pa.array(col_values, type=pa.float64()))
+            arrow_fields.append(pa.field(col["name"], pa.float64()))
+        else:
+            arrow_arrays.append(
+                pa.array([str(v) if v is not None else None for v in col_values], type=pa.string()))
+            arrow_fields.append(pa.field(col["name"], pa.string()))
+
+    schema = pa.schema(arrow_fields)
+    table = pa.table({f.name: a for f, a in zip(arrow_fields, arrow_arrays)}, schema=schema)
+    pq.write_table(table, path, compression="snappy")
+    return path
+
+
+def _export_tsv(columns: list[dict], rows: list[tuple], path: str) -> str:
+    """Export to TSV. Epoch-ms timestamps are converted to ISO 8601."""
+    import csv
+    from datetime import datetime, timezone
+
+    with open(path, "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f, delimiter="\t", quoting=csv.QUOTE_MINIMAL)
+        writer.writerow([c["name"] for c in columns])
+        for row in rows:
+            out: list[str] = []
+            for ci, val in enumerate(row):
+                if columns[ci]["type"] == "time" and isinstance(val, (int, float)):
+                    out.append(
+                        datetime.fromtimestamp(val / 1000, tz=timezone.utc)
+                        .strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z")
+                elif val is None:
+                    out.append("")
+                else:
+                    out.append(str(val))
+            writer.writerow(out)
+    return path
+
+
+def _export_jsonl(columns: list[dict], rows: list[tuple], path: str) -> str:
+    """Export to JSON Lines (one JSON object per row)."""
+    col_names = [c["name"] for c in columns]
+    with open(path, "w", encoding="utf-8") as f:
+        for row in rows:
+            f.write(json.dumps(dict(zip(col_names, row)), ensure_ascii=False) + "\n")
+    return path
+
+
+def _export_frames(result: dict, ref_id: str, fmt: str, path: str) -> str | None:
+    """Parse frames and export to the given format. Returns path or None."""
+    columns, rows = _parse_frames(result, ref_id)
+    if not columns or not rows:
+        return None
+    if fmt == "parquet":
+        return _export_parquet(columns, rows, path)
+    elif fmt == "tsv":
+        return _export_tsv(columns, rows, path)
+    elif fmt == "jsonl":
+        return _export_jsonl(columns, rows, path)
+    else:
+        print(f"Unknown format: {fmt}", file=sys.stderr)
+        sys.exit(1)
+
+
+def _auto_output_path(output_dir: str | None, prefix: str, ext: str) -> str:
+    """Generate an output file path, using tempfile if no output_dir."""
+    import tempfile
+    if output_dir:
+        os.makedirs(output_dir, exist_ok=True)
+        fd, path = tempfile.mkstemp(suffix=f".{ext}", prefix=f"{prefix}_", dir=output_dir)
+    else:
+        fd, path = tempfile.mkstemp(suffix=f".{ext}", prefix=f"{prefix}_")
+    os.close(fd)
+    return path
+
+
+def _check_query_errors(result: dict) -> None:
+    """Check per-refId errors (Grafana returns 200 even on query failure)."""
+    for ref_id, ref_result in result.get("results", {}).items():
+        if "error" in ref_result:
+            print(f"Query {ref_id} failed: {ref_result['error']}", file=sys.stderr)
+            sys.exit(1)
+        if ref_result.get("status", 200) != 200:
+            print(f"Query {ref_id} returned status {ref_result['status']}", file=sys.stderr)
+            sys.exit(1)
+
+
+def _format_from_path(path: str) -> str | None:
+    """Detect export format from file extension."""
+    if path.endswith(".parquet"):
+        return "parquet"
+    elif path.endswith(".tsv"):
+        return "tsv"
+    elif path.endswith(".jsonl"):
+        return "jsonl"
+    return None
+
+
+def _print_preview(result: dict, ref_id: str, n: int) -> None:
+    """Print up to n rows as JSONL to stdout, plus a summary line."""
+    rows = _frames_to_rows(result, ref_id)
+    for row in rows[:n]:
+        print(json.dumps(row, ensure_ascii=False))
+    total = len(rows)
+    if total > n:
+        print(f"... ({total - n} more rows)", file=sys.stderr)
+    print(f"Total: {total} rows for refId={ref_id}", file=sys.stderr)
+
+
+def _handle_query_output(result: dict, ref_ids: list[str], *,
+                         as_json: bool, preview: int | None,
+                         output: str | None, output_dir: str | None,
+                         fmt: str | None) -> None:
+    """Shared output logic for query and panel-query commands."""
+    if as_json:
+        _pp(result)
+        return
+
+    if preview is not None:
+        for ref_id in ref_ids:
+            _print_preview(result, ref_id, preview)
+        return
+
+    if output:
+        # Single explicit path — export first refId (or all if multiple)
+        effective_fmt = fmt or _format_from_path(output) or "parquet"
+        if len(ref_ids) == 1:
+            exported = _export_frames(result, ref_ids[0], effective_fmt, output)
+            if exported:
+                print(f"Exported refId={ref_ids[0]}: {exported}", file=sys.stderr)
+            else:
+                print(f"No data for refId={ref_ids[0]}", file=sys.stderr)
+        else:
+            base, _ = os.path.splitext(output)
+            ext_map = {"parquet": ".parquet", "tsv": ".tsv", "jsonl": ".jsonl"}
+            for ref_id in ref_ids:
+                rpath = f"{base}_{ref_id}{ext_map[effective_fmt]}"
+                exported = _export_frames(result, ref_id, effective_fmt, rpath)
+                if exported:
+                    print(f"Exported refId={ref_id}: {exported}", file=sys.stderr)
+        return
+
+    if output_dir:
+        effective_fmt = fmt or "parquet"
+        ext_map = {"parquet": "parquet", "tsv": "tsv", "jsonl": "jsonl"}
+        for ref_id in ref_ids:
+            path = _auto_output_path(output_dir, f"grafana_query_{ref_id}", ext_map[effective_fmt])
+            exported = _export_frames(result, ref_id, effective_fmt, path)
+            if exported:
+                print(f"Exported refId={ref_id}: {exported}", file=sys.stderr)
+        return
+
+    # Auto mode: small → preview, large → temp file
+    for ref_id in ref_ids:
+        columns, rows = _parse_frames(result, ref_id)
+        if not rows:
+            print(f"No data for refId={ref_id}", file=sys.stderr)
+            continue
+        if len(rows) <= 50:
+            _print_preview(result, ref_id, 50)
+        else:
+            effective_fmt = fmt or "parquet"
+            ext_map = {"parquet": "parquet", "tsv": "tsv", "jsonl": "jsonl"}
+            path = _auto_output_path(None, f"grafana_query_{ref_id}", ext_map[effective_fmt])
+            _export_frames(result, ref_id, effective_fmt, path)
+            print(f"Exported {len(rows)} rows for refId={ref_id}: {path}", file=sys.stderr)
 
 
 # ---------------------------------------------------------------------------
@@ -1340,6 +1623,237 @@ def cmd_convert(client: GrafanaClient, args: list[str], **_kw: Any) -> None:
     print(f"Converted {current_format} → {to_format}: {out_path}")
 
 
+def cmd_query(client: GrafanaClient, args: list[str], **_kw: Any) -> None:
+    """Execute a datasource query.
+
+    Usage:
+      query <ds_uid> --expr <promql|logql>  [options]
+      query <ds_uid> --raw-sql <sql>        [options]
+      query <ds_uid> --query <json>         [options]
+    """
+    if not args:
+        print("Usage: query <ds_uid> --expr <expr> | --raw-sql <sql> | --query <json> [options]",
+              file=sys.stderr)
+        sys.exit(1)
+
+    ds_uid = args[0]
+    expr = raw_sql = raw_query = ds_type = ref_id = fmt = output = output_dir = None
+    time_from = "now-1h"
+    time_to = "now"
+    max_data_points = 1000
+    interval_ms = 15000
+    instant = False
+    preview: int | None = None
+    as_json = False
+    i = 1
+    while i < len(args):
+        a = args[i]
+        if a == "--expr" and i + 1 < len(args):
+            expr = args[i + 1]; i += 2
+        elif a == "--raw-sql" and i + 1 < len(args):
+            raw_sql = args[i + 1]; i += 2
+        elif a == "--query" and i + 1 < len(args):
+            raw_query = args[i + 1]; i += 2
+        elif a == "--type" and i + 1 < len(args):
+            ds_type = args[i + 1]; i += 2
+        elif a == "--from" and i + 1 < len(args):
+            time_from = args[i + 1]; i += 2
+        elif a == "--to" and i + 1 < len(args):
+            time_to = args[i + 1]; i += 2
+        elif a == "--format" and i + 1 < len(args):
+            fmt = args[i + 1]; i += 2
+        elif a == "--output" and i + 1 < len(args):
+            output = args[i + 1]; i += 2
+        elif a == "--output-dir" and i + 1 < len(args):
+            output_dir = args[i + 1]; i += 2
+        elif a == "--max-data-points" and i + 1 < len(args):
+            max_data_points = int(args[i + 1]); i += 2
+        elif a == "--interval-ms" and i + 1 < len(args):
+            interval_ms = int(args[i + 1]); i += 2
+        elif a == "--ref-id" and i + 1 < len(args):
+            ref_id = args[i + 1]; i += 2
+        elif a == "--preview" and i + 1 < len(args):
+            preview = int(args[i + 1]); i += 2
+        elif a == "--instant":
+            instant = True; i += 1
+        elif a == "--json":
+            as_json = True; i += 1
+        else:
+            i += 1
+
+    if not expr and not raw_sql and not raw_query:
+        print("One of --expr, --raw-sql, or --query is required.", file=sys.stderr)
+        sys.exit(1)
+
+    # Auto-detect datasource type if not specified
+    if not ds_type:
+        ds_info = client.get_datasource(ds_uid)
+        ds_type = ds_info.get("type", "prometheus")
+
+    # Build query object
+    query: dict[str, Any] = {
+        "refId": ref_id or "A",
+        "datasource": {"uid": ds_uid, "type": ds_type},
+        "maxDataPoints": max_data_points,
+        "intervalMs": interval_ms,
+    }
+
+    if raw_query:
+        query.update(json.loads(raw_query))
+    elif raw_sql:
+        query["rawSql"] = raw_sql
+        query.setdefault("format", "table")
+    elif expr:
+        query["expr"] = expr
+        if instant:
+            query["instant"] = True
+            query["range"] = False
+        else:
+            query["range"] = True
+            query["instant"] = False
+
+    result = client.query_datasource([query], time_from=time_from, time_to=time_to)
+    _check_query_errors(result)
+
+    ref_ids = list(result.get("results", {}).keys())
+    _handle_query_output(result, ref_ids, as_json=as_json, preview=preview,
+                         output=output, output_dir=output_dir, fmt=fmt)
+
+
+def cmd_panel_query(client: GrafanaClient, args: list[str], **_kw: Any) -> None:
+    """Execute queries from a dashboard panel.
+
+    Usage: panel-query <dashboard_uid> <panel_id> [options]
+    """
+    if len(args) < 2:
+        print("Usage: panel-query <dashboard_uid> <panel_id> [options]", file=sys.stderr)
+        sys.exit(1)
+
+    dashboard_uid = args[0]
+    panel_id = int(args[1])
+    time_from = "now-1h"
+    time_to = "now"
+    variables: dict[str, str] = {}
+    fmt = output = output_dir = None
+    preview: int | None = None
+    as_json = False
+    i = 2
+    while i < len(args):
+        a = args[i]
+        if a == "--from" and i + 1 < len(args):
+            time_from = args[i + 1]; i += 2
+        elif a == "--to" and i + 1 < len(args):
+            time_to = args[i + 1]; i += 2
+        elif a == "--var" and i + 1 < len(args):
+            k, _, v = args[i + 1].partition("=")
+            variables[k] = v; i += 2
+        elif a == "--format" and i + 1 < len(args):
+            fmt = args[i + 1]; i += 2
+        elif a == "--output" and i + 1 < len(args):
+            output = args[i + 1]; i += 2
+        elif a == "--output-dir" and i + 1 < len(args):
+            output_dir = args[i + 1]; i += 2
+        elif a == "--preview" and i + 1 < len(args):
+            preview = int(args[i + 1]); i += 2
+        elif a == "--json":
+            as_json = True; i += 1
+        else:
+            i += 1
+
+    # Fetch dashboard and find panel
+    dash_data = client.get_dashboard(dashboard_uid)
+    panels = dash_data.get("dashboard", {}).get("panels", [])
+
+    # Flatten row-nested panels
+    all_panels: list[dict] = []
+    for panel in panels:
+        if panel.get("type") == "row":
+            all_panels.extend(panel.get("panels", []))
+        else:
+            all_panels.append(panel)
+
+    target_panel = None
+    for panel in all_panels:
+        if panel.get("id") == panel_id:
+            target_panel = panel
+            break
+
+    if not target_panel:
+        print(f"Panel {panel_id} not found in dashboard {dashboard_uid}", file=sys.stderr)
+        sys.exit(1)
+
+    targets = target_panel.get("targets", [])
+    if not targets:
+        print(f"Panel {panel_id} has no query targets.", file=sys.stderr)
+        sys.exit(1)
+
+    # Build queries from targets
+    queries: list[dict] = []
+    for idx, target in enumerate(targets):
+        q = dict(target)
+        q["refId"] = q.get("refId", chr(65 + idx))
+        q["maxDataPoints"] = q.get("maxDataPoints", 1000)
+        q["intervalMs"] = q.get("intervalMs", 15000)
+        # Ensure datasource is set (panel-level or target-level)
+        if "datasource" not in q and target_panel.get("datasource"):
+            q["datasource"] = target_panel["datasource"]
+        if variables:
+            q = _resolve_variables(q, variables)
+        queries.append(q)
+
+    result = client.query_datasource(queries, time_from=time_from, time_to=time_to)
+    _check_query_errors(result)
+
+    ref_ids = list(result.get("results", {}).keys())
+    _handle_query_output(result, ref_ids, as_json=as_json, preview=preview,
+                         output=output, output_dir=output_dir, fmt=fmt)
+
+
+def cmd_panel_list(client: GrafanaClient, args: list[str], **_kw: Any) -> None:
+    """List panels in a dashboard.
+
+    Usage: panel-list <dashboard_uid> [--json]
+    """
+    if not args:
+        print("Usage: panel-list <dashboard_uid> [--json]", file=sys.stderr)
+        sys.exit(1)
+
+    dashboard_uid = args[0]
+    as_json = "--json" in args
+
+    dash_data = client.get_dashboard(dashboard_uid)
+    panels = dash_data.get("dashboard", {}).get("panels", [])
+
+    # Flatten row-nested panels
+    all_panels: list[dict] = []
+    for panel in panels:
+        if panel.get("type") == "row":
+            all_panels.extend(panel.get("panels", []))
+        else:
+            all_panels.append(panel)
+
+    if as_json:
+        _pp([{
+            "id": p.get("id"),
+            "title": p.get("title", ""),
+            "type": p.get("type", ""),
+            "datasource": p.get("datasource"),
+            "targets": len(p.get("targets", [])),
+        } for p in all_panels])
+    else:
+        print(f"\nPanels ({len(all_panels)}):\n" + "-" * 72)
+        for p in all_panels:
+            ds = p.get("datasource")
+            ds_str = ""
+            if isinstance(ds, dict):
+                ds_str = ds.get("uid", ds.get("type", ""))
+            elif isinstance(ds, str):
+                ds_str = ds
+            targets = len(p.get("targets", []))
+            print(f"  {p.get('id', '?'):>4}  {p.get('title', ''):40s}  {p.get('type', ''):16s}  {ds_str}  ({targets} queries)")
+        print("-" * 72)
+
+
 # ---------------------------------------------------------------------------
 # Main
 # ---------------------------------------------------------------------------
@@ -1365,6 +1879,9 @@ COMMANDS: dict[str, Any] = {
     "diff": cmd_diff,
     "merge": cmd_merge,
     "convert": cmd_convert,
+    "query": cmd_query,
+    "panel-query": cmd_panel_query,
+    "panel-list": cmd_panel_list,
 }
 
 # Commands that benefit from DashboardOps
@@ -1397,6 +1914,11 @@ COMMANDS:
   diff <uid> --file <path>         Structural diff: local vs server
   merge <uid> --file <path>        Three-way merge: local vs server
   convert --file <path> --to fmt   Convert between legacy and K8s format
+  query <ds_uid> --expr <expr>     Query a datasource (PromQL, LogQL, etc.)
+  query <ds_uid> --raw-sql <sql>   Query a SQL datasource
+  query <ds_uid> --query <json>    Query with raw JSON body
+  panel-query <dash> <panel_id>    Execute queries from a dashboard panel
+  panel-list <dash_uid>            List panels in a dashboard
   folders [--json]                 List folders
   datasources [--json]             List datasources
   annotations [--dashboard uid]    Query annotations
