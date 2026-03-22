@@ -1,6 +1,6 @@
 ---
 name: grafana
-description: "Manage Grafana dashboards, datasources, folders, alerting, and annotations via the HTTP API. Use when creating, editing, or querying Grafana resources programmatically."
+description: "Manage Grafana dashboards, datasources, folders, alerting, and annotations via the HTTP API. Query datasources (PromQL, LogQL, TraceQL, SQL) and export results to Parquet, TSV, or JSONL. Use when creating, editing, or querying Grafana resources programmatically."
 argument-hint: "<command> [args...] | help"
 allowed-tools:
   - "Bash(./scripts/grafana.sh*)"
@@ -9,7 +9,7 @@ dependencies: "uv, gtimeout"
 
 # Grafana Skill
 
-Manage Grafana resources via the HTTP API using a Python CLI tool. Supports dashboard CRUD, folder management, datasource inspection, annotations, alerting, format conversion, structural diffing, three-way merge with conflict resolution, and raw API access.
+Manage Grafana resources via the HTTP API using a Python CLI tool. Supports dashboard CRUD, folder management, datasource inspection, annotations, alerting, format conversion, structural diffing, three-way merge with conflict resolution, datasource queries (PromQL, LogQL, TraceQL, SQL), result export (Parquet, TSV, JSONL), and raw API access.
 
 ## How to run (always use the helper script)
 
@@ -87,6 +87,9 @@ The wrapper enforces a global timeout via `gtimeout`. Pass `--timeout DURATION` 
 | `alerts` | List alert rules | `./scripts/grafana.sh alerts --active --json` |
 | `user` | Current user info | `./scripts/grafana.sh user` |
 | `org` | Current org info | `./scripts/grafana.sh org` |
+| `query <ds_uid>` | Query a datasource | `./scripts/grafana.sh query prom1 --expr 'up' --preview 10` |
+| `panel-query <dash> <id>` | Execute queries from a dashboard panel | `./scripts/grafana.sh panel-query abc123 2 --preview 10` |
+| `panel-list <dash_uid>` | List panels in a dashboard | `./scripts/grafana.sh panel-list abc123` |
 | `raw` | Raw API call | `./scripts/grafana.sh raw GET /api/search` |
 
 ### Common flags
@@ -110,6 +113,20 @@ The wrapper enforces a global timeout via `gtimeout`. Pass `--timeout DURATION` 
 | `--limit <n>` | list, versions, annotations | Limit results |
 | `--version <n>` | restore | Version number to restore |
 | `--active` | alerts | Show active (firing) alerts instead of rules |
+| `--expr <expr>` | query | PromQL / LogQL expression |
+| `--raw-sql <sql>` | query | SQL query string |
+| `--query <json>` | query | Raw JSON query body |
+| `--type <type>` | query | Datasource type (auto-detected if omitted) |
+| `--from <time>` | query, panel-query | Time range start (default: `now-1h`) |
+| `--to <time>` | query, panel-query | Time range end (default: `now`) |
+| `--format <fmt>` | query, panel-query | Export format: `parquet`, `tsv`, `jsonl` |
+| `--output-dir <dir>` | query, panel-query | Auto-named output in directory |
+| `--max-data-points <n>` | query | Max data points (default: 1000) |
+| `--interval-ms <n>` | query | Query interval in ms (default: 15000) |
+| `--ref-id <id>` | query | RefId for the query (default: `A`) |
+| `--instant` | query | Execute as instant query |
+| `--preview <n>` | query, panel-query | Print first N rows as JSONL to stdout |
+| `--var key=value` | panel-query | Template variable substitution (repeatable) |
 
 ## Conflict Resolution
 
@@ -173,6 +190,79 @@ Convert between legacy and K8s dashboard formats without any API calls:
 ./scripts/grafana.sh convert --file /tmp/k8s.json --to legacy --output /tmp/rt.json
 ```
 
+## Querying Data
+
+Query any Grafana datasource via the `/api/ds/query` endpoint. Grafana proxies the query to the underlying datasource (Prometheus, Loki, Tempo, MySQL, etc.) and returns results in a unified Data Frame format.
+
+### Direct query
+
+```bash
+# PromQL — preview 10 rows
+./scripts/grafana.sh query prom-uid --expr 'sum by (job) (rate(http_requests_total[5m]))' --preview 10
+
+# PromQL — instant query
+./scripts/grafana.sh query prom-uid --expr 'up' --instant --json
+
+# LogQL — last 30 minutes of errors
+./scripts/grafana.sh query loki-uid --expr '{app="api"} |= "error"' --from now-30m --preview 20
+
+# SQL datasource
+./scripts/grafana.sh query mysql-uid --raw-sql 'SELECT endpoint, count(*) AS n FROM requests WHERE $__timeFilter(created_at) GROUP BY endpoint ORDER BY n DESC LIMIT 10'
+
+# Raw query body (any datasource)
+./scripts/grafana.sh query tempo-uid --query '{"queryType":"traceqlSearch","query":"{ status = error }","limit":10}'
+```
+
+### Export formats
+
+```bash
+# Parquet (default for large results — requires pyarrow)
+./scripts/grafana.sh query prom-uid --expr 'up' --format parquet --output /tmp/up.parquet
+
+# TSV (opens in Excel)
+./scripts/grafana.sh query prom-uid --expr 'up' --format tsv --output /tmp/up.tsv
+
+# JSONL (no dependencies)
+./scripts/grafana.sh query prom-uid --expr 'up' --format jsonl --output /tmp/up.jsonl
+
+# Auto-named file in a directory
+./scripts/grafana.sh query prom-uid --expr 'up' --output-dir /tmp/results
+```
+
+### Panel queries
+
+Extract and execute queries directly from an existing dashboard panel:
+
+```bash
+# List panels to find the ID
+./scripts/grafana.sh panel-list <dashboard_uid>
+
+# Execute panel queries with variable substitution
+./scripts/grafana.sh panel-query <dashboard_uid> <panel_id> --var namespace=production --var job=api-server --preview 20
+
+# Export panel data to Parquet
+./scripts/grafana.sh panel-query <dashboard_uid> <panel_id> --format parquet --output /tmp/panel.parquet
+```
+
+### Output behavior
+
+When no output flags are given, the CLI auto-selects:
+- **≤50 rows** → prints JSONL preview to stdout
+- **>50 rows** → exports to a temp file (Parquet by default)
+
+Use `--json` for the raw API response, `--preview N` for a quick look, or `--output`/`--output-dir` for explicit file export.
+
+### Query language references
+
+Before constructing queries, read the appropriate reference file:
+
+| Datasource | Type String | Reference |
+|------------|-------------|-----------|
+| Prometheus / Mimir | `prometheus` | `references/PROMQL.md` |
+| Loki | `loki` | `references/LOGQL.md` |
+| Tempo | `tempo` | `references/TRACEQL.md` |
+| MySQL / PostgreSQL / ClickHouse / BigQuery | `mysql`, `postgres`, etc. | `references/SQL.md` |
+
 ## Raw API Access
 
 For any endpoint not covered by a dedicated command, use `raw`:
@@ -232,6 +322,10 @@ For any endpoint not covered by a dedicated command, use `raw`:
 | `references/api-users-teams.md` | Users, teams, service accounts, organizations |
 | `references/api-common-patterns.md` | Error handling, pagination, conflict handling, three-way merge patterns |
 | `references/api-workflow.md` | Step-by-step workflows for common dashboard operations |
+| `references/PROMQL.md` | PromQL query language reference (Prometheus/Mimir) |
+| `references/LOGQL.md` | LogQL query language reference (Loki) |
+| `references/TRACEQL.md` | TraceQL query language reference (Tempo) |
+| `references/SQL.md` | SQL query reference (MySQL, PostgreSQL, ClickHouse, BigQuery) |
 
 ## Example Dashboards
 
