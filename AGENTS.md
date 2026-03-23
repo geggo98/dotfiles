@@ -101,6 +101,7 @@ Host-specific secrets declarations live in **`hosts/<serial>/secrets.nix`**.
 - **Module type:** Uses `deferredModule` type for beneficial merge semantics
 - **Auto-import:** `import-tree ./modules` auto-discovers all module files
 - **Nix management:** Determinate Nix manages the Nix installation, not nix-darwin's built-in `nix.enable`
+- **SIP restriction:** `launchd.envVariables` is blocked by macOS System Integrity Protection. To set environment variables for GUI apps (e.g. PATH), use a `launchd.user.agents` entry that runs `/bin/launchctl setenv` at login instead
 
 ## Coding Style & Naming Conventions
 
