@@ -326,6 +326,7 @@ For any endpoint not covered by a dedicated command, use `raw`:
 | `references/LOGQL.md` | LogQL query language reference (Loki) |
 | `references/TRACEQL.md` | TraceQL query language reference (Tempo) |
 | `references/SQL.md` | SQL query reference (MySQL, PostgreSQL, ClickHouse, BigQuery) |
+| `references/labels-fields-geomap.md` | Labels vs. Fields, "Labels to Fields" transformation, Geomap panel location modes, Prometheus-to-Geomap pipelines |
 
 ## Example Dashboards
 
@@ -339,6 +340,7 @@ The `examples/` directory contains representative Grafana dashboard JSON files:
 | `alerting.json` | v2beta1 | Alert list, thresholds, time region annotations |
 | `pokemon.json` | v2beta1 | Infinity datasource, external API integration |
 | `canvas.json` | v2beta1 | Canvas visualization |
+| `geomap.json` | v2beta1 | Geomap with geohash heatmap layer, `labelsToFields` transformation pipeline |
 
 Note: The example files use the v2beta1 Kubernetes-style format (exported from newer Grafana). For creating dashboards via the API, use the legacy format documented in `references/dashboard-json-structure.md`.
 
