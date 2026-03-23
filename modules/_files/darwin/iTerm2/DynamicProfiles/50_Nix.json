@@ -76,6 +76,8 @@
       },
       "Bound Hosts": [],
       "Blinking Cursor": false,
+      "Allow Clipboard Access": true,
+      "Allow Title Setting": true,
       "Disable Window Resizing": false,
       "Sync Title": true,
       "Prompt Before Closing 2": false,
@@ -362,6 +364,15 @@
       }
     },
     {
+      "Name": "Nix (Dracula secure)",
+      "Dynamic Profile Parent Name": "Nix (Dracula black)",
+      "Guid": "7B930528-C07F-462D-A63E-7185D8A1786C",
+      "Allow Clipboard Access": false,
+      "Allow Title Setting": false,
+      "Disable Window Resizing": true,
+      "Badge Text": "secure"
+    },
+    {
       "Name": "Directory: nix-darwin",
       "Guid": "5330F2C3-83AE-40B3-89F7-AD94950451DE",
       "Dynamic Profile Parent Name": "Nix (Dracula dimmed)",
@@ -601,6 +612,29 @@
           "auto-rainbow style": 3
         }
       }
+    },
+    {
+      "Name": "Web",
+      "Dynamic Profile Parent Name": "Nix (Dracula black)",
+      "Guid": "C4EC1D55-30EC-4DD4-9E24-7E2CF68DB4AE",
+      "Custom Command": "Browser",
+      "Initial URL": "https:\/\/claude.ai\/new",
+      "Shortcut": "C",
+      "Icon": 1,
+      "Show Status Bar": false,
+      "Has Hotkey": true,
+      "HotKey Key Code": 17,
+      "HotKey Characters": "\u0014",
+      "HotKey Characters Ignoring Modifiers": "t",
+      "HotKey Modifier Flags": 1835008,
+      "HotKey Modifier Activation": 0,
+      "HotKey Activated By Modifier": false,
+      "HotKey Window Floats": true,
+      "HotKey Window Animates": true,
+      "HotKey Window AutoHides": false,
+      "HotKey Window Reopens On Activation": false,
+      "HotKey Window Dock Click Action": 0,
+      "HotKey Alternate Shortcuts": []
     }
   ]
 }
