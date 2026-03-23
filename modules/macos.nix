@@ -1,7 +1,35 @@
 { ... }:
 {
-  flake.modules.darwin.macos = { pkgs, ... }: {
+  flake.modules.darwin.macos = { config, pkgs, ... }: {
     system.stateVersion = 5;
+
+    # PATH for GUI apps launched via launchd (Spotlight, Dock, etc.)
+    # Uses launchctl setenv to bypass SIP restrictions on launchd.envVariables.
+    launchd.user.agents.set-gui-path =
+      let
+        path = builtins.concatStringsSep ":" [
+          "/nix/var/nix/profiles/default/bin"
+          "/etc/profiles/per-user/${config.system.primaryUser}/bin"
+          "/run/current-system/sw/bin"
+          "/usr/local/bin"
+          "/usr/bin"
+          "/bin"
+          "/usr/sbin"
+          "/sbin"
+        ];
+      in
+      {
+        serviceConfig = {
+          Label = "set-gui-path";
+          ProgramArguments = [
+            "/bin/launchctl"
+            "setenv"
+            "PATH"
+            path
+          ];
+          RunAtLoad = true;
+        };
+      };
 
     # Determinate uses its own daemon — nix-darwin must not manage Nix.
     nix.enable = false;
