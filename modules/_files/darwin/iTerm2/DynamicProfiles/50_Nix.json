@@ -85,6 +85,7 @@
       "Command": "\/run\/current-system\/sw\/bin\/fish",
       "Description": "Default",
       "Smart Cursor Color": true,
+      "Disable Potentially Insecure Escape Sequences": false,
       "Mouse Reporting": true,
       "Screen": -1,
       "Selection Color": {
@@ -367,6 +368,7 @@
       "Name": "Nix (Dracula secure)",
       "Dynamic Profile Parent Name": "Nix (Dracula black)",
       "Guid": "7B930528-C07F-462D-A63E-7185D8A1786C",
+      "Disable Potentially Insecure Escape Sequences": true,
       "Allow Clipboard Access": false,
       "Allow Title Setting": false,
       "Disable Window Resizing": true,
