@@ -31,8 +31,7 @@
     sops-nix.inputs.nixpkgs.follows = "nixpkgs";
 
     # https://github.com/nix-community/nix-index-database
-    # Fix tag, because newer versions have a corrupt `flake.lock` file
-    nix-index-database.url = "github:nix-community/nix-index-database/2025-12-07-035007";
+    nix-index-database.url = "github:nix-community/nix-index-database";
     nix-index-database.inputs.nixpkgs.follows = "nixpkgs";
 
     # https://github.com/numtide/llm-agents.nix
