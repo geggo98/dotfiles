@@ -34,6 +34,9 @@
     nix-index-database.url = "github:nix-community/nix-index-database";
     nix-index-database.inputs.nixpkgs.follows = "nixpkgs";
 
+    # https://github.com/cachix/devenv
+    devenv.url = "github:cachix/devenv";
+
     # https://github.com/numtide/llm-agents.nix
     nixpkgs-llm-agents.url = "github:numtide/llm-agents.nix";
 

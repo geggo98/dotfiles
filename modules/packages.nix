@@ -72,7 +72,7 @@
         # Dev
         asciinema
         deno
-        unstable.devenv
+        inputs.devenv.packages.${pkgs.stdenv.hostPlatform.system}.devenv
         git-absorb
         git-crypt
         git-machete
