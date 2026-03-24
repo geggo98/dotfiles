@@ -221,6 +221,16 @@ let
         '';
       });
 
+      devenvPkg = inputs.devenv.packages.${pkgs.stdenv.hostPlatform.system}.devenv;
+
+      mcp-devenv = (pkgs.writeShellApplication {
+        name = "+mcp-devenv";
+        runtimeInputs = [ devenvPkg ];
+        text = ''
+          exec devenv mcp "$@"
+        '';
+      });
+
       root = ./..;
     in
     {
@@ -266,6 +276,11 @@ let
           zai-web-reader = {
             type = "stdio";
             command = "${mcp-zai-web-reader}/bin/+mcp-zai-web-reader";
+            args = [ ];
+          };
+          devenv = {
+            type = "stdio";
+            command = "${mcp-devenv}/bin/+mcp-devenv";
             args = [ ];
           };
         };
@@ -318,6 +333,11 @@ let
               command = [ "${mcp-zai-web-reader}/bin/+mcp-zai-web-reader" ];
               enabled = true;
             };
+            devenv = {
+              type = "local";
+              command = [ "${mcp-devenv}/bin/+mcp-devenv" ];
+              enabled = true;
+            };
           };
         };
         rules = root + "/AGENTS.md";
@@ -360,6 +380,10 @@ let
               command = "${mcp-zai-web-reader}/bin/+mcp-zai-web-reader";
               args = [ ];
             };
+            devenv = {
+              command = "${mcp-devenv}/bin/+mcp-devenv";
+              args = [ ];
+            };
           };
         };
       };
@@ -373,6 +397,7 @@ let
         mcp-zai-search
         mcp-zai-vision
         mcp-zai-web-reader
+        mcp-devenv
       ];
 
       home.file.".agents/skills" = {
