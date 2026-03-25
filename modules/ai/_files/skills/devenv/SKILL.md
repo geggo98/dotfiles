@@ -200,6 +200,57 @@ Devenv stores it in `.devenv/state/venv/`. Create a symlink for IDE compatibilit
 
 Then configure IntelliJ/PyCharm to use `./venv` as the Python interpreter path.
 
+## Tasks
+
+Tasks enable dependency-ordered, parallel execution of commands. They integrate with
+shell entry (`devenv:enterShell`), tests (`devenv:enterTest`), and processes.
+
+```nix
+{
+  tasks."myapp:build" = {
+    exec = "npm run build";
+    before = [ "devenv:enterShell" ];
+  };
+
+  tasks."myapp:test" = {
+    exec = "npm test";
+    before = [ "devenv:enterTest" ];
+  };
+}
+```
+
+```bash
+devenv tasks run myapp:build          # Run a single task
+devenv tasks run myapp                # Run all tasks in namespace
+devenv tasks run myapp:build --input key=value  # Pass input (2.0+)
+```
+
+Tasks support `status` (skip if exit 0), `execIfModified` (skip if files unchanged),
+`package` (language-specific interpreter), `cwd`, and JSON input/output via environment
+variables. Processes become tasks automatically with the `devenv:processes:` prefix.
+
+### Agent-friendly tasks
+
+Wrap frequently used agent commands as devenv tasks so the user can allowlist
+`Bash(devenv tasks run agent:*)` in Claude Code permissions — avoiding repeated
+security prompts:
+
+```nix
+{
+  tasks."agent:build" = { exec = "mvn package -DskipTests"; };
+  tasks."agent:test"  = { exec = "mvn test"; };
+  tasks."agent:lint"  = { exec = "npm run lint"; };
+  tasks."agent:fmt"   = { exec = "prettier --write ."; };
+}
+```
+
+The agent should prefer `devenv tasks run agent:<name>` over raw shell commands
+when a matching task exists. Benefits: declarative, cached, dependency-ordered,
+and allowlistable with a single permission rule.
+
+For full details (lifecycle events, status/caching, input/output, process integration,
+namespace conventions): read `references/tasks.md`.
+
 ## Git hooks
 
 Devenv integrates git-hooks.nix for declarative linting/formatting at commit time.
@@ -461,6 +512,13 @@ Scaffold: `nix flake init --template github:cachix/devenv` (plain) or
 | `devcontainer.enable` | bool | Generate `.devcontainer.json` |
 | `scripts.<name>.exec` | string | Named script |
 | `tasks.<name>` | attrset | Task with dependencies |
+| `tasks.<name>.before` | `[string]` | Run before these tasks/events |
+| `tasks.<name>.after` | `[string]` | Run after these tasks |
+| `tasks.<name>.status` | string | Skip exec if status exits 0 |
+| `tasks.<name>.execIfModified` | `[string]` | Run only when files change |
+| `tasks.<name>.package` | package | Interpreter for exec |
+| `tasks.<name>.cwd` | string | Working directory |
+| `tasks.<name>.input` | attrset | JSON input via `$DEVENV_TASK_INPUT` |
 
 Full reference: https://devenv.sh/reference/options/
 
@@ -499,3 +557,4 @@ Full reference: https://devenv.sh/reference/options/
 | `references/direnv.md` | Direnv: all layouts, stdlib commands, combining with devenv, known issues |
 | `references/git-hooks.md` | Git hooks: built-in hooks, custom hooks, package overrides, Claude Code auto-format, per-language recipes |
 | `references/flakes.md` | Nix Flakes: plain flake.nix, flake-parts, feature comparison, multi-platform, multiple shells |
+| `references/tasks.md` | Tasks: defining, dependencies, lifecycle events, status/caching, input/output, agent-friendly patterns, allowlisting |
