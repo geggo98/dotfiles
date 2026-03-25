@@ -71,6 +71,7 @@
 
         # Dev
         asciinema
+        bun
         deno
         inputs.devenv.packages.${pkgs.stdenv.hostPlatform.system}.devenv
         git-absorb
