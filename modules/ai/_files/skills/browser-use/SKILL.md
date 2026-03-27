@@ -4,7 +4,7 @@ description: "Automates browser interactions for web testing, form filling, scre
 argument-hint: "<task description or URL>"
 allowed-tools:
   - "Read(references/*)"
-  - "Bash(./scripts/browser-use.sh*)"
+  - "Bash(cd * && ./scripts/browser-use.sh *)"
 dependencies: "uv, gtimeout"
 ---
 
