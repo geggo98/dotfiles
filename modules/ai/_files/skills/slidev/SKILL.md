@@ -6,7 +6,7 @@ description: >
   conference talks, code walkthroughs, teaching materials, or developer decks. Also trigger when the
   user mentions Slidev, sli.dev, slide decks with code, or wants to create developer-facing presentations.
 argument-hint: "<presentation topic or slides.md path>"
-allowed-tools: Read(references/*)
+allowed-tools: Read(references/*) Skill(tmux)
 ---
 
 # Slidev - Presentation Slides for Developers
@@ -27,12 +27,38 @@ Web-based slides maker built on Vite, Vue, and Markdown.
 
 ```bash
 bun create slidev     # Create project
-bun run dev           # Start dev server (opens http://localhost:3030)
 bun run build         # Build static SPA
 bun run export        # Export to PDF (requires playwright-chromium)
 ```
 
-**Verify**: After `bun run dev`, confirm slides load at `http://localhost:3030` with the browser-use skill. After `bun run export`, check the output PDF exists in the project root.
+### Dev Server (always use tmux)
+
+Start the Slidev dev server in a tmux session so both agent and user can monitor it:
+
+```bash
+SOCKET_DIR=${TMPDIR:-/tmp}/claude-tmux-sockets
+mkdir -p "$SOCKET_DIR"
+SOCKET="$SOCKET_DIR/claude.sock"
+SESSION=claude-slidev
+
+tmux -S "$SOCKET" new -d -s "$SESSION" -n slidev
+tmux -S "$SOCKET" send-keys -t "$SESSION":0.0 -- 'bun run dev' Enter
+```
+
+Then immediately tell the user:
+```
+To monitor the Slidev dev server yourself:
+  tmux -S /tmp/claude-tmux-sockets/claude.sock attach -t claude-slidev
+```
+
+Wait for the server to be ready before verifying:
+```bash
+./scripts/wait-for-text.sh -S "$SOCKET" -t "$SESSION":0.0 -p 'localhost:3030' -T 30
+```
+
+**Verify**: After the dev server is ready, confirm slides load at `http://localhost:3030` with the browser-use skill. After `bun run export`, check the output PDF exists in the project root.
+
+**Cleanup**: When done, kill the session: `tmux -S "$SOCKET" kill-session -t "$SESSION"`.
 
 ## Basic Syntax
 
