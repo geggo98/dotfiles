@@ -1,8 +1,7 @@
 ---
 name: dendritic-nix
 description: "Applies the Dendritic Pattern for structuring Nix flake configurations with flake-parts. Every file is a flake-parts module organized by feature (aspect), not by configuration class. Use when structuring Nix flakes, creating flake-parts modules, composing multi-host configs, organizing NixOS/home-manager/nix-darwin configuration, or sharing values across configuration classes. Triggers: nix flake structure, flake-parts modules, multi-host configs, aspect modules. Do NOT use for general Nix language questions, nixpkgs packaging, or NixOS module authoring unrelated to flake structure."
-allowed-tools:
-  - "Read(references/*)"
+allowed-tools: Read(references/*)
 ---
 
 # Dendritic Pattern for Nix Flakes
