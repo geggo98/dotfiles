@@ -3,6 +3,7 @@ name: grafana
 description: "Manage Grafana dashboards, datasources, folders, alerting, and annotations via the HTTP API. Query datasources (PromQL, LogQL, TraceQL, SQL) and export results to Parquet, TSV, or JSONL. Use when creating, editing, or querying Grafana resources programmatically."
 argument-hint: "<command> [args...] | help"
 allowed-tools:
+  - "Read(references/*)"
   - "Bash(./scripts/grafana.sh*)"
 dependencies: "uv, gtimeout"
 ---
