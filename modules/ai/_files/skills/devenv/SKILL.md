@@ -10,6 +10,7 @@ description: >
   polyrepo/monorepo setups, devenv profiles, devenv outputs, or devenv LSP/MCP. Even if the user just
   says "set up my project environment" or "I need MySQL and Java for local dev", consider this skill.
 allowed-tools:
+  - "Read(references/*)"
   - "mcp__devenv__search_options"
   - "mcp__devenv__search_packages"
 ---
