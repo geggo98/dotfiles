@@ -48,15 +48,13 @@ Start the Slidev dev server using the tmux skill (`Skill(tmux)`) and its `claude
 
 **Verify**: After the dev server is ready, confirm slides load at `http://localhost:3030` with the browser-use skill. After `bun run export`, check the output PDF exists in the project root.
 
-**Debugging**: Use Playwright for debugging issues with individual slides. It's much faster and more reliable than browser-use. Always place test scripts and screenshots in `./playwright-tests/` within the project directory (never in `/tmp`). Create the directory and a `.gitignore` on first use:
+**Debugging**: Use Playwright for debugging issues with individual slides. It's much faster and more reliable than browser-use. Always place test scripts and screenshots in `./playwright-tests/` within the project directory (never in `/tmp`).
 
-```bash
-mkdir -p playwright-tests
-echo '*' > playwright-tests/.gitignore
-echo '!.gitignore' >> playwright-tests/.gitignore
-```
+**IMPORTANT**: Use the **Write tool** to create scripts and the `.gitignore` — never use `cat <<HEREDOC`, shell redirects, or `echo` to write files (these trigger sandbox security warnings). Run scripts with `bun run playwright-tests/script.ts` or `bunx playwright test`.
 
-Then write scripts like `playwright-tests/debug-slide-5.ts` and screenshots land in `playwright-tests/` as well. Users can `git add -f` individual files they want to keep.
+On first use, create `playwright-tests/.gitignore` via the Write tool with content: `*\n!.gitignore`
+
+Then write scripts like `playwright-tests/debug-slide-5.ts` via the Write tool and run them with `bun run`. Screenshots land in `playwright-tests/` as well. Users can `git add -f` individual files they want to keep.
 
 **Cleanup**: When done, kill the session: `./scripts/claude-tmux.sh kill -s claude-slidev`.
 
