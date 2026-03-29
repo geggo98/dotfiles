@@ -74,6 +74,7 @@
         bun
         deno
         inputs.devenv.packages.${pkgs.stdenv.hostPlatform.system}.devenv
+        delta
         git-absorb
         git-crypt
         git-machete
