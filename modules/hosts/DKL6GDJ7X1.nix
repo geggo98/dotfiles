@@ -9,6 +9,7 @@ in
       darwin.macos
       darwin.determinate
       darwin.homebrew
+      darwin.overlays
     ];
 
     nixpkgs.hostPlatform = "aarch64-darwin";
@@ -27,7 +28,7 @@ in
       "hashicorp/tap/hashicorp-boundary-desktop"
       "cursor"
       "Dropbox"
-      "git-credential-manager"
+
       "openvpn-connect"
       "postman"
       "postman-cli"

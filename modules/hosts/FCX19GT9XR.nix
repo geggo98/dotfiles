@@ -9,6 +9,7 @@ in
       darwin.macos
       darwin.determinate
       darwin.homebrew
+      darwin.overlays
     ];
 
     nixpkgs.hostPlatform = "aarch64-darwin";
