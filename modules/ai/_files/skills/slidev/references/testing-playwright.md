@@ -15,6 +15,18 @@ bun add -D @playwright/test
 bunx playwright install chromium  # or: --with-deps chromium
 ```
 
+### Project Directory for Test Scripts
+
+Always place Playwright test scripts, screenshots, and artifacts in `./playwright-tests/` within the project directory — never in `/tmp` or other temporary locations. Create the directory with a `.gitignore` on first use:
+
+```bash
+mkdir -p playwright-tests
+echo '*' > playwright-tests/.gitignore
+echo '!.gitignore' >> playwright-tests/.gitignore
+```
+
+The `.gitignore` ignores everything by default. Users can selectively track files with `git add -f playwright-tests/some-file.ts`.
+
 ### Playwright Config with Dynamic Port
 
 Slidev already depends on `get-port-please`. Use it to avoid port conflicts:
@@ -27,7 +39,8 @@ import { getPort } from 'get-port-please'
 const port = await getPort({ port: 3030, portRange: [3030, 4000] })
 
 export default defineConfig({
-  testDir: './tests/e2e',
+  testDir: './playwright-tests',
+  outputDir: './playwright-tests/test-results',
   webServer: {
     command: `bunx slidev --port ${port}`,
     port,
@@ -50,6 +63,8 @@ export default defineConfig({
 import { defineConfig } from '@playwright/test'
 
 export default defineConfig({
+  testDir: './playwright-tests',
+  outputDir: './playwright-tests/test-results',
   webServer: {
     command: 'bunx slidev --port 3030',
     port: 3030,
@@ -458,3 +473,5 @@ test('slide with v-clicks after reveal', async ({ page }) => {
 ```
 
 Update snapshots: `bunx playwright test --update-snapshots`
+
+Snapshots are stored alongside test files in `playwright-tests/`. To keep a snapshot in version control: `git add -f playwright-tests/slide-1.png`.

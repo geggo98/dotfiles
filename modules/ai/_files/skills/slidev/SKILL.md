@@ -31,36 +31,34 @@ bun run build         # Build static SPA
 bun run export        # Export to PDF (requires playwright-chromium)
 ```
 
-### Dev Server (always use tmux)
+### Dev Server (always use tmux skill)
 
-Start the Slidev dev server in a tmux session so both agent and user can monitor it:
+Start the Slidev dev server using the tmux skill (`Skill(tmux)`) and its `claude-tmux.sh` wrapper — never use raw tmux commands with variable expansion:
 
 ```bash
-SOCKET_DIR=${TMPDIR:-/tmp}/claude-tmux-sockets
-mkdir -p "$SOCKET_DIR"
-SOCKET="$SOCKET_DIR/claude.sock"
-SESSION=claude-slidev
+# Start dev server in a tmux session
+./scripts/claude-tmux.sh new -s claude-slidev -c 'bun run dev'
 
-tmux -S "$SOCKET" new -d -s "$SESSION" -n slidev
-tmux -S "$SOCKET" send-keys -t "$SESSION":0.0 -- 'bun run dev' Enter
-```
+# Show the user how to monitor it
+./scripts/claude-tmux.sh attach
 
-Then immediately tell the user:
-```
-To monitor the Slidev dev server yourself:
-  tmux -S /tmp/claude-tmux-sockets/claude.sock attach -t claude-slidev
-```
-
-Wait for the server to be ready before verifying:
-```bash
-./scripts/wait-for-text.sh -S "$SOCKET" -t "$SESSION":0.0 -p 'localhost:3030' -T 30
+# Wait for the server to be ready
+./scripts/claude-tmux.sh wait -p 'localhost:3030' -T 30
 ```
 
 **Verify**: After the dev server is ready, confirm slides load at `http://localhost:3030` with the browser-use skill. After `bun run export`, check the output PDF exists in the project root.
 
-**Debugging**: Use Playwright for debugging issues with individual slides. It's much faster and more reliable than browser-use .
+**Debugging**: Use Playwright for debugging issues with individual slides. It's much faster and more reliable than browser-use. Always place test scripts and screenshots in `./playwright-tests/` within the project directory (never in `/tmp`). Create the directory and a `.gitignore` on first use:
 
-**Cleanup**: When done, kill the session: `tmux -S "$SOCKET" kill-session -t "$SESSION"`.
+```bash
+mkdir -p playwright-tests
+echo '*' > playwright-tests/.gitignore
+echo '!.gitignore' >> playwright-tests/.gitignore
+```
+
+Then write scripts like `playwright-tests/debug-slide-5.ts` and screenshots land in `playwright-tests/` as well. Users can `git add -f` individual files they want to keep.
+
+**Cleanup**: When done, kill the session: `./scripts/claude-tmux.sh kill -s claude-slidev`.
 
 ## Basic Syntax
 
