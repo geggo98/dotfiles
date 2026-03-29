@@ -6,6 +6,37 @@ End-to-end testing of Slidev presentations using Playwright. Covers setup, DOM s
 
 Slidev serves presentations as a Vue SPA on a Vite dev server. Every slide is a Vue component rendered in the browser. Custom Vue components placed in `components/` are auto-discovered via `unplugin-vue-components`. This means everything is testable through standard browser automation — no special framework adapter is needed.
 
+## Agent Workflow (IMPORTANT)
+
+When writing and running Playwright test scripts or debug scripts:
+
+1. **Use the Write or Edit tool** to create/modify scripts in `./playwright-tests/` — NEVER use `cat <<HEREDOC`, shell redirects, or `echo` to write scripts. Heredoc patterns trigger security warnings in the agent sandbox.
+2. **Always place scripts in `./playwright-tests/`** within the project directory — NEVER write to `/tmp/` or other temporary locations.
+3. **Run scripts with `bun run`** (e.g., `bun run playwright-tests/debug-slide-5.ts`) — not with `node`. The `bun` prefix is pre-approved in the skill's allowed-tools.
+4. **Run test suites with `bunx playwright test`** — this is also pre-approved.
+
+### Example: Ad-hoc Screenshot Script
+
+```
+# Step 1: Use Write tool to create playwright-tests/screenshot-slide5.ts
+# Step 2: Run it
+bun run playwright-tests/screenshot-slide5.ts
+```
+
+The script content (written via Write tool):
+
+```ts
+// playwright-tests/screenshot-slide5.ts
+import { chromium } from 'playwright-core'
+
+const browser = await chromium.launch()
+const page = await browser.newPage({ viewport: { width: 960, height: 540 } })
+await page.goto('http://localhost:3030/5', { waitUntil: 'networkidle' })
+await page.waitForTimeout(1500)
+await page.screenshot({ path: 'playwright-tests/slide5.png', fullPage: false })
+await browser.close()
+```
+
 ## Setup
 
 ### Install Dependencies
@@ -17,12 +48,12 @@ bunx playwright install chromium  # or: --with-deps chromium
 
 ### Project Directory for Test Scripts
 
-Always place Playwright test scripts, screenshots, and artifacts in `./playwright-tests/` within the project directory — never in `/tmp` or other temporary locations. Create the directory with a `.gitignore` on first use:
+Always place Playwright test scripts, screenshots, and artifacts in `./playwright-tests/` within the project directory — never in `/tmp` or other temporary locations. Use the Write tool to create a `.gitignore` on first use:
 
-```bash
-mkdir -p playwright-tests
-echo '*' > playwright-tests/.gitignore
-echo '!.gitignore' >> playwright-tests/.gitignore
+Write `playwright-tests/.gitignore` with:
+```
+*
+!.gitignore
 ```
 
 The `.gitignore` ignores everything by default. Users can selectively track files with `git add -f playwright-tests/some-file.ts`.
@@ -445,6 +476,9 @@ test('overview navigation with keyboard', async ({ page }) => {
 
 ## Tips
 
+- **Create scripts with Write/Edit tools**: Never use `cat <<HEREDOC` or shell redirects to write scripts — this triggers sandbox security warnings. Always use the Write or Edit tool.
+- **Run with `bun run` or `bunx playwright test`**: These prefixes are pre-approved in the skill's allowed-tools. Do not use `node` directly.
+- **Keep everything in `./playwright-tests/`**: Scripts, screenshots, and artifacts go here — never in `/tmp`.
 - **Wait for slides to load**: After `goto()`, wait for `.slidev-page-{N}` to be visible before asserting.
 - **Animation timing**: Use `await page.waitForTimeout(200)` between rapid click steps, or use `toHaveCSS` / `toBeVisible` which auto-retry.
 - **Click steps vs slides**: `ArrowRight` advances one click step. If there are no more click steps, it moves to the next slide. `ArrowDown` always skips to the next slide.
