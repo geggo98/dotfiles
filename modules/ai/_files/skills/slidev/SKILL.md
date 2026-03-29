@@ -6,7 +6,7 @@ description: >
   conference talks, code walkthroughs, teaching materials, or developer decks. Also trigger when the
   user mentions Slidev, sli.dev, slide decks with code, or wants to create developer-facing presentations.
 argument-hint: "<presentation topic or slides.md path>"
-allowed-tools: Read(references/*) Skill(tmux)
+allowed-tools: Read(references/*) Skill(tmux) Bash(bun:*) Bash(bunx:*)
 ---
 
 # Slidev - Presentation Slides for Developers
@@ -58,6 +58,8 @@ Wait for the server to be ready before verifying:
 
 **Verify**: After the dev server is ready, confirm slides load at `http://localhost:3030` with the browser-use skill. After `bun run export`, check the output PDF exists in the project root.
 
+**Debugging**: Use Playwright for debugging issues with individual slides. It's much faster and more reliable than browser-use .
+
 **Cleanup**: When done, kill the session: `tmux -S "$SOCKET" kill-session -t "$SESSION"`.
 
 ## Basic Syntax
@@ -101,6 +103,7 @@ Presenter notes go here
 | Exporting | PDF, PPTX, PNG export options | [core-exporting](references/core-exporting.md) |
 | Hosting | Build and deploy to various platforms | [core-hosting](references/core-hosting.md) |
 | Global Context | $nav, $slidev, composables API | [core-global-context](references/core-global-context.md) |
+| Testing | E2E testing with Playwright | [testing-playwright](references/testing-playwright.md) |
 
 ## Feature Reference
 
