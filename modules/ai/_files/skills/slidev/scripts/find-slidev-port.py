@@ -1,7 +1,9 @@
-#!/usr/bin/env -S uv run --script
+#!/usr/bin/env -S uv --quiet run --frozen --script
 # /// script
 # requires-python = ">=3.11"
 # dependencies = []
+# [tool.uv]
+# exclude-newer = "30 days"
 # ///
 """Scan ports 3030-4000 for running Slidev dev servers and print their titles."""
 
