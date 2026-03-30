@@ -7,9 +7,9 @@
     in
     {
       home.packages = [
-        unstable.aichat
         unstable.ollama
-        llm-agents.openskills
+        llm-agents.ccusage
+        llm-agents.ccusage-codex
         pkgs.tmux # required by the tmux skill for headless interactive sessions
 
         (pkgs.writeShellApplication {
