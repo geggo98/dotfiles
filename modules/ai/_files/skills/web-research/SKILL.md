@@ -4,7 +4,7 @@ description: "Researches the web thoroughly, e.g., how to use an API, library, o
 argument-hint: "<research query>"
 context: fork
 agent: Explore
-allowed-tools: Bash(./scripts/gemini_research.sh:*) Bash(./scripts/perplexity_open_router_research.sh:*)
+allowed-tools: Bash(./scripts/gemini_research.sh *) Bash(./scripts/perplexity_open_router_research.sh *)
 dependencies: "uv, gtimeout"
 ---
 
