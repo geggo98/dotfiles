@@ -6,7 +6,7 @@ description: >
   conference talks, code walkthroughs, teaching materials, or developer decks. Also trigger when the
   user mentions Slidev, sli.dev, slide decks with code, or wants to create developer-facing presentations.
 argument-hint: "<presentation topic or slides.md path>"
-allowed-tools: Read(references/*) Skill(tmux) Bash(bun:*) Bash(bunx:*)
+allowed-tools: Read(references/*) Skill(tmux) Bash(bun *) Bash(bunx *)
 ---
 
 # Slidev - Presentation Slides for Developers
