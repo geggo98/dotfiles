@@ -144,6 +144,7 @@ Presenter notes go here
 | Global layers | `global-top.vue`, `global-bottom.vue` | [layout-global-layers](references/layout-global-layers.md) |
 | Draggable elements | `v-drag`, `<v-drag>` | [layout-draggable](references/layout-draggable.md) |
 | Icons | `<mdi-icon-name />` | [style-icons](references/style-icons.md) |
+| Dark/Light mode | `dark:`, `useDarkMode()`, `colorSchema` | [style-dark-light-mode](references/style-dark-light-mode.md) |
 
 ### Animation & Interaction
 
