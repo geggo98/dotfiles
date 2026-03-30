@@ -2,7 +2,7 @@
 name: eval-notebook
 description: "Execute .ipynb notebooks (Python, Kotlin, or any Jupyter kernel) without overwriting; return LLM-friendly JSON with outputs and errors. Use when you need to run or validate a Jupyter notebook."
 argument-hint: "[notebook.ipynb]"
-allowed-tools: Bash(./scripts/eval_notebook.sh:*)
+allowed-tools: Bash(./scripts/eval_notebook.sh *)
 dependencies: "uv, gtimeout"
 ---
 
