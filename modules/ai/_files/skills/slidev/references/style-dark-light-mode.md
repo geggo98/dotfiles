@@ -93,6 +93,54 @@ colorSchema: all     # toggle allowed (default-like)
 ---
 ```
 
+## Testing Dark Mode with Playwright
+
+Toggle dark mode programmatically in Playwright tests by clicking the mode button in the navigation bar. The navigation bar is hidden by default (`opacity-0`), so make it visible first:
+
+```js
+// Make the navigation bar visible
+await page.locator('#page-root .absolute.bottom-0.left-0').first().evaluate(el => {
+  el.classList.remove('opacity-0');
+  el.classList.add('opacity-100');
+});
+
+// Click the dark/light mode toggle button
+await page.locator('button[title="Toggle dark mode"]').click();
+```
+
+Alternatively, toggle dark mode via the `<html>` class directly:
+
+```js
+// Switch to dark mode
+await page.evaluate(() => document.documentElement.classList.add('dark'));
+
+// Switch to light mode
+await page.evaluate(() => document.documentElement.classList.remove('dark'));
+```
+
+### Making the Navigation Bar Visible (outside Playwright)
+
+The Slidev navigation bar at the bottom-left is hidden with `opacity-0` by default. Useful ways to reveal it:
+
+**Bookmarklet (toggle):**
+```
+javascript:void(function(){const e=document.querySelector('#page-root .absolute.bottom-0.left-0');if(e){e.classList.toggle('opacity-0');e.classList.toggle('opacity-100')}}())
+```
+
+**Tampermonkey userscript:**
+```js
+// ==UserScript==
+// @name         Slidev Nav Always Visible
+// @match        http://localhost:*/*
+// @run-at       document-idle
+// ==/UserScript==
+const el = document.querySelector('#page-root .absolute.bottom-0.left-0.opacity-0');
+if (el) {
+  el.classList.remove('opacity-0');
+  el.classList.add('opacity-100');
+}
+```
+
 ## Quick Decision Guide
 
 | Need | Approach |
