@@ -5,7 +5,7 @@
 #   "browser-use[cli]",
 # ]
 # [tool.uv]
-# exclude-newer = "2026-02-15T00:00:00Z"
+# exclude-newer = "30 days"
 # ///
 
 # Hint: Lock dependencies with `uv lock --script ...`

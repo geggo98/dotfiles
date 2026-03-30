@@ -1,0 +1,7 @@
+version = 1
+revision = 3
+requires-python = ">=3.11"
+
+[options]
+exclude-newer = "2026-02-28T13:52:40.83145Z"
+exclude-newer-span = "P30D"
