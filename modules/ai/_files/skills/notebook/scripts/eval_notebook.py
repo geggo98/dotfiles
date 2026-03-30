@@ -5,7 +5,7 @@
 #     "nbclient", "nbformat", "kotlin-jupyter-kernel",
 # ]
 # [tool.uv]
-# exclude-newer = "2026-02-01T00:00:00Z"
+# exclude-newer = "30 days"
 # ///
 
 # Hint: Lock dependencies with `uv lock --script ...`
