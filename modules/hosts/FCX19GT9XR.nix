@@ -59,7 +59,6 @@ in
           homeManager.git
           homeManager.neovim
           homeManager.mcp-servers
-          homeManager.aichat
           homeManager.ai-tools
           homeManager.packages
           homeManager.misc
