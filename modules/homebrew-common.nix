@@ -11,7 +11,6 @@
       "hashicorp/tap"
     ];
     homebrew.brews = [
-      "llm"
       "gildas/tap/bitbucket-cli"
       "hashicorp/tap/vault"
     ];

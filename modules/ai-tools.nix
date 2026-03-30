@@ -8,6 +8,14 @@
     {
       home.packages = [
         unstable.ollama
+        (unstable.python313Packages.llm.withPlugins {
+          llm-openrouter = true;
+          llm-groq = true;
+          llm-ollama = true;
+          llm-anthropic = true;
+          llm-gemini = true;
+          llm-cmd = true;
+        })
         llm-agents.ccusage
         llm-agents.ccusage-codex
         pkgs.tmux # required by the tmux skill for headless interactive sessions
@@ -130,21 +138,15 @@
         };
       };
 
-      # Install or update LLM plugins
+      # Configure LLM aliases and default model
       home.activation.llm = lib.hm.dag.entryAfter [ "installPackages" ] ''
-        original_path_B541A0A9="$PATH"
-        export PATH="$PATH:/opt/homebrew/bin"
         if command -v llm > /dev/null 2>&1
         then
-          echo "Installing or updating LLM plugins"
-          run  --quiet llm install -U llm-openrouter llm-groq llm-ollama llm-claude-3 llm-gemini llm-cmd
           run --quiet llm aliases set gemini gemini-2.0-pro-exp-02-05
           run --quiet llm aliases set deepseek openrouter/deepseek/deepseek-r1
           run --quiet llm aliases set auto openrouter/openrouter/auto
           run llm models default gpt-5-mini
         fi
-        export PATH="$original_path_B541A0A9"
-        unset original_path_B541A0A9
       '';
     };
 }
