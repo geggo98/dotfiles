@@ -1,22 +1,12 @@
-#!/usr/bin/env bash
-# Find running Slidev dev server instances by scanning ports 3030-4000.
-# Slidev injects <meta name="slidev:version"> into its HTML, so we can
-# detect it by curling each port and checking for the marker.
-
-set -euo pipefail
-
-found=0
-for port in $(seq 3030 4000); do
-  if curl -s --connect-timeout 0.2 "http://localhost:$port" 2>/dev/null | grep -q "slidev"; then
-    echo "Slidev running on port $port → http://localhost:$port"
-    found=1
-  fi
-done
-
-if [ "$found" -eq 0 ]; then
-  echo "No Slidev instance found on ports 3030-4000."
-  echo ""
-  echo "Alternative: check node processes listening on any port:"
-  echo "  lsof -i -P | grep node | grep LISTEN"
+#!/bin/zsh
+if [ -n "$BASH_VERSION" ]; then
+  echo >&2 "ERROR: This script requires zsh but is running under bash."
+  echo >&2 "Run it directly (./scripts/find-slidev-port.sh) or with: zsh scripts/find-slidev-port.sh"
   exit 1
 fi
+set -euo pipefail
+
+# Absolute directory of this script, even when sourced or symlinked
+SCRIPT_DIR="${0:A:h}"
+
+exec gtimeout 2m "${SCRIPT_DIR}/find-slidev-port.py" "$@"
