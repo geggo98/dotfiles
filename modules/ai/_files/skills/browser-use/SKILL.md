@@ -14,6 +14,41 @@ For more information, see https://github.com/browser-use/browser-use/blob/main/b
 
 > **Important:** Run the script directly (`./scripts/browser-use.sh`). Do **not** prefix with `bash` — the script requires zsh and will fail under bash.
 
+> **Security:** Never use compound commands (`cd ... &&`), shell redirects (`2>/dev/null`), or pipes with this script. These trigger manual approval prompts. Instead, use the built-in output control flags below.
+
+## Output Control Flags
+
+These flags are handled by the wrapper script and work with any command. They eliminate the need for shell redirects or pipes, avoiding security prompts.
+
+```bash
+# Silent mode — discard all output, only propagate exit code
+./scripts/browser-use.sh --silent close                    # Close without output
+./scripts/browser-use.sh --silent close --all              # Clean up silently
+
+# Head/tail — limit output to first/last N lines
+./scripts/browser-use.sh --head 20 state                   # First 20 lines only
+./scripts/browser-use.sh --tail 10 state                   # Last 10 lines only
+./scripts/browser-use.sh --head 5 --tail 5 get html        # First 5 + last 5 lines
+
+# Regex match — filter output lines matching a pattern (ERE syntax)
+./scripts/browser-use.sh --match "button|link" state        # Only lines with "button" or "link"
+./scripts/browser-use.sh --match "^\[[0-9]" state           # Only indexed element lines
+
+# Regex replace — search and replace in output (sed ERE syntax, '|' delimiter)
+./scripts/browser-use.sh --replace "\s+$" "" state          # Strip trailing whitespace
+./scripts/browser-use.sh --replace "(https?://)[^ ]+" "\\1..." get html  # Redact URLs
+```
+
+**Combining flags:** Filters apply in order: match → replace → head → tail.
+
+```bash
+# Filter to buttons, show only the first 10
+./scripts/browser-use.sh --match "button" --head 10 state
+
+# Extract text, strip HTML tags, show last 5 lines
+./scripts/browser-use.sh --replace "<[^>]+>" "" --tail 5 get html --selector "main"
+```
+
 ## Core Workflow
 
 1. **Navigate**: `./scripts/browser-use.sh open <url>` - Opens URL (starts browser if needed)
@@ -283,15 +318,20 @@ The user is already authenticated — no login needed.
 
 ## Global Options
 
-| Option               | Description                                                                                                                                 |
-|----------------------|---------------------------------------------------------------------------------------------------------------------------------------------|
-| `--session NAME`     | Use named session (default: "default")                                                                                                      |
-| `--browser MODE`     | Browser mode: chromium, real, remote                                                                                                        |
-| `--headed`           | Show browser window (chromium mode)                                                                                                         |
-| `--profile NAME`     | Browser profile (local name or cloud ID). Works with `open`, `session create`, etc. — does NOT work with `run` (use `--session-id` instead) |
-| `--json`             | Output as JSON                                                                                                                              |
-| `--mcp`              | Run as MCP server via stdin/stdout                                                                                                          |
-| `--timeout DURATION` | Global execution timeout (default: `5m`). Format follows GNU coreutils (e.g. `30s`, `5m`, `1h`).                                            |
+| Option                          | Description                                                                                                                                 |
+|---------------------------------|---------------------------------------------------------------------------------------------------------------------------------------------|
+| `--session NAME`                | Use named session (default: "default")                                                                                                      |
+| `--browser MODE`                | Browser mode: chromium, real, remote                                                                                                        |
+| `--headed`                      | Show browser window (chromium mode)                                                                                                         |
+| `--profile NAME`                | Browser profile (local name or cloud ID). Works with `open`, `session create`, etc. — does NOT work with `run` (use `--session-id` instead) |
+| `--json`                        | Output as JSON                                                                                                                              |
+| `--mcp`                         | Run as MCP server via stdin/stdout                                                                                                          |
+| `--timeout DURATION`            | Global execution timeout (default: `5m`). Format follows GNU coreutils (e.g. `30s`, `5m`, `1h`).                                            |
+| `--silent`                      | Discard all output, only propagate exit code. Use instead of `2>/dev/null`.                                                                  |
+| `--head N`                      | Show only the first N lines of output.                                                                                                       |
+| `--tail N`                      | Show only the last N lines of output.                                                                                                        |
+| `--match PATTERN`               | Filter output to lines matching ERE regex pattern. Use instead of piping to `grep`.                                                          |
+| `--replace PATTERN REPLACEMENT` | Search and replace in output using ERE regex (sed syntax). Use instead of piping to `sed`.                                                   |
 
 **Session behavior**: All commands without `--session` use the same "default" session. The browser stays open and is reused across commands. Use `--session NAME` to run multiple browsers in parallel.
 
@@ -347,9 +387,10 @@ If you stop a task and try to reuse its session, the new task may get stuck at "
 **Always close the browser when done:**
 
 ```bash
-./scripts/browser-use.sh close                     # Close browser session
-./scripts/browser-use.sh session stop --all        # Stop cloud sessions (if any)
-./scripts/browser-use.sh tunnel stop --all         # Stop tunnels (if any)
+./scripts/browser-use.sh --silent close                     # Close browser session
+./scripts/browser-use.sh --silent close --all               # Close all sessions
+./scripts/browser-use.sh --silent session stop --all        # Stop cloud sessions (if any)
+./scripts/browser-use.sh --silent tunnel stop --all         # Stop tunnels (if any)
 ```
 
 # Additional resources
