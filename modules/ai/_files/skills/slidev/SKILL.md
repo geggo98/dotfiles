@@ -33,11 +33,15 @@ bun run export        # Export to PDF (requires playwright-chromium)
 
 ### Dev Server (always use tmux skill)
 
-Start the Slidev dev server using the tmux skill (`Skill(tmux)`) and its `claude-tmux.sh` wrapper — never use raw tmux commands with variable expansion:
+Start the Slidev dev server using the tmux skill (`Skill(tmux)`) and its `claude-tmux.sh` wrapper — never use raw tmux commands with variable expansion.
+
+**IMPORTANT: Always specify `--port` explicitly** (e.g. `--port 3030`). Without it, Slidev auto-picks a free port in 3030–4000, making it hard to find the server later. See [port-detection](references/port-detection.md) for details.
+
+If the port was forgotten, run `./scripts/find-slidev-port.sh` to scan for running Slidev instances.
 
 ```bash
-# Start dev server in a tmux session
-./scripts/claude-tmux.sh new -s claude-slidev -c 'bun run dev'
+# Start dev server in a tmux session (always pass --port!)
+./scripts/claude-tmux.sh new -s claude-slidev -c 'bun run dev -- --port 3030'
 
 # Show the user how to monitor it
 ./scripts/claude-tmux.sh attach
@@ -100,6 +104,7 @@ Presenter notes go here
 | Hosting | Build and deploy to various platforms | [core-hosting](references/core-hosting.md) |
 | Global Context | $nav, $slidev, composables API | [core-global-context](references/core-global-context.md) |
 | Testing | E2E testing with Playwright | [testing-playwright](references/testing-playwright.md) |
+| Port Detection | How Slidev picks ports, finding running instances | [port-detection](references/port-detection.md) |
 
 ## Feature Reference
 
