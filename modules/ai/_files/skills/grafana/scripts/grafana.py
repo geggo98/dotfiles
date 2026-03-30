@@ -5,7 +5,7 @@
 #   "httpx>=0.27",
 # ]
 # [tool.uv]
-# exclude-newer = "2025-06-01T00:00:00Z"
+# exclude-newer = "30 days"
 # ///
 """Grafana API CLI — manage dashboards, folders, datasources, annotations, and alerting."""
 from __future__ import annotations

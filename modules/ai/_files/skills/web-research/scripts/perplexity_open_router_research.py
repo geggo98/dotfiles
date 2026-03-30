@@ -5,7 +5,7 @@
 #   "openai>=2.29.0",
 # ]
 # [tool.uv]
-# exclude-newer = "2026-03-21T00:00:00Z"
+# exclude-newer = "30 days"
 # ///
 
 """

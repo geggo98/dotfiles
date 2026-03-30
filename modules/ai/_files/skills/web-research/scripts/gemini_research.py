@@ -5,8 +5,8 @@
 #   "google-genai>=1.68.0",
 #   "requests>=2.31.0",
 # ]
-# [tools.uv]
-# exclude-newer = "2026-03-21T00:00:00Z"
+# [tool.uv]
+# exclude-newer = "30 days"
 # ///
 
 import argparse
