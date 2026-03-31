@@ -50,6 +50,7 @@ in
           homeManager.mcp-servers
           homeManager.ai-tools
           homeManager.packages
+          homeManager.supply-chain-hardening
           homeManager.misc
           homeManager.secrets-DKL6GDJ7X1
           homeManager.boundary
