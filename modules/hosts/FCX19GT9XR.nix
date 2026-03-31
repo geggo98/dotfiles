@@ -61,6 +61,7 @@ in
           homeManager.mcp-servers
           homeManager.ai-tools
           homeManager.packages
+          homeManager.supply-chain-hardening
           homeManager.misc
           homeManager.secrets-FCX19GT9XR
         ];

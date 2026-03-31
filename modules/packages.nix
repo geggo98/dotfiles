@@ -63,10 +63,6 @@
         };
       };
 
-      xdg.configFile."uv/uv.toml".text = ''
-        exclude-newer = "14 days"
-      '';
-
       home.packages = with pkgs; [
         # Basics
         coreutils-prefixed
