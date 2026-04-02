@@ -12,7 +12,7 @@ dependencies: "uv, gtimeout"
 
 Use this skill to execute Jupyter notebooks (.ipynb) safely without modifying the original file. It evaluates notebooks using their configured kernel and returns structured JSON output with execution results, captured outputs, and any errors—perfect for LLM consumption and automated testing.
 
-> **Important:** Run the script directly (`./scripts/eval_notebook.sh`). Do **not** prefix with `bash` — the script requires zsh and will fail under bash.
+> **Important:** Run the script directly (`${CLAUDE_SKILL_DIR}/scripts/eval_notebook.sh`). Do **not** prefix with `bash` — the script requires zsh and will fail under bash.
 
 ## 2. Usage Scenarios
 
@@ -26,7 +26,7 @@ Run before:
 
 | Script | Purpose | Arguments |
 |--------|---------|-----------|
-| `scripts/eval_notebook.sh` | Entry point that delegates to Python evaluator | Forwards all arguments to `eval_notebook.py` |
+| `${CLAUDE_SKILL_DIR}/scripts/eval_notebook.sh` | Entry point that delegates to Python evaluator | Forwards all arguments to `eval_notebook.py` |
 
 The wrapper script enforces a global execution timeout via `gtimeout` (default: `15m`). Pass `--timeout DURATION` to override it. The duration format follows GNU coreutils (e.g. `30s`, `5m`, `1h`). This is separate from the per-notebook `--timeout SECONDS` option handled by the Python evaluator.
 
@@ -55,7 +55,7 @@ The wrapper script enforces a global execution timeout via `gtimeout` (default: 
 ### Basic Evaluation
 
 ```bash
-./scripts/eval_notebook.sh analysis.ipynb --pretty
+${CLAUDE_SKILL_DIR}/scripts/eval_notebook.sh analysis.ipynb --pretty
 ```
 
 Executes the notebook and returns pretty-printed JSON with results.
@@ -63,7 +63,7 @@ Executes the notebook and returns pretty-printed JSON with results.
 ### Multiple Notebooks
 
 ```bash
-./scripts/eval_notebook.sh notebook1.ipynb notebook2.ipynb
+${CLAUDE_SKILL_DIR}/scripts/eval_notebook.sh notebook1.ipynb notebook2.ipynb
 ```
 
 Returns an array of result objects, one per notebook.
@@ -71,7 +71,7 @@ Returns an array of result objects, one per notebook.
 ### Strict Evaluation
 
 ```bash
-./scripts/eval_notebook.sh analysis.ipynb --fail-fast --timeout 120
+${CLAUDE_SKILL_DIR}/scripts/eval_notebook.sh analysis.ipynb --fail-fast --timeout 120
 ```
 
 Stops immediately on any error with a 2-minute timeout.

@@ -21,21 +21,21 @@ Extract diagrams from the provided inputs:
 
 ## How to run (always use the helper script)
 
-The helper script lives at `scripts/render_diagram.sh`.
+The helper script lives at `${CLAUDE_SKILL_DIR}/scripts/render_diagram.sh`.
 
-> **Important:** Run the script directly (`./scripts/render_diagram.sh`). Do **not** prefix with `bash` — the script requires zsh and will fail under bash.
+> **Important:** Run the script directly (`${CLAUDE_SKILL_DIR}/scripts/render_diagram.sh`). Do **not** prefix with `bash` — the script requires zsh and will fail under bash.
 
 ### If the user passes file/dir paths
 
 Run:
 
-- `scripts/render_diagram.sh $ARGUMENTS` 
+- `${CLAUDE_SKILL_DIR}/scripts/render_diagram.sh $ARGUMENTS` 
 
 ### If the user pasted diagram text instead of giving a path
 
 Pipe the text to stdin and add `--stdin` (do not create a persistent file unless the user asks):
 
-- `cat <<'EOF' | scripts/render_diagram.sh --stdin <other flags>`
+- `cat <<'EOF' | ${CLAUDE_SKILL_DIR}/scripts/render_diagram.sh --stdin <other flags>`
 - *(paste the user’s text, containing @startuml..@enduml and/or fenced blocks)*
 - `EOF`
 
@@ -44,7 +44,7 @@ Pipe the text to stdin and add `--stdin` (do not create a persistent file unless
 The wrapper script enforces a global timeout via `gtimeout`. Pass `--timeout DURATION` to override it (default: `5m`). The duration format follows GNU coreutils (e.g. `30s`, `5m`, `1h`).
 
 ```bash
-scripts/render_diagram.sh docs/architecture.md --timeout 10m
+${CLAUDE_SKILL_DIR}/scripts/render_diagram.sh docs/architecture.md --timeout 10m
 ```
 
 ## Output rules
@@ -58,20 +58,20 @@ scripts/render_diagram.sh docs/architecture.md --timeout 10m
 ## Selecting which diagrams to render
 
 - To list extracted blocks and their IDs:
-    - `scripts/render_diagram.sh <paths...> --list`
+    - `${CLAUDE_SKILL_DIR}/scripts/render_diagram.sh <paths...> --list`
 - To render a subset by ID:
-    - `scripts/render_diagram.sh <paths...> --only 2,5-7`
+    - `${CLAUDE_SKILL_DIR}/scripts/render_diagram.sh <paths...> --only 2,5-7`
 
 ## Examples
 
 - Render everything found in a Markdown doc:
-    - `scripts/render_diagram.sh docs/architecture.md`
+    - `${CLAUDE_SKILL_DIR}/scripts/render_diagram.sh docs/architecture.md`
 - Only Mermaid blocks from multiple files:
-    - `scripts/render_diagram.sh docs/*.md --select mermaid`
+    - `${CLAUDE_SKILL_DIR}/scripts/render_diagram.sh docs/*.md --select mermaid`
 - Only PlantUML `@startuml ... @enduml` blocks:
-    - `scripts/render_diagram.sh src/diagrams --blocks startuml`
+    - `${CLAUDE_SKILL_DIR}/scripts/render_diagram.sh src/diagrams --blocks startuml`
 - Persist images for CI artifacts:
-    - `scripts/render_diagram.sh docs/architecture.md --out-dir out/diagrams`
+    - `${CLAUDE_SKILL_DIR}/scripts/render_diagram.sh docs/architecture.md --out-dir out/diagrams`
 
 ## Tooling expectations
 

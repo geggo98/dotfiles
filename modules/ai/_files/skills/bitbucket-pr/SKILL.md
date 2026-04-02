@@ -27,7 +27,7 @@ Run before:
 
 | Script                                | Purpose                              | Arguments                     |
 | ------------------------------------- | ------------------------------------ | ----------------------------- |
-| `scripts/bitbucket_pr_comments.sh`    | Fetch Bitbucket PR comments          | `list` or `get`               |
+| `${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_comments.sh`    | Fetch Bitbucket PR comments          | `list` or `get`               |
 
 ### Arguments
 
@@ -42,7 +42,7 @@ Run before:
 ### List All Comments
 
 ```bash
-bitbucket_pr_comments.sh list 12345
+${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_comments.sh list 12345
 ```
 
 Returns all comments with ID, content, and inline status for PR #12345.
@@ -50,7 +50,7 @@ Returns all comments with ID, content, and inline status for PR #12345.
 ### Get Specific Comment
 
 ```bash
-bitbucket_pr_comments.sh get 12345 67890
+${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_comments.sh get 12345 67890
 ```
 
 Returns detailed content for comment ID 67890 on PR #12345.
@@ -58,7 +58,7 @@ Returns detailed content for comment ID 67890 on PR #12345.
 ### Pipe to jq for Custom Filtering
 
 ```bash
-bitbucket_pr_comments.sh list 12345 | jq 'map(select(.inline == true))'
+${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_comments.sh list 12345 | jq 'map(select(.inline == true))'
 ```
 
 Filter to show only inline comments.
