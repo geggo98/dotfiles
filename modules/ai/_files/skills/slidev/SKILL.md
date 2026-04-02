@@ -37,17 +37,17 @@ Start the Slidev dev server using the tmux skill (`Skill(tmux)`) and its `claude
 
 **IMPORTANT: Always specify `--port` explicitly** (e.g. `--port 3030`). Without it, Slidev auto-picks a free port in 3030–4000, making it hard to find the server later. See [port-detection](references/port-detection.md) for details.
 
-If the port was forgotten, run `./scripts/find-slidev-port.sh` to scan for running Slidev instances.
+If the port was forgotten, run `${CLAUDE_SKILL_DIR}/scripts/find-slidev-port.sh` to scan for running Slidev instances.
 
 ```bash
 # Start dev server in a tmux session (always pass --port!)
-./scripts/claude-tmux.sh new -s claude-slidev -c 'bun run dev -- --port 3030'
+${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh new -s claude-slidev -c 'bun run dev -- --port 3030'
 
 # Show the user how to monitor it
-./scripts/claude-tmux.sh attach
+${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh attach
 
 # Wait for the server to be ready
-./scripts/claude-tmux.sh wait -p 'localhost:3030' -T 30
+${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh wait -p 'localhost:3030' -T 30
 ```
 
 **Verify**: After the dev server is ready, confirm slides load at `http://localhost:3030` with the browser-use skill. After `bun run export`, check the output PDF exists in the project root.
@@ -60,7 +60,7 @@ On first use, create `playwright-tests/.gitignore` via the Write tool with conte
 
 Then write scripts like `playwright-tests/debug-slide-5.ts` via the Write tool and run them with `bun run`. Screenshots land in `playwright-tests/` as well. Users can `git add -f` individual files they want to keep.
 
-**Cleanup**: When done, kill the session: `./scripts/claude-tmux.sh kill -s claude-slidev`.
+**Cleanup**: When done, kill the session: `${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh kill -s claude-slidev`.
 
 ## Basic Syntax
 

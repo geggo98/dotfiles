@@ -17,7 +17,7 @@ This skill is designed to shorten the feedback loop when an agent generates or e
 
 ---
 
-> **Important:** Run the script directly (`./scripts/streamdeck_manifest.sh`). Do **not** prefix with `bash` — the script requires zsh and will fail under bash.
+> **Important:** Run the script directly (`${CLAUDE_SKILL_DIR}/scripts/streamdeck_manifest.sh`). Do **not** prefix with `bash` — the script requires zsh and will fail under bash.
 
 ## What this skill does
 
@@ -56,7 +56,7 @@ The schema cannot reliably verify files on disk. This tool adds:
 
 ## Scripts
 
-- `scripts/streamdeck_manifest.sh` — CLI entrypoint.
+- `${CLAUDE_SKILL_DIR}/scripts/streamdeck_manifest.sh` — CLI entrypoint.
   - Output is **JSON by default** (easy for agents to parse).
   - Pass `--timeout DURATION` to override the global execution timeout (default: `1m`). Format follows GNU coreutils (e.g. `30s`, `2m`, `1h`).
 
@@ -67,7 +67,7 @@ The schema cannot reliably verify files on disk. This tool adds:
 ### Validate a manifest
 
 ```bash
-./scripts/streamdeck_manifest.sh validate path/to/manifest.json
+${CLAUDE_SKILL_DIR}/scripts/streamdeck_manifest.sh validate path/to/manifest.json
 ```
 
 Behavior:
@@ -93,19 +93,19 @@ JSON output shape:
 ### Fix JSONC / trailing commas
 
 ```bash
-./scripts/streamdeck_manifest.sh validate manifest.json --fix-jsonc --write
+${CLAUDE_SKILL_DIR}/scripts/streamdeck_manifest.sh validate manifest.json --fix-jsonc --write
 ```
 
 ### Format / normalize
 
 ```bash
-./scripts/streamdeck_manifest.sh fmt manifest.json --write
+${CLAUDE_SKILL_DIR}/scripts/streamdeck_manifest.sh fmt manifest.json --write
 ```
 
 ### Scaffold a new plugin folder
 
 ```bash
-./scripts/streamdeck_manifest.sh init ./MyPlugin.sdPlugin \
+${CLAUDE_SKILL_DIR}/scripts/streamdeck_manifest.sh init ./MyPlugin.sdPlugin \
   --name "My Plugin" \
   --uuid "com.example.myplugin" \
   --author "Example" \
@@ -115,7 +115,7 @@ JSON output shape:
 ### Add an action to an existing manifest
 
 ```bash
-./scripts/streamdeck_manifest.sh add-action ./MyPlugin.sdPlugin/manifest.json \
+${CLAUDE_SKILL_DIR}/scripts/streamdeck_manifest.sh add-action ./MyPlugin.sdPlugin/manifest.json \
   --name "My Action"
 ```
 
