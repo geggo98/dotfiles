@@ -120,6 +120,7 @@ Presenter notes go here
 | Monaco editor | `` ```ts {monaco} `` | [editor-monaco](references/editor-monaco.md) |
 | Run code | `` ```ts {monaco-run} `` | [editor-monaco-run](references/editor-monaco-run.md) |
 | Edit files | `<<< ./file.ts {monaco-write}` | [editor-monaco-write](references/editor-monaco-write.md) |
+| Monaco in Vue | `<Monaco :codeLz="..." />` in components | [editor-monaco-custom-vue](references/editor-monaco-custom-vue.md) |
 | Code animations | `` ````md magic-move `` | [code-magic-move](references/code-magic-move.md) |
 | TypeScript types | `` ```ts twoslash `` | [code-twoslash](references/code-twoslash.md) |
 | Import code | `<<< @/snippets/file.js` | [code-import-snippet](references/code-import-snippet.md) |
