@@ -20,7 +20,7 @@ Use tmux as a programmable terminal multiplexer for interactive work. Works on L
 
 ## Wrapper Script: `claude-tmux`
 
-All tmux interactions go through `./scripts/claude-tmux.sh`. This avoids raw variable expansion in shell commands (no more `$SOCKET` / `$SESSION` security prompts).
+All tmux interactions go through `${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh`. This avoids raw variable expansion in shell commands (no more `$SOCKET` / `$SESSION` security prompts).
 
 **Defaults:**
 - Socket: `${TMPDIR}/claude-tmux-sockets/claude.sock` (created automatically)
@@ -30,15 +30,15 @@ All tmux interactions go through `./scripts/claude-tmux.sh`. This avoids raw var
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `new`     | Create a session | `./scripts/claude-tmux.sh new -s claude-py -c 'PYTHON_BASIC_REPL=1 python3 -q'` |
-| `send`    | Send literal text + Enter | `./scripts/claude-tmux.sh send 'print("hello")'` |
-| `keys`    | Send special keys | `./scripts/claude-tmux.sh keys C-c` |
-| `capture` | Print current pane content | `./scripts/claude-tmux.sh capture` |
-| `delta`   | Print only new output since last capture/delta | `./scripts/claude-tmux.sh delta` |
-| `wait`    | Poll for text pattern | `./scripts/claude-tmux.sh wait -p '^>>>'` |
-| `list`    | List sessions | `./scripts/claude-tmux.sh list` |
-| `kill`    | Kill session or server | `./scripts/claude-tmux.sh kill -s claude-py` |
-| `attach`  | Print monitor command for user | `./scripts/claude-tmux.sh attach` |
+| `new`     | Create a session | `${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh new -s claude-py -c 'PYTHON_BASIC_REPL=1 python3 -q'` |
+| `send`    | Send literal text + Enter | `${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh send 'print("hello")'` |
+| `keys`    | Send special keys | `${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh keys C-c` |
+| `capture` | Print current pane content | `${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh capture` |
+| `delta`   | Print only new output since last capture/delta | `${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh delta` |
+| `wait`    | Poll for text pattern | `${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh wait -p '^>>>'` |
+| `list`    | List sessions | `${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh list` |
+| `kill`    | Kill session or server | `${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh kill -s claude-py` |
+| `attach`  | Print monitor command for user | `${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh attach` |
 
 ### Global options (before the command)
 
@@ -49,25 +49,25 @@ All tmux interactions go through `./scripts/claude-tmux.sh`. This avoids raw var
 
 ```bash
 # Start a Python REPL session
-./scripts/claude-tmux.sh new -s claude-py -c 'PYTHON_BASIC_REPL=1 python3 -q'
+${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh new -s claude-py -c 'PYTHON_BASIC_REPL=1 python3 -q'
 
 # Wait for the prompt
-./scripts/claude-tmux.sh wait -p '^>>>'
+${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh wait -p '^>>>'
 
 # Send code
-./scripts/claude-tmux.sh send 'print("hello world")'
+${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh send 'print("hello world")'
 
 # Read output
-./scripts/claude-tmux.sh capture
+${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh capture
 
 # Read only new output since last capture
-./scripts/claude-tmux.sh delta
+${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh delta
 
 # Clean up
-./scripts/claude-tmux.sh kill -s claude-py
+${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh kill -s claude-py
 ```
 
-After starting a session ALWAYS tell the user how to monitor it. Use `./scripts/claude-tmux.sh attach` to print the command, or manually give them:
+After starting a session ALWAYS tell the user how to monitor it. Use `${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh attach` to print the command, or manually give them:
 
 ```
 To monitor this session yourself:
@@ -81,8 +81,8 @@ This must ALWAYS be printed right after a session was started and once again at 
 When running multiple sessions or panes, use `-t` globally:
 
 ```bash
-./scripts/claude-tmux.sh -t claude-gdb:0.0 send 'bt'
-./scripts/claude-tmux.sh -t claude-gdb:0.0 capture
+${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh -t claude-gdb:0.0 send 'bt'
+${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh -t claude-gdb:0.0 capture
 ```
 
 Without `-t`, the script auto-detects the first session on the socket.
@@ -104,7 +104,7 @@ Without `-t`, the script auto-detects the first session on the socket.
 - When asked to debug, use lldb by default.
 - When starting a python interactive shell, always set `PYTHON_BASIC_REPL=1`. Pass it via `-c`:
   ```bash
-  ./scripts/claude-tmux.sh new -s claude-py -c 'PYTHON_BASIC_REPL=1 python3 -q'
+  ${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh new -s claude-py -c 'PYTHON_BASIC_REPL=1 python3 -q'
   ```
 
 ## Interactive tool recipes
@@ -118,8 +118,8 @@ Without `-t`, the script auto-detects the first session on the socket.
 
 ```bash
 # Kill one session
-./scripts/claude-tmux.sh kill -s claude-py
+${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh kill -s claude-py
 
 # Kill everything on the socket
-./scripts/claude-tmux.sh kill --all
+${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh kill --all
 ```

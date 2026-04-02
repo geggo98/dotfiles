@@ -12,9 +12,9 @@ Manage Grafana resources via the HTTP API using a Python CLI tool. Supports dash
 
 ## How to run (always use the helper script)
 
-The helper script lives at `scripts/grafana.sh`.
+The helper script lives at `${CLAUDE_SKILL_DIR}/scripts/grafana.sh`.
 
-> **Important:** Run the script directly (`./scripts/grafana.sh`). Do **not** prefix with `bash` — the script requires zsh and will fail under bash.
+> **Important:** Run the script directly (`${CLAUDE_SKILL_DIR}/scripts/grafana.sh`). Do **not** prefix with `bash` — the script requires zsh and will fail under bash.
 
 ## Connection
 
@@ -22,13 +22,13 @@ Pass credentials via `--env-file` or environment variables. The `--url` flag set
 
 ```bash
 # Load credentials from an env file
-./scripts/grafana.sh --env-file ~/.config/grafana/prod.env list
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh --env-file ~/.config/grafana/prod.env list
 
 # Or set URL directly and token via env var
-GRAFANA_TOKEN=glsa_... ./scripts/grafana.sh --url https://myinstance.grafana.net list
+GRAFANA_TOKEN=glsa_... ${CLAUDE_SKILL_DIR}/scripts/grafana.sh --url https://myinstance.grafana.net list
 
 # Multiple env files (later overrides earlier)
-./scripts/grafana.sh --env-file base.env --env-file prod.env health
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh --env-file base.env --env-file prod.env health
 ```
 
 ## API Modes
@@ -44,15 +44,15 @@ The CLI supports two Grafana API styles:
 Set via `--api` flag or `GRAFANA_API_MODE` env var:
 
 ```bash
-./scripts/grafana.sh --api legacy list     # force legacy API
-./scripts/grafana.sh --api k8s list        # force K8s API
-./scripts/grafana.sh --api auto health     # auto-detect (default)
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh --api legacy list     # force legacy API
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh --api k8s list        # force K8s API
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh --api auto health     # auto-detect (default)
 ```
 
 The K8s API requires a `--namespace` (default: `default`):
 
 ```bash
-./scripts/grafana.sh --api k8s --namespace my-org list
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh --api k8s --namespace my-org list
 ```
 
 ## Timeout
@@ -60,36 +60,36 @@ The K8s API requires a `--namespace` (default: `default`):
 The wrapper enforces a global timeout via `gtimeout`. Pass `--timeout DURATION` to override (default: `5m`).
 
 ```bash
-./scripts/grafana.sh --timeout 2m list
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh --timeout 2m list
 ```
 
 ## Commands
 
 | Command | Description | Example |
 |---------|-------------|---------|
-| `health` | Check Grafana instance health | `./scripts/grafana.sh health` |
-| `list` | Search/list dashboards | `./scripts/grafana.sh list --query prod --tag monitoring` |
-| `get <uid>` | Get dashboard details | `./scripts/grafana.sh get abc123 --json` |
-| `export <uid>` | Export dashboard to JSON + base sidecar | `./scripts/grafana.sh export abc123 --output dash.json` |
-| `create` | Create dashboard from JSON | `./scripts/grafana.sh create --file dash.json --folder my-folder` |
-| `update <uid>` | Update with OCC and auto-merge on conflict | `./scripts/grafana.sh update abc123 --file dash.json` |
-| `delete <uid>` | Delete dashboard | `./scripts/grafana.sh delete abc123` |
-| `clone <uid>` | Clone existing dashboard | `./scripts/grafana.sh clone abc123 --title "Copy"` |
-| `versions <uid>` | List version history | `./scripts/grafana.sh versions abc123` |
-| `restore <uid>` | Restore to specific version | `./scripts/grafana.sh restore abc123 --version 5` |
-| `diff <uid>` | Structural diff: local file vs server | `./scripts/grafana.sh diff abc123 --file dash.json` |
-| `merge <uid>` | Three-way merge: local vs server | `./scripts/grafana.sh merge abc123 --file dash.json` |
-| `convert` | Convert between legacy and K8s format | `./scripts/grafana.sh convert --file dash.json --to k8s` |
-| `folders` | List all folders | `./scripts/grafana.sh folders --json` |
-| `datasources` | List all datasources | `./scripts/grafana.sh datasources --json` |
-| `annotations` | Query annotations | `./scripts/grafana.sh annotations --dashboard abc123 --tag deploy` |
-| `alerts` | List alert rules | `./scripts/grafana.sh alerts --active --json` |
-| `user` | Current user info | `./scripts/grafana.sh user` |
-| `org` | Current org info | `./scripts/grafana.sh org` |
-| `query <ds_uid>` | Query a datasource | `./scripts/grafana.sh query prom1 --expr 'up' --preview 10` |
-| `panel-query <dash> <id>` | Execute queries from a dashboard panel | `./scripts/grafana.sh panel-query abc123 2 --preview 10` |
-| `panel-list <dash_uid>` | List panels in a dashboard | `./scripts/grafana.sh panel-list abc123` |
-| `raw` | Raw API call | `./scripts/grafana.sh raw GET /api/search` |
+| `health` | Check Grafana instance health | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh health` |
+| `list` | Search/list dashboards | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh list --query prod --tag monitoring` |
+| `get <uid>` | Get dashboard details | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh get abc123 --json` |
+| `export <uid>` | Export dashboard to JSON + base sidecar | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh export abc123 --output dash.json` |
+| `create` | Create dashboard from JSON | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh create --file dash.json --folder my-folder` |
+| `update <uid>` | Update with OCC and auto-merge on conflict | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh update abc123 --file dash.json` |
+| `delete <uid>` | Delete dashboard | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh delete abc123` |
+| `clone <uid>` | Clone existing dashboard | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh clone abc123 --title "Copy"` |
+| `versions <uid>` | List version history | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh versions abc123` |
+| `restore <uid>` | Restore to specific version | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh restore abc123 --version 5` |
+| `diff <uid>` | Structural diff: local file vs server | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh diff abc123 --file dash.json` |
+| `merge <uid>` | Three-way merge: local vs server | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh merge abc123 --file dash.json` |
+| `convert` | Convert between legacy and K8s format | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh convert --file dash.json --to k8s` |
+| `folders` | List all folders | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh folders --json` |
+| `datasources` | List all datasources | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh datasources --json` |
+| `annotations` | Query annotations | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh annotations --dashboard abc123 --tag deploy` |
+| `alerts` | List alert rules | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh alerts --active --json` |
+| `user` | Current user info | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh user` |
+| `org` | Current org info | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh org` |
+| `query <ds_uid>` | Query a datasource | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh query prom1 --expr 'up' --preview 10` |
+| `panel-query <dash> <id>` | Execute queries from a dashboard panel | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh panel-query abc123 2 --preview 10` |
+| `panel-list <dash_uid>` | List panels in a dashboard | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh panel-list abc123` |
+| `raw` | Raw API call | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh raw GET /api/search` |
 
 ### Common flags
 
@@ -143,22 +143,22 @@ The `update` command uses optimistic concurrency control (OCC) by default:
 
 ```bash
 # 1. Export (creates working copy + base sidecar)
-./scripts/grafana.sh export abc123
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh export abc123
 
 # 2. Edit locally
 $EDITOR abc123.json
 
 # 3. Update (OCC-safe, auto-merges on conflict)
-./scripts/grafana.sh update abc123 --file abc123.json --message "My changes"
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh update abc123 --file abc123.json --message "My changes"
 
 # If conflicts: resolve abc123.merged.json, then retry with --force
-./scripts/grafana.sh update abc123 --file abc123.merged.json --force --message "Resolved"
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh update abc123 --file abc123.merged.json --force --message "Resolved"
 ```
 
 ### Explicit merge
 
 ```bash
-./scripts/grafana.sh merge abc123 --file abc123.json --output merged.json
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh merge abc123 --file abc123.json --output merged.json
 ```
 
 ## Creating Dashboards from JSON
@@ -179,14 +179,14 @@ Convert between legacy and K8s dashboard formats without any API calls:
 
 ```bash
 # Legacy to K8s
-./scripts/grafana.sh convert --file dash.json --to k8s --output k8s-dash.json
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh convert --file dash.json --to k8s --output k8s-dash.json
 
 # K8s to legacy
-./scripts/grafana.sh convert --file k8s-dash.json --to legacy
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh convert --file k8s-dash.json --to legacy
 
 # Roundtrip test
-./scripts/grafana.sh convert --file dash.json --to k8s --output /tmp/k8s.json
-./scripts/grafana.sh convert --file /tmp/k8s.json --to legacy --output /tmp/rt.json
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh convert --file dash.json --to k8s --output /tmp/k8s.json
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh convert --file /tmp/k8s.json --to legacy --output /tmp/rt.json
 ```
 
 ## Querying Data
@@ -197,35 +197,35 @@ Query any Grafana datasource via the `/api/ds/query` endpoint. Grafana proxies t
 
 ```bash
 # PromQL — preview 10 rows
-./scripts/grafana.sh query prom-uid --expr 'sum by (job) (rate(http_requests_total[5m]))' --preview 10
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh query prom-uid --expr 'sum by (job) (rate(http_requests_total[5m]))' --preview 10
 
 # PromQL — instant query
-./scripts/grafana.sh query prom-uid --expr 'up' --instant --json
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh query prom-uid --expr 'up' --instant --json
 
 # LogQL — last 30 minutes of errors
-./scripts/grafana.sh query loki-uid --expr '{app="api"} |= "error"' --from now-30m --preview 20
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh query loki-uid --expr '{app="api"} |= "error"' --from now-30m --preview 20
 
 # SQL datasource
-./scripts/grafana.sh query mysql-uid --raw-sql 'SELECT endpoint, count(*) AS n FROM requests WHERE $__timeFilter(created_at) GROUP BY endpoint ORDER BY n DESC LIMIT 10'
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh query mysql-uid --raw-sql 'SELECT endpoint, count(*) AS n FROM requests WHERE $__timeFilter(created_at) GROUP BY endpoint ORDER BY n DESC LIMIT 10'
 
 # Raw query body (any datasource)
-./scripts/grafana.sh query tempo-uid --query '{"queryType":"traceqlSearch","query":"{ status = error }","limit":10}'
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh query tempo-uid --query '{"queryType":"traceqlSearch","query":"{ status = error }","limit":10}'
 ```
 
 ### Export formats
 
 ```bash
 # Parquet (default for large results — requires pyarrow)
-./scripts/grafana.sh query prom-uid --expr 'up' --format parquet --output /tmp/up.parquet
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh query prom-uid --expr 'up' --format parquet --output /tmp/up.parquet
 
 # TSV (opens in Excel)
-./scripts/grafana.sh query prom-uid --expr 'up' --format tsv --output /tmp/up.tsv
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh query prom-uid --expr 'up' --format tsv --output /tmp/up.tsv
 
 # JSONL (no dependencies)
-./scripts/grafana.sh query prom-uid --expr 'up' --format jsonl --output /tmp/up.jsonl
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh query prom-uid --expr 'up' --format jsonl --output /tmp/up.jsonl
 
 # Auto-named file in a directory
-./scripts/grafana.sh query prom-uid --expr 'up' --output-dir /tmp/results
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh query prom-uid --expr 'up' --output-dir /tmp/results
 ```
 
 ### Panel queries
@@ -234,13 +234,13 @@ Extract and execute queries directly from an existing dashboard panel:
 
 ```bash
 # List panels to find the ID
-./scripts/grafana.sh panel-list <dashboard_uid>
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh panel-list <dashboard_uid>
 
 # Execute panel queries with variable substitution
-./scripts/grafana.sh panel-query <dashboard_uid> <panel_id> --var namespace=production --var job=api-server --preview 20
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh panel-query <dashboard_uid> <panel_id> --var namespace=production --var job=api-server --preview 20
 
 # Export panel data to Parquet
-./scripts/grafana.sh panel-query <dashboard_uid> <panel_id> --format parquet --output /tmp/panel.parquet
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh panel-query <dashboard_uid> <panel_id> --format parquet --output /tmp/panel.parquet
 ```
 
 ### Output behavior
@@ -268,13 +268,13 @@ For any endpoint not covered by a dedicated command, use `raw`:
 
 ```bash
 # GET request
-./scripts/grafana.sh raw GET /api/search
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh raw GET /api/search
 
 # POST with JSON body
-./scripts/grafana.sh raw POST /api/annotations --body '{"text":"deploy","tags":["deploy"],"time":1700000000000}'
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh raw POST /api/annotations --body '{"text":"deploy","tags":["deploy"],"time":1700000000000}'
 
 # DELETE
-./scripts/grafana.sh raw DELETE /api/annotations/123
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh raw DELETE /api/annotations/123
 ```
 
 ## Wrapper Options
@@ -347,41 +347,41 @@ Note: The example files use the **v2beta1** Kubernetes-style format (exported fr
 
 **List production dashboards and export them:**
 ```bash
-./scripts/grafana.sh list --tag production --json | jq -r '.[].uid' | while read uid; do
-  ./scripts/grafana.sh export "$uid" --output "exports/${uid}.json"
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh list --tag production --json | jq -r '.[].uid' | while read uid; do
+  ${CLAUDE_SKILL_DIR}/scripts/grafana.sh export "$uid" --output "exports/${uid}.json"
 done
 ```
 
 **Create a dashboard from a JSON file:**
 ```bash
-./scripts/grafana.sh create --file my-dashboard.json --folder my-folder --title "My Dashboard"
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh create --file my-dashboard.json --folder my-folder --title "My Dashboard"
 ```
 
 **Clone a dashboard to a different folder:**
 ```bash
-./scripts/grafana.sh clone abc123 --title "Staging Copy" --folder staging-folder
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh clone abc123 --title "Staging Copy" --folder staging-folder
 ```
 
 **Export, edit, and update with OCC:**
 ```bash
-./scripts/grafana.sh export abc123
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh export abc123
 $EDITOR abc123.json
-./scripts/grafana.sh update abc123 --file abc123.json --message "Updated thresholds"
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh update abc123 --file abc123.json --message "Updated thresholds"
 ```
 
 **Diff local changes against server:**
 ```bash
-./scripts/grafana.sh export abc123
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh export abc123
 # ... edit abc123.json ...
-./scripts/grafana.sh diff abc123 --file abc123.json
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh diff abc123 --file abc123.json
 ```
 
 **Add a deploy annotation:**
 ```bash
-./scripts/grafana.sh raw POST /api/annotations --body '{"text":"Deploy v2.1","tags":["deploy","production"],"time":'$(date +%s000)'}'
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh raw POST /api/annotations --body '{"text":"Deploy v2.1","tags":["deploy","production"],"time":'$(date +%s000)'}'
 ```
 
 **Check if Grafana is reachable:**
 ```bash
-./scripts/grafana.sh health
+${CLAUDE_SKILL_DIR}/scripts/grafana.sh health
 ```

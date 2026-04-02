@@ -15,7 +15,7 @@ dependencies: "uv, gtimeout"
 Use this skill to research the web, e.g, for APIs, libraries, or design patterns before implementation.
 It produces concise best-practice summaries, including alternatives, and tradeoffs. It produces a Markdown-formatted doocument containing the research results, including references as URLs.
 
-> **Important:** Run scripts directly (`./scripts/gemini_research.sh`, `./scripts/perplexity_open_router_research.sh`). Do **not** prefix with `bash` — the scripts require zsh and will fail under bash.
+> **Important:** Run scripts directly (`${CLAUDE_SKILL_DIR}/scripts/gemini_research.sh`, `${CLAUDE_SKILL_DIR}/scripts/perplexity_open_router_research.sh`). Do **not** prefix with `bash` — the scripts require zsh and will fail under bash.
 
 ## 2. Usage Scenarios
 
@@ -29,8 +29,8 @@ Run before:
 
 | Script                                       | Purpose                          | Quick Mode | Deep Mode |
 | -------------------------------------------- | -------------------------------- | ---------- | --------- |
-| `scripts/perplexity_open_router_research.sh` | General-purpose quick research.  | Default    | `--deep`  |
-| `scripts/gemini_research.sh`                 | Deep research via Google Gemini. | `--flash`  | Default   |
+| `${CLAUDE_SKILL_DIR}/scripts/perplexity_open_router_research.sh` | General-purpose quick research.  | Default    | `--deep`  |
+| `${CLAUDE_SKILL_DIR}/scripts/gemini_research.sh`                 | Deep research via Google Gemini. | `--flash`  | Default   |
 
 ### Arguments
 
@@ -45,31 +45,31 @@ Always start with `--flash`. If the result doesn't work or if important parts ar
 ### Quick Search
 
 ```bash
-scripts/gemini_research.sh --flash "Which Python HTTP client libraries support caching headers, and with which backends?"
+${CLAUDE_SKILL_DIR}/scripts/gemini_research.sh --flash "Which Python HTTP client libraries support caching headers, and with which backends?"
 ```
 
 ### API Research
 
 ```bash
-scripts/perplexity_open_router_research.sh "Research Python best-practices for using the Atlassian Confluence API."
-scripts/gemini_research "Write a Python best-practice manual for using the Atlassian Confluence API."
-scripts/perplexity_open_router_researchi.sh --deep "Give a second opinion on the Atlassian API usage. Alternatives and tradeoffs?"
+${CLAUDE_SKILL_DIR}/scripts/perplexity_open_router_research.sh "Research Python best-practices for using the Atlassian Confluence API."
+${CLAUDE_SKILL_DIR}/scripts/gemini_research.sh "Write a Python best-practice manual for using the Atlassian Confluence API."
+${CLAUDE_SKILL_DIR}/scripts/perplexity_open_router_research.sh --deep "Give a second opinion on the Atlassian API usage. Alternatives and tradeoffs?"
 ```
 
 ### Library Research
 
 ```bash
-perplexity_open_router_research.sh "Best practices for using the os-lib library in Scala."
-gemini_research.sh "Create a manual for using os-lib in Scala with up-to-date best-practices."
-perplexity_open_router_research.sh --deep "Second opinion on using os-lib in Scala. Alternatives and tradeoffs?"
+${CLAUDE_SKILL_DIR}/scripts/perplexity_open_router_research.sh "Best practices for using the os-lib library in Scala."
+${CLAUDE_SKILL_DIR}/scripts/gemini_research.sh "Create a manual for using os-lib in Scala with up-to-date best-practices."
+${CLAUDE_SKILL_DIR}/scripts/perplexity_open_router_research.sh --deep "Second opinion on using os-lib in Scala. Alternatives and tradeoffs?"
 ```
 
 ### Implementation Planning
 
 ```bash
-perplexity_open_router_research.sh "How to parse cron expressions in Rust, using stdlib or third-party crates?"
-gemini_research.sh "Manual for parsing cron expressions in Rust with the cron crate."
-perplexity_open_router_research.sh --deep "Evaluate the cron crate. Alternatives and tradeoffs?"
+${CLAUDE_SKILL_DIR}/scripts/perplexity_open_router_research.sh "How to parse cron expressions in Rust, using stdlib or third-party crates?"
+${CLAUDE_SKILL_DIR}/scripts/gemini_research.sh "Manual for parsing cron expressions in Rust with the cron crate."
+${CLAUDE_SKILL_DIR}/scripts/perplexity_open_router_research.sh --deep "Evaluate the cron crate. Alternatives and tradeoffs?"
 ```
 
 ## 5. Tool Modes

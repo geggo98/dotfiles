@@ -26,7 +26,7 @@ Run when:
 
 | Script                    | Purpose                                               | Arguments                                              |
 | ------------------------- | ----------------------------------------------------- | ------------------------------------------------------ |
-| `scripts/nix_shell.sh`   | Search/locate packages or run commands in nix shell    | `search <term>`, `locate <pattern>`, or `run <pkgs> -- <cmd>` |
+| `${CLAUDE_SKILL_DIR}/scripts/nix_shell.sh`   | Search/locate packages or run commands in nix shell    | `search <term>`, `locate <pattern>`, or `run <pkgs> -- <cmd>` |
 
 ## 4. Subcommands
 
@@ -62,49 +62,49 @@ Run a command with specified Nix packages available on PATH.
 ### Search for a package
 
 ```bash
-scripts/nix_shell.sh search envsubst
+${CLAUDE_SKILL_DIR}/scripts/nix_shell.sh search envsubst
 ```
 
 ### Search with JSON output
 
 ```bash
-scripts/nix_shell.sh search envsubst --json
+${CLAUDE_SKILL_DIR}/scripts/nix_shell.sh search envsubst --json
 ```
 
 ### Locate which package provides a binary
 
 ```bash
-scripts/nix_shell.sh locate gtimeout
+${CLAUDE_SKILL_DIR}/scripts/nix_shell.sh locate gtimeout
 ```
 
 ### Locate with exact basename match and limited results
 
 ```bash
-scripts/nix_shell.sh locate gtimeout -w -n 10
+${CLAUDE_SKILL_DIR}/scripts/nix_shell.sh locate gtimeout -w -n 10
 ```
 
 ### Locate regular files instead of executables
 
 ```bash
-scripts/nix_shell.sh locate nginx.conf -t r
+${CLAUDE_SKILL_DIR}/scripts/nix_shell.sh locate nginx.conf -t r
 ```
 
 ### Run a command with a single package
 
 ```bash
-scripts/nix_shell.sh run envsubst -- envsubst --help
+${CLAUDE_SKILL_DIR}/scripts/nix_shell.sh run envsubst -- envsubst --help
 ```
 
 ### Run with multiple packages
 
 ```bash
-scripts/nix_shell.sh run envsubst jq -- sh -c 'echo "{}" | jq . && which envsubst'
+${CLAUDE_SKILL_DIR}/scripts/nix_shell.sh run envsubst jq -- sh -c 'echo "{}" | jq . && which envsubst'
 ```
 
 ### Use a full flake reference
 
 ```bash
-scripts/nix_shell.sh run github:NixOS/nixpkgs#hello -- hello
+${CLAUDE_SKILL_DIR}/scripts/nix_shell.sh run github:NixOS/nixpkgs#hello -- hello
 ```
 
 ## 6. Output Format
