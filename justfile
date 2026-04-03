@@ -94,3 +94,21 @@ edit-boundary-doc:
         -r stefan.schwetschke@check24.de \
         -r stefan.schwetschke+DKL6GDJ7X1@check24.de \
         -o hosts/DKL6GDJ7X1/BOUNDARY.md.gpg "$tmp"
+
+# --- Pulumi (infra/) ---
+
+# Preview infrastructure changes
+pulumi-preview:
+    cd infra && pulumi preview
+
+# Apply infrastructure changes
+pulumi-up:
+    cd infra && pulumi up
+
+# Show current infrastructure state
+pulumi-stack:
+    cd infra && pulumi stack
+
+# Install infra dependencies
+pulumi-install:
+    cd infra && pnpm install
