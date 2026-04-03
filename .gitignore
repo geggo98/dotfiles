@@ -6,3 +6,8 @@ result
 *.local
 *.local.*
 .devenv
+
+# Pulumi infra
+infra/node_modules/
+infra/dist/
+infra/.pulumi/

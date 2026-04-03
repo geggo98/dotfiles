@@ -1,0 +1,6 @@
+name: nix-darwin-infra
+runtime:
+  name: nodejs
+  options:
+    packagemanager: pnpm
+description: Cloud infrastructure for nix-darwin managed hosts
