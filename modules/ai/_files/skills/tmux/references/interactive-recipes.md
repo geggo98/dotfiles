@@ -10,8 +10,8 @@ Complete step-by-step patterns for launching, driving, and cleaning up interacti
 All examples assume:
 
 ```bash
-SOCKET="${CLAUDE_TMUX_SOCKET_DIR:-${TMPDIR:-/tmp}/claude-tmux-sockets}/claude.sock"
-mkdir -p "${CLAUDE_TMUX_SOCKET_DIR:-${TMPDIR:-/tmp}/claude-tmux-sockets}"
+SOCKET="${CLAUDE_TMUX_SOCKET_DIR:-${TMPDIR:-/tmp}/tmux-use-sockets}/tmux.sock"
+mkdir -p "${CLAUDE_TMUX_SOCKET_DIR:-${TMPDIR:-/tmp}/tmux-use-sockets}"
 ```
 
 ## Python REPL
