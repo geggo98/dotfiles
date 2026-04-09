@@ -10,7 +10,7 @@ description: "Reading tmux pane contents: capture-pane options, scrollback, join
 All examples assume `SOCKET` and `TARGET` are set:
 
 ```bash
-SOCKET="${CLAUDE_TMUX_SOCKET_DIR:-${TMPDIR:-/tmp}/claude-tmux-sockets}/claude.sock"
+SOCKET="${CLAUDE_TMUX_SOCKET_DIR:-${TMPDIR:-/tmp}/tmux-use-sockets}/tmux.sock"
 TARGET="claude-py:0.0"
 ```
 
