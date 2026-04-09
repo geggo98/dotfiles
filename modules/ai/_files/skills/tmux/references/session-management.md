@@ -10,9 +10,9 @@ How to create, organize, inspect, and tear down tmux sessions using the private 
 All examples assume:
 
 ```bash
-SOCKET_DIR="${CLAUDE_TMUX_SOCKET_DIR:-${TMPDIR:-/tmp}/claude-tmux-sockets}"
+SOCKET_DIR="${CLAUDE_TMUX_SOCKET_DIR:-${TMPDIR:-/tmp}/tmux-use-sockets}"
 mkdir -p "$SOCKET_DIR"
-SOCKET="$SOCKET_DIR/claude.sock"
+SOCKET="$SOCKET_DIR/tmux.sock"
 ```
 
 ## Creating sessions
