@@ -11,6 +11,7 @@
     # Package sets
     nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11"; # https://status.nixos.org/
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
+    nixpkgs-yt-dlp.url = "github:nixos/nixpkgs/nixos-unstable"; # independent yt-dlp updates
 
     # Flake structure
     flake-parts.url = "github:hercules-ci/flake-parts";
