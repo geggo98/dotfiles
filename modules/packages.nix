@@ -3,6 +3,7 @@
   flake.modules.homeManager.packages = { pkgs, lib, ... }:
     let
       unstable = inputs.nixpkgs-unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system};
+      yt-dlp-pkgs = inputs.nixpkgs-yt-dlp.legacyPackages.${pkgs.stdenv.hostPlatform.system};
       moreutilsWithoutParallel = pkgs.moreutils.overrideAttrs (oldAttrs: {
         preBuild = (oldAttrs.preBuild or "") + ''
           substituteInPlace Makefile --replace " parallel " " " --replace " parallel.1 " " "
@@ -25,7 +26,7 @@
       programs.aria2.enable = true;
       programs.yt-dlp = {
         enable = true;
-        package = unstable.yt-dlp;
+        package = yt-dlp-pkgs.yt-dlp;
         settings = {
           embed-thumbnail = true;
           embed-subs = true;
