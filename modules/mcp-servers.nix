@@ -237,6 +237,25 @@ let
       programs.claude-code = {
         enable = true;
         package = llm-agents.claude-code;
+        settings = {
+          enabledPlugins = {
+            "jdtls-lsp@claude-plugins-official" = true;
+            "lua-lsp@claude-plugins-official" = true;
+            "pyright-lsp@claude-plugins-official" = true;
+            "rust-analyzer-lsp@claude-plugins-official" = true;
+            "gopls-lsp@claude-plugins-official" = true;
+            "pr-review-toolkit@claude-plugins-official" = true;
+            "typescript-lsp@claude-plugins-official" = true;
+            "frontend-design@claude-plugins-official" = true;
+            "code-review@claude-plugins-official" = true;
+            "commit-commands@claude-plugins-official" = true;
+          };
+          skipDangerousModePermissionPrompt = true;
+          statusLine = {
+            type = "command";
+            command = "sh ~/.claude/statusline-command.sh";
+          };
+        };
         mcpServers = {
           atlassian = {
             type = "stdio";
@@ -399,6 +418,10 @@ let
         mcp-zai-web-reader
         mcp-devenv
       ];
+
+      home.file.".claude/statusline-command.sh" = {
+        source = ./ai/_files/statusline-command.sh;
+      };
 
       home.file.".agents/skills" = {
         source = ./ai/_files/skills;
