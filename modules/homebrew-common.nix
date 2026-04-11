@@ -75,6 +75,7 @@
       "zed"
       "betterdisplay"
       "tabtab"
+      { name = "typewhisper/tap/typewhisper"; }
       "bettermouse"
     ];
     homebrew.masApps = {
