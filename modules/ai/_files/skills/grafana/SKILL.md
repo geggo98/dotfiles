@@ -339,7 +339,8 @@ The `examples/` directory contains representative Grafana dashboard JSON files:
 | `alerting.json` | v2beta1 | Alert list, thresholds, time region annotations |
 | `pokemon.json` | v2beta1 | Infinity datasource, external API integration |
 | `canvas.json` | v2beta1 | Canvas visualization |
-| `geomap.json` | v2beta1 | Geomap with geohash heatmap layer, `labelsToFields` transformation pipeline |
+| `geomap.json` | v2beta1 | Geomap with geohash heatmap layer, `labelsToFields` transformation pipeline (range query) |
+| `geomap-instant.json` | v2beta1 | Geomap with geohash heatmap layer, **no transformation** — uses `instant: true` + `format: table` |
 
 Note: The example files use the **v2beta1** Kubernetes-style format (exported from newer Grafana with a restructured spec: `elements`, `layout`, `vizConfig`). This is distinct from the **v1beta1** format, which wraps the legacy panel model in a K8s envelope. The CLI's `convert` command handles `legacy ↔ v1beta1` conversion but does **not** support v2beta1. For creating dashboards via the API, use the legacy format documented in `references/dashboard-json-structure.md`.
 
