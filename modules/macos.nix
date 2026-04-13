@@ -47,6 +47,8 @@
       nerd-fonts.jetbrains-mono
       nerd-fonts.iosevka
       nerd-fonts.victor-mono
+      fira # Fira Sans (fallback for Nokia Sans Wide)
+      monaspace # Monaspace Radon (fallback for Operator Mono)
       iosevka
       jetbrains-mono
       victor-mono
