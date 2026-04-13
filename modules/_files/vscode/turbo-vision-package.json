@@ -1,0 +1,22 @@
+{
+  "name": "turbo-vision-theme",
+  "displayName": "Turbo Vision (based on Gerry Cyberpunk Plus)",
+  "description": "Dark cyberpunk theme ported from IntelliJ IDEA",
+  "version": "1.0.0",
+  "publisher": "local",
+  "engines": {
+    "vscode": "^1.60.0"
+  },
+  "categories": [
+    "Themes"
+  ],
+  "contributes": {
+    "themes": [
+      {
+        "label": "Turbo Vision (based on Gerry Cyberpunk Plus)",
+        "uiTheme": "vs-dark",
+        "path": "./themes/turbo-vision-color-theme.json"
+      }
+    ]
+  }
+}

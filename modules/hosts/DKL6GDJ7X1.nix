@@ -52,6 +52,7 @@ in
           homeManager.packages
           homeManager.supply-chain-hardening
           homeManager.misc
+          homeManager.vscode
           homeManager.secrets-DKL6GDJ7X1
           homeManager.boundary
           homeManager.vault
