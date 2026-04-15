@@ -57,7 +57,7 @@
         "editor.guides.bracketPairs" = "active";
         "editor.semanticHighlighting.enabled" = true;
 
-        "files.autoSave" =  "onFocusChange";
+        "files.autoSave" = "onFocusChange";
 
         # Mark vendored/external source files as read-only
         "files.readonlyInclude" = {
