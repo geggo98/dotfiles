@@ -109,6 +109,7 @@
         docker-client
         docker-credential-helpers
         docker-ls
+        gitleaks
         k9s
         kubectl
         kubetail

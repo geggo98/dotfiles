@@ -1,0 +1,46 @@
+title = "nix-darwin secret scanning"
+
+[extend]
+useDefault = true
+
+# Built-in rules cover: AWS, GCP/Gemini (AIza*), Slack, legacy OpenAI (sk-*T3BlbkFJ*)
+# Custom rules below fill gaps for newer key formats and org-specific patterns
+
+[[rules]]
+id = "openai-api-key-v2"
+description = "OpenAI API Key (new format: sk-proj, sk-svcacct, sk-admin)"
+regex = '''(?i)\b(sk-(?:proj|svcacct|admin)-[a-zA-Z0-9_-]{20,200})\b'''
+keywords = ["sk-proj", "sk-svcacct", "sk-admin"]
+
+[[rules]]
+id = "openrouter-api-key"
+description = "OpenRouter API Key"
+regex = '''(?i)\b(sk-or-v1-[a-f0-9]{64})\b'''
+keywords = ["sk-or-"]
+
+[[rules]]
+id = "check24-domain"
+description = "Check24 domain reference"
+regex = '''check24\.de'''
+keywords = ["check24"]
+
+[[rules]]
+id = "ttcp-prefix"
+description = "Boundary target ID (ttcp_ prefix)"
+regex = '''ttcp_[A-Za-z0-9]{8,}'''
+keywords = ["ttcp_"]
+
+[allowlist]
+description = "Files that legitimately contain these patterns"
+paths = [
+  '''\.gitleaks\.toml''',
+  '''CLAUDE\.md''',
+  '''modules/boundary\.nix''',
+  '''modules/vault\.nix''',
+  '''modules/hosts/DKL6GDJ7X1\.nix''',
+  '''modules/_files/.*\.sec\..*''',
+  '''hosts/.*/BOUNDARY\.sec\.md''',
+  '''hosts/.*/config/ssh/.*\.pub''',
+  '''secrets/.*\.enc\.yaml''',
+  '''hosts/.*/secrets\.enc\.yaml''',
+]
