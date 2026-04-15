@@ -29,6 +29,22 @@
         "terminal.integrated.fontFamily" = "'BerkeleyMono Nerd Font', 'JetBrainsMono Nerd Font', 'Victor Mono', monospace";
         "terminal.integrated.fontSize" = 13;
 
+        # Terminal profiles: Nix-managed shells
+        "terminal.integrated.profiles.osx" = {
+          "fish ❄️" = {
+            path = "/etc/profiles/per-user/${config.home.username}/bin/fish";
+            args = [ "-l" ];
+          };
+          "zsh ❄️" = {
+            path = "/etc/profiles/per-user/${config.home.username}/bin/zsh";
+            args = [ "-l" ];
+          };
+          "Agent (Claude)" = {
+            path = "/etc/profiles/per-user/${config.home.username}/bin/+agent-claude";
+          };
+        };
+        "terminal.integrated.defaultProfile.osx" = "fish ❄️";
+
         # UI font hint: Nokia Sans Wide → Fira Sans (limited VS Code support)
         "editor.inlayHints.fontFamily" = "'Nokia Sans Wide', 'Fira Sans', sans-serif";
 
@@ -41,12 +57,18 @@
         "editor.guides.bracketPairs" = "active";
         "editor.semanticHighlighting.enabled" = true;
 
+        "files.autoSave" =  "onFocusChange";
+
         # Mark vendored/external source files as read-only
         "files.readonlyInclude" = {
           "**/.cargo/registry/src/**/*.rs" = true;
           "**/.cargo/git/checkouts/**/*.rs" = true;
           "**/lib/rustlib/src/rust/library/**/*.rs" = true;
         };
+        "excalidraw.theme" = "auto";
+        "github.copilot.chat.claudeAgent.enabled" = true;
+        "gitlens.plusFeatures.enabled" = false;
+        "gitlens.showWhatsNewAfterUpgrades" = false;
       };
   };
 }
