@@ -2,10 +2,18 @@
 name: tmux
 description: "Remote control tmux sessions for interactive CLIs (python, gdb, etc.) by sending keystrokes and scraping pane output."
 license: Vibecoded
-allowed-tools: Read(references/*) Bash(./scripts/tmux-use.sh *)
+allowed-tools: Read(references/*) Bash(./scripts/tmux-use.sh *) Bash(zsh *) Read
 ---
 
 # tmux Skill
+
+## Usage
+
+Run the script:
+
+```bash
+zsh ${CLAUDE_SKILL_DIR}/scripts/tmux-use.sh $ARGUMENTS
+```
 
 Use tmux as a programmable terminal multiplexer for interactive work. Works on Linux and macOS with stock tmux; the `tmux-use` wrapper manages sockets, targets, and defaults automatically.
 

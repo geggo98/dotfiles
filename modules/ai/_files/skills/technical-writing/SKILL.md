@@ -1,7 +1,7 @@
 ---
 name: writing-clearly-and-concisely
 description: "Use when writing documentation, commit messages, error text, explanations, reports, or summaries. Applies Strunk's principles for clear, vigorous prose. Triggers: writing human-readable content, verbose text, unclear explanations."
-allowed-tools: Read(references/*)
+allowed-tools: Read(references/*) Bash(zsh *) Read
 ---
 
 # Writing Clearly and Concisely
