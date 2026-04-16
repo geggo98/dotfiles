@@ -48,4 +48,4 @@ done
 [[ -n "$cli_api" ]]       && export GRAFANA_API_MODE="$cli_api"
 [[ -n "$cli_namespace" ]] && export GRAFANA_NAMESPACE="$cli_namespace"
 
-exec gtimeout "$timeout" uv run --script "${SCRIPT_DIR}/grafana.py" "${args[@]}"
+exec gtimeout "$timeout" "${SCRIPT_DIR}/grafana.py" "${args[@]}"

@@ -1,8 +1,9 @@
-#!/usr/bin/env python3
+#!/usr/bin/env -S uv --quiet run --frozen --script
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
 #   "httpx>=0.27",
+#   "pyyaml>=6.0",
 # ]
 # [tool.uv]
 # exclude-newer = "30 days"
@@ -23,8 +24,10 @@ import httpx
 # Exceptions (Phase 1)
 # ---------------------------------------------------------------------------
 
+
 class GrafanaAPIError(Exception):
     """Base exception for Grafana API errors."""
+
     def __init__(self, message: str, status_code: int, response: Any):
         self.message = message
         self.status_code = status_code
@@ -34,17 +37,20 @@ class GrafanaAPIError(Exception):
 
 class ConflictError(GrafanaAPIError):
     """HTTP 409 — K8s-style API resource version conflict."""
+
     pass
 
 
 class PreconditionFailedError(GrafanaAPIError):
     """HTTP 412 — Legacy API version mismatch."""
+
     pass
 
 
 # ---------------------------------------------------------------------------
 # Merge conflict types (Phase 6)
 # ---------------------------------------------------------------------------
+
 
 @dataclass
 class BothModified:
@@ -53,10 +59,12 @@ class BothModified:
     our_val: Any
     their_val: Any
 
+
 @dataclass
 class DeleteModify:
     path: str
     surviving_val: Any
+
 
 @dataclass
 class BothAdded:
@@ -64,16 +72,24 @@ class BothAdded:
     our_val: Any
     their_val: Any
 
+
 Conflict = BothModified | DeleteModify | BothAdded
 
 # ---------------------------------------------------------------------------
 # Client
 # ---------------------------------------------------------------------------
 
+
 class GrafanaClient:
     """Thin HTTP wrapper around the Grafana REST API."""
 
-    def __init__(self, base_url: str, token: str, org_id: int | None = None, timeout: float = 30.0):
+    def __init__(
+        self,
+        base_url: str,
+        token: str,
+        org_id: int | None = None,
+        timeout: float = 30.0,
+    ):
         self.base_url = base_url.rstrip("/")
         headers: dict[str, str] = {
             "Authorization": f"Bearer {token}",
@@ -86,7 +102,14 @@ class GrafanaClient:
 
     # -- low-level --------------------------------------------------------
 
-    def _request(self, method: str, endpoint: str, *, params: dict | None = None, json_body: Any = None) -> Any:
+    def _request(
+        self,
+        method: str,
+        endpoint: str,
+        *,
+        params: dict | None = None,
+        json_body: Any = None,
+    ) -> Any:
         url = f"{self.base_url}{endpoint}"
         resp = self._client.request(method, url, params=params, json=json_body)
         try:
@@ -94,7 +117,9 @@ class GrafanaClient:
         except Exception:
             data = {"message": resp.text}
         if not resp.is_success:
-            msg = data.get("message", resp.text) if isinstance(data, dict) else resp.text
+            msg = (
+                data.get("message", resp.text) if isinstance(data, dict) else resp.text
+            )
             if resp.status_code == 409:
                 raise ConflictError(msg, resp.status_code, data)
             elif resp.status_code == 412:
@@ -103,7 +128,14 @@ class GrafanaClient:
                 raise GrafanaAPIError(msg, resp.status_code, data)
         return data
 
-    def _request_safe(self, method: str, endpoint: str, *, params: dict | None = None, json_body: Any = None) -> tuple[int, Any]:
+    def _request_safe(
+        self,
+        method: str,
+        endpoint: str,
+        *,
+        params: dict | None = None,
+        json_body: Any = None,
+    ) -> tuple[int, Any]:
         """Non-raising request — returns (status_code, data) for probing."""
         url = f"{self.base_url}{endpoint}"
         resp = self._client.request(method, url, params=params, json=json_body)
@@ -135,8 +167,13 @@ class GrafanaClient:
 
     # -- dashboards (legacy) ----------------------------------------------
 
-    def search_dashboards(self, query: str | None = None, tag: str | None = None,
-                          folder_uid: str | None = None, limit: int = 100) -> list[dict]:
+    def search_dashboards(
+        self,
+        query: str | None = None,
+        tag: str | None = None,
+        folder_uid: str | None = None,
+        limit: int = 100,
+    ) -> list[dict]:
         params: dict[str, Any] = {"type": "dash-db", "limit": limit}
         if query:
             params["query"] = query
@@ -149,8 +186,13 @@ class GrafanaClient:
     def get_dashboard(self, uid: str) -> dict:
         return self.get(f"/api/dashboards/uid/{uid}")
 
-    def save_dashboard(self, dashboard: dict, folder_uid: str | None = None,
-                       message: str = "", overwrite: bool = False) -> dict:
+    def save_dashboard(
+        self,
+        dashboard: dict,
+        folder_uid: str | None = None,
+        message: str = "",
+        overwrite: bool = False,
+    ) -> dict:
         body: dict[str, Any] = {"dashboard": dashboard, "overwrite": overwrite}
         if folder_uid:
             body["folderUid"] = folder_uid
@@ -165,30 +207,43 @@ class GrafanaClient:
         return self.get(f"/api/dashboards/uid/{uid}/versions", params={"limit": limit})
 
     def restore_dashboard_version(self, uid: str, version: int) -> dict:
-        return self.post(f"/api/dashboards/uid/{uid}/restore", json_body={"version": version})
+        return self.post(
+            f"/api/dashboards/uid/{uid}/restore", json_body={"version": version}
+        )
 
     # -- dashboards (K8s-style API, Phase 2) ------------------------------
 
     K8S_API_BASE = "/apis/dashboard.grafana.app/v1beta1"
 
-    def k8s_list_dashboards(self, namespace: str, label_selector: str | None = None) -> dict:
+    def k8s_list_dashboards(
+        self, namespace: str, label_selector: str | None = None
+    ) -> dict:
         params: dict[str, Any] = {}
         if label_selector:
             params["labelSelector"] = label_selector
-        return self.get(f"{self.K8S_API_BASE}/namespaces/{namespace}/dashboards", params=params)
+        return self.get(
+            f"{self.K8S_API_BASE}/namespaces/{namespace}/dashboards", params=params
+        )
 
     def k8s_get_dashboard(self, namespace: str, name: str) -> dict:
         return self.get(f"{self.K8S_API_BASE}/namespaces/{namespace}/dashboards/{name}")
 
     def k8s_create_dashboard(self, namespace: str, body: dict) -> dict:
-        return self.post(f"{self.K8S_API_BASE}/namespaces/{namespace}/dashboards", json_body=body)
+        return self.post(
+            f"{self.K8S_API_BASE}/namespaces/{namespace}/dashboards", json_body=body
+        )
 
     def k8s_update_dashboard(self, namespace: str, name: str, body: dict) -> dict:
         """PUT — body must include metadata.resourceVersion for OCC."""
-        return self.put(f"{self.K8S_API_BASE}/namespaces/{namespace}/dashboards/{name}", json_body=body)
+        return self.put(
+            f"{self.K8S_API_BASE}/namespaces/{namespace}/dashboards/{name}",
+            json_body=body,
+        )
 
     def k8s_delete_dashboard(self, namespace: str, name: str) -> dict:
-        return self.delete(f"{self.K8S_API_BASE}/namespaces/{namespace}/dashboards/{name}")
+        return self.delete(
+            f"{self.K8S_API_BASE}/namespaces/{namespace}/dashboards/{name}"
+        )
 
     def detect_api_mode(self) -> str:
         """Probe K8s endpoint; return 'k8s' if available, else 'legacy'."""
@@ -203,7 +258,9 @@ class GrafanaClient:
     def get_folder(self, uid: str) -> dict:
         return self.get(f"/api/folders/{uid}")
 
-    def create_folder(self, title: str, uid: str | None = None, parent_uid: str | None = None) -> dict:
+    def create_folder(
+        self, title: str, uid: str | None = None, parent_uid: str | None = None
+    ) -> dict:
         body: dict[str, Any] = {"title": title}
         if uid:
             body["uid"] = uid
@@ -212,7 +269,9 @@ class GrafanaClient:
         return self.post("/api/folders", json_body=body)
 
     def delete_folder(self, uid: str, force_delete_rules: bool = False) -> dict:
-        return self.delete(f"/api/folders/{uid}", params={"forceDeleteRules": force_delete_rules})
+        return self.delete(
+            f"/api/folders/{uid}", params={"forceDeleteRules": force_delete_rules}
+        )
 
     # -- datasources ------------------------------------------------------
 
@@ -225,14 +284,23 @@ class GrafanaClient:
     def health_check_datasource(self, uid: str) -> dict:
         return self.get(f"/api/datasources/uid/{uid}/health")
 
-    def query_datasource(self, queries: list[dict], time_from: str = "now-1h", time_to: str = "now") -> dict:
+    def query_datasource(
+        self, queries: list[dict], time_from: str = "now-1h", time_to: str = "now"
+    ) -> dict:
         """Execute queries via POST /api/ds/query."""
-        return self.post("/api/ds/query", json_body={"from": time_from, "to": time_to, "queries": queries})
+        return self.post(
+            "/api/ds/query",
+            json_body={"from": time_from, "to": time_to, "queries": queries},
+        )
 
     # -- annotations ------------------------------------------------------
 
-    def query_annotations(self, dashboard_uid: str | None = None, tags: list[str] | None = None,
-                          limit: int = 100) -> list[dict]:
+    def query_annotations(
+        self,
+        dashboard_uid: str | None = None,
+        tags: list[str] | None = None,
+        limit: int = 100,
+    ) -> list[dict]:
         params: dict[str, Any] = {"limit": limit}
         if dashboard_uid:
             params["dashboardUID"] = dashboard_uid
@@ -240,11 +308,20 @@ class GrafanaClient:
             params["tags"] = tags
         return self.get("/api/annotations", params=params)
 
-    def create_annotation(self, text: str, tags: list[str] | None = None,
-                          dashboard_uid: str | None = None, time_ms: int | None = None,
-                          time_end_ms: int | None = None) -> dict:
+    def create_annotation(
+        self,
+        text: str,
+        tags: list[str] | None = None,
+        dashboard_uid: str | None = None,
+        time_ms: int | None = None,
+        time_end_ms: int | None = None,
+    ) -> dict:
         import time as _time
-        body: dict[str, Any] = {"text": text, "time": time_ms or int(_time.time() * 1000)}
+
+        body: dict[str, Any] = {
+            "text": text,
+            "time": time_ms or int(_time.time() * 1000),
+        }
         if tags:
             body["tags"] = tags
         if dashboard_uid:
@@ -286,6 +363,7 @@ class GrafanaClient:
 # Format Detection & Conversion (Phase 3)
 # ---------------------------------------------------------------------------
 
+
 def detect_format(data: dict) -> str:
     """Detect whether data is K8s-style or legacy format."""
     if "apiVersion" in data and "kind" in data:
@@ -295,7 +373,11 @@ def detect_format(data: dict) -> str:
 
 def legacy_to_k8s(dashboard: dict, folder_uid: str | None = None) -> dict:
     """Convert legacy dashboard body to K8s-style resource."""
-    spec = {k: v for k, v in dashboard.items() if k not in ("uid", "id", "version", "schemaVersion")}
+    spec = {
+        k: v
+        for k, v in dashboard.items()
+        if k not in ("uid", "id", "version", "schemaVersion")
+    }
     metadata: dict[str, Any] = {}
     if dashboard.get("uid"):
         metadata["name"] = dashboard["uid"]
@@ -332,10 +414,12 @@ def k8s_to_legacy(resource: dict) -> dict:
 # DashboardOps Facade (Phase 4)
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class OccMeta:
     """Optimistic concurrency control metadata."""
-    version: int | None = None           # legacy
+
+    version: int | None = None  # legacy
     resource_version: str | None = None  # K8s
     api_mode: str = "legacy"
 
@@ -355,7 +439,9 @@ class OccMeta:
 class DashboardOps:
     """Normalizes API differences so CLI commands don't branch on mode."""
 
-    def __init__(self, client: GrafanaClient, api_mode: str = "auto", namespace: str = "default"):
+    def __init__(
+        self, client: GrafanaClient, api_mode: str = "auto", namespace: str = "default"
+    ):
         self.client = client
         self.namespace = namespace
         if api_mode == "auto":
@@ -367,7 +453,9 @@ class DashboardOps:
         if self.api_mode == "k8s":
             res = self.client.k8s_get_dashboard(self.namespace, uid)
             dashboard = k8s_to_legacy(res)
-            occ = OccMeta(resource_version=res["metadata"].get("resourceVersion"), api_mode="k8s")
+            occ = OccMeta(
+                resource_version=res["metadata"].get("resourceVersion"), api_mode="k8s"
+            )
             return dashboard, occ
         else:
             res = self.client.get_dashboard(uid)
@@ -380,7 +468,9 @@ class DashboardOps:
         if self.api_mode == "k8s":
             res = self.client.k8s_get_dashboard(self.namespace, uid)
             dashboard = k8s_to_legacy(res)
-            occ = OccMeta(resource_version=res["metadata"].get("resourceVersion"), api_mode="k8s")
+            occ = OccMeta(
+                resource_version=res["metadata"].get("resourceVersion"), api_mode="k8s"
+            )
             return dashboard, occ, res
         else:
             res = self.client.get_dashboard(uid)
@@ -388,8 +478,13 @@ class DashboardOps:
             occ = OccMeta(version=res["meta"].get("version"), api_mode="legacy")
             return dashboard, occ, res
 
-    def save(self, dashboard: dict, occ: OccMeta, folder_uid: str | None = None,
-             message: str = "") -> dict:
+    def save(
+        self,
+        dashboard: dict,
+        occ: OccMeta,
+        folder_uid: str | None = None,
+        message: str = "",
+    ) -> dict:
         if self.api_mode == "k8s":
             body = legacy_to_k8s(dashboard, folder_uid=folder_uid)
             name = dashboard.get("uid", body["metadata"].get("name", ""))
@@ -400,22 +495,28 @@ class DashboardOps:
             dash = dict(dashboard)
             if occ.version is not None:
                 dash["version"] = occ.version
-            return self.client.save_dashboard(dash, folder_uid=folder_uid,
-                                              message=message, overwrite=False)
+            return self.client.save_dashboard(
+                dash, folder_uid=folder_uid, message=message, overwrite=False
+            )
 
-    def save_force(self, dashboard: dict, folder_uid: str | None = None,
-                   message: str = "") -> dict:
+    def save_force(
+        self, dashboard: dict, folder_uid: str | None = None, message: str = ""
+    ) -> dict:
         """Save with overwrite/force — bypasses OCC."""
         if self.api_mode == "k8s":
             # For K8s, fetch current resourceVersion first then PUT
             _, current_occ = self.get(dashboard.get("uid", ""))
-            return self.save(dashboard, current_occ, folder_uid=folder_uid, message=message)
+            return self.save(
+                dashboard, current_occ, folder_uid=folder_uid, message=message
+            )
         else:
-            return self.client.save_dashboard(dashboard, folder_uid=folder_uid,
-                                              message=message, overwrite=True)
+            return self.client.save_dashboard(
+                dashboard, folder_uid=folder_uid, message=message, overwrite=True
+            )
 
-    def create(self, dashboard: dict, folder_uid: str | None = None,
-               message: str = "") -> dict:
+    def create(
+        self, dashboard: dict, folder_uid: str | None = None, message: str = ""
+    ) -> dict:
         if self.api_mode == "k8s":
             body = legacy_to_k8s(dashboard, folder_uid=folder_uid)
             body["metadata"].pop("name", None)  # let server assign
@@ -424,8 +525,9 @@ class DashboardOps:
             dash = dict(dashboard)
             dash["id"] = None
             dash["uid"] = None
-            return self.client.save_dashboard(dash, folder_uid=folder_uid,
-                                              message=message, overwrite=False)
+            return self.client.save_dashboard(
+                dash, folder_uid=folder_uid, message=message, overwrite=False
+            )
 
     def delete(self, uid: str) -> dict:
         if self.api_mode == "k8s":
@@ -433,8 +535,13 @@ class DashboardOps:
         else:
             return self.client.delete_dashboard(uid)
 
-    def search(self, query: str | None = None, tag: str | None = None,
-               folder_uid: str | None = None, limit: int = 100) -> list[dict]:
+    def search(
+        self,
+        query: str | None = None,
+        tag: str | None = None,
+        folder_uid: str | None = None,
+        limit: int = 100,
+    ) -> list[dict]:
         if self.api_mode == "k8s":
             res = self.client.k8s_list_dashboards(self.namespace)
             items = res.get("items", [])
@@ -453,13 +560,15 @@ class DashboardOps:
                 results.append(entry)
             return results[:limit]
         else:
-            return self.client.search_dashboards(query=query, tag=tag,
-                                                 folder_uid=folder_uid, limit=limit)
+            return self.client.search_dashboards(
+                query=query, tag=tag, folder_uid=folder_uid, limit=limit
+            )
 
 
 # ---------------------------------------------------------------------------
 # Sidecar Base File Handling (Phase 5)
 # ---------------------------------------------------------------------------
+
 
 def _base_path(working_path: str) -> Path:
     p = Path(working_path)
@@ -540,8 +649,13 @@ def _strict_equal(a: Any, b: Any) -> bool:
     return a == b
 
 
-def _merge_by_key(base_list: list[dict], ours_list: list[dict], theirs_list: list[dict],
-                  key_fn, path_prefix: str) -> tuple[list[dict], list[Conflict]]:
+def _merge_by_key(
+    base_list: list[dict],
+    ours_list: list[dict],
+    theirs_list: list[dict],
+    key_fn,
+    path_prefix: str,
+) -> tuple[list[dict], list[Conflict]]:
     """Merge two lists of dicts using a key function for identity."""
     conflicts: list[Conflict] = []
 
@@ -605,7 +719,9 @@ def _merge_by_key(base_list: list[dict], ours_list: list[dict], theirs_list: lis
             if _strict_equal(ours_map[k], theirs_map[k]):
                 merged.append(copy.deepcopy(ours_map[k]))
             else:
-                conflicts.append(BothAdded(f"{path_prefix}[{k}]", ours_map[k], theirs_map[k]))
+                conflicts.append(
+                    BothAdded(f"{path_prefix}[{k}]", ours_map[k], theirs_map[k])
+                )
                 merged.append(copy.deepcopy(theirs_map[k]))
         elif not in_base and in_ours and not in_theirs:
             merged.append(copy.deepcopy(ours_map[k]))  # We added
@@ -616,7 +732,9 @@ def _merge_by_key(base_list: list[dict], ours_list: list[dict], theirs_list: lis
     return merged, conflicts
 
 
-def three_way_merge(base: dict, ours: dict, theirs: dict) -> tuple[dict, list[Conflict]]:
+def three_way_merge(
+    base: dict, ours: dict, theirs: dict
+) -> tuple[dict, list[Conflict]]:
     """Three-way merge of dashboard bodies. Returns (merged, conflicts)."""
     conflicts: list[Conflict] = []
     merged = copy.deepcopy(theirs)  # Start from theirs as base
@@ -647,15 +765,28 @@ def three_way_merge(base: dict, ours: dict, theirs: dict) -> tuple[dict, list[Co
         t_list = theirs_val.get(last, []) if isinstance(theirs_val, dict) else []
 
         if b_list or o_list or t_list:
-            merged_list, list_conflicts = _merge_by_key(b_list, o_list, t_list, key_fn, field_path)
+            merged_list, list_conflicts = _merge_by_key(
+                b_list, o_list, t_list, key_fn, field_path
+            )
             conflicts.extend(list_conflicts)
             if isinstance(merged_parent, dict):
                 merged_parent[last] = merged_list
 
     # --- Merge scalar fields ---
-    scalar_fields = ["title", "description", "tags", "timezone", "refresh", "editable",
-                     "graphTooltip", "fiscalYearStartMonth", "liveNow",
-                     "time", "timepicker", "weekStart"]
+    scalar_fields = [
+        "title",
+        "description",
+        "tags",
+        "timezone",
+        "refresh",
+        "editable",
+        "graphTooltip",
+        "fiscalYearStartMonth",
+        "liveNow",
+        "time",
+        "timepicker",
+        "weekStart",
+    ]
 
     for sf in scalar_fields:
         b_val = base.get(sf)
@@ -681,7 +812,9 @@ def three_way_merge(base: dict, ours: dict, theirs: dict) -> tuple[dict, list[Co
     t_links = theirs.get("links", [])
     if b_links or o_links or t_links:
         link_key = lambda l: l.get("title", "") + "|" + l.get("url", "")
-        merged_links, link_conflicts = _merge_by_key(b_links, o_links, t_links, link_key, "links")
+        merged_links, link_conflicts = _merge_by_key(
+            b_links, o_links, t_links, link_key, "links"
+        )
         conflicts.extend(link_conflicts)
         merged["links"] = merged_links
 
@@ -694,22 +827,35 @@ def _format_conflicts(conflicts: list[Conflict]) -> str:
     for c in conflicts:
         if isinstance(c, BothModified):
             lines.append(f"  BOTH MODIFIED: {c.path}")
-            lines.append(f"    base:   {json.dumps(c.base_val, ensure_ascii=False)[:120]}")
-            lines.append(f"    ours:   {json.dumps(c.our_val, ensure_ascii=False)[:120]}")
-            lines.append(f"    theirs: {json.dumps(c.their_val, ensure_ascii=False)[:120]}")
+            lines.append(
+                f"    base:   {json.dumps(c.base_val, ensure_ascii=False)[:120]}"
+            )
+            lines.append(
+                f"    ours:   {json.dumps(c.our_val, ensure_ascii=False)[:120]}"
+            )
+            lines.append(
+                f"    theirs: {json.dumps(c.their_val, ensure_ascii=False)[:120]}"
+            )
         elif isinstance(c, DeleteModify):
             lines.append(f"  DELETE/MODIFY: {c.path}")
-            lines.append(f"    surviving: {json.dumps(c.surviving_val, ensure_ascii=False)[:120]}")
+            lines.append(
+                f"    surviving: {json.dumps(c.surviving_val, ensure_ascii=False)[:120]}"
+            )
         elif isinstance(c, BothAdded):
             lines.append(f"  BOTH ADDED: {c.path}")
-            lines.append(f"    ours:   {json.dumps(c.our_val, ensure_ascii=False)[:120]}")
-            lines.append(f"    theirs: {json.dumps(c.their_val, ensure_ascii=False)[:120]}")
+            lines.append(
+                f"    ours:   {json.dumps(c.our_val, ensure_ascii=False)[:120]}"
+            )
+            lines.append(
+                f"    theirs: {json.dumps(c.their_val, ensure_ascii=False)[:120]}"
+            )
     return "\n".join(lines)
 
 
 # ---------------------------------------------------------------------------
 # Query Helpers
 # ---------------------------------------------------------------------------
+
 
 def _resolve_variables(obj: Any, variables: dict[str, str]) -> Any:
     """Recursively replace $var and ${var} placeholders in strings.
@@ -755,7 +901,9 @@ def _parse_frames(result: dict, ref_id: str = "A") -> tuple[list[dict], list[tup
             fname = field["name"]
             if fname not in seen_data:
                 seen_data.add(fname)
-                data_columns.append({"name": fname, "type": field.get("type", "string")})
+                data_columns.append(
+                    {"name": fname, "type": field.get("type", "string")}
+                )
 
     label_cols = [{"name": n, "type": "string"} for n in sorted(label_names)]
     all_columns = label_cols + data_columns
@@ -806,9 +954,12 @@ def _export_parquet(columns: list[dict], rows: list[tuple], path: str) -> str:
         import pyarrow as pa
         import pyarrow.parquet as pq
     except ImportError:
-        print("ERROR: pyarrow is required for Parquet export.\n"
-              "Install with:  uv pip install pyarrow\n"
-              "Or use --format tsv / --format jsonl instead.", file=sys.stderr)
+        print(
+            "ERROR: pyarrow is required for Parquet export.\n"
+            "Install with:  uv pip install pyarrow\n"
+            "Or use --format tsv / --format jsonl instead.",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     arrow_arrays = []
@@ -825,11 +976,17 @@ def _export_parquet(columns: list[dict], rows: list[tuple], path: str) -> str:
             arrow_fields.append(pa.field(col["name"], pa.float64()))
         else:
             arrow_arrays.append(
-                pa.array([str(v) if v is not None else None for v in col_values], type=pa.string()))
+                pa.array(
+                    [str(v) if v is not None else None for v in col_values],
+                    type=pa.string(),
+                )
+            )
             arrow_fields.append(pa.field(col["name"], pa.string()))
 
     schema = pa.schema(arrow_fields)
-    table = pa.table({f.name: a for f, a in zip(arrow_fields, arrow_arrays)}, schema=schema)
+    table = pa.table(
+        {f.name: a for f, a in zip(arrow_fields, arrow_arrays)}, schema=schema
+    )
     pq.write_table(table, path, compression="snappy")
     return path
 
@@ -847,8 +1004,11 @@ def _export_tsv(columns: list[dict], rows: list[tuple], path: str) -> str:
             for ci, val in enumerate(row):
                 if columns[ci]["type"] == "time" and isinstance(val, (int, float)):
                     out.append(
-                        datetime.fromtimestamp(val / 1000, tz=timezone.utc)
-                        .strftime("%Y-%m-%dT%H:%M:%S.%f")[:-3] + "Z")
+                        datetime.fromtimestamp(val / 1000, tz=timezone.utc).strftime(
+                            "%Y-%m-%dT%H:%M:%S.%f"
+                        )[:-3]
+                        + "Z"
+                    )
                 elif val is None:
                     out.append("")
                 else:
@@ -885,9 +1045,12 @@ def _export_frames(result: dict, ref_id: str, fmt: str, path: str) -> str | None
 def _auto_output_path(output_dir: str | None, prefix: str, ext: str) -> str:
     """Generate an output file path, using tempfile if no output_dir."""
     import tempfile
+
     if output_dir:
         os.makedirs(output_dir, exist_ok=True)
-        fd, path = tempfile.mkstemp(suffix=f".{ext}", prefix=f"{prefix}_", dir=output_dir)
+        fd, path = tempfile.mkstemp(
+            suffix=f".{ext}", prefix=f"{prefix}_", dir=output_dir
+        )
     else:
         fd, path = tempfile.mkstemp(suffix=f".{ext}", prefix=f"{prefix}_")
     os.close(fd)
@@ -901,7 +1064,10 @@ def _check_query_errors(result: dict) -> None:
             print(f"Query {ref_id} failed: {ref_result['error']}", file=sys.stderr)
             sys.exit(1)
         if ref_result.get("status", 200) != 200:
-            print(f"Query {ref_id} returned status {ref_result['status']}", file=sys.stderr)
+            print(
+                f"Query {ref_id} returned status {ref_result['status']}",
+                file=sys.stderr,
+            )
             sys.exit(1)
 
 
@@ -927,10 +1093,16 @@ def _print_preview(result: dict, ref_id: str, n: int) -> None:
     print(f"Total: {total} rows for refId={ref_id}", file=sys.stderr)
 
 
-def _handle_query_output(result: dict, ref_ids: list[str], *,
-                         as_json: bool, preview: int | None,
-                         output: str | None, output_dir: str | None,
-                         fmt: str | None) -> None:
+def _handle_query_output(
+    result: dict,
+    ref_ids: list[str],
+    *,
+    as_json: bool,
+    preview: int | None,
+    output: str | None,
+    output_dir: str | None,
+    fmt: str | None,
+) -> None:
     """Shared output logic for query and panel-query commands."""
     if as_json:
         _pp(result)
@@ -964,7 +1136,9 @@ def _handle_query_output(result: dict, ref_ids: list[str], *,
         effective_fmt = fmt or "parquet"
         ext_map = {"parquet": "parquet", "tsv": "tsv", "jsonl": "jsonl"}
         for ref_id in ref_ids:
-            path = _auto_output_path(output_dir, f"grafana_query_{ref_id}", ext_map[effective_fmt])
+            path = _auto_output_path(
+                output_dir, f"grafana_query_{ref_id}", ext_map[effective_fmt]
+            )
             exported = _export_frames(result, ref_id, effective_fmt, path)
             if exported:
                 print(f"Exported refId={ref_id}: {exported}", file=sys.stderr)
@@ -981,14 +1155,504 @@ def _handle_query_output(result: dict, ref_ids: list[str], *,
         else:
             effective_fmt = fmt or "parquet"
             ext_map = {"parquet": "parquet", "tsv": "tsv", "jsonl": "jsonl"}
-            path = _auto_output_path(None, f"grafana_query_{ref_id}", ext_map[effective_fmt])
+            path = _auto_output_path(
+                None, f"grafana_query_{ref_id}", ext_map[effective_fmt]
+            )
             _export_frames(result, ref_id, effective_fmt, path)
-            print(f"Exported {len(rows)} rows for refId={ref_id}: {path}", file=sys.stderr)
+            print(
+                f"Exported {len(rows)} rows for refId={ref_id}: {path}", file=sys.stderr
+            )
+
+
+# ---------------------------------------------------------------------------
+# Dashboard Validation
+# ---------------------------------------------------------------------------
+
+_VALID_LAYOUT_KINDS = {"GridLayout", "RowsLayout", "AutoGridLayout", "TabsLayout"}
+_VALID_VARIABLE_KINDS = {
+    "QueryVariable",
+    "CustomVariable",
+    "ConstantVariable",
+    "TextVariable",
+    "DatasourceVariable",
+    "IntervalVariable",
+    "GroupByVariable",
+    "AdhocVariable",
+    "SwitchVariable",
+}
+
+
+@dataclass
+class ValidationIssue:
+    """A single validation finding."""
+
+    level: str  # "error" | "warning"
+    path: str  # JSON path
+    rule: str  # machine-readable rule ID
+    message: str  # human-readable message
+
+
+def _validate_v2beta1(data: dict) -> list[ValidationIssue]:
+    """Validate a v2beta1 dashboard."""
+    issues: list[ValidationIssue] = []
+
+    def err(path: str, rule: str, msg: str) -> None:
+        issues.append(ValidationIssue("error", path, rule, msg))
+
+    def warn(path: str, rule: str, msg: str) -> None:
+        issues.append(ValidationIssue("warning", path, rule, msg))
+
+    # --- Envelope ---
+    if data.get("apiVersion") != "dashboard.grafana.app/v2beta1":
+        err(
+            "apiVersion",
+            "invalid-api-version",
+            f'expected "dashboard.grafana.app/v2beta1", got {data.get("apiVersion")!r}',
+        )
+    if data.get("kind") != "Dashboard":
+        err("kind", "invalid-kind", f'expected "Dashboard", got {data.get("kind")!r}')
+    meta = data.get("metadata")
+    if not isinstance(meta, dict) or not meta.get("name"):
+        err("metadata.name", "missing-required-field", '"metadata.name" is required')
+
+    spec = data.get("spec")
+    if not isinstance(spec, dict):
+        err(
+            "spec", "missing-required-field", '"spec" is required and must be an object'
+        )
+        return issues
+
+    # --- Required spec fields ---
+    critical_required = {"title", "elements", "layout", "timeSettings"}
+    soft_required = {
+        "annotations",
+        "cursorSync",
+        "links",
+        "preload",
+        "tags",
+        "variables",
+    }
+    for field in critical_required:
+        if field not in spec:
+            err(f"spec.{field}", "missing-required-field", f'"{field}" is required')
+    for field in soft_required:
+        if field not in spec:
+            warn(
+                f"spec.{field}",
+                "missing-recommended-field",
+                f'"{field}" is recommended by the OpenAPI spec',
+            )
+
+    # --- CursorSync enum ---
+    cs = spec.get("cursorSync")
+    if cs is not None and cs not in ("Off", "Crosshair", "Tooltip"):
+        err(
+            "spec.cursorSync",
+            "invalid-enum",
+            f'must be "Off", "Crosshair", or "Tooltip", got {cs!r}',
+        )
+
+    # --- Elements ---
+    elements = spec.get("elements", {})
+    if not isinstance(elements, dict):
+        err("spec.elements", "invalid-type", '"elements" must be an object')
+        elements = {}
+
+    for name, el in elements.items():
+        p = f"spec.elements.{name}"
+        if not isinstance(el, dict):
+            err(p, "invalid-type", "element must be an object")
+            continue
+        kind = el.get("kind")
+        if kind not in ("Panel", "LibraryPanel"):
+            err(
+                f"{p}.kind",
+                "invalid-kind",
+                f'expected "Panel" or "LibraryPanel", got {kind!r}',
+            )
+            continue
+        el_spec = el.get("spec")
+        if not isinstance(el_spec, dict):
+            err(f"{p}.spec", "missing-required-field", '"spec" is required')
+            continue
+
+        if kind == "Panel":
+            if "vizConfig" not in el_spec:
+                err(
+                    f"{p}.spec.vizConfig",
+                    "missing-required-field",
+                    '"vizConfig" is required',
+                )
+            elif isinstance(el_spec["vizConfig"], dict):
+                vc = el_spec["vizConfig"]
+                if vc.get("kind") != "VizConfig":
+                    err(
+                        f"{p}.spec.vizConfig.kind",
+                        "invalid-kind",
+                        f'expected "VizConfig", got {vc.get("kind")!r}',
+                    )
+
+            data_node = el_spec.get("data")
+            if data_node is not None and isinstance(data_node, dict):
+                if data_node.get("kind") != "QueryGroup":
+                    err(
+                        f"{p}.spec.data.kind",
+                        "invalid-kind",
+                        f'expected "QueryGroup", got {data_node.get("kind")!r}',
+                    )
+                queries = data_node.get("spec", {}).get("queries", [])
+                for qi, q in enumerate(queries):
+                    qp = f"{p}.spec.data.spec.queries[{qi}]"
+                    if isinstance(q, dict):
+                        q_spec = q.get("spec", {})
+                        if not q_spec.get("refId"):
+                            warn(
+                                f"{qp}.spec.refId",
+                                "missing-ref-id",
+                                '"refId" is recommended for each query',
+                            )
+
+    # --- Layout ---
+    layout = spec.get("layout")
+    if isinstance(layout, dict):
+        referenced_elements = set()
+        _validate_layout(layout, "spec.layout", elements, referenced_elements, issues)
+
+        # Orphan detection
+        for name in elements:
+            if name not in referenced_elements:
+                warn(
+                    f"spec.elements.{name}",
+                    "orphan-element",
+                    "not referenced by any layout item",
+                )
+    elif layout is not None:
+        err("spec.layout", "invalid-type", '"layout" must be an object')
+
+    # --- Variables ---
+    variables = spec.get("variables", [])
+    if isinstance(variables, list):
+        var_names: list[str] = []
+        for vi, v in enumerate(variables):
+            vp = f"spec.variables[{vi}]"
+            if not isinstance(v, dict):
+                err(vp, "invalid-type", "variable must be an object")
+                continue
+            vkind = v.get("kind")
+            if vkind and vkind not in _VALID_VARIABLE_KINDS:
+                warn(
+                    f"{vp}.kind",
+                    "unknown-variable-kind",
+                    f"unknown variable kind {vkind!r}",
+                )
+            vname = (v.get("spec") or {}).get("name")
+            if vname:
+                if vname in var_names:
+                    err(
+                        f"{vp}.spec.name",
+                        "duplicate-variable-name",
+                        f'variable name "{vname}" is already used',
+                    )
+                var_names.append(vname)
+
+    return issues
+
+
+def _validate_layout(
+    layout: dict,
+    path: str,
+    elements: dict,
+    referenced: set,
+    issues: list[ValidationIssue],
+) -> None:
+    """Recursively validate a layout node and collect element references."""
+
+    def err(p: str, rule: str, msg: str) -> None:
+        issues.append(ValidationIssue("error", p, rule, msg))
+
+    kind = layout.get("kind")
+    if kind not in _VALID_LAYOUT_KINDS:
+        err(
+            f"{path}.kind",
+            "invalid-layout-kind",
+            f"expected one of {sorted(_VALID_LAYOUT_KINDS)}, got {kind!r}",
+        )
+        return
+
+    layout_spec = layout.get("spec")
+    if not isinstance(layout_spec, dict):
+        err(f"{path}.spec", "missing-required-field", '"spec" is required')
+        return
+
+    if kind == "GridLayout":
+        items = layout_spec.get("items", [])
+        for ii, item in enumerate(items):
+            ip = f"{path}.spec.items[{ii}]"
+            _validate_grid_item(item, ip, elements, referenced, issues)
+
+    elif kind == "RowsLayout":
+        rows = layout_spec.get("rows", [])
+        for ri, row in enumerate(rows):
+            rp = f"{path}.spec.rows[{ri}]"
+            if not isinstance(row, dict):
+                err(rp, "invalid-type", "row must be an object")
+                continue
+            row_spec = row.get("spec", {})
+            if isinstance(row_spec, dict):
+                nested = row_spec.get("layout")
+                if isinstance(nested, dict):
+                    _validate_layout(
+                        nested, f"{rp}.spec.layout", elements, referenced, issues
+                    )
+
+    elif kind == "AutoGridLayout":
+        items = layout_spec.get("items", [])
+        for ii, item in enumerate(items):
+            ip = f"{path}.spec.items[{ii}]"
+            if isinstance(item, dict):
+                item_spec = item.get("spec", {})
+                if isinstance(item_spec, dict):
+                    _validate_element_ref(
+                        item_spec.get("element"),
+                        f"{ip}.spec.element",
+                        elements,
+                        referenced,
+                        issues,
+                    )
+
+    elif kind == "TabsLayout":
+        tabs = layout_spec.get("tabs", [])
+        for ti, tab in enumerate(tabs):
+            tp = f"{path}.spec.tabs[{ti}]"
+            if isinstance(tab, dict):
+                tab_spec = tab.get("spec", {})
+                if isinstance(tab_spec, dict):
+                    nested = tab_spec.get("layout")
+                    if isinstance(nested, dict):
+                        _validate_layout(
+                            nested, f"{tp}.spec.layout", elements, referenced, issues
+                        )
+
+
+def _validate_grid_item(
+    item: Any,
+    path: str,
+    elements: dict,
+    referenced: set,
+    issues: list[ValidationIssue],
+) -> None:
+    """Validate a single GridLayoutItem."""
+
+    def err(p: str, rule: str, msg: str) -> None:
+        issues.append(ValidationIssue("error", p, rule, msg))
+
+    if not isinstance(item, dict):
+        err(path, "invalid-type", "grid item must be an object")
+        return
+    item_spec = item.get("spec")
+    if not isinstance(item_spec, dict):
+        err(f"{path}.spec", "missing-required-field", '"spec" is required')
+        return
+
+    # Grid bounds
+    x = item_spec.get("x")
+    y = item_spec.get("y")
+    w = item_spec.get("width")
+    h = item_spec.get("height")
+
+    for field, val in [("x", x), ("y", y), ("width", w), ("height", h)]:
+        if not isinstance(val, (int, float)):
+            err(
+                f"{path}.spec.{field}",
+                "missing-required-field",
+                f'"{field}" is required and must be a number',
+            )
+
+    if isinstance(x, (int, float)) and isinstance(w, (int, float)):
+        if x < 0:
+            err(f"{path}.spec.x", "grid-bounds", f"x must be >= 0, got {x}")
+        if w <= 0:
+            err(f"{path}.spec.width", "grid-bounds", f"width must be > 0, got {w}")
+        if x + w > 24:
+            err(f"{path}.spec", "grid-overflow", f"x({x}) + width({w}) = {x+w} > 24")
+    if isinstance(y, (int, float)) and y < 0:
+        err(f"{path}.spec.y", "grid-bounds", f"y must be >= 0, got {y}")
+    if isinstance(h, (int, float)) and h <= 0:
+        err(f"{path}.spec.height", "grid-bounds", f"height must be > 0, got {h}")
+
+    _validate_element_ref(
+        item_spec.get("element"), f"{path}.spec.element", elements, referenced, issues
+    )
+
+
+def _validate_element_ref(
+    ref: Any,
+    path: str,
+    elements: dict,
+    referenced: set,
+    issues: list[ValidationIssue],
+) -> None:
+    """Validate an ElementReference and track the reference."""
+    if not isinstance(ref, dict):
+        issues.append(
+            ValidationIssue(
+                "error",
+                path,
+                "missing-required-field",
+                '"element" reference is required',
+            )
+        )
+        return
+    name = ref.get("name")
+    if not name:
+        issues.append(
+            ValidationIssue(
+                "error",
+                f"{path}.name",
+                "missing-required-field",
+                '"name" is required in ElementReference',
+            )
+        )
+        return
+    referenced.add(name)
+    if name not in elements:
+        issues.append(
+            ValidationIssue(
+                "error",
+                f"{path}.name",
+                "broken-reference",
+                f'element "{name}" not found in spec.elements',
+            )
+        )
+
+
+def _validate_legacy(data: dict) -> list[ValidationIssue]:
+    """Validate a legacy-format dashboard."""
+    issues: list[ValidationIssue] = []
+
+    def err(path: str, rule: str, msg: str) -> None:
+        issues.append(ValidationIssue("error", path, rule, msg))
+
+    def warn(path: str, rule: str, msg: str) -> None:
+        issues.append(ValidationIssue("warning", path, rule, msg))
+
+    # Handle wrapped format
+    if "dashboard" in data and isinstance(data["dashboard"], dict):
+        dashboard = data["dashboard"]
+        prefix = "dashboard"
+    else:
+        dashboard = data
+        prefix = ""
+
+    def p(field: str) -> str:
+        return f"{prefix}.{field}" if prefix else field
+
+    if not dashboard.get("title"):
+        err(p("title"), "missing-required-field", '"title" is required')
+
+    panels = dashboard.get("panels", [])
+    if not isinstance(panels, list):
+        err(p("panels"), "invalid-type", '"panels" must be an array')
+        return issues
+
+    seen_ids: list[int] = []
+    for pi, panel in enumerate(panels):
+        pp = p(f"panels[{pi}]")
+        if not isinstance(panel, dict):
+            err(pp, "invalid-type", "panel must be an object")
+            continue
+
+        if panel.get("type") == "row":
+            continue  # rows don't need gridPos validation
+
+        if not panel.get("type"):
+            err(f"{pp}.type", "missing-required-field", '"type" is required')
+
+        pid = panel.get("id")
+        if isinstance(pid, (int, float)):
+            if pid in seen_ids:
+                err(f"{pp}.id", "duplicate-panel-id", f"panel id {pid} is duplicated")
+            seen_ids.append(int(pid))
+
+        gp = panel.get("gridPos")
+        if not isinstance(gp, dict):
+            warn(f"{pp}.gridPos", "missing-grid-pos", '"gridPos" is recommended')
+        else:
+            x = gp.get("x", 0)
+            w = gp.get("w", 0)
+            h = gp.get("h", 0)
+            if (
+                isinstance(x, (int, float))
+                and isinstance(w, (int, float))
+                and x + w > 24
+            ):
+                err(f"{pp}.gridPos", "grid-overflow", f"x({x}) + w({w}) = {x+w} > 24")
+            if isinstance(h, (int, float)) and h <= 0:
+                err(f"{pp}.gridPos.h", "grid-bounds", f"h must be > 0, got {h}")
+
+        targets = panel.get("targets", [])
+        for ti, t in enumerate(targets):
+            if isinstance(t, dict) and not t.get("refId"):
+                warn(
+                    f"{pp}.targets[{ti}].refId",
+                    "missing-ref-id",
+                    '"refId" is recommended',
+                )
+
+    return issues
+
+
+def _format_issues_text(fmt: str, issues: list[ValidationIssue]) -> str:
+    """Format validation issues as human-readable text."""
+    errors = [i for i in issues if i.level == "error"]
+    warnings = [i for i in issues if i.level == "warning"]
+    lines = [f"Format: {fmt}"]
+
+    if not errors and not warnings:
+        lines.append("Status: VALID")
+        return "\n".join(lines)
+
+    parts = []
+    if errors:
+        parts.append(f"{len(errors)} error{'s' if len(errors) != 1 else ''}")
+    if warnings:
+        parts.append(f"{len(warnings)} warning{'s' if len(warnings) != 1 else ''}")
+    status = "INVALID" if errors else "VALID"
+    lines.append(f"Status: {status} ({', '.join(parts)})")
+
+    if errors:
+        lines.append("\nERRORS:")
+        for i in errors:
+            lines.append(f"  [E] {i.path}: {i.rule} \u2014 {i.message}")
+    if warnings:
+        lines.append("\nWARNINGS:")
+        for i in warnings:
+            lines.append(f"  [W] {i.path}: {i.rule} \u2014 {i.message}")
+
+    return "\n".join(lines)
+
+
+def _format_issues_json(fmt: str, issues: list[ValidationIssue]) -> str:
+    """Format validation issues as JSON."""
+    errors = [i for i in issues if i.level == "error"]
+    warnings = [i for i in issues if i.level == "warning"]
+    result = {
+        "format": fmt,
+        "valid": len(errors) == 0,
+        "errors": [
+            {"path": i.path, "rule": i.rule, "message": i.message} for i in errors
+        ],
+        "warnings": [
+            {"path": i.path, "rule": i.rule, "message": i.message} for i in warnings
+        ],
+    }
+    return json.dumps(result, indent=2, ensure_ascii=False)
 
 
 # ---------------------------------------------------------------------------
 # CLI commands
 # ---------------------------------------------------------------------------
+
 
 def _pp(data: Any) -> None:
     """Pretty-print JSON."""
@@ -999,7 +1663,13 @@ def cmd_health(client: GrafanaClient, _args: list[str], **_kw: Any) -> None:
     _pp(client.health())
 
 
-def cmd_list(client: GrafanaClient, args: list[str], *, ops: DashboardOps | None = None, **_kw: Any) -> None:
+def cmd_list(
+    client: GrafanaClient,
+    args: list[str],
+    *,
+    ops: DashboardOps | None = None,
+    **_kw: Any,
+) -> None:
     """List dashboards. Flags: --query <q>, --tag <t>, --folder <uid>, --limit <n>, --json"""
     query = tag = folder_uid = None
     limit = 100
@@ -1007,22 +1677,29 @@ def cmd_list(client: GrafanaClient, args: list[str], *, ops: DashboardOps | None
     i = 0
     while i < len(args):
         if args[i] == "--query" and i + 1 < len(args):
-            query = args[i + 1]; i += 2
+            query = args[i + 1]
+            i += 2
         elif args[i] == "--tag" and i + 1 < len(args):
-            tag = args[i + 1]; i += 2
+            tag = args[i + 1]
+            i += 2
         elif args[i] == "--folder" and i + 1 < len(args):
-            folder_uid = args[i + 1]; i += 2
+            folder_uid = args[i + 1]
+            i += 2
         elif args[i] == "--limit" and i + 1 < len(args):
-            limit = int(args[i + 1]); i += 2
+            limit = int(args[i + 1])
+            i += 2
         elif args[i] == "--json":
-            as_json = True; i += 1
+            as_json = True
+            i += 1
         else:
             i += 1
 
     if ops:
         results = ops.search(query=query, tag=tag, folder_uid=folder_uid, limit=limit)
     else:
-        results = client.search_dashboards(query=query, tag=tag, folder_uid=folder_uid, limit=limit)
+        results = client.search_dashboards(
+            query=query, tag=tag, folder_uid=folder_uid, limit=limit
+        )
     if as_json:
         _pp(results)
     else:
@@ -1034,10 +1711,17 @@ def cmd_list(client: GrafanaClient, args: list[str], *, ops: DashboardOps | None
         print("-" * 72)
 
 
-def cmd_get(client: GrafanaClient, args: list[str], *, ops: DashboardOps | None = None, **_kw: Any) -> None:
+def cmd_get(
+    client: GrafanaClient,
+    args: list[str],
+    *,
+    ops: DashboardOps | None = None,
+    **_kw: Any,
+) -> None:
     """Get dashboard by UID. Usage: get <uid> [--json]"""
     if not args:
-        print("Usage: get <uid> [--json]", file=sys.stderr); sys.exit(1)
+        print("Usage: get <uid> [--json]", file=sys.stderr)
+        sys.exit(1)
     uid = args[0]
     as_json = "--json" in args
 
@@ -1046,7 +1730,11 @@ def cmd_get(client: GrafanaClient, args: list[str], *, ops: DashboardOps | None 
         if as_json:
             _pp(raw)
         else:
-            meta = raw.get("meta", {}) if ops.api_mode == "legacy" else raw.get("metadata", {})
+            meta = (
+                raw.get("meta", {})
+                if ops.api_mode == "legacy"
+                else raw.get("metadata", {})
+            )
             print(f"\nDashboard: {dashboard.get('title', '?')}\n" + "-" * 72)
             print(f"  UID:      {dashboard.get('uid')}")
             print(f"  API Mode: {ops.api_mode}")
@@ -1083,10 +1771,19 @@ def cmd_get(client: GrafanaClient, args: list[str], *, ops: DashboardOps | None 
             print("-" * 72)
 
 
-def cmd_export(client: GrafanaClient, args: list[str], *, ops: DashboardOps | None = None, **_kw: Any) -> None:
+def cmd_export(
+    client: GrafanaClient,
+    args: list[str],
+    *,
+    ops: DashboardOps | None = None,
+    **_kw: Any,
+) -> None:
     """Export dashboard JSON. Usage: export <uid> [--output <path>] [--format <legacy|k8s>] [--no-base]"""
     if not args:
-        print("Usage: export <uid> [--output <path>] [--format <legacy|k8s>] [--no-base]", file=sys.stderr)
+        print(
+            "Usage: export <uid> [--output <path>] [--format <legacy|k8s>] [--no-base]",
+            file=sys.stderr,
+        )
         sys.exit(1)
     uid = args[0]
     output = None
@@ -1121,26 +1818,41 @@ def cmd_export(client: GrafanaClient, args: list[str], *, ops: DashboardOps | No
         print(f"Base saved:  {bp}")
 
 
-def cmd_create(client: GrafanaClient, args: list[str], *, ops: DashboardOps | None = None, **_kw: Any) -> None:
+def cmd_create(
+    client: GrafanaClient,
+    args: list[str],
+    *,
+    ops: DashboardOps | None = None,
+    **_kw: Any,
+) -> None:
     """Create dashboard from JSON. Usage: create --file <path> [--folder <uid>] [--title <t>] [--message <m>]"""
     file_path = folder_uid = title = message = None
     force = False
     i = 0
     while i < len(args):
         if args[i] == "--file" and i + 1 < len(args):
-            file_path = args[i + 1]; i += 2
+            file_path = args[i + 1]
+            i += 2
         elif args[i] == "--folder" and i + 1 < len(args):
-            folder_uid = args[i + 1]; i += 2
+            folder_uid = args[i + 1]
+            i += 2
         elif args[i] == "--title" and i + 1 < len(args):
-            title = args[i + 1]; i += 2
+            title = args[i + 1]
+            i += 2
         elif args[i] == "--message" and i + 1 < len(args):
-            message = args[i + 1]; i += 2
+            message = args[i + 1]
+            i += 2
         elif args[i] in ("--overwrite", "--force"):
-            force = True; i += 1
+            force = True
+            i += 1
         else:
             i += 1
     if not file_path:
-        print("Usage: create --file <path> [--folder <uid>] [--title <t>]", file=sys.stderr); sys.exit(1)
+        print(
+            "Usage: create --file <path> [--folder <uid>] [--title <t>]",
+            file=sys.stderr,
+        )
+        sys.exit(1)
 
     dashboard = read_working(file_path)
     dashboard["id"] = None
@@ -1149,32 +1861,49 @@ def cmd_create(client: GrafanaClient, args: list[str], *, ops: DashboardOps | No
         dashboard["title"] = title
 
     if ops:
-        result = ops.create(dashboard, folder_uid=folder_uid, message=message or "Created via CLI")
+        result = ops.create(
+            dashboard, folder_uid=folder_uid, message=message or "Created via CLI"
+        )
     else:
-        result = client.save_dashboard(dashboard, folder_uid=folder_uid,
-                                       message=message or "Created via CLI", overwrite=force)
+        result = client.save_dashboard(
+            dashboard,
+            folder_uid=folder_uid,
+            message=message or "Created via CLI",
+            overwrite=force,
+        )
     _pp(result)
 
 
-def cmd_update(client: GrafanaClient, args: list[str], *, ops: DashboardOps | None = None, **_kw: Any) -> None:
+def cmd_update(
+    client: GrafanaClient,
+    args: list[str],
+    *,
+    ops: DashboardOps | None = None,
+    **_kw: Any,
+) -> None:
     """Update dashboard. Usage: update <uid> --file <path> [--message <m>] [--force]"""
     if not args:
-        print("Usage: update <uid> --file <path>", file=sys.stderr); sys.exit(1)
+        print("Usage: update <uid> --file <path>", file=sys.stderr)
+        sys.exit(1)
     uid = args[0]
     file_path = message = None
     force = False
     i = 1
     while i < len(args):
         if args[i] == "--file" and i + 1 < len(args):
-            file_path = args[i + 1]; i += 2
+            file_path = args[i + 1]
+            i += 2
         elif args[i] == "--message" and i + 1 < len(args):
-            message = args[i + 1]; i += 2
+            message = args[i + 1]
+            i += 2
         elif args[i] in ("--overwrite", "--force"):
-            force = True; i += 1
+            force = True
+            i += 1
         else:
             i += 1
     if not file_path:
-        print("--file required", file=sys.stderr); sys.exit(1)
+        print("--file required", file=sys.stderr)
+        sys.exit(1)
 
     # 1. Read local file and normalize
     dashboard = read_working(file_path)
@@ -1186,12 +1915,18 @@ def cmd_update(client: GrafanaClient, args: list[str], *, ops: DashboardOps | No
     if force:
         # --force: bypass OCC entirely
         if ops:
-            result = ops.save_force(dashboard, message=message or "Updated via CLI (force)")
+            result = ops.save_force(
+                dashboard, message=message or "Updated via CLI (force)"
+            )
         else:
             existing = client.get_dashboard(uid)
             folder_uid = existing["meta"].get("folderUid")
-            result = client.save_dashboard(dashboard, folder_uid=folder_uid,
-                                           message=message or "Updated via CLI (force)", overwrite=True)
+            result = client.save_dashboard(
+                dashboard,
+                folder_uid=folder_uid,
+                message=message or "Updated via CLI (force)",
+                overwrite=True,
+            )
         _pp(result)
         return
 
@@ -1204,7 +1939,9 @@ def cmd_update(client: GrafanaClient, args: list[str], *, ops: DashboardOps | No
             _, occ = ops.get(uid)
         else:
             existing = client.get_dashboard(uid)
-            occ = OccMeta(version=existing["dashboard"].get("version"), api_mode="legacy")
+            occ = OccMeta(
+                version=existing["dashboard"].get("version"), api_mode="legacy"
+            )
         base_dashboard = None
 
     # 4. Attempt save with OCC
@@ -1223,23 +1960,36 @@ def cmd_update(client: GrafanaClient, args: list[str], *, ops: DashboardOps | No
 
     try:
         if ops:
-            result = ops.save(dashboard, occ, folder_uid=folder_uid,
-                              message=message or "Updated via CLI")
+            result = ops.save(
+                dashboard,
+                occ,
+                folder_uid=folder_uid,
+                message=message or "Updated via CLI",
+            )
         else:
-            result = client.save_dashboard(dashboard, folder_uid=folder_uid,
-                                           message=message or "Updated via CLI", overwrite=False)
+            result = client.save_dashboard(
+                dashboard,
+                folder_uid=folder_uid,
+                message=message or "Updated via CLI",
+                overwrite=False,
+            )
         _pp(result)
     except (PreconditionFailedError, ConflictError) as exc:
         # 5. Conflict — attempt three-way merge if we have a base
         if base_dashboard is not None:
-            print(f"Conflict detected ({exc.status_code}). Attempting three-way merge...", file=sys.stderr)
+            print(
+                f"Conflict detected ({exc.status_code}). Attempting three-way merge...",
+                file=sys.stderr,
+            )
             # Fetch server version as "theirs"
             if ops:
                 theirs, new_occ = ops.get(uid)
             else:
                 server = client.get_dashboard(uid)
                 theirs = server["dashboard"]
-                new_occ = OccMeta(version=server["dashboard"].get("version"), api_mode="legacy")
+                new_occ = OccMeta(
+                    version=server["dashboard"].get("version"), api_mode="legacy"
+                )
 
             merged, conflicts = three_way_merge(base_dashboard, dashboard, theirs)
             merged["uid"] = uid
@@ -1248,35 +1998,63 @@ def cmd_update(client: GrafanaClient, args: list[str], *, ops: DashboardOps | No
                 print(_format_conflicts(conflicts), file=sys.stderr)
                 # Write merged result for manual resolution
                 merged_path = Path(file_path).parent / f"{uid}.merged.json"
-                merged_path.write_text(json.dumps(merged, indent=2, ensure_ascii=False) + "\n")
-                print(f"\nMerged (with conflicts) written to: {merged_path}", file=sys.stderr)
-                print("Resolve conflicts manually, then retry with --force or update the file.", file=sys.stderr)
+                merged_path.write_text(
+                    json.dumps(merged, indent=2, ensure_ascii=False) + "\n"
+                )
+                print(
+                    f"\nMerged (with conflicts) written to: {merged_path}",
+                    file=sys.stderr,
+                )
+                print(
+                    "Resolve conflicts manually, then retry with --force or update the file.",
+                    file=sys.stderr,
+                )
                 sys.exit(2)
 
             # Clean merge — retry save
             print("Clean merge successful. Saving merged result...", file=sys.stderr)
             if ops:
-                result = ops.save(merged, new_occ, folder_uid=folder_uid,
-                                  message=message or "Updated via CLI (auto-merged)")
+                result = ops.save(
+                    merged,
+                    new_occ,
+                    folder_uid=folder_uid,
+                    message=message or "Updated via CLI (auto-merged)",
+                )
             else:
                 merged["version"] = new_occ.version
-                result = client.save_dashboard(merged, folder_uid=folder_uid,
-                                               message=message or "Updated via CLI (auto-merged)",
-                                               overwrite=False)
+                result = client.save_dashboard(
+                    merged,
+                    folder_uid=folder_uid,
+                    message=message or "Updated via CLI (auto-merged)",
+                    overwrite=False,
+                )
             _pp(result)
 
             # Update sidecar with new base
             write_sidecar(file_path, merged, new_occ)
         else:
-            print(f"Conflict detected ({exc.status_code}), but no .base.json sidecar found.", file=sys.stderr)
-            print("Re-export with: export <uid> (creates sidecar), edit, then retry.", file=sys.stderr)
+            print(
+                f"Conflict detected ({exc.status_code}), but no .base.json sidecar found.",
+                file=sys.stderr,
+            )
+            print(
+                "Re-export with: export <uid> (creates sidecar), edit, then retry.",
+                file=sys.stderr,
+            )
             sys.exit(2)
 
 
-def cmd_delete(client: GrafanaClient, args: list[str], *, ops: DashboardOps | None = None, **_kw: Any) -> None:
+def cmd_delete(
+    client: GrafanaClient,
+    args: list[str],
+    *,
+    ops: DashboardOps | None = None,
+    **_kw: Any,
+) -> None:
     """Delete dashboard. Usage: delete <uid>"""
     if not args:
-        print("Usage: delete <uid>", file=sys.stderr); sys.exit(1)
+        print("Usage: delete <uid>", file=sys.stderr)
+        sys.exit(1)
     if ops:
         _pp(ops.delete(args[0]))
     else:
@@ -1286,15 +2064,18 @@ def cmd_delete(client: GrafanaClient, args: list[str], *, ops: DashboardOps | No
 def cmd_clone(client: GrafanaClient, args: list[str], **_kw: Any) -> None:
     """Clone dashboard. Usage: clone <uid> [--title <t>] [--folder <uid>]"""
     if not args:
-        print("Usage: clone <uid> [--title <t>] [--folder <uid>]", file=sys.stderr); sys.exit(1)
+        print("Usage: clone <uid> [--title <t>] [--folder <uid>]", file=sys.stderr)
+        sys.exit(1)
     uid = args[0]
     title = folder_uid = None
     i = 1
     while i < len(args):
         if args[i] == "--title" and i + 1 < len(args):
-            title = args[i + 1]; i += 2
+            title = args[i + 1]
+            i += 2
         elif args[i] == "--folder" and i + 1 < len(args):
-            folder_uid = args[i + 1]; i += 2
+            folder_uid = args[i + 1]
+            i += 2
         else:
             i += 1
     source = client.get_dashboard(uid)
@@ -1302,15 +2083,19 @@ def cmd_clone(client: GrafanaClient, args: list[str], **_kw: Any) -> None:
     dashboard["id"] = None
     dashboard["uid"] = None
     dashboard["title"] = title or f"{dashboard['title']} (Copy)"
-    result = client.save_dashboard(dashboard, folder_uid=folder_uid or source["meta"].get("folderUid"),
-                                   message=f"Cloned from {uid}")
+    result = client.save_dashboard(
+        dashboard,
+        folder_uid=folder_uid or source["meta"].get("folderUid"),
+        message=f"Cloned from {uid}",
+    )
     _pp(result)
 
 
 def cmd_versions(client: GrafanaClient, args: list[str], **_kw: Any) -> None:
     """List dashboard versions. Usage: versions <uid> [--limit <n>]"""
     if not args:
-        print("Usage: versions <uid>", file=sys.stderr); sys.exit(1)
+        print("Usage: versions <uid>", file=sys.stderr)
+        sys.exit(1)
     limit = 20
     if "--limit" in args:
         idx = args.index("--limit")
@@ -1318,22 +2103,30 @@ def cmd_versions(client: GrafanaClient, args: list[str], **_kw: Any) -> None:
     versions = client.get_dashboard_versions(args[0], limit=limit)
     print(f"\nVersions ({len(versions)}):\n" + "-" * 72)
     for v in versions:
-        restored = f" (restored from v{v['restoredFrom']})" if v.get("restoredFrom", 0) > 0 else ""
-        print(f"  v{v['version']:>3}  {v.get('created', '?')}  by {v.get('createdBy', '?')}  {v.get('message', '')}{restored}")
+        restored = (
+            f" (restored from v{v['restoredFrom']})"
+            if v.get("restoredFrom", 0) > 0
+            else ""
+        )
+        print(
+            f"  v{v['version']:>3}  {v.get('created', '?')}  by {v.get('createdBy', '?')}  {v.get('message', '')}{restored}"
+        )
     print("-" * 72)
 
 
 def cmd_restore(client: GrafanaClient, args: list[str], **_kw: Any) -> None:
     """Restore dashboard version. Usage: restore <uid> --version <n>"""
     if not args:
-        print("Usage: restore <uid> --version <n>", file=sys.stderr); sys.exit(1)
+        print("Usage: restore <uid> --version <n>", file=sys.stderr)
+        sys.exit(1)
     uid = args[0]
     version = None
     if "--version" in args:
         idx = args.index("--version")
         version = int(args[idx + 1]) if idx + 1 < len(args) else None
     if version is None:
-        print("--version required", file=sys.stderr); sys.exit(1)
+        print("--version required", file=sys.stderr)
+        sys.exit(1)
     _pp(client.restore_dashboard_version(uid, version))
 
 
@@ -1373,16 +2166,22 @@ def cmd_annotations(client: GrafanaClient, args: list[str], **_kw: Any) -> None:
     i = 0
     while i < len(args):
         if args[i] == "--dashboard" and i + 1 < len(args):
-            dashboard_uid = args[i + 1]; i += 2
+            dashboard_uid = args[i + 1]
+            i += 2
         elif args[i] == "--tag" and i + 1 < len(args):
-            tags.append(args[i + 1]); i += 2
+            tags.append(args[i + 1])
+            i += 2
         elif args[i] == "--limit" and i + 1 < len(args):
-            limit = int(args[i + 1]); i += 2
+            limit = int(args[i + 1])
+            i += 2
         elif args[i] == "--json":
-            as_json = True; i += 1
+            as_json = True
+            i += 1
         else:
             i += 1
-    result = client.query_annotations(dashboard_uid=dashboard_uid, tags=tags or None, limit=limit)
+    result = client.query_annotations(
+        dashboard_uid=dashboard_uid, tags=tags or None, limit=limit
+    )
     if as_json:
         _pp(result)
     else:
@@ -1404,7 +2203,10 @@ def cmd_alerts(client: GrafanaClient, args: list[str], **_kw: Any) -> None:
     if as_json:
         _pp(result)
     else:
-        print(f"\n{'Active alerts' if show_active else 'Alert rules'} ({len(result)}):\n" + "-" * 72)
+        print(
+            f"\n{'Active alerts' if show_active else 'Alert rules'} ({len(result)}):\n"
+            + "-" * 72
+        )
         for r in result:
             title = r.get("title") or r.get("labels", {}).get("alertname", "?")
             state = r.get("status", {}).get("state", "") if show_active else ""
@@ -1425,7 +2227,11 @@ def cmd_org(client: GrafanaClient, _args: list[str], **_kw: Any) -> None:
 def cmd_raw(client: GrafanaClient, args: list[str], **_kw: Any) -> None:
     """Raw API call. Usage: raw <METHOD> <endpoint> [--body <json>]"""
     if len(args) < 2:
-        print("Usage: raw <GET|POST|PUT|DELETE> <endpoint> [--body <json>]", file=sys.stderr); sys.exit(1)
+        print(
+            "Usage: raw <GET|POST|PUT|DELETE> <endpoint> [--body <json>]",
+            file=sys.stderr,
+        )
+        sys.exit(1)
     method = args[0].upper()
     endpoint = args[1]
     json_body = None
@@ -1438,20 +2244,30 @@ def cmd_raw(client: GrafanaClient, args: list[str], **_kw: Any) -> None:
 
 # -- New commands (Phase 7) -----------------------------------------------
 
-def cmd_diff(client: GrafanaClient, args: list[str], *, ops: DashboardOps | None = None, **_kw: Any) -> None:
+
+def cmd_diff(
+    client: GrafanaClient,
+    args: list[str],
+    *,
+    ops: DashboardOps | None = None,
+    **_kw: Any,
+) -> None:
     """Structural diff: local file vs server. Usage: diff <uid> --file <path>"""
     if not args:
-        print("Usage: diff <uid> --file <path>", file=sys.stderr); sys.exit(1)
+        print("Usage: diff <uid> --file <path>", file=sys.stderr)
+        sys.exit(1)
     uid = args[0]
     file_path = None
     i = 1
     while i < len(args):
         if args[i] == "--file" and i + 1 < len(args):
-            file_path = args[i + 1]; i += 2
+            file_path = args[i + 1]
+            i += 2
         else:
             i += 1
     if not file_path:
-        print("--file required", file=sys.stderr); sys.exit(1)
+        print("--file required", file=sys.stderr)
+        sys.exit(1)
 
     local = read_working(file_path)
     if ops:
@@ -1462,8 +2278,17 @@ def cmd_diff(client: GrafanaClient, args: list[str], *, ops: DashboardOps | None
 
     # Compare scalar fields
     diffs_found = False
-    scalar_fields = ["title", "description", "tags", "timezone", "refresh", "editable",
-                     "graphTooltip", "time", "timepicker"]
+    scalar_fields = [
+        "title",
+        "description",
+        "tags",
+        "timezone",
+        "refresh",
+        "editable",
+        "graphTooltip",
+        "time",
+        "timepicker",
+    ]
     print(f"\nDiff: {file_path} vs server ({uid})\n" + "=" * 72)
 
     for sf in scalar_fields:
@@ -1484,7 +2309,11 @@ def cmd_diff(client: GrafanaClient, args: list[str], *, ops: DashboardOps | None
     added = local_ids - server_ids
     removed = server_ids - local_ids
     common = local_ids & server_ids
-    modified = [pid for pid in common if not _strict_equal(local_panels[pid], server_panels[pid])]
+    modified = [
+        pid
+        for pid in common
+        if not _strict_equal(local_panels[pid], server_panels[pid])
+    ]
 
     if added or removed or modified:
         print(f"\n  Panels:")
@@ -1501,12 +2330,18 @@ def cmd_diff(client: GrafanaClient, args: list[str], *, ops: DashboardOps | None
 
     # Compare variables
     local_vars = {v.get("name"): v for v in local.get("templating", {}).get("list", [])}
-    server_vars = {v.get("name"): v for v in server.get("templating", {}).get("list", [])}
+    server_vars = {
+        v.get("name"): v for v in server.get("templating", {}).get("list", [])
+    }
     l_var_names = set(local_vars.keys())
     s_var_names = set(server_vars.keys())
     var_added = l_var_names - s_var_names
     var_removed = s_var_names - l_var_names
-    var_modified = [n for n in l_var_names & s_var_names if not _strict_equal(local_vars[n], server_vars[n])]
+    var_modified = [
+        n
+        for n in l_var_names & s_var_names
+        if not _strict_equal(local_vars[n], server_vars[n])
+    ]
 
     if var_added or var_removed or var_modified:
         print(f"\n  Variables:")
@@ -1523,25 +2358,38 @@ def cmd_diff(client: GrafanaClient, args: list[str], *, ops: DashboardOps | None
     print("=" * 72)
 
 
-def cmd_merge(client: GrafanaClient, args: list[str], *, ops: DashboardOps | None = None, **_kw: Any) -> None:
+def cmd_merge(
+    client: GrafanaClient,
+    args: list[str],
+    *,
+    ops: DashboardOps | None = None,
+    **_kw: Any,
+) -> None:
     """Three-way merge. Usage: merge <uid> --file <path> [--base <path>] [--output <path>]"""
     if not args:
-        print("Usage: merge <uid> --file <path> [--base <path>] [--output <path>]", file=sys.stderr)
+        print(
+            "Usage: merge <uid> --file <path> [--base <path>] [--output <path>]",
+            file=sys.stderr,
+        )
         sys.exit(1)
     uid = args[0]
     file_path = base_path = output = None
     i = 1
     while i < len(args):
         if args[i] == "--file" and i + 1 < len(args):
-            file_path = args[i + 1]; i += 2
+            file_path = args[i + 1]
+            i += 2
         elif args[i] == "--base" and i + 1 < len(args):
-            base_path = args[i + 1]; i += 2
+            base_path = args[i + 1]
+            i += 2
         elif args[i] == "--output" and i + 1 < len(args):
-            output = args[i + 1]; i += 2
+            output = args[i + 1]
+            i += 2
         else:
             i += 1
     if not file_path:
-        print("--file required", file=sys.stderr); sys.exit(1)
+        print("--file required", file=sys.stderr)
+        sys.exit(1)
 
     # Ours = local file
     ours = read_working(file_path)
@@ -1552,7 +2400,10 @@ def cmd_merge(client: GrafanaClient, args: list[str], *, ops: DashboardOps | Non
     else:
         base_info = read_base(file_path)
         if base_info is None:
-            print("No base found. Provide --base or export with sidecar first.", file=sys.stderr)
+            print(
+                "No base found. Provide --base or export with sidecar first.",
+                file=sys.stderr,
+            )
             sys.exit(1)
         base, _ = base_info
 
@@ -1583,15 +2434,21 @@ def cmd_convert(client: GrafanaClient, args: list[str], **_kw: Any) -> None:
     i = 0
     while i < len(args):
         if args[i] == "--file" and i + 1 < len(args):
-            file_path = args[i + 1]; i += 2
+            file_path = args[i + 1]
+            i += 2
         elif args[i] == "--to" and i + 1 < len(args):
-            to_format = args[i + 1]; i += 2
+            to_format = args[i + 1]
+            i += 2
         elif args[i] == "--output" and i + 1 < len(args):
-            output = args[i + 1]; i += 2
+            output = args[i + 1]
+            i += 2
         else:
             i += 1
     if not file_path or not to_format:
-        print("Usage: convert --file <path> --to <legacy|k8s> [--output <path>]", file=sys.stderr)
+        print(
+            "Usage: convert --file <path> --to <legacy|k8s> [--output <path>]",
+            file=sys.stderr,
+        )
         sys.exit(1)
     if to_format not in ("legacy", "k8s"):
         print(f"Unknown format: {to_format}. Use 'legacy' or 'k8s'.", file=sys.stderr)
@@ -1623,6 +2480,88 @@ def cmd_convert(client: GrafanaClient, args: list[str], **_kw: Any) -> None:
     print(f"Converted {current_format} → {to_format}: {out_path}")
 
 
+def cmd_validate(_client: Any, args: list[str], **_kw: Any) -> None:
+    """Validate a dashboard JSON or YAML file.
+
+    Usage: validate --file <path> [--format auto|legacy|v2beta1] [--strict] [--json]
+    """
+    file_path = fmt_override = None
+    strict = output_json = False
+    i = 0
+    while i < len(args):
+        if args[i] == "--file" and i + 1 < len(args):
+            file_path = args[i + 1]
+            i += 2
+        elif args[i] == "--format" and i + 1 < len(args):
+            fmt_override = args[i + 1]
+            i += 2
+        elif args[i] == "--strict":
+            strict = True
+            i += 1
+        elif args[i] == "--json":
+            output_json = True
+            i += 1
+        else:
+            i += 1
+    if not file_path:
+        print(
+            "Usage: validate --file <path> [--format auto|legacy|v2beta1] [--strict] [--json]",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # Load file (JSON or YAML)
+    path = Path(file_path)
+    text = path.read_text()
+    if path.suffix in (".yaml", ".yml"):
+        import yaml  # type: ignore[import-untyped]
+
+        data = yaml.safe_load(text)
+    else:
+        data = json.loads(text)
+
+    if not isinstance(data, dict):
+        print("ERROR: file must contain a JSON/YAML object", file=sys.stderr)
+        sys.exit(1)
+
+    # Detect format
+    if fmt_override and fmt_override != "auto":
+        fmt = fmt_override
+    else:
+        if data.get("apiVersion") == "dashboard.grafana.app/v2beta1":
+            fmt = "v2beta1"
+        elif "apiVersion" in data and "kind" in data:
+            fmt = "v2beta1"  # treat other K8s versions as v2beta1
+        else:
+            fmt = "legacy"
+
+    # Validate
+    if fmt in ("v2beta1", "k8s"):
+        issues = _validate_v2beta1(data)
+        display_fmt = "v2beta1"
+    elif fmt == "legacy":
+        issues = _validate_legacy(data)
+        display_fmt = "legacy"
+    else:
+        print(
+            f"Unknown format: {fmt}. Use 'auto', 'legacy', or 'v2beta1'.",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    # Output
+    if output_json:
+        print(_format_issues_json(display_fmt, issues))
+    else:
+        print(_format_issues_text(display_fmt, issues))
+
+    # Exit code
+    errors = [i for i in issues if i.level == "error"]
+    warnings = [i for i in issues if i.level == "warning"]
+    if errors or (strict and warnings):
+        sys.exit(1)
+
+
 def cmd_query(client: GrafanaClient, args: list[str], **_kw: Any) -> None:
     """Execute a datasource query.
 
@@ -1632,8 +2571,10 @@ def cmd_query(client: GrafanaClient, args: list[str], **_kw: Any) -> None:
       query <ds_uid> --query <json>         [options]
     """
     if not args:
-        print("Usage: query <ds_uid> --expr <expr> | --raw-sql <sql> | --query <json> [options]",
-              file=sys.stderr)
+        print(
+            "Usage: query <ds_uid> --expr <expr> | --raw-sql <sql> | --query <json> [options]",
+            file=sys.stderr,
+        )
         sys.exit(1)
 
     ds_uid = args[0]
@@ -1649,35 +2590,50 @@ def cmd_query(client: GrafanaClient, args: list[str], **_kw: Any) -> None:
     while i < len(args):
         a = args[i]
         if a == "--expr" and i + 1 < len(args):
-            expr = args[i + 1]; i += 2
+            expr = args[i + 1]
+            i += 2
         elif a == "--raw-sql" and i + 1 < len(args):
-            raw_sql = args[i + 1]; i += 2
+            raw_sql = args[i + 1]
+            i += 2
         elif a == "--query" and i + 1 < len(args):
-            raw_query = args[i + 1]; i += 2
+            raw_query = args[i + 1]
+            i += 2
         elif a == "--type" and i + 1 < len(args):
-            ds_type = args[i + 1]; i += 2
+            ds_type = args[i + 1]
+            i += 2
         elif a == "--from" and i + 1 < len(args):
-            time_from = args[i + 1]; i += 2
+            time_from = args[i + 1]
+            i += 2
         elif a == "--to" and i + 1 < len(args):
-            time_to = args[i + 1]; i += 2
+            time_to = args[i + 1]
+            i += 2
         elif a == "--format" and i + 1 < len(args):
-            fmt = args[i + 1]; i += 2
+            fmt = args[i + 1]
+            i += 2
         elif a == "--output" and i + 1 < len(args):
-            output = args[i + 1]; i += 2
+            output = args[i + 1]
+            i += 2
         elif a == "--output-dir" and i + 1 < len(args):
-            output_dir = args[i + 1]; i += 2
+            output_dir = args[i + 1]
+            i += 2
         elif a == "--max-data-points" and i + 1 < len(args):
-            max_data_points = int(args[i + 1]); i += 2
+            max_data_points = int(args[i + 1])
+            i += 2
         elif a == "--interval-ms" and i + 1 < len(args):
-            interval_ms = int(args[i + 1]); i += 2
+            interval_ms = int(args[i + 1])
+            i += 2
         elif a == "--ref-id" and i + 1 < len(args):
-            ref_id = args[i + 1]; i += 2
+            ref_id = args[i + 1]
+            i += 2
         elif a == "--preview" and i + 1 < len(args):
-            preview = int(args[i + 1]); i += 2
+            preview = int(args[i + 1])
+            i += 2
         elif a == "--instant":
-            instant = True; i += 1
+            instant = True
+            i += 1
         elif a == "--json":
-            as_json = True; i += 1
+            as_json = True
+            i += 1
         else:
             i += 1
 
@@ -1716,8 +2672,15 @@ def cmd_query(client: GrafanaClient, args: list[str], **_kw: Any) -> None:
     _check_query_errors(result)
 
     ref_ids = list(result.get("results", {}).keys())
-    _handle_query_output(result, ref_ids, as_json=as_json, preview=preview,
-                         output=output, output_dir=output_dir, fmt=fmt)
+    _handle_query_output(
+        result,
+        ref_ids,
+        as_json=as_json,
+        preview=preview,
+        output=output,
+        output_dir=output_dir,
+        fmt=fmt,
+    )
 
 
 def cmd_panel_query(client: GrafanaClient, args: list[str], **_kw: Any) -> None:
@@ -1726,7 +2689,9 @@ def cmd_panel_query(client: GrafanaClient, args: list[str], **_kw: Any) -> None:
     Usage: panel-query <dashboard_uid> <panel_id> [options]
     """
     if len(args) < 2:
-        print("Usage: panel-query <dashboard_uid> <panel_id> [options]", file=sys.stderr)
+        print(
+            "Usage: panel-query <dashboard_uid> <panel_id> [options]", file=sys.stderr
+        )
         sys.exit(1)
 
     dashboard_uid = args[0]
@@ -1741,22 +2706,30 @@ def cmd_panel_query(client: GrafanaClient, args: list[str], **_kw: Any) -> None:
     while i < len(args):
         a = args[i]
         if a == "--from" and i + 1 < len(args):
-            time_from = args[i + 1]; i += 2
+            time_from = args[i + 1]
+            i += 2
         elif a == "--to" and i + 1 < len(args):
-            time_to = args[i + 1]; i += 2
+            time_to = args[i + 1]
+            i += 2
         elif a == "--var" and i + 1 < len(args):
             k, _, v = args[i + 1].partition("=")
-            variables[k] = v; i += 2
+            variables[k] = v
+            i += 2
         elif a == "--format" and i + 1 < len(args):
-            fmt = args[i + 1]; i += 2
+            fmt = args[i + 1]
+            i += 2
         elif a == "--output" and i + 1 < len(args):
-            output = args[i + 1]; i += 2
+            output = args[i + 1]
+            i += 2
         elif a == "--output-dir" and i + 1 < len(args):
-            output_dir = args[i + 1]; i += 2
+            output_dir = args[i + 1]
+            i += 2
         elif a == "--preview" and i + 1 < len(args):
-            preview = int(args[i + 1]); i += 2
+            preview = int(args[i + 1])
+            i += 2
         elif a == "--json":
-            as_json = True; i += 1
+            as_json = True
+            i += 1
         else:
             i += 1
 
@@ -1779,7 +2752,9 @@ def cmd_panel_query(client: GrafanaClient, args: list[str], **_kw: Any) -> None:
             break
 
     if not target_panel:
-        print(f"Panel {panel_id} not found in dashboard {dashboard_uid}", file=sys.stderr)
+        print(
+            f"Panel {panel_id} not found in dashboard {dashboard_uid}", file=sys.stderr
+        )
         sys.exit(1)
 
     targets = target_panel.get("targets", [])
@@ -1805,8 +2780,15 @@ def cmd_panel_query(client: GrafanaClient, args: list[str], **_kw: Any) -> None:
     _check_query_errors(result)
 
     ref_ids = list(result.get("results", {}).keys())
-    _handle_query_output(result, ref_ids, as_json=as_json, preview=preview,
-                         output=output, output_dir=output_dir, fmt=fmt)
+    _handle_query_output(
+        result,
+        ref_ids,
+        as_json=as_json,
+        preview=preview,
+        output=output,
+        output_dir=output_dir,
+        fmt=fmt,
+    )
 
 
 def cmd_panel_list(client: GrafanaClient, args: list[str], **_kw: Any) -> None:
@@ -1833,13 +2815,18 @@ def cmd_panel_list(client: GrafanaClient, args: list[str], **_kw: Any) -> None:
             all_panels.append(panel)
 
     if as_json:
-        _pp([{
-            "id": p.get("id"),
-            "title": p.get("title", ""),
-            "type": p.get("type", ""),
-            "datasource": p.get("datasource"),
-            "targets": len(p.get("targets", [])),
-        } for p in all_panels])
+        _pp(
+            [
+                {
+                    "id": p.get("id"),
+                    "title": p.get("title", ""),
+                    "type": p.get("type", ""),
+                    "datasource": p.get("datasource"),
+                    "targets": len(p.get("targets", [])),
+                }
+                for p in all_panels
+            ]
+        )
     else:
         print(f"\nPanels ({len(all_panels)}):\n" + "-" * 72)
         for p in all_panels:
@@ -1850,7 +2837,9 @@ def cmd_panel_list(client: GrafanaClient, args: list[str], **_kw: Any) -> None:
             elif isinstance(ds, str):
                 ds_str = ds
             targets = len(p.get("targets", []))
-            print(f"  {p.get('id', '?'):>4}  {p.get('title', ''):40s}  {p.get('type', ''):16s}  {ds_str}  ({targets} queries)")
+            print(
+                f"  {p.get('id', '?'):>4}  {p.get('title', ''):40s}  {p.get('type', ''):16s}  {ds_str}  ({targets} queries)"
+            )
         print("-" * 72)
 
 
@@ -1879,6 +2868,7 @@ COMMANDS: dict[str, Any] = {
     "diff": cmd_diff,
     "merge": cmd_merge,
     "convert": cmd_convert,
+    "validate": cmd_validate,
     "query": cmd_query,
     "panel-query": cmd_panel_query,
     "panel-list": cmd_panel_list,
@@ -1886,6 +2876,9 @@ COMMANDS: dict[str, Any] = {
 
 # Commands that benefit from DashboardOps
 _OPS_COMMANDS = {"list", "get", "export", "create", "update", "delete", "diff", "merge"}
+
+# Commands that work offline (no GRAFANA_URL / GRAFANA_TOKEN required)
+_OFFLINE_COMMANDS = {"validate", "convert"}
 
 USAGE = """\
 Grafana API CLI
@@ -1914,6 +2907,7 @@ COMMANDS:
   diff <uid> --file <path>         Structural diff: local vs server
   merge <uid> --file <path>        Three-way merge: local vs server
   convert --file <path> --to fmt   Convert between legacy and K8s format
+  validate --file <path>           Validate dashboard JSON/YAML (offline)
   query <ds_uid> --expr <expr>     Query a datasource (PromQL, LogQL, etc.)
   query <ds_uid> --raw-sql <sql>   Query a SQL datasource
   query <ds_uid> --query <json>    Query with raw JSON body
@@ -1948,21 +2942,6 @@ def main() -> None:
         print(USAGE)
         sys.exit(0)
 
-    base_url = os.environ.get("GRAFANA_URL")
-    token = os.environ.get("GRAFANA_TOKEN")
-    if not base_url:
-        print("GRAFANA_URL is required (use --url or --env-file)", file=sys.stderr)
-        sys.exit(1)
-    if not token:
-        print("GRAFANA_TOKEN is required (use --env-file or set GRAFANA_TOKEN)", file=sys.stderr)
-        sys.exit(1)
-
-    org_id = int(os.environ["GRAFANA_ORG_ID"]) if os.environ.get("GRAFANA_ORG_ID") else None
-    api_mode = os.environ.get("GRAFANA_API_MODE", "auto")
-    namespace = os.environ.get("GRAFANA_NAMESPACE", "default")
-
-    client = GrafanaClient(base_url, token, org_id=org_id)
-
     command_name = args[0]
     command_args = args[1:]
 
@@ -1970,6 +2949,31 @@ def main() -> None:
         print(f"Unknown command: {command_name}\n", file=sys.stderr)
         print(USAGE, file=sys.stderr)
         sys.exit(1)
+
+    # Offline commands skip credential checks
+    if command_name in _OFFLINE_COMMANDS:
+        COMMANDS[command_name](None, command_args)
+        return
+
+    base_url = os.environ.get("GRAFANA_URL")
+    token = os.environ.get("GRAFANA_TOKEN")
+    if not base_url:
+        print("GRAFANA_URL is required (use --url or --env-file)", file=sys.stderr)
+        sys.exit(1)
+    if not token:
+        print(
+            "GRAFANA_TOKEN is required (use --env-file or set GRAFANA_TOKEN)",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+    org_id = (
+        int(os.environ["GRAFANA_ORG_ID"]) if os.environ.get("GRAFANA_ORG_ID") else None
+    )
+    api_mode = os.environ.get("GRAFANA_API_MODE", "auto")
+    namespace = os.environ.get("GRAFANA_NAMESPACE", "default")
+
+    client = GrafanaClient(base_url, token, org_id=org_id)
 
     # Build DashboardOps for commands that need it
     extra_kwargs: dict[str, Any] = {}
