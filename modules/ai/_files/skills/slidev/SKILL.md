@@ -6,10 +6,18 @@ description: >
   conference talks, code walkthroughs, teaching materials, or developer decks. Also trigger when the
   user mentions Slidev, sli.dev, slide decks with code, or wants to create developer-facing presentations.
 argument-hint: "<presentation topic or slides.md path>"
-allowed-tools: Read(references/*) Skill(tmux) Bash(bun *) Bash(bunx *)
+allowed-tools: Read(references/*) Skill(tmux) Bash(bun *) Bash(bunx *) Bash(zsh *) Read
 ---
 
 # Slidev - Presentation Slides for Developers
+
+## Usage
+
+Run the script:
+
+```bash
+zsh ${CLAUDE_SKILL_DIR}/scripts/find-slidev-port.sh $ARGUMENTS
+```
 
 Web-based slides maker built on Vite, Vue, and Markdown.
 
