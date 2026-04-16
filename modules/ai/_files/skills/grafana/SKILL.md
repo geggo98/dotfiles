@@ -80,6 +80,7 @@ ${CLAUDE_SKILL_DIR}/scripts/grafana.sh --timeout 2m list
 | `diff <uid>` | Structural diff: local file vs server | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh diff abc123 --file dash.json` |
 | `merge <uid>` | Three-way merge: local vs server | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh merge abc123 --file dash.json` |
 | `convert` | Convert between legacy and K8s format | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh convert --file dash.json --to k8s` |
+| `validate` | Validate dashboard JSON/YAML (offline) | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh validate --file dash.json` |
 | `folders` | List all folders | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh folders --json` |
 | `datasources` | List all datasources | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh datasources --json` |
 | `annotations` | Query annotations | `${CLAUDE_SKILL_DIR}/scripts/grafana.sh annotations --dashboard abc123 --tag deploy` |
@@ -108,6 +109,8 @@ ${CLAUDE_SKILL_DIR}/scripts/grafana.sh --timeout 2m list
 | `--no-base` | export | Skip writing the `.base.json` sidecar |
 | `--format <legacy\|k8s>` | export | Export in specific format |
 | `--to <legacy\|k8s>` | convert | Target format for conversion |
+| `--format <auto\|legacy\|v2beta1>` | validate | Override format detection |
+| `--strict` | validate | Treat warnings as errors |
 | `--base <path>` | merge | Explicit base file (overrides sidecar) |
 | `--limit <n>` | list, versions, annotations | Limit results |
 | `--version <n>` | restore | Version number to restore |
@@ -171,7 +174,7 @@ When creating a dashboard, provide a JSON file with the standard Grafana dashboa
 
 The input format is auto-detected and converted as needed. The `id` and `uid` fields are set to `null` automatically for new dashboards.
 
-See `references/dashboard-json-structure.md` for the annotated JSON schema and `examples/` for sample dashboard JSON files.
+See `references/dashboard-json-structure.md` for the legacy JSON schema, `references/dashboard-v2beta1-structure.md` for the v2beta1 K8s format, and `examples/` for sample dashboard JSON files.
 
 ## Format Conversion
 
@@ -311,7 +314,8 @@ ${CLAUDE_SKILL_DIR}/scripts/grafana.sh raw DELETE /api/annotations/123
 
 | Document | Description |
 |----------|-------------|
-| `references/dashboard-json-structure.md` | Annotated dashboard JSON schema (panels, gridPos, targets, variables, fieldConfig) |
+| `references/dashboard-json-structure.md` | Annotated dashboard JSON schema — legacy format (panels, gridPos, targets, variables, fieldConfig) |
+| `references/dashboard-v2beta1-structure.md` | Annotated dashboard JSON schema — v2beta1 K8s format (elements, layout, vizConfig, typed variables) |
 | `references/dashboard-design.md` | Dashboard design principles (RED/USE methods, layout, best practices) |
 | `references/api-dashboards.md` | Dashboard API endpoints (legacy + K8s-style, OCC, versions, permissions) |
 | `references/api-datasources.md` | Datasource API (list, get, create, query, health check) |

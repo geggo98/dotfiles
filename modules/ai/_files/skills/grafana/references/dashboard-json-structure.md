@@ -400,47 +400,13 @@ Common transformations: `organize`, `sortBy`, `filterByValue`, `merge`, `calcula
 
 ## v2beta1 Format (Kubernetes-style)
 
-Newer Grafana versions export dashboards in a Kubernetes-style format:
-
-```json
-{
-  "apiVersion": "dashboard.grafana.app/v2beta1",
-  "kind": "Dashboard",
-  "metadata": {
-    "name": "dashboard-uid",
-    "generation": 1,
-    "creationTimestamp": "2024-06-10T16:46:19Z"
-  },
-  "spec": {
-    "title": "My Dashboard",
-    "tags": ["demo"],
-    "elements": {
-      "panel-1": { "kind": "Panel", "spec": { ... } }
-    },
-    "layout": {
-      "kind": "GridLayout",
-      "spec": {
-        "items": [
-          {
-            "kind": "GridLayoutItem",
-            "spec": {
-              "x": 0, "y": 0, "width": 12, "height": 8,
-              "element": {"kind": "ElementReference", "name": "panel-1"}
-            }
-          }
-        ]
-      }
-    },
-    "variables": [],
-    "timeSettings": { "from": "now-6h", "to": "now" }
-  }
-}
-```
+Grafana v13+ exports dashboards in a Kubernetes-style v2beta1 format with a fundamentally different structure. For the **complete v2beta1 reference**, see [dashboard-v2beta1-structure.md](dashboard-v2beta1-structure.md).
 
 Key differences from the legacy format:
-- Panels are in `spec.elements` (keyed by name) instead of `spec.panels` (array)
-- Layout is separate from panel definitions (`spec.layout`)
-- Queries use `kind: "DataQuery"` with `group` and `version` fields
-- Cannot be used directly with `POST /api/dashboards/db` -- use the legacy format for API operations
+- Panels are in `spec.elements` (keyed by name) instead of `panels` (array)
+- Layout is separate from panel definitions (`spec.layout` with GridLayout, RowsLayout, AutoGridLayout, TabsLayout)
+- Queries use typed `kind`/`group`/`version`/`spec` wrappers (PanelQueryKind → DataQueryKind)
+- Variables use typed kinds (QueryVariable, CustomVariable, TextVariable, etc.)
+- Cannot be used directly with `POST /api/dashboards/db` -- use the legacy format or the K8s API
 
 The `examples/` directory contains dashboards exported in v2beta1 format for reference.
