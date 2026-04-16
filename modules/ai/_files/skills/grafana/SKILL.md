@@ -2,11 +2,19 @@
 name: grafana
 description: "Manage Grafana dashboards, datasources, folders, alerting, and annotations via the HTTP API. Query datasources (PromQL, LogQL, TraceQL, SQL) and export results to Parquet, TSV, or JSONL. Use when creating, editing, or querying Grafana resources programmatically."
 argument-hint: "<command> [args...] | help"
-allowed-tools: Read(references/*) Bash(./scripts/grafana.sh *)
+allowed-tools: Read(references/*) Bash(./scripts/grafana.sh *) Bash(zsh *) Read
 dependencies: "uv, gtimeout"
 ---
 
 # Grafana Skill
+
+## Usage
+
+Run the script:
+
+```bash
+zsh ${CLAUDE_SKILL_DIR}/scripts/grafana.sh $ARGUMENTS
+```
 
 Manage Grafana resources via the HTTP API using a Python CLI tool. Supports dashboard CRUD, folder management, datasource inspection, annotations, alerting, format conversion, structural diffing, three-way merge with conflict resolution, datasource queries (PromQL, LogQL, TraceQL, SQL), result export (Parquet, TSV, JSONL), and raw API access.
 

@@ -2,11 +2,19 @@
 name: browser-use
 description: "Automates browser interactions for web testing, form filling, screenshots, and data extraction. Use when the user needs to navigate websites, interact with web pages, fill forms, take screenshots, or extract information from web pages."
 argument-hint: "<task description or URL>"
-allowed-tools: Read(references/*) Bash(./scripts/browser-use.sh *)
+allowed-tools: Read(references/*) Bash(./scripts/browser-use.sh *) Bash(zsh *) Read
 dependencies: "uv, gtimeout"
 ---
 
 # Browser Automation with browser-use CLI
+
+## Usage
+
+Run the script:
+
+```bash
+zsh ${CLAUDE_SKILL_DIR}/scripts/browser-use.sh $ARGUMENTS
+```
 
 The `${CLAUDE_SKILL_DIR}/scripts/browser-use.sh` command provides fast, persistent browser automation. It maintains browser sessions across commands, enabling complex multi-step workflows.
 
