@@ -1,6 +1,7 @@
 ---
 name: red-green-refactor
 description: "Domain-agnostic TDD methodology for iterative improvement. Enforces baseline measurement, minimal changes, and rigorous testing through commitment devices. Use when applying red-green-refactor workflow to any domain: prompts, skills, code, tests. Triggers: TDD methodology, baseline measurement, iterative improvement, red-green-refactor."
+allowed-tools: Bash(zsh *)
 ---
 
 # Red-Green-Refactor Methodology
