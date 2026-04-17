@@ -10,20 +10,39 @@
         fi
       '';
 
+      configFlag = key: ''[ "$(${pkgs.git}/bin/git config --bool --get ${key} 2>/dev/null)" = "true" ]'';
+
       gitleaksPreCommit = pkgs.writeShellScript "pre-commit" ''
+        if ${configFlag "hooks.skipPreCommit"}; then
+          echo "pre-commit: skipped (hooks.skipPreCommit=true)"
+          exit 0
+        fi
         ${chainLocalHook "pre-commit"}
+        if ${configFlag "hooks.skipGitleaksCommit"}; then
+          echo "pre-commit: gitleaks skipped (hooks.skipGitleaksCommit=true)"
+          exit 0
+        fi
         ${pkgs.gitleaks}/bin/gitleaks protect --staged --verbose --redact
         exit_code=$?
         if [ $exit_code -ne 0 ]; then
           echo ""
           echo "ERROR: gitleaks detected secrets in staged changes."
           echo "To bypass (false positive): git commit --no-verify"
+          echo "To disable permanently for this repo: git config --local hooks.skipGitleaksCommit true"
           exit $exit_code
         fi
       '';
 
       gitleaksPrePush = pkgs.writeShellScript "pre-push" ''
+        if ${configFlag "hooks.skipPrePush"}; then
+          echo "pre-push: skipped (hooks.skipPrePush=true)"
+          exit 0
+        fi
         ${chainLocalHook "pre-push"}
+        if ${configFlag "hooks.skipGitleaksPush"}; then
+          echo "pre-push: gitleaks skipped (hooks.skipGitleaksPush=true)"
+          exit 0
+        fi
         while read -r local_ref local_sha remote_ref remote_sha; do
           if [ "$local_sha" = "0000000000000000000000000000000000000000" ]; then
             continue
@@ -38,6 +57,7 @@
             echo ""
             echo "ERROR: gitleaks detected secrets in commits being pushed."
             echo "To bypass (false positive): git push --no-verify"
+            echo "To disable permanently for this repo: git config --local hooks.skipGitleaksPush true"
             exit $exit_code
           fi
         done
