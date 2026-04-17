@@ -28,9 +28,9 @@
             if (( $# > 0 )) && [[ "''${1}" == "--acp" ]]; then
               export CLAUDE_CODE_EXECUTABLE="/etc/profiles/per-user/''${USER}/bin/claude"
               shift
-              exec claude-agent-acp "$@"
+              exec claude-agent-acp --thinking-display summarized "$@"
             fi
-            exec "/etc/profiles/per-user/''${USER}/bin/claude" "$@"
+            exec "/etc/profiles/per-user/''${USER}/bin/claude" --thinking-display summarized "$@"
           '';
         })
         (pkgs.writeShellApplication {
