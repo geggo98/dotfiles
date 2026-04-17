@@ -15,14 +15,15 @@
         "workbench.colorTheme" = "Turbo Vision (based on Gerry Cyberpunk Plus)";
         "workbench.preferredHighContrastColorTheme" = "Turbo Vision (based on Gerry Cyberpunk Plus)";
 
-
         # Editor font: Operator Mono Lig → Victor Mono → Monaspace Radon
         "editor.fontFamily" = "'Operator Mono Lig', 'Victor Mono', 'Monaspace Radon', 'JetBrainsMono Nerd Font Mono', monospace";
         "editor.fontSize" = 18;
         "editor.fontLigatures" = true;
         "editor.lineHeight" = 1.2;
-
+        
+        "editor.accessibilitySupport" =  "off";
         "editor.lineNumbers" = "relative";
+
         "notebook.lineNumbers" = "on";
 
         # Terminal font: BerkeleyMono Nerd Font → JetBrains Mono Nerd Font
@@ -65,10 +66,13 @@
           "**/.cargo/git/checkouts/**/*.rs" = true;
           "**/lib/rustlib/src/rust/library/**/*.rs" = true;
         };
+        
+        "claudeCode.preferredLocation" = "sidebar";
         "excalidraw.theme" = "auto";
         "github.copilot.chat.claudeAgent.enabled" = true;
         "gitlens.plusFeatures.enabled" = false;
         "gitlens.showWhatsNewAfterUpgrades" = false;
+        "git.autofetch" = true;
       };
   };
 }
