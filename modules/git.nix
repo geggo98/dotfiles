@@ -12,6 +12,12 @@
 
       configFlag = key: ''[ "$(${pkgs.git}/bin/git config --bool --get ${key} 2>/dev/null)" = "true" ]'';
 
+      # Per-repo opt-out for the hooks below. Set a flag with:
+      #   git config --local hooks.skipPreCommit true        # disable pre-commit entirely (also skips chained local hook)
+      #   git config --local hooks.skipGitleaksCommit true   # disable only the gitleaks scan; local hook still runs
+      #   git config --local hooks.skipPrePush true          # disable pre-push entirely (also skips chained local hook)
+      #   git config --local hooks.skipGitleaksPush true     # disable only the gitleaks scan; local hook still runs
+      # Re-enable by unsetting: git config --local --unset hooks.<flag>
       gitleaksPreCommit = pkgs.writeShellScript "pre-commit" ''
         if ${configFlag "hooks.skipPreCommit"}; then
           echo "pre-commit: skipped (hooks.skipPreCommit=true)"
