@@ -95,6 +95,10 @@ edit-boundary-doc:
         -r stefan.schwetschke+DKL6GDJ7X1@check24.de \
         -o hosts/DKL6GDJ7X1/BOUNDARY.md.gpg "$tmp"
 
+# Enter the devenv-backed developer shell (also available automatically via direnv)
+devshell:
+    nix develop --no-pure-eval
+
 # --- Pulumi (infra/) ---
 
 # Preview infrastructure changes
