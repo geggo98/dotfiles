@@ -6,8 +6,10 @@ result
 *.local
 *.local.*
 .devenv
+.direnv/
 
 # Pulumi infra
 infra/node_modules/
 infra/dist/
 infra/.pulumi/
+.pre-commit-config.yaml
