@@ -1,5 +1,4 @@
 *.enc.yaml diff=sopsdiffer
-*.sec.* filter=git-crypt diff=git-crypt
 modules/boundary.nix filter=git-crypt diff=git-crypt
 modules/boundary-pm2.nix filter=git-crypt diff=git-crypt
 modules/vault.nix filter=git-crypt diff=git-crypt

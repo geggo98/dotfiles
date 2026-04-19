@@ -61,3 +61,23 @@ eval:
 # Show derivation of current host build
 show-derivation:
     nix derivation show '.#darwinConfigurations.FCX19GT9XR.system' | nix run nixpkgs#jq -- .
+
+# Decrypt and view the Boundary reference doc (hosts/DKL6GDJ7X1/BOUNDARY.md.gpg)
+view-boundary-doc:
+    gpg --decrypt hosts/DKL6GDJ7X1/BOUNDARY.md.gpg | less -R
+
+# Edit the Boundary reference doc: decrypt -> $EDITOR -> re-encrypt to all three recipients
+edit-boundary-doc:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    tmp="$(mktemp -t BOUNDARY.md.XXXXXX)"
+    trap 'rm -f "$tmp"' EXIT
+    gpg --decrypt hosts/DKL6GDJ7X1/BOUNDARY.md.gpg > "$tmp"
+    "${EDITOR:-nvim}" "$tmp"
+    # --trust-model always: rely on the explicit recipient list rather than GPG's web-of-trust.
+    # Necessary because the work check24 key has no WoT path to your primary key.
+    gpg --yes --trust-model always --encrypt --armor \
+        -r stefan@schwetschke.de \
+        -r stefan.schwetschke@check24.de \
+        -r stefan.schwetschke+DKL6GDJ7X1@check24.de \
+        -o hosts/DKL6GDJ7X1/BOUNDARY.md.gpg "$tmp"

@@ -56,6 +56,7 @@ in
           homeManager.secrets-DKL6GDJ7X1
           homeManager.boundary
           homeManager.vault
+          homeManager.tunnelblick-raycast
         ];
         home.stateVersion = "25.11";
       };
