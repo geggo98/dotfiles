@@ -77,7 +77,6 @@
         inputs.devenv.packages.${pkgs.stdenv.hostPlatform.system}.devenv
         delta
         git-absorb
-        git-crypt
         git-machete
         git-trim
         git-credential-manager

@@ -6,5 +6,6 @@
   "c24_bi_kfz_test_liquibase.json" = { };
   "c24_bi_kfz_prod_liquibase.json" = { };
   "openai_api_key" = { };
+  office_vpn_prefix = { };
 }
 
