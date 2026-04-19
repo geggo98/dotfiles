@@ -87,7 +87,7 @@ let
         name = "+mcp-javadocs";
         runtimeInputs = [ pkgs.nodejs_24 ];
         text = ''
-          exec npx -y mcp-remote@0.1.29 https://www.javadocs.dev/mcp
+          exec npx -y mcp-remote@0.1.38 https://www.javadocs.dev/mcp
         '';
       });
 
