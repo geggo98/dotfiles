@@ -20,8 +20,8 @@
         "editor.fontSize" = 18;
         "editor.fontLigatures" = true;
         "editor.lineHeight" = 1.2;
-        
-        "editor.accessibilitySupport" =  "off";
+
+        "editor.accessibilitySupport" = "off";
         "editor.lineNumbers" = "relative";
 
         "notebook.lineNumbers" = "on";
@@ -66,7 +66,7 @@
           "**/.cargo/git/checkouts/**/*.rs" = true;
           "**/lib/rustlib/src/rust/library/**/*.rs" = true;
         };
-        
+
         "claudeCode.preferredLocation" = "sidebar";
         "excalidraw.theme" = "auto";
         "github.copilot.chat.claudeAgent.enabled" = true;

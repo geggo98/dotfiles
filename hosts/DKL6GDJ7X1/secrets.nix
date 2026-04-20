@@ -8,6 +8,7 @@
   "openai_api_key" = { };
   office_vpn_prefix = { };
   boundary_cluster_url = { };
+  boundary_services = { };
   vault_addr = { };
 }
 
