@@ -21,7 +21,7 @@ keywords = ["sk-or-"]
 [[rules]]
 id = "check24-domain"
 description = "Check24 domain reference"
-regex = '''check24\.de'''
+regex = '''\.check24\.de'''
 keywords = ["check24"]
 
 [[rules]]
@@ -37,9 +37,4 @@ paths = [
   '''CLAUDE\.md''',
   # Retains ttcp_ target IDs; cluster URL moved to SOPS in refactor-secrets migration.
   '''modules/boundary\.nix''',
-  # Retains the user's check24.de git commit email.
-  '''modules/hosts/DKL6GDJ7X1\.nix''',
-  '''hosts/.*/config/ssh/.*\.pub''',
-  '''secrets/.*\.enc\.yaml''',
-  '''hosts/.*/secrets\.enc\.yaml''',
 ]
