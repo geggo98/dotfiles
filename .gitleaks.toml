@@ -35,6 +35,4 @@ description = "Files that legitimately contain these patterns"
 paths = [
   '''\.gitleaks\.toml''',
   '''CLAUDE\.md''',
-  # Retains ttcp_ target IDs; cluster URL moved to SOPS in refactor-secrets migration.
-  '''modules/boundary\.nix''',
 ]
