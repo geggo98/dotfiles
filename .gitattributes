@@ -1,6 +1,1 @@
 *.enc.yaml diff=sopsdiffer
-modules/boundary.nix filter=git-crypt diff=git-crypt
-modules/boundary-pm2.nix filter=git-crypt diff=git-crypt
-modules/vault.nix filter=git-crypt diff=git-crypt
-config/raycast/script_commands/tunnelblick-connect-office-vpn.applescript filter=git-crypt diff=git-crypt
-modules/_files/darwin/raycast/script_commands/tunnelblick-connect-office-vpn.applescript filter=git-crypt diff=git-crypt
