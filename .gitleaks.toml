@@ -35,4 +35,6 @@ description = "Files that legitimately contain these patterns"
 paths = [
   '''\.gitleaks\.toml''',
   '''CLAUDE\.md''',
+  '''modules/ai/_files/skills/.*/references/.*\.md''',
 ]
+
