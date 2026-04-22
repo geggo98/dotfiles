@@ -3,6 +3,9 @@
   flake.modules.homeManager.shell = { config, pkgs, lib, ... }: {
     imports = [ inputs.nix-index-database.homeModules.nix-index ];
 
+    home.sessionVariables.SOPS_AGE_SSH_PRIVATE_KEY_FILE =
+      "${config.home.homeDirectory}/.ssh/id_ed25519_sops_nopw";
+
     programs.nix-index-database.comma.enable = true;
     programs.nix-index.enable = true;
 
@@ -239,8 +242,8 @@
         "+tar-zstd" = "tar \"-Izstd -10 -T0\"";
         "+tar-zstd-max" = "tar \"-Izstd -19 -T0\"";
 
-        "+sops-edit-keys" = "env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops edit -s";
-        "+sops-edit-secrets" = "env SOPS_AGE_KEY=(, ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key ) sops edit";
+        "+sops-edit-keys" = "env SOPS_AGE_SSH_PRIVATE_KEY_FILE={$HOME}/.ssh/id_ed25519_sops_nopw sops edit -s";
+        "+sops-edit-secrets" = "env SOPS_AGE_SSH_PRIVATE_KEY_FILE={$HOME}/.ssh/id_ed25519_sops_nopw sops edit";
       };
     };
 
