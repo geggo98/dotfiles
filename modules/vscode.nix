@@ -55,8 +55,29 @@
         "editor.smoothScrolling" = true;
         "editor.renderWhitespace" = "boundary";
         "editor.bracketPairColorization.enabled" = true;
-        "editor.guides.bracketPairs" = "active";
+        "editor.guides.bracketPairs" = true;
+        "editor.guides.bracketPairsHorizontal" = "active";
+        "editor.guides.highlightActiveIndentation" = true;
         "editor.semanticHighlighting.enabled" = true;
+
+        # Rainbow brackets & indent guides — colors scoped to the active theme
+        # See https://stackoverflow.com/a/72125627
+        "workbench.colorCustomizations" = {
+          "[Turbo Vision (based on Gerry Cyberpunk Plus)]" = {
+            "editorBracketPairGuide.background1" = "#FFB86C";
+            "editorBracketPairGuide.background2" = "#FF75B5";
+            "editorBracketPairGuide.background3" = "#45A9F9";
+            "editorBracketPairGuide.background4" = "#B084EB";
+            "editorBracketPairGuide.background5" = "#E6E6E6";
+            "editorBracketPairGuide.background6" = "#19F9D8";
+            "editorBracketPairGuide.activeBackground1" = "#FFB86C";
+            "editorBracketPairGuide.activeBackground2" = "#FF75B5";
+            "editorBracketPairGuide.activeBackground3" = "#45A9F9";
+            "editorBracketPairGuide.activeBackground4" = "#B084EB";
+            "editorBracketPairGuide.activeBackground5" = "#E6E6E6";
+            "editorBracketPairGuide.activeBackground6" = "#19F9D8";
+          };
+        };
 
         "files.autoSave" = "onFocusChange";
 
