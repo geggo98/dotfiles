@@ -2,8 +2,6 @@
 name: web-research
 description: "Researches the web thoroughly, e.g., how to use an API, library, or reference architecture. Can also be used as fallback when the WebSearch tool fails. Use when the user asks to research a complex topic."
 argument-hint: "<research query>"
-context: fork
-agent: Explore
 allowed-tools: Bash(./scripts/gemini_research.sh *) Bash(./scripts/perplexity_open_router_research.sh *) Bash(zsh *)
 dependencies: "uv, gtimeout"
 ---
