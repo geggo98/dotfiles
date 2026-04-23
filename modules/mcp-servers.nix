@@ -250,6 +250,10 @@ let
             "code-review@claude-plugins-official" = true;
             "commit-commands@claude-plugins-official" = true;
           };
+          permissions = {
+            defaultMode = "auto";
+          };
+          skipAutoPermissionPrompt = true;
           skipDangerousModePermissionPrompt = true;
           statusLine = {
             type = "command";
