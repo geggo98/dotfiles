@@ -54,9 +54,11 @@ in
       useUserPackages = true;
       backupFileExtension = "hm.bak";
       users.stefan = {
+        programs.gpg.settings.default-key = "FCX19GT9XR@schwetschke.de";
         imports = [
           homeManager.shell
           homeManager.git
+          homeManager.gpg
           homeManager.neovim
           homeManager.mcp-servers
           homeManager.ai-tools

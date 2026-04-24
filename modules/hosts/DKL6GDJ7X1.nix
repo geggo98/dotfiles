@@ -43,9 +43,11 @@ in
       backupFileExtension = "hm.bak";
       users."stefan.schwetschke" = {
         programs.git.settings.user.email = "stefan.schwetschke@check24.de";
+        programs.gpg.settings.default-key = "DKL6GDJ7X1@schwetschke.de";
         imports = [
           homeManager.shell
           homeManager.git
+          homeManager.gpg
           homeManager.neovim
           homeManager.mcp-servers
           homeManager.ai-tools
