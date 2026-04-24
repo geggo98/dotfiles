@@ -11,7 +11,6 @@
       });
     in
     {
-      programs.gpg.enable = true;
       programs.k9s.enable = true;
       programs.lsd.enable = true;
       programs.eza = {
