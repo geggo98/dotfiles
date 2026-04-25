@@ -5,16 +5,29 @@
 default:
     @just --list
 
+# Warn if there are untracked files under modules/ or hosts/ — Nix flakes
+# only see git-tracked files, so untracked changes are silently ignored
+# by build/eval/check. Run `git add -N <paths>` to make them visible.
+_check-untracked:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    untracked=$(git status --porcelain | grep -E '^\?\? (modules|hosts)/' || true)
+    if [ -n "$untracked" ]; then
+        echo "WARNING: untracked files under modules/ or hosts/ — the flake will NOT see them." >&2
+        echo "Stage them first:  git add -N <paths>" >&2
+        echo "$untracked" >&2
+    fi
+
 # Build the current host configuration (without applying)
-build:
+build: _check-untracked
     darwin-rebuild build --flake .
 
 # Build a specific host configuration
-build-host host:
+build-host host: _check-untracked
     nix build '.#darwinConfigurations.{{host}}.system'
 
 # Run flake checks
-check:
+check: _check-untracked
     nix flake check
 
 # Format all Nix files
@@ -55,7 +68,7 @@ deps:
     nix flake metadata --json | nix run nixpkgs#jq -- -r '.locks.nodes | to_entries[] | select(.value.locked?) | "\(.key): \(.value.locked.type):\(.value.locked.owner // ""):\(.value.locked.repo // "")"'
 
 # Evaluate a flake output without building (fast syntax check)
-eval:
+eval: _check-untracked
     nix eval '.#darwinConfigurations' --apply 'x: builtins.attrNames x'
 
 # Show derivation of current host build
