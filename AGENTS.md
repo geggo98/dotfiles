@@ -33,6 +33,27 @@ A `justfile` provides safe, pre-approved commands that agents can run without us
 | `just eval` | Evaluate flake outputs (fast syntax check) |
 | `just show-derivation` | Show derivation of current host build |
 
+### New files: stage them before building
+
+**Nix flakes only see git-tracked files.** Newly created files (modules, skill
+files, references, templates, secrets — anything under the flake source) are
+**invisible** to `nix build`, `just build`, `just eval`, and `darwin-rebuild`
+until at least intent-to-added with `git add -N <paths>` (or fully staged with
+`git add <paths>`). The flake build silently skips untracked files; the only
+hint is the `warning: Git tree '…' has uncommitted changes` line, which fires
+even when nothing is wrong.
+
+After creating any new file, run:
+
+```bash
+git add -N <new-paths>      # intent-to-add is enough for flake to see them
+just build                  # now picks up the new files
+```
+
+If a build seems to "ignore" your changes (a new module isn't applied, a new
+skill doesn't appear, a new file referenced from a tracked module fails to
+load) — check `git status` first. Untracked files are the most common cause.
+
 ### Commands requiring user approval
 
 These cannot run inside the agent sandbox or need explicit confirmation:
