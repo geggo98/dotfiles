@@ -38,71 +38,136 @@ criterion: do not start the next one until the current one is durable.
 
 | # | Phase | Outcome |
 |---|---|---|
-| 1 | First AWS resource, end-to-end | `pulumi up` from the laptop creates a real S3 bucket; SOPS-bridged credentials work |
-| 2 | Generated secrets back to SOPS | Pulumi creates a credential, writes it to SOPS, sops-nix picks it up on the next switch |
+| 1 | Infra SOPS file + first AWS resource | `secrets/infra.enc.yaml` exists with `PULUMI_ACCESS_TOKEN`; `pulumi up` from a wrapper creates a real S3 bucket |
+| 2 | Generated secrets back to SOPS | Pulumi creates a credential, writes it to the right SOPS file, downstream consumer picks it up |
 | 3 | First NixOS host (single) | One IONOS or AWS VM, provisioned by Pulumi, installed via `nixos-anywhere`, configured via `colmena` |
 | 4 | Multi-host inventory + colmena | Two or more hosts driven from `infra/pulumi-outputs.json`; `colmena --on '@all'` works |
-| 5 | (Optional) GitHub Actions runner | `preview` workflow on PRs, `deploy` workflow on `main` |
+| 5 | (Optional) GitHub Actions runner | GHA Age key added as recipient on `infra.enc.yaml`; `preview` workflow on PRs, `deploy` workflow on `main`, AWS via OIDC |
 | 6 | Hardening | Least-priv IAM, branch protection, environment approval gates, `known_hosts` instead of `accept-new` |
 
 ---
 
-## Phase 1 — First AWS resource
+## Phase 1 — Infra SOPS file + first AWS resource
 
-**Goal:** Replace the placeholder `index.ts` with one real, low-risk AWS
-resource end-to-end. Validates the SOPS → Pulumi → AWS auth chain on the
-laptop.
+**Goal:** Stand up `secrets/infra.enc.yaml` as the operating-secret store
+for Pulumi, then prove the full chain works by creating one real, low-risk
+AWS resource end-to-end. Doing the SOPS file *before* the first resource
+means the wrapper pattern (`sops -d` → env vars → `pulumi`) is in place
+from day one — no later retrofit when CI arrives.
 
-**Prerequisites already satisfied** (do not redo): AWS credentials are
-declared in SOPS at `aws-access-key-id` / `aws-secret-access-key` and exported
-to `~/.aws/credentials` by sops-nix (`modules/secrets.nix:23-25`).
+**Prerequisites already satisfied** (do not redo): AWS credentials for the
+laptop are declared in SOPS at `aws-access-key-id` / `aws-secret-access-key`
+and exported to `~/.aws/credentials` by sops-nix
+(`modules/secrets.nix:23-25`). They stay there — the laptop continues to use
+the static profile; CI will use OIDC instead (Phase 5).
 
 **Steps:**
 
-1. **Initialise the stack.**
-   ```bash
-   cd infra
-   pulumi login          # uses PULUMI_ACCESS_TOKEN from ~/.pulumi
-   pulumi stack init prod
-   pulumi config set aws:region eu-central-1
+1. **Add a creation rule for `secrets/infra.enc.yaml`** to `.sops.yaml`.
+   Recipients: the workstation Ed25519 SSH public keys *that run Pulumi*
+   (currently both Macs) plus the recovery PGP key. Do **not** add a GHA Age
+   key yet — that comes in Phase 5. Example:
+
+   ```yaml
+   creation_rules:
+     - path_regex: ^secrets/infra\.enc\.yaml$
+       pgp: ["B6CA7BD9B0973FBF981C3B1E7C8C077F1B72E98B"]
+       age:
+         - "ssh-ed25519 AAAAC3...JqRmE94"   # FCX19GT9XR
+         - "ssh-ed25519 AAAAC3...c6c+EP"   # DKL6GDJ7X1
    ```
 
-2. **Pick a low-risk first resource.** Suggested: an S3 bucket with versioning
-   and a deny-public bucket policy. It is observable, cheap, and easy to
-   destroy if the experiment fails.
+2. **Create the file with `PULUMI_ACCESS_TOKEN`.** Generate the token at
+   `app.pulumi.com` → Settings → Access Tokens, then ask the user to run:
 
-3. **Wire AWS credentials into the provider.** Either set
-   `AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` from the SOPS values
-   (`readSopsSecret`) before constructing the provider, or rely on the
-   already-present `~/.aws/credentials` file. The latter is simpler — only
-   reach for `readSopsSecret` if you need a credential that *isn't* the AWS
-   default profile.
+   ```bash
+   env SOPS_AGE_KEY=$(ssh-to-age -i ~/.ssh/id_ed25519_sops_nopw -private-key) \
+       sops edit secrets/infra.enc.yaml
+   ```
 
-4. **Run `pulumi preview`, then `pulumi up`.** Confirm the bucket appears in
-   the AWS console.
+   First content:
+   ```yaml
+   pulumi_access_token: pul-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+   ```
 
-5. **Add the resource to the README.** Update `infra/README.md` "Project
-   structure" with whatever module file you create.
+   Verify decryption from both Macs (or at least confirm the recipient list
+   is correct via `sops -d --extract '["pulumi_access_token"]' …`).
 
-**Exit criterion:** `pulumi up` is idempotent (a second run shows zero
-changes), and `pulumi destroy` works without manual cleanup.
+3. **Add a `pulumi` wrapper that loads infra secrets into the env.** Two
+   options:
+
+   - **Justfile recipe** (preferred for the laptop):
+     ```just
+     # Run any pulumi command with infra secrets loaded into the env
+     pulumi *args:
+         #!/usr/bin/env bash
+         set -euo pipefail
+         export PULUMI_ACCESS_TOKEN=$(sops -d --extract '["pulumi_access_token"]' secrets/infra.enc.yaml)
+         cd infra && pulumi {{args}}
+     ```
+     Replace the existing `pulumi-preview`/`pulumi-up`/`pulumi-stack`
+     recipes with thin wrappers around this one.
+
+   - **Shell function in the devshell** (alternative): export the same
+     vars in `enterShell` of `modules/devshell.nix`. Less explicit, harder
+     to audit.
+
+4. **Initialise the stack.**
+   ```bash
+   just pulumi login           # writes ~/.pulumi/credentials.json (cache only)
+   just pulumi stack init prod
+   just pulumi config set aws:region eu-central-1
+   ```
+
+5. **Pick a low-risk first resource.** Suggested: an S3 bucket with
+   versioning enabled and a deny-public bucket policy. It is observable,
+   cheap, and trivial to destroy if the experiment fails.
+
+6. **Wire AWS credentials into the provider.** Locally, the AWS SDK picks
+   up `~/.aws/credentials` automatically — no `readSopsSecret` call needed.
+   In CI (Phase 5), the OIDC step exports `AWS_*` env vars before `pulumi`
+   runs; the same code path works in both runtimes.
+
+7. **Run `just pulumi preview`, then `just pulumi up`.** Confirm the
+   bucket appears in the AWS console.
+
+8. **Update `infra/README.md`.** Document the wrapper, the new SOPS file,
+   and the bucket module.
+
+**Exit criterion:** `just pulumi up` is idempotent (second run shows zero
+changes), `just pulumi destroy` works without manual cleanup, and *no
+plaintext `PULUMI_ACCESS_TOKEN` exists anywhere on disk* outside the env of
+the wrapper process.
 
 **Trip-wires:**
 
 - `readSopsSecret` shells out to `sops` synchronously at *evaluation* time.
-  If the Age key isn't loaded, the error is `failed to get the data key`. Make
-  sure `~/.ssh/id_ed25519_sops_nopw` exists and has correct permissions.
-- The bucket name must be globally unique. Use a stable suffix derived from
+  If the Age key isn't loaded, the error is `failed to get the data key`.
+  Make sure `~/.ssh/id_ed25519_sops_nopw` exists and has correct permissions.
+- The S3 bucket name must be globally unique. Derive a stable suffix from
   `pulumi.getStack()` to avoid collisions.
+- Don't put the `PULUMI_ACCESS_TOKEN` in a `.env` file or in
+  `direnv` — those files are easy to commit by accident. The wrapper-recipe
+  pattern keeps the secret short-lived (one process invocation).
 
 ---
 
 ## Phase 2 — Pulumi-generated secrets back to SOPS
 
 **Goal:** Establish the writeable bridge from Pulumi to SOPS. Once a Pulumi
-resource generates a credential (a random password, a TLS key), Pulumi must
-be able to land that value in `secrets/secrets.enc.yaml` so that sops-nix can
-distribute it on the next `darwin-rebuild switch`.
+resource generates a credential, Pulumi must be able to land that value in
+the *correct* SOPS file so the right consumer (sops-nix on a Mac, the colmena
+step in CI, etc.) can read it.
+
+**Routing reminder** (from Architecture §4):
+
+- Generated secret needed *to operate Pulumi* or to deploy NixOS hosts (e.g.
+  the colmena `deploy_key`, per-host `provisioning_key`) → write to
+  `secrets/infra.enc.yaml`.
+- Generated secret needed at *macOS host runtime* (e.g. a DB password an app
+  on a Mac connects with) → write to `secrets/secrets.enc.yaml`.
+- Generated secret needed only by another cloud resource → don't write it
+  to SOPS at all; let the cloud's secret store hold it.
 
 **Why this is non-trivial:** Pulumi resources are normally side-effect-free;
 shelling out to `sops set` from a `command.local.Command` mutates a tracked
@@ -113,26 +178,35 @@ trigger is set carefully.
 
 1. **Decide the SOPS-write contract.**
    - Wrap `sops set` calls in a small helper (e.g. `helpers/sops-write.ts`)
-     so the call site is uniform and testable.
+     that takes `(file, key, value)` so the call site is uniform and the
+     file-routing decision is explicit at every callsite.
    - Use `triggers: [<output of the random resource>]` so the command only
      re-runs when the value changes.
    - Mark the command's output as a secret via `additionalSecretOutputs`.
-   - The committable manifest must end up in `secrets/secrets.enc.yaml`
-     under a fixed key — declare that key in `modules/secrets.nix` *first*,
-     so sops-nix knows about it.
+   - For host-runtime targets: declare the key in `modules/secrets.nix`
+     *before* the first write, so sops-nix knows it exists.
+   - For infra targets: no declaration step needed — `infra.enc.yaml` is
+     not consumed by sops-nix, only by the Pulumi/colmena wrappers.
 
 2. **Test on a throwaway value.** Generate a `random.RandomPassword`,
-   write it to a key like `pulumi-test-token`, and verify:
-   - `sops -d secrets/secrets.enc.yaml | grep pulumi-test-token` shows it
-   - `darwin-rebuild build` succeeds with the new declaration
+   write it to `secrets/infra.enc.yaml` under `pulumi-test-token`, and
+   verify:
+   - `sops -d --extract '["pulumi-test-token"]' secrets/infra.enc.yaml`
+     returns the value
    - A second `pulumi up` is a no-op (no diff against itself)
+   - The same test repeated against `secrets/secrets.enc.yaml` also works,
+     and the corresponding sops-nix declaration in `modules/secrets.nix`
+     is honoured by `darwin-rebuild build`
 
-3. **Document the round-trip.** Add a short "Generated secret round-trip"
-   section to `infra/README.md` showing the pattern.
+3. **Document the round-trip.** Add a "Generated secret round-trip"
+   section to `infra/README.md` showing the pattern *and* the file-routing
+   decision tree.
 
 **Exit criterion:** Generating a secret from Pulumi and consuming it on a
 nix-darwin host requires only `pulumi up` followed by `darwin-rebuild
-switch` — no manual `sops edit` step in between.
+switch` — no manual `sops edit` step in between. Same for infra-routed
+secrets: a regenerated colmena `deploy_key` is usable by the next
+`colmena apply` without manual handling.
 
 **Trip-wires:**
 
@@ -143,6 +217,9 @@ switch` — no manual `sops edit` step in between.
 - The `command.local` runs in the laptop's working directory at `pulumi up`
   time. Working directory and `cwd:` of the command must agree, otherwise
   `sops set` writes to the wrong file silently.
+- Routing mistakes (writing a host-runtime secret to `infra.enc.yaml`) only
+  surface when the consumer fails. Code-review the `(file, key, value)`
+  argument at every callsite.
 
 ---
 
@@ -240,21 +317,122 @@ Only worth doing once at least one of the following is true:
 - `pulumi preview` on every PR is valuable enough to justify a CI Age key
 - Drift detection (`pulumi preview` on a schedule) is desired
 
+The architecture is already CI-ready: `secrets/infra.enc.yaml` exists,
+secrets are loaded into env via a wrapper, AWS access is treated as
+"static locally / OIDC in CI". This phase is a recipient-list expansion
+plus a workflow file — not a re-architecture.
+
 **Steps when the trigger fires:**
 
-1. Create a CI-only Ed25519 key (or reuse a dedicated GitHub Actions Age key)
-   and add its public form to `.sops.yaml`. Re-encrypt with
-   `sops updatekeys secrets/secrets.enc.yaml`.
-2. Configure AWS OIDC for the repo (see reference `Anleitung.md` §1.3 — same
-   trust policy template, with this repo's name).
-3. Add `.github/workflows/preview.yml` (PRs → `pulumi preview`) and
-   `.github/workflows/deploy.yml` (main → `pulumi up`). Use a `prod`
-   environment with required reviewers as the approval gate.
-4. Move `PULUMI_ACCESS_TOKEN` into GitHub repo secrets.
+1. **Generate a dedicated GitHub Actions Age key.** Do this on a trusted
+   workstation, not in CI:
+   ```bash
+   age-keygen -o /tmp/gha-age-key.txt
+   # File contains the private key (line starting with AGE-SECRET-KEY-1...)
+   # and a comment with the public key (age1...).
+   ```
+   - **Private form** → GitHub repo Settings → Secrets and variables →
+     Actions → new secret named `SOPS_AGE_KEY`. Verify, then `shred -u
+     /tmp/gha-age-key.txt`.
+   - **Public form** → recipient on `secrets/infra.enc.yaml` *only*.
+
+2. **Add the public key as a recipient on `infra.enc.yaml`** in
+   `.sops.yaml`:
+   ```yaml
+   - path_regex: ^secrets/infra\.enc\.yaml$
+     pgp: ["B6CA7BD9B0973FBF981C3B1E7C8C077F1B72E98B"]
+     age:
+       - "ssh-ed25519 ..."   # FCX19GT9XR
+       - "ssh-ed25519 ..."   # DKL6GDJ7X1
+       - "age1...            # GHA — created step 1"
+   ```
+   Then re-encrypt:
+   ```bash
+   sops updatekeys secrets/infra.enc.yaml
+   ```
+   Crucially, the global `secrets/secrets.enc.yaml` recipient list is **not**
+   touched — CI cannot read host-runtime secrets.
+
+3. **Configure AWS OIDC for the repo.** One-shot, in AWS:
+   - Create the OIDC provider for `token.actions.githubusercontent.com`
+     (per reference `Anleitung.md` §1.3 — same template).
+   - Create an IAM role `pulumi-deploy` with a trust policy scoped to
+     `repo:<OWNER>/<REPO>:environment:prod`.
+   - Attach the policies Pulumi needs (start broad, tighten in Phase 6).
+   - Note the role ARN and the AWS region as **GitHub Variables** (not
+     secrets — the ARN is not sensitive):
+     - `AWS_DEPLOY_ROLE_ARN`
+     - `AWS_REGION`
+
+4. **Create the GitHub Environment `prod`** with required reviewers (the
+   user's GitHub account) and `main`-only deployment branches. This is the
+   approval gate referenced by the OIDC trust policy's `:sub` condition.
+
+5. **Add `.github/workflows/preview.yml`** for PR previews. Sketch:
+   ```yaml
+   on:
+     pull_request:
+       paths: ['infra/**', '.github/workflows/**']
+   permissions:
+     id-token: write
+     contents: read
+     pull-requests: write
+   jobs:
+     preview:
+       runs-on: ubuntu-latest
+       steps:
+         - uses: actions/checkout@v4
+         - uses: aws-actions/configure-aws-credentials@v4
+           with:
+             role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+             aws-region: ${{ vars.AWS_REGION }}
+         - uses: DeterminateSystems/nix-installer-action@v9
+         - name: Decrypt infra secrets into env
+           env:
+             SOPS_AGE_KEY: ${{ secrets.SOPS_AGE_KEY }}
+           run: |
+             {
+               printf 'PULUMI_ACCESS_TOKEN=%s\n' \
+                 "$(nix run nixpkgs#sops -- -d --extract '["pulumi_access_token"]' secrets/infra.enc.yaml)"
+               # Add IONOS_TOKEN etc. as the resource set grows
+             } >> "$GITHUB_ENV"
+         - uses: pulumi/actions@v5
+           with:
+             command: preview
+             stack-name: prod
+             work-dir: infra
+             comment-on-pr: true
+   ```
+
+6. **Add `.github/workflows/deploy.yml`** for main-branch applies.
+   Same shape as `preview.yml` plus `environment: prod` (engages the
+   approval gate) and `command: up`.
+
+**Exit criterion:** A PR triggers `pulumi preview` and posts the diff as a
+comment; merging to `main` triggers `pulumi up` after manual approval; no
+secrets exist in the workflow YAML other than `SOPS_AGE_KEY`.
+
+**Trip-wires:**
+
+- The trust policy's `:sub` claim must match the workflow exactly. A common
+  mistake is leaving `:environment:prod` in the policy but forgetting to
+  declare `environment: prod` in the deploy job — the assume-role step then
+  fails with `AccessDenied`.
+- `sops` must be available in the runner. Either install it via
+  `nix-installer` + `nix run nixpkgs#sops`, or use the
+  `getsops/sops-installer` action.
+- Avoid printing decrypted values into logs. The `$GITHUB_ENV` mechanism
+  redacts values automatically when the workflow has registered them as
+  secrets via `::add-mask::`; without that, an `env: |` echo could leak.
+- Rotating the GHA Age key means: generate a new one, run `sops
+  updatekeys`, swap the `SOPS_AGE_KEY` repo secret. Do *not* attempt to
+  re-encrypt with both old and new in flight.
 
 **Trade-off to revisit at this point:** if managing the CI Age key feels
-heavier than introducing 1Password, reconsider the secret-store choice from
-Architecture §2.
+heavier than introducing a service account from a dedicated secret manager
+(1Password, Bitwarden Secrets Manager, …), reconsider the secret-store
+choice from Architecture §2. The file split makes that swap localised — only
+`infra.enc.yaml`'s consumers would change.
 
 ---
 
