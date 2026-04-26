@@ -16,8 +16,10 @@ flowchart TB
     Dev[Developer laptop<br/>nix-darwin host] -->|local pulumi up<br/>or git push| Repo[Git repo<br/>infra/ + modules/]
     Repo -.->|future| GHA[GitHub Actions<br/>optional CI runner]
 
-    Dev -->|sops -d<br/>via Age key| SOPS[(SOPS-encrypted YAML<br/>secrets/secrets.enc.yaml)]
-    SOPS -->|readSopsSecret| Pulumi[pulumi up]
+    Dev -->|sops -d<br/>via Age key| INFRA[(SOPS infra file<br/>secrets/infra.enc.yaml<br/>recipients: workstations + GHA)]
+    Dev -->|sops -d<br/>via Age key| SOPS[(SOPS host/global file<br/>secrets/secrets.enc.yaml<br/>recipients: workstations only)]
+    INFRA -->|env vars before run| Pulumi[pulumi up]
+    SOPS -->|readSopsSecret + sops-nix| Pulumi
     SOPS -->|sops-nix at activation| Nix[nix-darwin / NixOS]
 
     Pulumi -->|state| PC[Pulumi Cloud<br/>Individual plan]
@@ -43,12 +45,35 @@ decisions are merged into one story. Separating them:
 
 | Axis | Question | Our choice | Why |
 |---|---|---|---|
-| **A — Runner** | Where does `pulumi up` execute? | Developer laptop (local) | Solo engineer, infrequent changes; CI is future work |
+| **A — Runner** | Where does `pulumi up` execute? | Developer laptop today; GitHub Actions enabled later without re-architecture | Solo engineer, infrequent changes; CI becomes worth it once a second person joins or unattended PR previews matter |
 | **B — State** | Where does Pulumi state live? | Pulumi Cloud (Individual, free) | Web UI + history + encryption-as-a-service for $0 |
-| **C — Secrets** | Where do credentials and generated secrets live? | SOPS (Age, sops-nix) — single source of truth | Already integrated with nix-darwin; one fewer system |
+| **C — Secrets** | Where do credentials and generated secrets live? | SOPS (Age, sops-nix) — single source of truth, split across two files | Already integrated with nix-darwin; one fewer system. The split lets CI decrypt only what it needs |
 
-Each choice is independent of the others. We could later move runner to GitHub
-Actions without touching the secret model, and vice versa.
+Each choice is independent. The secret model is *deliberately designed for
+both runners*: when GHA later joins, its Age key becomes an additional
+recipient on the infra file — no migration to a different secret store.
+
+### The two SOPS files
+
+| File | Recipients | Holds |
+|---|---|---|
+| `secrets/secrets.enc.yaml` (existing) | Workstation Ed25519-derived Age keys + recovery PGP | Runtime secrets consumed by sops-nix on macOS hosts: AWS credentials, third-party API keys for Home Manager, etc. |
+| `secrets/infra.enc.yaml` (new — Phase 1) | Workstation Age keys *that run Pulumi* + recovery PGP + (later) one GitHub Actions Age public key | Secrets needed *to operate* Pulumi: `PULUMI_ACCESS_TOKEN`, `IONOS_TOKEN`, eventually a deploy SSH key for colmena |
+
+Why split:
+
+- **Least-privilege for CI.** A GitHub Actions runner does not need to
+  decrypt the laptop user's API keys or AWS profile. Limiting its recipient
+  scope to `secrets/infra.enc.yaml` means a compromised CI Age key can only
+  read infra-operation secrets, not personal ones.
+- **Independent rotation.** Adding/removing the GHA Age key (`sops
+  updatekeys secrets/infra.enc.yaml`) does not re-encrypt the much larger
+  global file or invalidate any cached decryptions on the laptops.
+- **Different consumption paths.** Global SOPS secrets land on Macs at
+  activation time via sops-nix (one process, one decryption). Infra secrets
+  are loaded into the *environment* of the `pulumi` process by a wrapper
+  (just recipe locally, workflow step in CI) — they never sit in
+  `~/.aws/credentials` or similar.
 
 ### Why SOPS, not 1Password?
 
@@ -106,44 +131,65 @@ flowchart LR
 
 | Component | Responsible for | NOT responsible for |
 |---|---|---|
-| Git repo | Pulumi code, Nix flake, encrypted secrets, justfile | Decryption keys, Pulumi state |
+| Git repo | Pulumi code, Nix flake, both encrypted SOPS files, justfile | Decryption keys, Pulumi state |
 | Developer laptop | `pulumi up`, `darwin-rebuild switch`, `sops edit`, holding the Age private key | Long-lived state |
-| SOPS YAML | Runtime + build-time secrets shared by Pulumi and Nix | Pulumi resource state |
+| `secrets/secrets.enc.yaml` | Host-runtime secrets distributed by sops-nix to macOS workstations | Anything CI needs to read |
+| `secrets/infra.enc.yaml` | Tokens needed to *run* Pulumi (state backend, providers, deploy keys) | Host-runtime secrets unrelated to infra |
 | Pulumi Cloud | Resource state, encryption-as-a-service, web UI, history | Secret distribution to runtime |
-| `nix develop` shell (devenv) | Tool versions: pulumi, node, pnpm, sops; pre-commit hooks | Anything host-specific |
+| `nix develop` shell (devenv) | Tool versions: pulumi, node, pnpm, sops, ssh-to-age; pre-commit hooks | Anything host-specific |
+| GitHub Actions (future) | Unattended `pulumi preview` / `pulumi up` once enabled | Local-only operations like `darwin-rebuild` |
 
 ## 4. Secret categories
 
-Even with SOPS as the single store, secrets fall into distinct lifecycles. The
-column "Who writes" is the important one — it dictates the workflow.
+Even with SOPS as the single store, secrets fall into distinct lifecycles.
+The two columns that drive the workflow are *which file* the secret lives in
+and *who reads it*.
 
-| Category | Example | Who writes | Who reads | Notes |
+| Category | Example | SOPS file | Who writes | Who reads |
 |---|---|---|---|---|
-| **Cloud auth (static)** | `aws-access-key-id`, future IONOS token | Human via `sops edit` | Pulumi via `readSopsSecret`; nix-darwin via `sops-nix` for `~/.aws/credentials` | Already wired (see `modules/secrets.nix:23-25`) |
-| **App input** | Third-party API keys (OpenAI, Atlassian, …) | Human via `sops edit` | Home Manager modules at activation | Already wired |
-| **Pulumi-generated → SOPS** *(future)* | RDS passwords, generated SSH deploy keys | Pulumi via `command.local` running `sops set` | Pulumi (next run) and sops-nix at activation | Phase 2 — see Plan.md |
-| **Pulumi-generated → cloud-only** | Auto-rotated AWS Secrets Manager entries | AWS itself | Cloud apps that have IAM permissions | Avoid copying to SOPS unless a non-AWS consumer needs it |
+| **Pulumi-state auth** | `PULUMI_ACCESS_TOKEN` | `infra.enc.yaml` | Human (one-shot, on Pulumi Cloud) | A `pulumi` wrapper that exports it as env var before `pulumi up` |
+| **Cloud-auth — static** | `IONOS_TOKEN` (future) | `infra.enc.yaml` | Human via `sops edit` | `pulumi` wrapper, env var to provider |
+| **Cloud-auth — federated** *(future)* | AWS role ARN + OIDC trust | not a secret — repo variable / `.github/` config | Human (one-shot, in AWS) | GHA via `aws-actions/configure-aws-credentials` |
+| **Cloud-auth — local AWS** | `aws-access-key-id`, `aws-secret-access-key` | `secrets.enc.yaml` (existing) | Human via `sops edit` | sops-nix → `~/.aws/credentials` on the laptop |
+| **App input — host runtime** | OpenAI / Atlassian / Jira tokens | `secrets.enc.yaml` (existing) | Human via `sops edit` | Home Manager modules at activation |
+| **Pulumi-generated → infra** *(Phase 2)* | colmena `deploy_key`, host `provisioning_key` | `infra.enc.yaml` | Pulumi via `command.local` running `sops set` | `pulumi` wrapper + colmena step in CI |
+| **Pulumi-generated → host runtime** *(Phase 2)* | DB password that an app on a Mac needs | `secrets.enc.yaml` | Pulumi via `command.local` running `sops set` | sops-nix at `darwin-rebuild switch` |
+| **Pulumi-generated → cloud-only** | AWS Secrets Manager entries with auto-rotation | not in SOPS | AWS | Cloud apps with IAM permissions |
 
-**Rule of thumb:** if a secret needs to land on a Nix-managed machine, route
-it through SOPS. If it only needs to be readable by another cloud resource,
-let the cloud's own secret store hold it.
+**Routing rules:**
+
+- *Operate Pulumi* → `infra.enc.yaml` (recipients are runners, not hosts).
+- *Land on a Mac at activation time* → `secrets.enc.yaml` (recipients are
+  workstations, not CI).
+- *Live entirely inside one cloud* → that cloud's secret store (no SOPS).
 
 ## 5. Trust anchors
 
-The minimum trust state that lives *outside* of SOPS:
+The minimum trust state that lives *outside* of SOPS — i.e. the keys and
+identities required to decrypt SOPS in the first place, or to authenticate to
+clouds that don't go through SOPS.
 
-1. **The Age private key on the developer laptop** —
-   `~/.ssh/id_ed25519_sops_nopw`, converted to Age via `ssh-to-age`.
-   Recovery: each host's Ed25519 public key is registered in `.sops.yaml`;
-   losing one host's key still leaves the others able to decrypt.
-2. **`PULUMI_ACCESS_TOKEN`** in the developer's local Pulumi config (`~/.pulumi/credentials.json`).
-   Bootstrap to Pulumi Cloud; one click to revoke.
-3. **AWS credentials** for the IAM user/role that Pulumi uses. Currently
-   read out of SOPS into `~/.aws/credentials`; later may be replaced by
-   GitHub OIDC if a CI runner is added.
+| Anchor | Where | Held by | Decrypts | Created in |
+|---|---|---|---|---|
+| **Workstation Age key** | `~/.ssh/id_ed25519_sops_nopw` (laptop), Age form via `ssh-to-age` | Each developer Mac (one per host) | Both SOPS files | Already exists |
+| **Recovery PGP key** | Developer's GPG keyring | Human | Both SOPS files | Already exists |
+| **AWS — local** | `~/.aws/credentials` populated by sops-nix from `secrets.enc.yaml` | Laptop | n/a (consumed by AWS SDK) | Already exists |
+| **AWS — CI** *(Phase 5)* | GitHub OIDC trust policy on an IAM role; ARN as a public repo variable | AWS account | n/a (assumed via STS) | Created when CI is enabled |
+| **GitHub Actions Age key** *(Phase 5)* | Private form: GitHub repo secret. Public form: recipient on `infra.enc.yaml` only | GitHub Actions runner | `infra.enc.yaml` *only* | Created when CI is enabled |
 
-Everything else (third-party tokens, generated passwords, deploy keys) lives
-in SOPS or in the cloud provider's own state.
+Notes:
+
+- **`PULUMI_ACCESS_TOKEN` is no longer a trust anchor** — it lives inside
+  `infra.enc.yaml`, decrypted by whichever Age key the runtime holds. The
+  laptop's `~/.pulumi/credentials.json` is treated as a cache only; the
+  source of truth is SOPS.
+- **The GHA Age key has narrower scope than the laptop key.** Compromise of
+  the GitHub repo secret leaks `infra.enc.yaml` contents but cannot decrypt
+  any host-runtime secret in `secrets.enc.yaml`. This is the whole point of
+  the file split.
+- **AWS in CI does not need a key in SOPS at all** — OIDC issues short-lived
+  STS credentials directly to the workflow, scoped by the trust policy's
+  `:sub` condition (`repo:<OWNER>/<REPO>:environment:prod`).
 
 ## 6. NixOS lifecycle (forward-looking)
 
@@ -236,8 +282,9 @@ worth it once a host becomes production-critical. `nixos-rebuild
 
 | Topic | Reference | This repo | Verdict |
 |---|---|---|---|
-| Primary secret store | 1Password vault `Pulumi-Infra` | SOPS (Age) shared with sops-nix | **Architectural** — keep SOPS |
-| Runner | GitHub Actions with OIDC | Local laptop | **Phase difference** — GHA is optional future work |
+| Primary secret store | 1Password vault `Pulumi-Infra` | SOPS (Age), split into `secrets.enc.yaml` (host runtime) and `infra.enc.yaml` (Pulumi operation) | **Architectural** — keep SOPS; the file split is what makes CI possible without 1Password |
+| CI bootstrap secrets | `OP_SERVICE_ACCOUNT_TOKEN` + `PULUMI_ACCESS_TOKEN` as GitHub Secrets | A single GitHub Actions Age key as a GitHub Secret; everything else decrypted from `infra.enc.yaml` | Equivalent surface area, one fewer external system |
+| Runner | GitHub Actions with OIDC | Local laptop today; GHA wired-ready (Phase 5) | **Phase difference** — same target, deferred |
 | State backend | Pulumi Cloud Individual | Pulumi Cloud Individual | Same |
 | Pulumi targets | AWS + IONOS + NixOS hosts | AWS first; IONOS + NixOS planned | Same destination, earlier phase |
 | Package manager | npm | pnpm | Stylistic |
