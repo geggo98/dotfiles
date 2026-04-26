@@ -134,6 +134,46 @@ let
         '';
       });
 
+      # Single source of truth for which MCP servers exist and which
+      # package provides each one. Each agent (claude-code, opencode,
+      # codex) consumes this through a small mapping function below.
+      mcpServerPkgs = {
+        atlassian = mcp-atlassian;
+        context7 = mcp-context7;
+        devenv = mcp-devenv;
+        javadocs = mcp-javadocs;
+        nixos = mcp-nixos;
+        travily = mcp-travily;
+        zai-search = mcp-zai-search;
+        zai-vision = mcp-zai-vision;
+        zai-web-reader = mcp-zai-web-reader;
+      };
+
+      mcpCmd = name: pkg: "${pkg}/bin/+mcp-${name}";
+
+      claudeMcpServers = lib.mapAttrs
+        (name: pkg: {
+          type = "stdio";
+          command = mcpCmd name pkg;
+          args = [ ];
+        })
+        mcpServerPkgs;
+
+      opencodeMcpServers = lib.mapAttrs
+        (name: pkg: {
+          type = "local";
+          command = [ (mcpCmd name pkg) ];
+          enabled = true;
+        })
+        mcpServerPkgs;
+
+      codexMcpServers = lib.mapAttrs
+        (name: pkg: {
+          command = mcpCmd name pkg;
+          args = [ ];
+        })
+        mcpServerPkgs;
+
       root = ./..;
     in
     {
@@ -163,53 +203,7 @@ let
             command = "sh ~/.claude/statusline-command.sh";
           };
         };
-        mcpServers = {
-          atlassian = {
-            type = "stdio";
-            command = "${mcp-atlassian}/bin/+mcp-atlassian";
-            args = [ ];
-          };
-          context7 = {
-            type = "stdio";
-            command = "${mcp-context7}/bin/+mcp-context7";
-            args = [ ];
-          };
-          javadocs = {
-            type = "stdio";
-            command = "${mcp-javadocs}/bin/+mcp-javadocs";
-            args = [ ];
-          };
-          nixos = {
-            type = "stdio";
-            command = "${mcp-nixos}/bin/+mcp-nixos";
-            args = [ ];
-          };
-          travily = {
-            type = "stdio";
-            command = "${mcp-travily}/bin/+mcp-travily";
-            args = [ ];
-          };
-          zai-search = {
-            type = "stdio";
-            command = "${mcp-zai-search}/bin/+mcp-zai-search";
-            args = [ ];
-          };
-          zai-vision = {
-            type = "stdio";
-            command = "${mcp-zai-vision}/bin/+mcp-zai-vision";
-            args = [ ];
-          };
-          zai-web-reader = {
-            type = "stdio";
-            command = "${mcp-zai-web-reader}/bin/+mcp-zai-web-reader";
-            args = [ ];
-          };
-          devenv = {
-            type = "stdio";
-            command = "${mcp-devenv}/bin/+mcp-devenv";
-            args = [ ];
-          };
-        };
+        mcpServers = claudeMcpServers;
         skillsDir = ./ai/_files/skills;
       };
 
@@ -218,53 +212,7 @@ let
         package = llm-agents.opencode;
         settings = {
           autoupdate = false;
-          mcp = {
-            atlassian = {
-              type = "local";
-              command = [ "${mcp-atlassian}/bin/+mcp-atlassian" ];
-              enabled = true;
-            };
-            context7 = {
-              type = "local";
-              command = [ "${mcp-context7}/bin/+mcp-context7" ];
-              enabled = true;
-            };
-            javadocs = {
-              type = "local";
-              command = [ "${mcp-javadocs}/bin/+mcp-javadocs" ];
-              enabled = true;
-            };
-            nixos = {
-              type = "local";
-              command = [ "${mcp-nixos}/bin/+mcp-nixos" ];
-              enabled = true;
-            };
-            travily = {
-              type = "local";
-              command = [ "${mcp-travily}/bin/+mcp-travily" ];
-              enabled = true;
-            };
-            zai-search = {
-              type = "local";
-              command = [ "${mcp-zai-search}/bin/+mcp-zai-search" ];
-              enabled = true;
-            };
-            zai-vision = {
-              type = "local";
-              command = [ "${mcp-zai-vision}/bin/+mcp-zai-vision" ];
-              enabled = true;
-            };
-            zai-web-reader = {
-              type = "local";
-              command = [ "${mcp-zai-web-reader}/bin/+mcp-zai-web-reader" ];
-              enabled = true;
-            };
-            devenv = {
-              type = "local";
-              command = [ "${mcp-devenv}/bin/+mcp-devenv" ];
-              enabled = true;
-            };
-          };
+          mcp = opencodeMcpServers;
         };
         rules = root + "/AGENTS.md";
       };
@@ -273,58 +221,11 @@ let
         enable = true;
         package = llm-agents.codex;
         settings = {
-          mcp_servers = {
-            atlassian = {
-              command = "${mcp-atlassian}/bin/+mcp-atlassian";
-              args = [ ];
-            };
-            context7 = {
-              command = "${mcp-context7}/bin/+mcp-context7";
-              args = [ ];
-            };
-            javadocs = {
-              command = "${mcp-javadocs}/bin/+mcp-javadocs";
-              args = [ ];
-            };
-            nixos = {
-              command = "${mcp-nixos}/bin/+mcp-nixos";
-              args = [ ];
-            };
-            travily = {
-              command = "${mcp-travily}/bin/+mcp-travily";
-              args = [ ];
-            };
-            "zai-search" = {
-              command = "${mcp-zai-search}/bin/+mcp-zai-search";
-              args = [ ];
-            };
-            "zai-vision" = {
-              command = "${mcp-zai-vision}/bin/+mcp-zai-vision";
-              args = [ ];
-            };
-            "zai-web-reader" = {
-              command = "${mcp-zai-web-reader}/bin/+mcp-zai-web-reader";
-              args = [ ];
-            };
-            devenv = {
-              command = "${mcp-devenv}/bin/+mcp-devenv";
-              args = [ ];
-            };
-          };
+          mcp_servers = codexMcpServers;
         };
       };
 
-      home.packages = [
-        mcp-atlassian
-        mcp-context7
-        mcp-javadocs
-        mcp-nixos
-        mcp-travily
-        mcp-zai-search
-        mcp-zai-vision
-        mcp-zai-web-reader
-        mcp-devenv
-      ];
+      home.packages = lib.attrValues mcpServerPkgs;
 
       home.file.".claude/statusline-command.sh" = {
         source = ./ai/_files/statusline-command.sh;
