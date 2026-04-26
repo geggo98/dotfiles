@@ -7,22 +7,18 @@ let
       globalSopsFile = root + "/secrets/secrets.enc.yaml";
       hostSecretsFile = root + "/hosts/${hostId}/secrets.enc.yaml";
       hostSecretsModule = root + "/hosts/${hostId}/secrets.nix";
-      hasHostSecretsFile = builtins.pathExists hostSecretsFile;
-      hostSecretsFileContent =
-        if hasHostSecretsFile then builtins.readFile hostSecretsFile else "";
+
+      # Contract: hosts/<host>/secrets.nix lists exactly the secret
+      # keys stored in this host's encrypted YAML. Each entry receives
+      # `sopsFile = hostSecretsFile` (overridable per entry); base
+      # secrets keep `defaultSopsFile = globalSopsFile`.
       hostSecrets =
         if builtins.pathExists hostSecretsModule then import hostSecretsModule else { };
-      hostSecretsPresent =
-        if hasHostSecretsFile then
-          lib.filterAttrs (name: _: lib.hasInfix "${name}:" hostSecretsFileContent || lib.hasPrefix "${name}:" hostSecretsFileContent) hostSecrets
-        else
-          { };
-      hostSecretsWithFile =
-        lib.mapAttrs
-          (_: secret: secret // {
-            sopsFile = if secret ? sopsFile then secret.sopsFile else hostSecretsFile;
-          })
-          hostSecretsPresent;
+
+      hostSecretsWithFile = lib.mapAttrs
+        (_: secret: { sopsFile = hostSecretsFile; } // secret)
+        hostSecrets;
+
       baseSecrets = {
         "aws/credentials".path = "${config.home.homeDirectory}/.aws/credentials";
         "aws/credentials".mode = "0600";
