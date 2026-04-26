@@ -1,11 +1,11 @@
-{ config, inputs, ... }:
+{ config, ... }:
 let
   inherit (config.flake.modules) darwin homeManager;
 in
 {
   configurations.darwin.DKL6GDJ7X1.module = {
     imports = [
-      inputs.home-manager.darwinModules.home-manager
+      darwin.home-manager
       darwin.macos
       darwin.determinate
       darwin.homebrew
@@ -37,31 +37,17 @@ in
     ];
     homebrew.masApps = { };
 
-    home-manager = {
-      useGlobalPkgs = true;
-      useUserPackages = true;
-      backupFileExtension = "hm.bak";
-      users."stefan.schwetschke" = {
-        programs.git.settings.user.email = "stefan.schwetschke@check24.de";
-        programs.gpg.settings.default-key = "DKL6GDJ7X1@schwetschke.de";
-        imports = [
-          homeManager.shell
-          homeManager.git
-          homeManager.gpg
-          homeManager.neovim
-          homeManager.mcp-servers
-          homeManager.ai-tools
-          homeManager.packages
-          homeManager.supply-chain-hardening
-          homeManager.misc
-          homeManager.vscode
-          homeManager.secrets-DKL6GDJ7X1
-          homeManager.boundary
-          homeManager.vault
-          homeManager.tunnelblick-raycast
-        ];
-        home.stateVersion = "25.11";
-      };
+    home-manager.users."stefan.schwetschke" = {
+      programs.git.settings.user.email = "stefan.schwetschke@check24.de";
+      programs.gpg.settings.default-key = "DKL6GDJ7X1@schwetschke.de";
+      imports = [
+        homeManager.base
+        homeManager.secrets-DKL6GDJ7X1
+        homeManager.boundary
+        homeManager.vault
+        homeManager.tunnelblick-raycast
+      ];
+      home.stateVersion = "25.11";
     };
   };
 }
