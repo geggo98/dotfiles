@@ -315,6 +315,11 @@ flake.modules.nixos.shell = nixosArgs: {
 Here the outer `config` is flake-parts top-level config,
 while `nixosArgs.config` is the NixOS evaluation config.
 
+For a wider catalogue (infinite recursion via self-referential defaults,
+`_module.args` vs. `specialArgs` ordering, double `pkgs` instantiation,
+`import` vs. `imports`, cyclic file dependencies through option defaults)
+see the [foundations pitfall catalogue](references/foundations.md#pitfall-catalogue).
+
 ## Examples
 
 ### Example: Adding a new feature aspect
@@ -342,6 +347,12 @@ See [examples](references/examples.md) for detailed patterns
 including user modules, incremental features,
 deferredModule merge semantics,
 and community sharing through Dendrix.
+
+See [foundations](references/foundations.md) for the underlying
+module system and `flake-parts` mechanics —
+option types and merge rules, priorities, evaluation phases,
+the `systems` / `perSystem` / `flake.*` split,
+and a wider pitfall catalogue.
 
 ## References
 
