@@ -48,13 +48,13 @@ update-input input:
 
 # Show what would change between current system and new build
 diff: build
-    nix store diff-closures /run/current-system result
+    nix store diff-closures /run/current-system ./result
 
 # Build and verify no package delta (useful after refactoring)
 verify-no-diff: build
     #!/usr/bin/env bash
     set -euo pipefail
-    diff_output=$(nix store diff-closures /run/current-system result 2>&1)
+    diff_output=$(nix store diff-closures /run/current-system ./result 2>&1)
     if [ -n "$diff_output" ]; then
         echo "Differences found:"
         echo "$diff_output"
