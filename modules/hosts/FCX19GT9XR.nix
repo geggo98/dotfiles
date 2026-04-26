@@ -1,11 +1,11 @@
-{ config, inputs, ... }:
+{ config, ... }:
 let
   inherit (config.flake.modules) darwin homeManager;
 in
 {
   configurations.darwin.FCX19GT9XR.module = {
     imports = [
-      inputs.home-manager.darwinModules.home-manager
+      darwin.home-manager
       darwin.macos
       darwin.determinate
       darwin.homebrew
@@ -49,27 +49,13 @@ in
       "Spark Desktop" = 6445813049;
     };
 
-    home-manager = {
-      useGlobalPkgs = true;
-      useUserPackages = true;
-      backupFileExtension = "hm.bak";
-      users.stefan = {
-        programs.gpg.settings.default-key = "FCX19GT9XR@schwetschke.de";
-        imports = [
-          homeManager.shell
-          homeManager.git
-          homeManager.gpg
-          homeManager.neovim
-          homeManager.mcp-servers
-          homeManager.ai-tools
-          homeManager.packages
-          homeManager.supply-chain-hardening
-          homeManager.misc
-          homeManager.vscode
-          homeManager.secrets-FCX19GT9XR
-        ];
-        home.stateVersion = "25.11";
-      };
+    home-manager.users.stefan = {
+      programs.gpg.settings.default-key = "FCX19GT9XR@schwetschke.de";
+      imports = [
+        homeManager.base
+        homeManager.secrets-FCX19GT9XR
+      ];
+      home.stateVersion = "25.11";
     };
   };
 }
