@@ -10,6 +10,17 @@ let
 
       loadSecretsLib = builtins.readFile ./_files/shell/load-secrets.sh;
 
+      # Pinned NPM versions for `npx -y <pkg>@<ver>` wrappers. Picks
+      # must be at least 14 days old (matches the cooldown enforced by
+      # supply-chain-hardening.nix for unpinned installs) and account
+      # for known-bad versions. mcp-remote < 0.1.38 has runtime
+      # regressions and supply-chain risk and must not be used.
+      npmVersions = {
+        mcp-remote = "0.1.38";
+        context7-mcp = "v1.0.30";
+        zai-mcp-server = "0.1.2";
+      };
+
       mcp-atlassian = (pkgs.writeShellApplication {
         name = "+mcp-atlassian";
         runtimeInputs = [ dockerPkg ];
@@ -48,7 +59,7 @@ let
           ${loadSecretsLib}
           load_from_secret CONTEXT7_API_KEY context7_api_key
           require_secrets CONTEXT7_API_KEY
-          exec npx -y @upstash/context7-mcp@v1.0.30 --api-key "''${CONTEXT7_API_KEY}"
+          exec npx -y "@upstash/context7-mcp@${npmVersions.context7-mcp}" --api-key "''${CONTEXT7_API_KEY}"
         '';
       });
 
@@ -56,7 +67,7 @@ let
         name = "+mcp-javadocs";
         runtimeInputs = [ pkgs.nodejs_24 ];
         text = ''
-          exec npx -y mcp-remote@0.1.38 https://www.javadocs.dev/mcp
+          exec npx -y "mcp-remote@${npmVersions.mcp-remote}" https://www.javadocs.dev/mcp
         '';
       });
 
@@ -75,7 +86,7 @@ let
           ${loadSecretsLib}
           load_from_secret TRAVILY_API_KEY travily_api_key
           require_secrets TRAVILY_API_KEY
-          exec npx -y mcp-remote@0.1.29 "https://mcp.tavily.com/mcp/?tavilyApiKey=''${TRAVILY_API_KEY}"
+          exec npx -y "mcp-remote@${npmVersions.mcp-remote}" "https://mcp.tavily.com/mcp/?tavilyApiKey=''${TRAVILY_API_KEY}"
         '';
       });
 
@@ -86,7 +97,7 @@ let
           ${loadSecretsLib}
           load_from_secret Z_AI_API_KEY z_ai_api_key
           require_secrets Z_AI_API_KEY
-          exec npx -y mcp-remote@0.1.29 "https://api.z.ai/api/mcp/web_search_prime/mcp" "--header" "Authorization: Bearer ''${Z_AI_API_KEY}"
+          exec npx -y "mcp-remote@${npmVersions.mcp-remote}" "https://api.z.ai/api/mcp/web_search_prime/mcp" "--header" "Authorization: Bearer ''${Z_AI_API_KEY}"
         '';
       });
 
@@ -98,7 +109,7 @@ let
           load_from_secret Z_AI_API_KEY z_ai_api_key
           require_secrets Z_AI_API_KEY
           export Z_AI_MODE=ZAI
-          exec npx -y "@z_ai/mcp-server@0.1.2"
+          exec npx -y "@z_ai/mcp-server@${npmVersions.zai-mcp-server}"
         '';
       });
 
@@ -109,7 +120,7 @@ let
           ${loadSecretsLib}
           load_from_secret Z_AI_API_KEY z_ai_api_key
           require_secrets Z_AI_API_KEY
-          exec npx -y mcp-remote@0.1.29 "https://api.z.ai/api/mcp/web_reader/mcp" "--header" "Authorization: Bearer ''${Z_AI_API_KEY}"
+          exec npx -y "mcp-remote@${npmVersions.mcp-remote}" "https://api.z.ai/api/mcp/web_reader/mcp" "--header" "Authorization: Bearer ''${Z_AI_API_KEY}"
         '';
       });
 
