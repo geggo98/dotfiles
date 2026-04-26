@@ -4,6 +4,7 @@
     let
       unstable = inputs.nixpkgs-unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system};
       llm-agents = inputs.nixpkgs-llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
+      loadSecretsLib = builtins.readFile ./_files/shell/load-secrets.sh;
     in
     {
       home.packages = [
@@ -39,26 +40,12 @@
           runtimeInputs = [ ];
           text = ''
             export DISABLE_AUTOUPDATER='1'
-            SECRETS_DIR="''${XDG_CONFIG_HOME:-$HOME/.config}/sops-nix/secrets"
-            load_from_secret() {
-              local var_name="$1" file_name="$2"
-              local current_val="''${!var_name-}"
-              if [[ -z "''${current_val}" && -r "''${SECRETS_DIR}/''${file_name}" ]]; then
-                local val
-                val="$(<"''${SECRETS_DIR}/''${file_name}")"
-                if [[ -n "''${val}" ]]; then
-                  export "''${var_name}=''${val}"
-                fi
-              fi
-              if [[ -z "''${var_name}" ]]; then
-                echo "ERROR: Secret ''${var_name} not found" >&2
-                exit 1
-              fi
-            }
+            ${loadSecretsLib}
             load_from_secret GEMINI_API_KEY      gemini_api_key
             load_from_secret OPENAI_API_KEY      openai_api_key
             load_from_secret OPENROUTER_API_KEY  openrouter_api_key
             load_from_secret Z_AI_API_KEY        z_ai_api_key
+            require_secrets GEMINI_API_KEY OPENAI_API_KEY OPENROUTER_API_KEY Z_AI_API_KEY
             if (( $# > 0 )) && [[ "''${1}" == "--acp" ]]; then
               shift
               exec "/etc/profiles/per-user/''${USER}/bin/opencode" acp "$@"
@@ -70,23 +57,9 @@
           name = "+agent-codex";
           runtimeInputs = [ llm-agents.codex-acp ];
           text = ''
-            SECRETS_DIR="''${XDG_CONFIG_HOME:-$HOME/.config}/sops-nix/secrets"
-            load_from_secret() {
-              local var_name="$1" file_name="$2"
-              local current_val="''${!var_name-}"
-              if [[ -z "''${current_val}" && -r "''${SECRETS_DIR}/''${file_name}" ]]; then
-                local val
-                val="$(<"''${SECRETS_DIR}/''${file_name}")"
-                if [[ -n "''${val}" ]]; then
-                  export "''${var_name}=''${val}"
-                fi
-              fi
-              if [[ -z "''${var_name}" ]]; then
-                echo "ERROR: Secret ''${var_name} not found" >&2
-                exit 1
-              fi
-            }
-            load_from_secret OPENAI_API_KEY  openai_api_key
+            ${loadSecretsLib}
+            load_from_secret OPENAI_API_KEY openai_api_key
+            require_secrets OPENAI_API_KEY
             if (( $# > 0 )) && [[ "''${1}" == "--acp" ]]; then
               shift
               exec codex-acp "$@"
@@ -98,23 +71,9 @@
           name = "+agent-gemini";
           runtimeInputs = [ llm-agents.gemini-cli ];
           text = ''
-            SECRETS_DIR="''${XDG_CONFIG_HOME:-$HOME/.config}/sops-nix/secrets"
-            load_from_secret() {
-              local var_name="$1" file_name="$2"
-              local current_val="''${!var_name-}"
-              if [[ -z "''${current_val}" && -r "''${SECRETS_DIR}/''${file_name}" ]]; then
-                local val
-                val="$(<"''${SECRETS_DIR}/''${file_name}")"
-                if [[ -n "''${val}" ]]; then
-                  export "''${var_name}=''${val}"
-                fi
-              fi
-              if [[ -z "''${var_name}" ]]; then
-                echo "ERROR: Secret ''${var_name} not found" >&2
-                exit 1
-              fi
-            }
-            load_from_secret GEMINI_API_KEY  gemini_api_key
+            ${loadSecretsLib}
+            load_from_secret GEMINI_API_KEY gemini_api_key
+            require_secrets GEMINI_API_KEY
             if (( $# > 0 )) && [[ "''${1}" == "--acp" ]]; then
               shift
               exec gemini --experimental-acp "$@"

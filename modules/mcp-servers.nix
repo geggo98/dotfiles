@@ -8,40 +8,22 @@ let
       llm-agents = llm-agents-pkgs pkgs.stdenv.hostPlatform.system;
       dockerPkg = if builtins.hasAttr "docker-client" pkgs then pkgs."docker-client" else pkgs.docker;
 
+      loadSecretsLib = builtins.readFile ./_files/shell/load-secrets.sh;
+
       mcp-atlassian = (pkgs.writeShellApplication {
         name = "+mcp-atlassian";
         runtimeInputs = [ dockerPkg ];
         text = ''
-          SECRETS_DIR="''${XDG_CONFIG_HOME:-$HOME/.config}/sops-nix/secrets"
-          load_from_secret() {
-            local var_name="$1" file_name="$2"
-            local current_val="''${!var_name-}"
-            if [[ -z "''${current_val}" && -r "''${SECRETS_DIR}/''${file_name}" ]]; then
-              local val
-              val="$(<"''${SECRETS_DIR}/''${file_name}")"
-              if [[ -n "''${val}" ]]; then
-                export "''${var_name}=''${val}"
-              fi
-            fi
-          }
-          load_from_secret CONFLUENCE_URL       confluence_url
-          load_from_secret CONFLUENCE_USERNAME  confluence_username
+          ${loadSecretsLib}
+          load_from_secret CONFLUENCE_URL            confluence_url
+          load_from_secret CONFLUENCE_USERNAME       confluence_username
           load_from_secret CONFLUENCE_PERSONAL_TOKEN confluence_personal_token
-          load_from_secret JIRA_URL             jira_url
-          load_from_secret JIRA_USERNAME        jira_username
-          load_from_secret JIRA_API_TOKEN       jira_api_token
-          missing=()
-          for k in CONFLUENCE_URL CONFLUENCE_USERNAME CONFLUENCE_PERSONAL_TOKEN \
-                   JIRA_URL JIRA_USERNAME JIRA_API_TOKEN; do
-            if [[ -z "''${!k-}" ]]; then
-              missing+=("$k")
-            fi
-          done
-          if (( ''${#missing[@]} > 0 )); then
-            echo "[mcp-atlassian] Missing required env vars: ''${missing[*]}" >&2
-            echo "[mcp-atlassian] Provide them via environment or secrets in: $SECRETS_DIR" >&2
-            exit 1
-          fi
+          load_from_secret JIRA_URL                  jira_url
+          load_from_secret JIRA_USERNAME             jira_username
+          load_from_secret JIRA_API_TOKEN            jira_api_token
+          require_secrets \
+            CONFLUENCE_URL CONFLUENCE_USERNAME CONFLUENCE_PERSONAL_TOKEN \
+            JIRA_URL JIRA_USERNAME JIRA_API_TOKEN
           IMAGE="''${MCP_ATLASSIAN_IMAGE:-ghcr.io/sooperset/mcp-atlassian:latest}"
           args=(
             run -i --rm
@@ -63,22 +45,9 @@ let
         name = "+mcp-context7";
         runtimeInputs = [ pkgs.nodejs_24 ];
         text = ''
-          load_from_secret() {
-            local var_name="$1" file_name="$2"
-            local current_val="''${!var_name-}"
-            if [[ -z "''${current_val}" && -r "''${SECRETS_DIR}/''${file_name}" ]]; then
-              local val
-              val="$(<"''${SECRETS_DIR}/''${file_name}")"
-              if [[ -n "''${val}" ]]; then
-                export "''${var_name}=''${val}"
-              fi
-            fi
-            if [[ -z "''${var_name}" ]]; then
-              echo "ERROR: Secret ''${var_name} not found" >&2
-              exit 1
-            fi
-          }
+          ${loadSecretsLib}
           load_from_secret CONTEXT7_API_KEY context7_api_key
+          require_secrets CONTEXT7_API_KEY
           exec npx -y @upstash/context7-mcp@v1.0.30 --api-key "''${CONTEXT7_API_KEY}"
         '';
       });
@@ -103,22 +72,9 @@ let
         name = "+mcp-travily";
         runtimeInputs = [ pkgs.nodejs_24 ];
         text = ''
-          load_from_secret() {
-            local var_name="$1" file_name="$2"
-            local current_val="''${!var_name-}"
-            if [[ -z "''${current_val}" && -r "''${SECRETS_DIR}/''${file_name}" ]]; then
-              local val
-              val="$(<"''${SECRETS_DIR}/''${file_name}")"
-              if [[ -n "''${val}" ]]; then
-                export "''${var_name}=''${val}"
-              fi
-            fi
-            if [[ -z "''${var_name}" ]]; then
-              echo "ERROR: Secret ''${var_name} not found" >&2
-              exit 1
-            fi
-          }
+          ${loadSecretsLib}
           load_from_secret TRAVILY_API_KEY travily_api_key
+          require_secrets TRAVILY_API_KEY
           exec npx -y mcp-remote@0.1.29 "https://mcp.tavily.com/mcp/?tavilyApiKey=''${TRAVILY_API_KEY}"
         '';
       });
@@ -127,22 +83,9 @@ let
         name = "+mcp-zai-search";
         runtimeInputs = [ pkgs.nodejs_24 ];
         text = ''
-          load_from_secret() {
-            local var_name="$1" file_name="$2"
-            local current_val="''${!var_name-}"
-            if [[ -z "''${current_val}" && -r "''${SECRETS_DIR}/''${file_name}" ]]; then
-              local val
-              val="$(<"''${SECRETS_DIR}/''${file_name}")"
-              if [[ -n "''${val}" ]]; then
-                export "''${var_name}=''${val}"
-              fi
-            fi
-            if [[ -z "''${var_name}" ]]; then
-              echo "ERROR: Secret ''${var_name} not found" >&2
-              exit 1
-            fi
-          }
+          ${loadSecretsLib}
           load_from_secret Z_AI_API_KEY z_ai_api_key
+          require_secrets Z_AI_API_KEY
           exec npx -y mcp-remote@0.1.29 "https://api.z.ai/api/mcp/web_search_prime/mcp" "--header" "Authorization: Bearer ''${Z_AI_API_KEY}"
         '';
       });
@@ -151,22 +94,9 @@ let
         name = "+mcp-zai-vision";
         runtimeInputs = [ pkgs.nodejs_24 ];
         text = ''
-          load_from_secret() {
-            local var_name="$1" file_name="$2"
-            local current_val="''${!var_name-}"
-            if [[ -z "''${current_val}" && -r "''${SECRETS_DIR}/''${file_name}" ]]; then
-              local val
-              val="$(<"''${SECRETS_DIR}/''${file_name}")"
-              if [[ -n "''${val}" ]]; then
-                export "''${var_name}=''${val}"
-              fi
-            fi
-            if [[ -z "''${var_name}" ]]; then
-              echo "ERROR: Secret ''${var_name} not found" >&2
-              exit 1
-            fi
-          }
+          ${loadSecretsLib}
           load_from_secret Z_AI_API_KEY z_ai_api_key
+          require_secrets Z_AI_API_KEY
           export Z_AI_MODE=ZAI
           exec npx -y "@z_ai/mcp-server@0.1.2"
         '';
@@ -176,22 +106,9 @@ let
         name = "+mcp-zai-web-reader";
         runtimeInputs = [ pkgs.nodejs_24 ];
         text = ''
-          load_from_secret() {
-            local var_name="$1" file_name="$2"
-            local current_val="''${!var_name-}"
-            if [[ -z "''${current_val}" && -r "''${SECRETS_DIR}/''${file_name}" ]]; then
-              local val
-              val="$(<"''${SECRETS_DIR}/''${file_name}")"
-              if [[ -n "''${val}" ]]; then
-                export "''${var_name}=''${val}"
-              fi
-            fi
-            if [[ -z "''${var_name}" ]]; then
-              echo "ERROR: Secret ''${var_name} not found" >&2
-              exit 1
-            fi
-          }
+          ${loadSecretsLib}
           load_from_secret Z_AI_API_KEY z_ai_api_key
+          require_secrets Z_AI_API_KEY
           exec npx -y mcp-remote@0.1.29 "https://api.z.ai/api/mcp/web_reader/mcp" "--header" "Authorization: Bearer ''${Z_AI_API_KEY}"
         '';
       });
@@ -200,23 +117,9 @@ let
         name = "+agent-claude-apiKeyHelper";
         runtimeInputs = [ ];
         text = ''
-          SECRETS_DIR="''${XDG_CONFIG_HOME:-$HOME/.config}/sops-nix/secrets"
-          load_from_secret() {
-            local var_name="$1" file_name="$2"
-            local current_val="''${!var_name-}"
-            if [[ -z "''${current_val}" && -r "''${SECRETS_DIR}/''${file_name}" ]]; then
-              local val
-              val="$(<"''${SECRETS_DIR}/''${file_name}")"
-              if [[ -n "''${val}" ]]; then
-                export "''${var_name}=''${val}"
-              fi
-            fi
-            if [[ -z "''${var_name}" ]]; then
-              echo "ERROR: Secret ''${var_name} not found" >&2
-              exit 1
-            fi
-          }
+          ${loadSecretsLib}
           load_from_secret CLAUDE_API_KEY z_ai_api_key
+          require_secrets CLAUDE_API_KEY
           echo -n "''${CLAUDE_API_KEY}"
         '';
       });
