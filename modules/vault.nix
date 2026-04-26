@@ -3,18 +3,18 @@
   flake.modules.homeManager.vault = { config, pkgs, ... }:
     let
       vaultAddrFile = config.sops.secrets.vault_addr.path;
-      vaultLoginPackage = pkgs.stdenv.mkDerivation {
-        name = "vault-login";
-        dontUnpack = true;
-        nativeBuildInputs = [ pkgs.makeWrapper ];
 
-        installPhase = ''
-          mkdir -p $out/bin
+      # `vault` itself is provided by Homebrew (hashicorp/tap/vault in
+      # homebrew-common.nix). Keep /opt/homebrew on PATH so the wrapper
+      # finds it; everything else (tmux) comes via runtimeInputs.
+      vaultLoginPackage = pkgs.writeShellApplication {
+        name = "+vault-login";
+        runtimeInputs = [ pkgs.tmux ];
+        text = ''
+          export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
 
-          cat > $out/bin/+vault-login <<'SCRIPT'
-          #!${pkgs.zsh}/bin/zsh
-          export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/local/sbin:/Users/$USER/.nix-profile/bin:/etc/profiles/per-user/$USER/bin:/run/current-system/sw/bin:/nix/var/nix/profiles/default/bin:$PATH"
-          VAULT_ADDR=''${VAULT_ADDR:-$(< "${vaultAddrFile}")}
+          VAULT_ADDR="''${VAULT_ADDR:-$(< "${vaultAddrFile}")}"
+          export VAULT_ADDR
 
           if [ -t 0 ]; then
             vault login -method=oidc -address "$VAULT_ADDR" -no-print
@@ -23,17 +23,13 @@
             SESSION_NAME="vault-login-$$"
             echo "Running vault login in tmux session: $SESSION_NAME"
             echo "Attach with: tmux attach -t $SESSION_NAME"
-            ${pkgs.tmux}/bin/tmux new-session -d -s "$SESSION_NAME" \
-              "VAULT_ADDR=\"$VAULT_ADDR\" vault login -method=oidc -address \"$VAULT_ADDR\" -no-print; RC=\$?; if [ \$RC -ne 0 ]; then echo \"Vault login failed (exit \$RC). Press Enter to close.\"; read; fi; exit \$RC"
-            ${pkgs.tmux}/bin/tmux wait-for "$SESSION_NAME" &
-            WAIT_PID=$!
-            # Tell tmux to signal when the session's hook fires
-            ${pkgs.tmux}/bin/tmux set-hook -t "$SESSION_NAME" session-closed "run-shell '${pkgs.tmux}/bin/tmux wait-for -S $SESSION_NAME'"
-            wait $WAIT_PID 2>/dev/null
+            tmux new-session -d -s "$SESSION_NAME" \
+              "vault login -method=oidc -address \"$VAULT_ADDR\" -no-print; RC=\$?; if [ \$RC -ne 0 ]; then echo \"Vault login failed (exit \$RC). Press Enter to close.\"; read -r; fi; exit \$RC"
+            tmux set-hook -t "$SESSION_NAME" session-closed \
+              "run-shell 'tmux wait-for -S $SESSION_NAME'"
+            tmux wait-for "$SESSION_NAME" || true
             echo "Vault login session finished."
           fi
-          SCRIPT
-          chmod +x $out/bin/+vault-login
         '';
       };
     in
