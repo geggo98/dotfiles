@@ -17,14 +17,14 @@
     '';
 
     # Bumps the local cache TTL from the 7-day default to 30 days, which
-    # survives longer worktree rotations.
+    # survives longer worktree rotations. Uses the `beforeSettings { caches }`
+    # form (Gradle 8.0+) instead of the legacy
+    # `settingsEvaluated { buildCache.local.removeUnusedEntriesAfterDays }`,
+    # which was removed in Gradle 9.0.
     home.file.".gradle/init.d/cache.gradle.kts".text = ''
-      settingsEvaluated {
-          buildCache {
-              local {
-                  isEnabled = true
-                  removeUnusedEntriesAfterDays = 30
-              }
+      beforeSettings {
+          caches {
+              buildCache.setRemoveUnusedEntriesAfterDays(30)
           }
       }
     '';
