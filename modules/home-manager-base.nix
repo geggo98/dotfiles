@@ -12,6 +12,7 @@ in
       hm.shell
       hm.git
       hm.gpg
+      hm.gradle
       hm.neovim
       hm.mcp-servers
       hm.ai-tools
@@ -19,6 +20,7 @@ in
       hm.supply-chain-hardening
       hm.misc
       hm.vscode
+      hm.worktrunk
     ];
   };
 }
