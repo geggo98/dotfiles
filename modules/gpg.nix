@@ -1,11 +1,30 @@
 { ... }:
 {
-  flake.modules.homeManager.gpg = { config, ... }:
+  flake.modules.homeManager.gpg = { config, lib, pkgs, ... }:
+    let
+      # Mirror home-manager's gpg.conf rendering (bool true → bare flag,
+      # bool false → omit, list → repeated `key val` lines, else `key val`).
+      mkSetting = k: v:
+        if lib.isBool v then lib.optionalString v k
+        else if lib.isList v then
+          lib.concatStringsSep "\n" (map (vv: "${k} ${toString vv}") v)
+        else "${k} ${toString v}";
+
+      gpgConfFile = pkgs.writeText "gpg.conf" (
+        lib.concatStringsSep "\n"
+          (
+            lib.filter (s: s != "") (
+              lib.mapAttrsToList mkSetting config.programs.gpg.settings
+            )
+          ) + "\n"
+      );
+    in
     {
       programs.gpg = {
         enable = true;
 
-        # Written to ~/.gnupg/gpg.conf. In home-manager's `programs.gpg.settings`,
+        # Rendered to a regular file at ~/.gnupg/gpg.conf via the activation
+        # script below (not via home-manager's symlink). In `settings`,
         # `bool true` emits the bare key (a flag), `bool false` omits it, and
         # strings emit `key value`. Lifted verbatim from the user's hand-curated
         # ~/.gnupg/gpg.conf and extended with 2026-era defense-in-depth flags.
@@ -44,6 +63,18 @@
           # default-key is host-specific; set in modules/hosts/<serial>.nix.
         };
       };
+
+      # GnuPG (and some GUI tools) periodically rewrites ~/.gnupg/gpg.conf as
+      # a regular file. That collides with home-manager's read-only symlink
+      # to /nix/store, so the next `darwin-rebuild switch` aborts with a
+      # backup conflict. Disable the symlink and install a plain file via
+      # the activation script instead — a later overwrite by GnuPG no longer
+      # blocks rebuilds (the next switch just rewrites it).
+      home.file."${config.programs.gpg.homedir}/gpg.conf".enable = lib.mkForce false;
+
+      home.activation.gpgConf = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+        install -m 0644 ${gpgConfFile} "$HOME/.gnupg/gpg.conf"
+      '';
 
       # home-manager (this pin) only manages gpg.conf and scdaemon.conf via
       # `programs.gpg`. Manage dirmngr.conf, gpg-agent.conf and common.conf
