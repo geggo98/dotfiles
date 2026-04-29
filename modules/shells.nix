@@ -139,8 +139,8 @@
         "+usb-serial-autoconnect-latest" = ", tio -a latest";
         "+usb-serial-list" = ", tio --list";
 
-        "+pmset-standby-ram" = "sudo pmset -a hibernatemode 3";
-        "+pmset-hibernate-disk" = "sudo pmset -a hibernatemode 25";
+        "+pmset-standby-ram" = "sudo pmset-hibernatemode standby-ram";
+        "+pmset-hibernate-disk" = "sudo pmset-hibernatemode disk";
 
         "+ssh-add-yubikey" = "env SSH_AUTH_SOCK={$HOME}.ssh/agent ssh-add {$HOME}/.ssh/id_es255519_sk";
 
