@@ -10,6 +10,7 @@ in
       darwin.determinate
       darwin.homebrew
       darwin.overlays
+      darwin.pmset-hibernatemode
     ];
 
     nixpkgs.hostPlatform = "aarch64-darwin";
