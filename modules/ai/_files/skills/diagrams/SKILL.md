@@ -37,7 +37,7 @@ The helper script lives at `${CLAUDE_SKILL_DIR}/scripts/render_diagram.sh`.
 
 Run:
 
-- `${CLAUDE_SKILL_DIR}/scripts/render_diagram.sh $ARGUMENTS` 
+- `${CLAUDE_SKILL_DIR}/scripts/render_diagram.sh $ARGUMENTS`
 
 ### If the user pasted diagram text instead of giving a path
 

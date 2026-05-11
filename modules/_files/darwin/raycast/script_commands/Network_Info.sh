@@ -9,7 +9,7 @@
 # @raycast.author Kailash Yellareddy
 # @raycast.authorURL https://github.com/kyellareddy
 
-import urllib.request, json 
+import urllib.request, json
 with urllib.request.urlopen("http://ip-api.com/json") as url:
     data = json.load(url)
 
