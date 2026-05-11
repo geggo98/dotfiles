@@ -8,6 +8,7 @@
         settings = {
           init.defaultBranch = "main";
           core.autocrlf = "input";
+          push.default = "current";
           user = {
             name = "stefan.schwetschke";
             email = lib.mkDefault "stefan@schwetschke.de";
