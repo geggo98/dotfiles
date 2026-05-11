@@ -37,7 +37,7 @@ if command -v nvim > /dev/null
 end
 if command -v bat > /dev/null
     set -x PAGER (command -v bat)
-    set -x FZF_PREVIEW_FILE_CMD 'fzf --preview "bat --color=always --style=numbers --line-range=:500 {}"' 
+    set -x FZF_PREVIEW_FILE_CMD 'fzf --preview "bat --color=always --style=numbers --line-range=:500 {}"'
 end
 if command -v lsd > /dev/null
     set -x FZF_PREVIEW_DIR_CMD "lsd -a"
@@ -61,7 +61,7 @@ end
 
 if test -e {$HOME}/.iterm2_shell_integration.fish
     source {$HOME}/.iterm2_shell_integration.fish
-    if functions fish_prompt > /dev/null 
+    if functions fish_prompt > /dev/null
         # random 100000000000 1000000000000
         functions --copy fish_prompt fish_prompt_old_892546889851
         function fish_prompt
@@ -70,4 +70,4 @@ if test -e {$HOME}/.iterm2_shell_integration.fish
         end
     end
 end
-test -d {$HOME}/.iterm2 ; and fish_add_path {$HOME}/.iterm2 
+test -d {$HOME}/.iterm2 ; and fish_add_path {$HOME}/.iterm2
