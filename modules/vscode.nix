@@ -94,6 +94,9 @@
         "gitlens.plusFeatures.enabled" = false;
         "gitlens.showWhatsNewAfterUpgrades" = false;
         "git.autofetch" = true;
+        "git.confirmSync" = false;
+        "git.enableSmartCommit" = true;
+        "git.suggestSmartCommit" = false;
       };
   };
 }
