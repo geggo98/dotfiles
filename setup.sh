@@ -75,7 +75,7 @@ cat > "${HOME}/.config/nixpkgs/home.nix" <<EOF
 
   programs.tmux.enable = true;
 
-  programs.vim.enable = true; 
+  programs.vim.enable = true;
 }
 EOF
 
