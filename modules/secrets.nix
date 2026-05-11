@@ -25,7 +25,6 @@ let
         "aws/config".path = "${config.home.homeDirectory}/.aws/config";
         "aws/config".mode = "0600";
         openai_api_key = { };
-        anthropic_api_key = { };
         openrouter_api_key = { };
         groq_api_key = { };
         gemini_api_key = { };
