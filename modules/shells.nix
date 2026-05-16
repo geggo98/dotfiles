@@ -101,6 +101,10 @@
           '';
           description = "Generate .gitignore files for multiple technologies via gitignore.io API";
         };
+        "+wait-and-exec" = {
+          body = builtins.readFile ./_files/shell/wait-and-exec.fish;
+          description = "Block until stdin has data, then exec the given command (passes stdin through). --timeout N for hard abort, --wait-eof to buffer via sponge.";
+        };
         "+yt-dlp-transcript" = {
           body = builtins.readFile ./_files/shell/yt-dlp-transcript.fish;
           description = "Download subtitles (VTT) and write a cleaned transcript .txt into $TMPDIR/yt-dlp-transcript (ignores global yt-dlp config; -q/--stdout for pipe use)";
