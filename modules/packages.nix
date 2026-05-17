@@ -3,7 +3,6 @@
   flake.modules.homeManager.packages = { pkgs, lib, ... }:
     let
       unstable = inputs.nixpkgs-unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system};
-      yt-dlp-pkgs = inputs.nixpkgs-yt-dlp.legacyPackages.${pkgs.stdenv.hostPlatform.system};
       moreutilsWithoutParallel = pkgs.moreutils.overrideAttrs (oldAttrs: {
         preBuild = (oldAttrs.preBuild or "") + ''
           substituteInPlace Makefile --replace " parallel " " " --replace " parallel.1 " " "
@@ -23,17 +22,6 @@
       programs.htop.enable = true;
       programs.htop.settings.show_program_path = true;
       programs.aria2.enable = true;
-      programs.yt-dlp = {
-        enable = true;
-        package = yt-dlp-pkgs.yt-dlp;
-        settings = {
-          embed-thumbnail = true;
-          embed-subs = true;
-          sub-langs = "all";
-          downloader = "aria2c";
-          downloader-args = "aria2c:'-c -x8 -s8 -k1M'";
-        };
-      };
       programs.yazi = {
         enable = true;
         enableFishIntegration = true;
