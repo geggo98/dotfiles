@@ -105,10 +105,6 @@
           body = builtins.readFile ./_files/shell/wait-and-exec.fish;
           description = "Block until stdin has data, then exec the given command (passes stdin through). --timeout N for hard abort, --wait-eof to buffer via sponge.";
         };
-        "+yt-dlp-transcript" = {
-          body = builtins.readFile ./_files/shell/yt-dlp-transcript.fish;
-          description = "Download subtitles (VTT) and write a cleaned transcript .txt into $TMPDIR/yt-dlp-transcript (ignores global yt-dlp config; -q/--stdout for pipe use)";
-        };
       };
       shellAbbrs = {
         # forgit abbreviations
@@ -144,9 +140,6 @@
         "+pmset-hibernate-disk" = "sudo pmset-hibernatemode disk";
 
         "+ssh-add-yubikey" = "env SSH_AUTH_SOCK={$HOME}.ssh/agent ssh-add {$HOME}/.ssh/id_es255519_sk";
-
-        "+yt-dlp" = "yt-dlp -i --format 'bestvideo[ext=mp4]+bestaudio/best[ext=m4a]/best' --merge-output-format mp4 --no-post-overwrites --output ~/Downloads/yt-dlp/'%(title)s.%(ext)s'";
-        "+yt-dlp-info" = ''yt-dlp --ignore-config --skip-download --no-playlist --print "Title:       %(title)s" --print "Uploader:    %(uploader)s" --print "Upload Date: %(upload_date)s" --print "Duration:    %(duration_string)s" --print "Views:       %(view_count)s" --print "URL:         %(webpage_url)s" --print "" --print "%(description)s"'';
 
         "+darwin-rebuild-switch" = "sudo darwin-rebuild switch --flake ~/.config/nix-darwin";
 
