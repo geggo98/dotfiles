@@ -71,3 +71,7 @@ if test -e {$HOME}/.iterm2_shell_integration.fish
     end
 end
 test -d {$HOME}/.iterm2 ; and fish_add_path {$HOME}/.iterm2
+
+if command -v devenv > /dev/null
+    devenv hook fish | source
+end

@@ -14,7 +14,14 @@
 
     programs.z-lua.enable = true;
 
-    programs.zsh.enable = true;
+    programs.zsh = {
+      enable = true;
+      initContent = ''
+        if command -v devenv > /dev/null; then
+          eval "$(devenv hook zsh)"
+        fi
+      '';
+    };
     programs.fish = {
       enable = true;
       interactiveShellInit = (builtins.readFile ./_files/shell/promptInit.fish)
