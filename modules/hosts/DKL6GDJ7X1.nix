@@ -6,6 +6,7 @@ in
   configurations.darwin.DKL6GDJ7X1.module = {
     imports = [
       darwin.home-manager
+      darwin.identity
       darwin.macos
       darwin.determinate
       darwin.homebrew
@@ -15,6 +16,11 @@ in
 
     nixpkgs.hostPlatform = "aarch64-darwin";
     nixpkgs.config.allowUnfree = true;
+
+    my.identity = {
+      hostName = "DKL6GDJ7X1";
+      computerName = "DKL6GDJ7X1";
+    };
 
     users.users."stefan.schwetschke".home = /Users/stefan.schwetschke;
     system.primaryUser = "stefan.schwetschke";

@@ -6,6 +6,7 @@ in
   configurations.darwin.FCX19GT9XR.module = {
     imports = [
       darwin.home-manager
+      darwin.identity
       darwin.macos
       darwin.determinate
       darwin.homebrew
@@ -15,6 +16,11 @@ in
 
     nixpkgs.hostPlatform = "aarch64-darwin";
     nixpkgs.config.allowUnfree = true;
+
+    my.identity = {
+      hostName = "FCX19GT9XR";
+      computerName = "FCX19GT9XR";
+    };
 
     users.users.stefan.home = /Users/stefan;
     system.primaryUser = "stefan";
