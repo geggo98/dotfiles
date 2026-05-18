@@ -24,7 +24,7 @@
 
         (pkgs.writeShellApplication {
           name = "+agent-claude";
-          runtimeInputs = [ llm-agents.claude-code-acp ];
+          runtimeInputs = [ llm-agents.claude-agent-acp ];
           text = ''
             export DISABLE_AUTOUPDATER='1'
             if (( $# > 0 )) && [[ "''${1}" == "--acp" ]]; then
