@@ -50,6 +50,7 @@ in
       imports = [
         homeManager.base
         homeManager.secrets-DKL6GDJ7X1
+        homeManager.bitbucket-cli
         homeManager.boundary
         homeManager.vault
         homeManager.tunnelblick-raycast

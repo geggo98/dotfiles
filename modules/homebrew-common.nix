@@ -7,11 +7,9 @@
     };
 
     homebrew.taps = [
-      "gildas/tap"
       "hashicorp/tap"
     ];
     homebrew.brews = [
-      "gildas/tap/bitbucket-cli"
       "hashicorp/tap/vault"
     ];
     homebrew.casks = [
