@@ -15,8 +15,8 @@
         "workbench.colorTheme" = "Turbo Vision (based on Gerry Cyberpunk Plus)";
         "workbench.preferredHighContrastColorTheme" = "Turbo Vision (based on Gerry Cyberpunk Plus)";
 
-        # Editor font: Operator Mono Lig → Victor Mono → Monaspace Radon
-        "editor.fontFamily" = "'Operator Mono Lig', 'Victor Mono', 'Monaspace Radon', 'JetBrainsMono Nerd Font Mono', monospace";
+        # Editor font: Operator Mono Lig → Maple Mono NF (OSS) → Victor Mono → Monaspace Radon
+        "editor.fontFamily" = "'Operator Mono Lig', 'Maple Mono NF', 'Victor Mono', 'Monaspace Radon', 'JetBrainsMono Nerd Font Mono', monospace";
         "editor.fontSize" = 18;
         "editor.fontLigatures" = true;
         "editor.lineHeight" = 1.2;
@@ -26,8 +26,8 @@
 
         "notebook.lineNumbers" = "on";
 
-        # Terminal font: BerkeleyMono Nerd Font → JetBrains Mono Nerd Font
-        "terminal.integrated.fontFamily" = "'BerkeleyMono Nerd Font', 'JetBrainsMono Nerd Font', 'Victor Mono', monospace";
+        # Terminal font: BerkeleyMono Nerd Font → IoskeleyMono Nerd Font (OSS) → JetBrains Mono Nerd Font
+        "terminal.integrated.fontFamily" = "'BerkeleyMono Nerd Font', 'IoskeleyMono Nerd Font', 'JetBrainsMono Nerd Font', 'Victor Mono', monospace";
         "terminal.integrated.fontSize" = 13;
 
         # Terminal profiles: Nix-managed shells
