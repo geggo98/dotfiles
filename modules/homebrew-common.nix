@@ -25,6 +25,7 @@
       "devutils"
       "elgato-stream-deck"
       "firefox"
+      "font-maple-mono-nf" # OSS Operator Mono alternative — cursive italic + ligatures + NF
       "google-chrome"
       "gpg-suite-no-mail"
       "hammerspoon"
