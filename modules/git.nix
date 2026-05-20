@@ -5,7 +5,7 @@
       programs.git = {
         enable = true;
         lfs.enable = true;
-        ignores = [ "/.worktrees/" "/.devenv/" "/.direnv/" "/.devbox/" ".DS_Store" ];
+        ignores = [ "/.worktrees/" "/.devenv/" "/.direnv/" "/.devbox/" ".DS_Store" "/.pre-commit-config.yaml" ];
         settings = {
           init.defaultBranch = "main";
           core.autocrlf = "input";
