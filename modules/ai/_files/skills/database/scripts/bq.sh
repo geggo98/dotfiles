@@ -8,6 +8,9 @@
 
 set -eEuo pipefail
 
+# Captured for ensure_pkgs to re-exec us under `nix shell` when needed.
+__ORIGINAL_ARGV=("$@")
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./_lib.sh
 . "$SCRIPT_DIR/_lib.sh"
@@ -133,8 +136,7 @@ if (( cap > DEFAULT_CAP )); then
   warn_once "cap-raised" "BigQuery cap raised to $(human_bytes "$cap") (~ €${cost_eur})"
 fi
 
-require_cmd bq "install google-cloud-sdk"
-require_cmd jq "install jq"
+ensure_pkgs bq google-cloud-sdk gcloud google-cloud-sdk jq jq
 
 # ---------------------------------------------------------------------------
 # Ephemeral service-account auth (if a key file was given)
@@ -146,8 +148,12 @@ require_cmd jq "install jq"
 # we fall back to the project_id field of the key file.
 
 if [[ -n "$credentials_file" ]]; then
-  derived_project="$(setup_gcloud_service_account "$credentials_file")"
-  [[ -z "$project_id" && -n "$derived_project" ]] && project_id="$derived_project"
+  # NOTE: must NOT be in $(...) — `export CLOUDSDK_CONFIG` inside a
+  # subshell would not propagate. Project derivation is a separate call.
+  setup_gcloud_service_account "$credentials_file"
+  if [[ -z "$project_id" ]]; then
+    project_id="$(gcp_project_from_key_file "$credentials_file")"
+  fi
 fi
 
 # ---------------------------------------------------------------------------
