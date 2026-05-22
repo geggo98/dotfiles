@@ -68,9 +68,10 @@ ${CLAUDE_SKILL_DIR}/scripts/db.sh --dsn-file ~/.config/db/staging.dsn \
 ${CLAUDE_SKILL_DIR}/scripts/bq.sh dry-run \
   'SELECT user_id FROM `prj.ds.events` WHERE day = "2026-05-01"'
 
-# 4. BigQuery query under the default ≈ 1 EUR cap
-${CLAUDE_SKILL_DIR}/scripts/bq.sh query --project-id my-prj \
-  'SELECT user_id FROM `prj.ds.events` WHERE day = "2026-05-01" LIMIT 100'
+# 4. BigQuery query under the default ≈ 1 EUR cap, ephemeral SA auth
+${CLAUDE_SKILL_DIR}/scripts/bq.sh \
+  --credentials-file ~/.config/sops-nix/secrets/my-sa.json \
+  query 'SELECT user_id FROM `prj.ds.events` WHERE day = "2026-05-01" LIMIT 100'
 
 # 5. Native-CLI passthrough (under the wrapper's timeout)
 ${CLAUDE_SKILL_DIR}/scripts/db.sh --dsn "$STAGING_DSN" \
@@ -127,6 +128,24 @@ command (`some-cmd | db-buffer.sh --max-bytes N`).
 
 `bq.sh dry-run "<sql>"` is the agent's friend: zero charge, returns
 `{ estimated bytes, estimated cost, cap }` and exits non-zero if over cap.
+
+## BigQuery auth (`bq.sh` only)
+
+`bq.sh` accepts `--credentials-file PATH` (or `$GOOGLE_APPLICATION_CREDENTIALS`)
+pointing to a service-account JSON. The wrapper:
+
+1. Creates an isolated `CLOUDSDK_CONFIG` tempdir so user-global gcloud
+   state is not touched.
+2. Runs `gcloud auth activate-service-account --key-file=...` silently.
+3. Derives `--project-id` from the JSON if you didn't pass one.
+4. Removes the tempdir on exit (trap).
+
+Without this flag, `bq.sh` falls back to whatever `gcloud` already has
+configured (ADC or user login). Only service-account JSONs are
+auto-activated; user-credential or impersonation files raise an error.
+
+The path to the key file goes in the agent's prompt; the *contents*
+never do.
 
 Background on BigQuery pricing edge-cases (10 MiB minimum per query,
 `LIMIT` does not reduce cost, `SELECT *` is the bankruptcy classic,

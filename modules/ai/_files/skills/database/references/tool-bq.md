@@ -1,16 +1,49 @@
 # bq (Google BigQuery)
 
-Part of `google-cloud-sdk`. Uses Application Default Credentials (ADC).
+Part of `google-cloud-sdk`. Reads from gcloud's active configuration —
+either Application Default Credentials (ADC), a user login, or a
+service-account activation.
 
-> **Use `scripts/bq.sh`** instead of raw `bq` — it enforces the cost cap.
-> Drop to `bq.sh raw -- ...` only when you need a flag the wrapper doesn't expose.
+> **Use `scripts/bq.sh`** instead of raw `bq` — it enforces the cost cap
+> and can activate a service-account JSON ephemerally without touching
+> user-global gcloud state. Drop to `bq.sh raw -- ...` only when you need
+> a flag the wrapper doesn't expose.
 
 ## Install
 
 ```bash
 nix shell nixpkgs#google-cloud-sdk
-gcloud auth application-default login   # one-time
+gcloud auth application-default login   # interactive ADC
+# OR — for service accounts, prefer the wrapper:
+#   ${CLAUDE_SKILL_DIR}/scripts/bq.sh --credentials-file <PATH> ...
 ```
+
+## Auth via service-account JSON
+
+The wrapper handles the whole `CLOUDSDK_CONFIG` tempdir + `gcloud auth
+activate-service-account` dance. Pass `--credentials-file PATH` (or set
+`$GOOGLE_APPLICATION_CREDENTIALS`) and the wrapper:
+
+1. Creates an isolated `CLOUDSDK_CONFIG` under `$TMPDIR`.
+2. Validates the JSON's `type == "service_account"`.
+3. Activates the account quietly (no stdout/stderr noise).
+4. Derives `--project-id` from the JSON's `project_id` field if not
+   given on the CLI / via env.
+5. Cleans up the tempdir on exit.
+
+```bash
+${CLAUDE_SKILL_DIR}/scripts/bq.sh \
+  --credentials-file ~/.config/sops-nix/secrets/my-sa.json \
+  query 'SELECT 1 AS one'
+```
+
+This is preferable to `gcloud auth activate-service-account` outside the
+wrapper because:
+- No mutation of `~/.config/gcloud/`.
+- No risk of leaving an activated SA as the default in subsequent shells.
+- Works in parallel runs (each gets its own `CLOUDSDK_CONFIG`).
+- The key path goes through the wrapper but never appears in `bq`'s own
+  command line.
 
 ## Non-interactive patterns
 

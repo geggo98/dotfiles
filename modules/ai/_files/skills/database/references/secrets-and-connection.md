@@ -97,6 +97,25 @@ ${CLAUDE_SKILL_DIR}/scripts/db.sh query \
   "SELECT count(*) FROM users"
 ```
 
+## BigQuery service-account JSON
+
+`bq.sh` wraps the `gcloud auth activate-service-account` dance in an
+ephemeral `CLOUDSDK_CONFIG` tempdir, so the agent only needs to know
+the path to the key file. The contents are never echoed.
+
+```bash
+${CLAUDE_SKILL_DIR}/scripts/bq.sh \
+  --credentials-file ~/.config/sops-nix/secrets/my-sa.json \
+  query 'SELECT 1'
+
+# Same via env var:
+GOOGLE_APPLICATION_CREDENTIALS=~/.config/sops-nix/secrets/my-sa.json \
+  ${CLAUDE_SKILL_DIR}/scripts/bq.sh query 'SELECT 1'
+```
+
+Project-id is derived from the JSON when `--project-id` is not given.
+User-global `~/.config/gcloud/` is not touched.
+
 ## Credentials-file format (if you make one)
 
 INI-style with one section per environment:

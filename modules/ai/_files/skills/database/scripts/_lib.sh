@@ -237,3 +237,57 @@ require_cmd() {
     fi
   fi
 }
+
+# ---------------------------------------------------------------------------
+# Tempdir cleanup registry
+# ---------------------------------------------------------------------------
+#
+# Callers wanting auto-cleaned tempdirs append paths to __CLEANUP_DIRS and
+# arrange `trap cleanup_temp_dirs EXIT`. Helpers like
+# setup_gcloud_service_account rely on this.
+
+__CLEANUP_DIRS=()
+
+cleanup_temp_dirs() {
+  local d
+  for d in "${__CLEANUP_DIRS[@]-}"; do
+    [[ -n "$d" && -d "$d" ]] && rm -rf "$d"
+  done
+}
+
+# ---------------------------------------------------------------------------
+# gcloud service-account activation (ephemeral, side-effect-free)
+# ---------------------------------------------------------------------------
+#
+# setup_gcloud_service_account <key-file>
+#
+# Validates that <key-file> is a service-account JSON, creates an isolated
+# CLOUDSDK_CONFIG tempdir (so user-global gcloud state is untouched),
+# activates the service account quietly, and registers the tempdir for
+# cleanup via cleanup_temp_dirs. Exports CLOUDSDK_CONFIG so subsequent
+# `gcloud` and `bq` invocations in the same process tree pick it up.
+# Prints the project_id from the JSON on stdout so callers can use it
+# as a fallback when --project-id was not given.
+setup_gcloud_service_account() {
+  local key_file="$1"
+  [[ -r "$key_file" ]] || die "credentials file not readable: $key_file"
+  require_cmd jq     "needed to validate service-account JSON"
+  require_cmd gcloud "install google-cloud-sdk"
+
+  local key_type
+  key_type="$(jq -r '.type // empty' "$key_file" 2>/dev/null || true)"
+  if [[ "$key_type" != "service_account" ]]; then
+    die "credentials file is not a service-account JSON (type='${key_type:-?}'); only service accounts are auto-activated"
+  fi
+
+  local cfg
+  cfg="$(mktemp -d "${TMPDIR:-/tmp}/gcloud-svc.XXXXXX")"
+  __CLEANUP_DIRS+=("$cfg")
+  export CLOUDSDK_CONFIG="$cfg"
+
+  if ! gcloud auth activate-service-account --key-file="$key_file" --quiet >/dev/null 2>&1; then
+    die "gcloud auth activate-service-account failed for $key_file (check key permissions / network)"
+  fi
+
+  jq -r '.project_id // empty' "$key_file" 2>/dev/null || true
+}
