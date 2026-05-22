@@ -40,6 +40,7 @@ match_pattern=""
 replace_pattern=""
 replace_with=""
 aws_agent_core=false
+engine="agent-browser"
 args=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -50,9 +51,19 @@ while [[ $# -gt 0 ]]; do
     --match) match_pattern="$2"; shift 2 ;;
     --replace) replace_pattern="$2"; replace_with="$3"; shift 3 ;;
     --aws-agent-core) aws_agent_core=true; shift ;;
+    --engine) engine="$2"; shift 2 ;;
     *) args+=("$1"); shift ;;
   esac
 done
+
+case "$engine" in
+  agent-browser) ;;
+  camoufox)
+    $aws_agent_core && die "--engine camoufox is incompatible with --aws-agent-core (AgentCore is Chromium-only)"
+    AGENT_BROWSER="${CAMOUFOX_DRIVER:-camoufox-driver}"
+    ;;
+  *) die "Unknown --engine: ${engine} (supported: agent-browser, camoufox)" ;;
+esac
 
 if $aws_agent_core; then
   load_from_secret AWS_ACCESS_KEY_ID         aws_access_key_id
