@@ -2,10 +2,17 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#   "browser-use[cli]",
+#   "browser-use[cli]>=0.12.7",
 # ]
 # [tool.uv]
 # exclude-newer = "30 days"
+# # Per-package cooldown overrides for CVE-driven bump to browser-use >=0.12.7
+# # (litellm supply-chain removed in 0.12.5; pillow/pypdf/aiohttp transitive CVE
+# # fixes land in 0.12.7). The date is set to "yesterday at bump time" — that's
+# # enough to let the lock pick up 0.12.7 today, while ensuring future re-locks
+# # don't silently bypass the global 30-day cooldown for these packages. Bump
+# # the date again the next time a CVE forces an early upgrade.
+# exclude-newer-package = { "browser-use" = "2026-05-21", "pillow" = "2026-05-21", "pypdf" = "2026-05-21", "aiohttp" = "2026-05-21" }
 # ///
 
 # Hint: Lock dependencies with `uv lock --script ...`
