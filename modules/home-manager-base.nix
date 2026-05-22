@@ -16,6 +16,7 @@ in
       hm.neovim
       hm.mcp-servers
       hm.ai-tools
+      hm.camoufox
       hm.packages
       hm.supply-chain-hardening
       hm.misc

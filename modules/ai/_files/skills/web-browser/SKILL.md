@@ -2,8 +2,8 @@
 name: web-browser
 description: "Fast browser automation for AI agents via the agent-browser CLI. Use for navigating web pages, filling forms, clicking, taking screenshots, extracting data, testing web apps, login flows, persistent sessions, video recording, React tree inspection, and exploratory QA / dogfooding (systematic bug hunts with reproduction evidence). Chrome/Chromium via CDP with accessibility-tree snapshots and compact @eN element refs. Triggers: open a URL, fill a form, click a button, scrape a page, take a screenshot, test a web app, dogfood / QA / bug-hunt a site. Pass --aws-agent-core to run against AWS Bedrock AgentCore cloud browsers instead of local Chrome (credentials auto-loaded from sops-nix secrets when available). Also automates Electron desktop apps (VS Code, Slack desktop, Discord, Figma, Notion, Spotify) — for those load the electron-ui skill; for Slack workflows specifically load slack-ui."
 argument-hint: "<task description or URL>"
-allowed-tools: Read(references/*) Read(templates/*) Bash(./scripts/web-browser.sh *) Bash(zsh *) Skill(electron-ui) Skill(slack-ui) Read
-dependencies: "agent-browser, gtimeout"
+allowed-tools: Read(references/*) Read(templates/*) Bash(./scripts/web-browser.sh *) Bash(zsh *) Bash(camoufox-driver *) Skill(electron-ui) Skill(slack-ui) Read
+dependencies: "agent-browser, gtimeout, camoufox-driver"
 ---
 
 # Browser Automation with agent-browser
@@ -366,6 +366,53 @@ IAM-role chain — no error.
 
 Full reference: [references/aws-agentcore.md](references/aws-agentcore.md).
 
+## Stealth mode (Camoufox)
+
+The default engine fails fingerprint-class anti-bot challenges (Cloudflare
+Turnstile, DataDome, PerimeterX) because Chromium + Playwright + CDP has a
+distinctive TLS hello, leaks `navigator.webdriver`, and lacks behavioural
+realism. Pass `--engine camoufox` to switch to a Firefox-based stealth
+engine ([Camoufox](https://github.com/daijro/camoufox)) that spoofs Canvas /
+WebGL / audio / fonts / screen / navigator / WebRTC in C++ at engine source
+level and ships built-in `humanize`-style mouse curves.
+
+```bash
+# Anubis (proof-of-work) — defaults are enough
+${CLAUDE_SKILL_DIR}/scripts/web-browser.sh --engine camoufox open https://anubis.techaro.lol/
+${CLAUDE_SKILL_DIR}/scripts/web-browser.sh --engine camoufox wait \
+    --fn "document.cookie.includes('techaro.lol-anubis-auth')" --timeout 120
+${CLAUDE_SKILL_DIR}/scripts/web-browser.sh --engine camoufox screenshot anubis.png
+
+# Cloudflare Turnstile — humanize + disable-coop + os-pinning are mandatory
+${CLAUDE_SKILL_DIR}/scripts/web-browser.sh --engine camoufox open \
+    --humanize --os macos --disable-coop --locale en-US \
+    https://clifford.io/demo/cloudflare-turnstile
+${CLAUDE_SKILL_DIR}/scripts/web-browser.sh --engine camoufox wait \
+    --fn 'document.querySelector("input[name=\"cf-turnstile-response\"]")?.value?.length > 20' \
+    --timeout 90
+```
+
+The same `snapshot -i` / `click @eN` / `fill @eN "text"` / `screenshot` /
+`get` / `state save` / `wait` / `eval` mental model applies — Camoufox uses
+`data-camoufox-ref` attributes under the hood to keep refs stable.
+
+For cookie-bound challenges (Anubis, Cloudflare interstitial), solve once
+under `--engine camoufox`, `state save /tmp/x.json`, then use the default
+engine with `--state /tmp/x.json` from there on. One-time form tokens
+(Turnstile's `cf-turnstile-response`) must be submitted inside the same
+Camoufox session — no hand-off.
+
+When **not** to use this:
+
+- Routine automation against sites that don't fingerprint-check.
+- `--aws-agent-core` flows (AgentCore is Chromium; the combination errors).
+- CDP-only features: React DevTools, `vitals`, network HAR, Chrome traces.
+  Camoufox is Firefox and exposes none of those.
+
+Full reference: [references/stealth-camoufox.md](references/stealth-camoufox.md).
+End-to-end recipes: [templates/bypass-anubis.sh](templates/bypass-anubis.sh)
+and [templates/bypass-turnstile.sh](templates/bypass-turnstile.sh).
+
 ## Electron desktop apps
 
 This same CLI automates Electron apps (VS Code, Slack desktop, Discord, Figma,
@@ -489,6 +536,7 @@ iframe's origin or `--headers` to satisfy CORS.
 --proxy <url>           # proxy server
 --state <path>          # load saved auth state from JSON
 --session-name <name>   # auto-save/restore session state by name
+--engine <name>         # switch backend: agent-browser (default) | camoufox
 ```
 
 ## React / Web Vitals
@@ -541,6 +589,7 @@ ${CLAUDE_SKILL_DIR}/scripts/web-browser.sh --silent close --all
 | [references/proxy-support.md](references/proxy-support.md)   | Proxy configuration                               |
 | [references/issue-taxonomy.md](references/issue-taxonomy.md) | Dogfood/QA: severity rubric, exploration checklist|
 | [references/aws-agentcore.md](references/aws-agentcore.md)   | AgentCore env vars, regions, profiles, pricing    |
+| [references/stealth-camoufox.md](references/stealth-camoufox.md) | Camoufox engine, captcha classes, hand-off pattern |
 
 ## Templates
 
@@ -550,3 +599,5 @@ ${CLAUDE_SKILL_DIR}/scripts/web-browser.sh --silent close --all
 | [templates/form-automation.sh](templates/form-automation.sh)                   | Starter for form filling                         |
 | [templates/capture-workflow.sh](templates/capture-workflow.sh)                 | Starter for capturing snapshots + screenshots    |
 | [templates/dogfood-report-template.md](templates/dogfood-report-template.md)   | Copy into output dir as the dogfood report file  |
+| [templates/bypass-anubis.sh](templates/bypass-anubis.sh)                       | End-to-end Anubis bypass + state hand-off        |
+| [templates/bypass-turnstile.sh](templates/bypass-turnstile.sh)                 | End-to-end Cloudflare Turnstile bypass           |
