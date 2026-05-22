@@ -12,6 +12,10 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./_lib.sh
 . "$SCRIPT_DIR/_lib.sh"
 
+# Activated service-account keys live in an ephemeral CLOUDSDK_CONFIG that
+# the cleanup helper removes when the script exits.
+trap cleanup_temp_dirs EXIT
+
 # 1 EUR ≈ 200 GiB at $6.25/TiB (0.92 USD/EUR). 200 * 2^30:
 DEFAULT_CAP=214748364800     # ~200 GiB ~ 1 EUR
 CONFIRM_THRESHOLD=1099511627776  # 1 TiB ~ 5 EUR
@@ -22,33 +26,49 @@ Usage:
   bq.sh [global-options] <subcommand> [args...]
 
 Subcommands:
-  query <sql>          Run a query (always with --maximum_bytes_billed)
-  dry-run <sql>        Estimate bytes scanned + cost, no execution
-  schema TABLE         bq show --schema --format=prettyjson TABLE
-  ls [DATASET]         bq ls [DATASET]
-  raw -- <args...>     Pass-through to bq under the timeout
-  help                 This message
+  query <sql>           Run a query (always with --maximum_bytes_billed)
+  dry-run <sql>         Estimate bytes scanned + cost, no execution
+  schema TABLE          bq show --schema --format=prettyjson TABLE
+  ls [DATASET]          bq ls [DATASET]
+  raw -- <args...>      Pass-through to bq under the timeout
+  help                  This message
 
 Global options:
-  --project-id P       Or $GOOGLE_PROJECT / $GCP_PROJECT env
-  --max-bytes-billed N Default 214748364800 (≈ 200 GiB ≈ 1 EUR);
-                       or $BQ_MAX_BYTES_BILLED env
-  --location LOC       e.g. EU, US, europe-west3
-  --use-legacy-sql     Default: --use_legacy_sql=false
-  --timeout DURATION   Default 5m
-  --output-max-bytes N Default 32768; or $DB_OUTPUT_MAX_BYTES env
-  --output FILE        Write all output to FILE; skip the buffer check
-  --format FMT         json (default) | csv | prettyjson
-  --no-dry-run         Skip pre-flight estimate (default: dry-run first)
-  --confirm-cost       Required when --max-bytes-billed > ≈ 5 EUR
-  -h, --help           This message
+  --project-id P        Or $GOOGLE_PROJECT / $GCP_PROJECT env, or derived
+                        from the service-account JSON (see --credentials-file)
+  --credentials-file P  Service-account JSON to activate ephemerally. Honors
+                        $GOOGLE_APPLICATION_CREDENTIALS as the default.
+                        The wrapper creates an isolated CLOUDSDK_CONFIG
+                        tempdir, runs `gcloud auth activate-service-account`,
+                        and cleans up on exit. User-global gcloud state is
+                        not touched. Only service-account JSONs are accepted.
+  --max-bytes-billed N  Default 214748364800 (≈ 200 GiB ≈ 1 EUR);
+                        or $BQ_MAX_BYTES_BILLED env
+  --location LOC        e.g. EU, US, europe-west3
+  --use-legacy-sql      Default: --use_legacy_sql=false
+  --timeout DURATION    Default 5m
+  --output-max-bytes N  Default 32768; or $DB_OUTPUT_MAX_BYTES env
+  --output FILE         Write all output to FILE; skip the buffer check
+  --format FMT          prettyjson (default) | json | csv. prettyjson
+                        produces multi-line indented JSON — the preview
+                        emitted when output exceeds --output-max-bytes is
+                        meaningful row-by-row instead of one long line.
+  --no-dry-run          Skip pre-flight estimate (default: dry-run first)
+  --confirm-cost        Required when --max-bytes-billed > ≈ 5 EUR
+  -h, --help            This message
 
 Examples:
   ${CLAUDE_SKILL_DIR}/scripts/bq.sh dry-run \
     'SELECT user_id FROM `prj.ds.events` WHERE day = "2026-05-01"'
 
-  ${CLAUDE_SKILL_DIR}/scripts/bq.sh query --project-id my-prj \
-    'SELECT 1 AS one'
+  # Ephemeral service-account auth (no gcloud config side-effects):
+  ${CLAUDE_SKILL_DIR}/scripts/bq.sh \
+    --credentials-file ~/.config/sops-nix/secrets/my-sa.json \
+    query 'SELECT 1 AS one'
+
+  # Same via env var (e.g. set once in the agent's shell):
+  GOOGLE_APPLICATION_CREDENTIALS=~/.config/sops-nix/secrets/my-sa.json \
+    ${CLAUDE_SKILL_DIR}/scripts/bq.sh query 'SELECT 1 AS one'
 
   ${CLAUDE_SKILL_DIR}/scripts/bq.sh --max-bytes-billed 2199023255552 \
     --confirm-cost query 'SELECT count(*) FROM `prj.ds.big`'
@@ -60,13 +80,14 @@ EOF
 # ---------------------------------------------------------------------------
 
 project_id="${GOOGLE_PROJECT:-${GCP_PROJECT:-}}"
+credentials_file="${GOOGLE_APPLICATION_CREDENTIALS:-}"
 cap="${BQ_MAX_BYTES_BILLED:-$DEFAULT_CAP}"
 location=""
 legacy_sql="false"
 timeout_dur="5m"
 max_bytes="${DB_OUTPUT_MAX_BYTES:-32768}"
 output_file=""
-format="json"
+format="prettyjson"
 do_dry_run=1
 confirm_cost=0
 subcommand=""
@@ -75,6 +96,7 @@ args=()
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --project-id)        project_id="$2"; shift 2 ;;
+    --credentials-file)  credentials_file="$2"; shift 2 ;;
     --max-bytes-billed)  cap="$2"; shift 2 ;;
     --location)          location="$2"; shift 2 ;;
     --use-legacy-sql)    legacy_sql="true"; shift ;;
@@ -113,6 +135,20 @@ fi
 
 require_cmd bq "install google-cloud-sdk"
 require_cmd jq "install jq"
+
+# ---------------------------------------------------------------------------
+# Ephemeral service-account auth (if a key file was given)
+# ---------------------------------------------------------------------------
+#
+# Triggered by --credentials-file or $GOOGLE_APPLICATION_CREDENTIALS. The
+# helper builds an isolated CLOUDSDK_CONFIG tempdir, activates the service
+# account inside it, and registers cleanup. If --project-id was omitted,
+# we fall back to the project_id field of the key file.
+
+if [[ -n "$credentials_file" ]]; then
+  derived_project="$(setup_gcloud_service_account "$credentials_file")"
+  [[ -z "$project_id" && -n "$derived_project" ]] && project_id="$derived_project"
+fi
 
 # ---------------------------------------------------------------------------
 # Common bq flags
