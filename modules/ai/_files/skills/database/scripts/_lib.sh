@@ -226,16 +226,98 @@ buffer_output() {
 
 # require_cmd <name> [hint]
 # Die with a friendly message if the named command is missing on PATH.
+# Prefer ensure_pkgs (below) when the missing tool is in nixpkgs — it
+# auto-bootstraps via `nix shell` instead of giving up.
 require_cmd() {
   local name="$1"
   local hint="${2-}"
   if ! command -v "$name" >/dev/null 2>&1; then
     if [[ -n "$hint" ]]; then
-      die "$name not found on PATH ($hint)"
+      die "$name not found on PATH ($hint). If you have nix, the database skill normally bootstraps automatically — see ensure_pkgs in _lib.sh."
     else
       die "$name not found on PATH"
     fi
   fi
+}
+
+# ---------------------------------------------------------------------------
+# Auto-bootstrap missing binaries via `nix shell nixpkgs#<pkg>`
+# ---------------------------------------------------------------------------
+#
+# Callers must capture their original argv at the very top of the script:
+#   __ORIGINAL_ARGV=("$@")
+#
+# Then, before reaching the line that needs the binary, call:
+#   ensure_pkgs psql postgresql jq jq
+#
+# Each (cmd, pkg) pair is checked. If any cmd is missing AND `nix` is on
+# PATH, the script re-execs itself under
+#   nix shell nixpkgs#<pkg1> nixpkgs#<pkg2> ... --command "$0" <argv>
+# A guard env var prevents infinite loops.
+#
+# If `nix` is unavailable, ensure_pkgs dies with a copy-pasteable
+# `nix shell nixpkgs#...` template and the original argv so the agent
+# (or human) can run it manually once nix is installed.
+
+ensure_pkgs() {
+  local -a missing_cmds=()
+  local -A pkg_set=()
+  local cmd pkg
+  while [[ $# -gt 0 ]]; do
+    cmd="$1"; pkg="$2"; shift 2
+    if ! command -v "$cmd" >/dev/null 2>&1; then
+      missing_cmds+=("$cmd")
+      pkg_set["$pkg"]=1
+    fi
+  done
+
+  [[ ${#missing_cmds[@]} -eq 0 ]] && return 0
+
+  if [[ -z "${__ORIGINAL_ARGV+x}" ]]; then
+    die "ensure_pkgs: caller did not capture \`__ORIGINAL_ARGV=(\"\$@\")\` at the top of the script. Open a bug."
+  fi
+
+  # Build the deduplicated installable list and the example command once,
+  # since both the auto-bootstrap note and the no-nix error use them.
+  local -a installables=()
+  local pkg_list_str=""
+  for pkg in "${!pkg_set[@]}"; do
+    installables+=("nixpkgs#$pkg")
+    pkg_list_str+=" nixpkgs#$pkg"
+  done
+  pkg_list_str="${pkg_list_str# }"
+
+  local quoted_argv
+  quoted_argv="$(printf ' %q' "$0" "${__ORIGINAL_ARGV[@]}")"
+  quoted_argv="${quoted_argv# }"
+  local example="nix shell ${pkg_list_str} --command ${quoted_argv}"
+
+  if [[ -n "${__DB_SKILL_BOOTSTRAPPED-}" ]]; then
+    die "still missing after auto-bootstrap: ${missing_cmds[*]}. The package(s) [${!pkg_set[*]}] may not provide the expected binary. Open a bug."
+  fi
+
+  if ! command -v nix >/dev/null 2>&1; then
+    die "$(cat <<EOF
+missing tool(s): ${missing_cmds[*]}
+\`nix\` is not on PATH either, so auto-bootstrap is unavailable.
+
+fix (any of):
+  1. Install nix (https://nixos.org/download), then re-run the same command —
+     the wrapper auto-bootstraps via:
+       ${example}
+  2. Use the in-repo nix-shell skill once nix is available:
+       ~/.claude/skills/nix-shell/scripts/nix_shell.sh run ${!pkg_set[*]} -- ${quoted_argv}
+  3. Install the missing tool(s) via your OS package manager
+     (e.g. brew install --cask google-cloud-sdk).
+EOF
+)"
+  fi
+
+  printf 'note: missing tool(s) [%s]; auto-bootstrapping via:\n  %s\n(first run may take a few minutes; cached afterwards)\n' \
+    "${missing_cmds[*]}" "${example}" >&2
+
+  export __DB_SKILL_BOOTSTRAPPED=1
+  exec nix shell "${installables[@]}" --command "$0" "${__ORIGINAL_ARGV[@]}"
 }
 
 # ---------------------------------------------------------------------------
@@ -266,8 +348,13 @@ cleanup_temp_dirs() {
 # activates the service account quietly, and registers the tempdir for
 # cleanup via cleanup_temp_dirs. Exports CLOUDSDK_CONFIG so subsequent
 # `gcloud` and `bq` invocations in the same process tree pick it up.
-# Prints the project_id from the JSON on stdout so callers can use it
-# as a fallback when --project-id was not given.
+#
+# IMPORTANT: must be called WITHOUT command substitution — i.e.
+#   setup_gcloud_service_account "$key_file"
+# NOT
+#   x=$(setup_gcloud_service_account "$key_file")
+# because `export` inside a $(...) subshell does not propagate to the
+# parent. Use gcp_project_from_key_file separately to read the project_id.
 setup_gcloud_service_account() {
   local key_file="$1"
   [[ -r "$key_file" ]] || die "credentials file not readable: $key_file"
@@ -288,6 +375,11 @@ setup_gcloud_service_account() {
   if ! gcloud auth activate-service-account --key-file="$key_file" --quiet >/dev/null 2>&1; then
     die "gcloud auth activate-service-account failed for $key_file (check key permissions / network)"
   fi
+}
 
-  jq -r '.project_id // empty' "$key_file" 2>/dev/null || true
+# gcp_project_from_key_file <key-file>
+# Prints the project_id field from a service-account JSON on stdout, or
+# nothing if absent. Safe to call inside $(...).
+gcp_project_from_key_file() {
+  jq -r '.project_id // empty' "$1" 2>/dev/null || true
 }

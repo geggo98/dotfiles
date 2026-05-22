@@ -19,10 +19,12 @@ allowed-tools: >-
   Bash(${CLAUDE_SKILL_DIR}/scripts/db-buffer.sh *)
   Read
 dependencies: >-
-  At least one of: usql, psql, mysql-client, sqlite-interactive, duckdb,
-  mongosh, google-cloud-sdk (for bq), go-sqlcmd, sqlcl. Plus jq, coreutils
-  (gtimeout), bash 4+. Missing tools can be loaded on demand via the
-  `nix-shell` skill.
+  bash 4+, coreutils (gtimeout), nix. Tool binaries (psql, mysql,
+  sqlite3, duckdb, mongosh, sqlcmd, sqlcl, usql, bq, gcloud, jq) are
+  AUTO-BOOTSTRAPPED via `nix shell nixpkgs#<pkg>` on first use — agents
+  do NOT need to invoke the nix-shell skill manually. If `nix` itself
+  is unavailable, the wrappers emit a copy-pasteable
+  `nix shell nixpkgs#... --command <script> <args>` template.
 ---
 
 # Database — non-interactive SQL access for agents
@@ -36,6 +38,19 @@ Three wrappers in `scripts/`:
 | [`scripts/db-buffer.sh`](scripts/db-buffer.sh) | Ad-hoc output buffer: pipe arbitrary stdout through it; ≤ 32 KiB inlined, larger gets path + preview. |
 
 All three accept `--help`.
+
+## Missing tools? The wrapper bootstraps for you
+
+If `psql`, `bq`, `gcloud`, or any other dependency is missing on `$PATH`,
+the wrapper re-execs itself transparently under
+`nix shell nixpkgs#<pkg> --command <wrapper> <original args>`. The agent
+sees a one-line `note: bootstrapping ...` on stderr and the command
+proceeds. First-time bootstrap fetches into the nix store and may take a
+minute; subsequent runs reuse the cache.
+
+If `nix` is also missing, the wrapper dies with a copy-pasteable
+template — install nix (https://nixos.org/download), or use the
+`nix-shell` skill once nix is available.
 
 ## Pick a tool
 

@@ -8,6 +8,9 @@
 
 set -eEuo pipefail
 
+# Captured for ensure_pkgs to re-exec us under `nix shell` when needed.
+__ORIGINAL_ARGV=("$@")
+
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=./_lib.sh
 . "$SCRIPT_DIR/_lib.sh"
@@ -157,7 +160,7 @@ esac
 strip_scheme() { local v="$1"; v="${v#*:}"; printf '%s' "${v#//}"; }
 
 run_psql() {
-  require_cmd psql "install postgresql client"
+  ensure_pkgs psql postgresql
   local sql="$1"
   local -a flags=(-X -A -w -v ON_ERROR_STOP=1)
   case "$format" in
@@ -174,7 +177,7 @@ run_psql() {
 }
 
 run_mysql() {
-  require_cmd mysql "install mysql or mariadb client"
+  ensure_pkgs mysql mysql-client
   local sql="$1"
   local -a flags=(--batch --skip-column-names --connect-timeout=10)
   [[ "$no_rc" -eq 1 ]] && flags+=(--no-defaults)
@@ -186,7 +189,7 @@ run_mysql() {
 }
 
 run_sqlite() {
-  require_cmd sqlite3 "install sqlite-interactive"
+  ensure_pkgs sqlite3 sqlite-interactive
   local sql="$1"
   local path
   path="$(strip_scheme "$DSN")"
@@ -202,7 +205,7 @@ run_sqlite() {
 }
 
 run_duckdb() {
-  require_cmd duckdb "install duckdb"
+  ensure_pkgs duckdb duckdb
   local sql="$1"
   local path
   path="$(strip_scheme "$DSN")"
@@ -222,13 +225,13 @@ run_duckdb() {
 }
 
 run_mongo() {
-  require_cmd mongosh "install mongodb-shell"
+  ensure_pkgs mongosh mongosh
   [[ "$mode" == "write" ]] || die "mongosh wrapper requires --write (mongo has no session-level read-only)"
   with_timeout "$timeout_dur" -- mongosh "$DSN" --quiet --eval "$1"
 }
 
 run_mssql() {
-  require_cmd sqlcmd "install go-sqlcmd"
+  ensure_pkgs sqlcmd go-sqlcmd
   local sql="$1"
   # Parse mssql://user:pw@host:port/db
   local rest="${DSN#*://}"
@@ -258,7 +261,7 @@ run_mssql() {
 }
 
 run_oracle() {
-  require_cmd sql "install sqlcl"
+  ensure_pkgs sql sqlcl
   local sql="$1"
   local rest="${DSN#oracle://}"
   local userpass="${rest%%@*}"
@@ -284,7 +287,7 @@ run_oracle() {
 }
 
 run_usql() {
-  require_cmd usql "install usql"
+  ensure_pkgs usql usql
   local sql="$1"
   local -a flags=(-w -v ON_ERROR_STOP=1)
   [[ "$no_rc" -eq 1 ]] && flags+=(-X)
