@@ -144,6 +144,12 @@ command (`some-cmd | db-buffer.sh --max-bytes N`).
 `bq.sh dry-run "<sql>"` is the agent's friend: zero charge, returns
 `{ estimated bytes, estimated cost, cap }` and exits non-zero if over cap.
 
+**Avoid `DECLARE`** in queries passed to `bq.sh query` / `dry-run`.
+`bq query` is single-statement; multi-statement scripts with `DECLARE`
+confuse the parser and the `--dry_run` estimator. Inline the values, or
+use bq's `--parameter` flag via `bq.sh raw -- query --parameter=...`.
+See [`references/tool-bq.md`](references/tool-bq.md) §Pitfall.
+
 ## BigQuery auth (`bq.sh` only)
 
 `bq.sh` accepts `--credentials-file PATH` (or `$GOOGLE_APPLICATION_CREDENTIALS`)
