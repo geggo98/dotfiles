@@ -95,7 +95,51 @@ from a typo. `bq.sh`:
 For cost details and partitioning strategies, see
 [`bigquery-pricing.md`](bigquery-pricing.md).
 
+## Pitfall: `DECLARE` and multi-statement scripts
+
+`bq query` is single-statement by default. Multi-statement scripts that
+use `DECLARE` (e.g. for parameterised dates) confuse the CLI:
+
+- `--dry_run` does not produce a per-script estimate; it sees only the
+  first statement.
+- The wrapper passes the whole SQL as one `bq query` argument; the parser
+  often rejects the trailing `SELECT` after a `DECLARE`.
+
+Workarounds, in order of preference:
+
+1. **Inline the values directly** — trade DRY for correctness:
+
+   ```sql
+   -- bad (DECLARE):
+   DECLARE day DATE DEFAULT '2026-05-01';
+   SELECT * FROM `prj.ds.events` WHERE event_day = day;
+
+   -- good (inline):
+   SELECT * FROM `prj.ds.events` WHERE event_day = '2026-05-01';
+   ```
+
+2. **Use bq's `--parameter` flag** for genuine parameterisation:
+
+   ```bash
+   ${CLAUDE_SKILL_DIR}/scripts/bq.sh raw -- \
+     query --use_legacy_sql=false \
+            --parameter='day:DATE:2026-05-01' \
+     'SELECT * FROM `prj.ds.events` WHERE event_day = @day'
+   ```
+
+   (Go through `bq.sh raw -- ...` so the cap and timeout still apply.)
+
+3. **Submit as a script file** for genuine multi-statement scripts:
+
+   ```bash
+   bq query --use_legacy_sql=false \
+            --max_statement_results=10 \
+            --maximum_bytes_billed=$BQ_MAX_BYTES_BILLED \
+            < script.sql
+   ```
+
 ## Docs
 
 <https://cloud.google.com/bigquery/docs/bq-command-line-tool>
 <https://cloud.google.com/bigquery/pricing>
+<https://cloud.google.com/bigquery/docs/parameterized-queries>
