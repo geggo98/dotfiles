@@ -60,6 +60,8 @@ cat <<'MD' | ./scripts/bitbucket_pr.sh update 1234 --description-from-stdin
 MD
 ```
 
+> **⚠ `update` is broken in bb v0.18.0** — see [§9 Known bugs](#9-known-bugs-bb-v0180). Until `bb ≥ 0.18.1` ships, use the `curl` REST workaround documented there for `update`. `create` is unaffected and should still go through this script (it pipes the description to `bb` via stdin, sidestepping heredoc escaping problems that bite when calling `bb pr create --description "..."` inline).
+
 ### Comments
 
 ```bash
@@ -168,8 +170,57 @@ echo "Fixed in <commit-hash>" | \
 | `This command expects … on stdin` | Forgot to pipe content | `echo "text" \| ./scripts/...` (or use a here-doc) |
 | `pr task --help` unknown command | `bb` is pre-v0.18.0 | Confirm `bb --version` reports `0.18.0`; tasks require v0.18.0+ |
 | Auth / 401 errors | Profile not set up or token expired | Reconfigure with `bb profile create` / `bb profile update`; check `BB_PROFILE` |
+| `bb pr update`: `unsupported protocol scheme ""` | Bug in `bb` v0.18.0 (URL built without API base) | See [§9 Known bugs](#9-known-bugs-bb-v0180) — use `curl` REST workaround |
 
-## 9. What this skill does NOT do
+## 9. Known bugs (bb v0.18.0)
+
+### `bb pr update` fails with `unsupported protocol scheme ""`
+
+**Affected:** `./scripts/bitbucket_pr.sh update` (every flag combination). `list`, `get`, `create` are *not* affected.
+
+**Symptom:**
+
+```
+Failed to get pullrequest <id>: error.runtime
+Caused by:
+    Get "pullrequests/<id>": unsupported protocol scheme ""
+```
+
+**Cause:** `bb pr update` fetches the current PR before patching, but builds the GET URL as a bare path (`pullrequests/<id>`) instead of prefixing the API base (`https://api.bitbucket.org/2.0/repositories/<ws>/<repo>/`). Go's `http.Client` rejects relative URLs. Reproduce with `LOG_LEVEL=DEBUG LOG_DESTINATION=stderr bb pr update …`. `--workspace`, `--repository`, `--profile` do not change the behaviour.
+
+**Upstream status:** [gildas/bitbucket-cli#92](https://github.com/gildas/bitbucket-cli/issues/92) — open, labelled `bug`. Fixed on the [`dev` branch](https://github.com/gildas/bitbucket-cli/tree/dev) (commits `b833434` "missing path join", plus follow-ups `45ef589`, `d0e1ac9`, `dcb23cf` for the workspace-resolution chain that surfaces once the URL bug is gone). **No release tag yet** as of 2026-05-26 — owner has stated a new version is forthcoming. Delete this section once `bb ≥ 0.18.1` is installed via Nix and verified.
+
+**Workaround:** call the Bitbucket Cloud REST API directly with `curl`. Credentials live in `~/Library/Application Support/bitbucket/config-cli.yml` (the `user:` / `password:` fields — an App Password with `pullrequest:write` scope).
+
+```bash
+USER_BB=$(grep '^      user:'     "$HOME/Library/Application Support/bitbucket/config-cli.yml" | awk '{print $2}')
+PASS_BB=$(grep '^      password:' "$HOME/Library/Application Support/bitbucket/config-cli.yml" | awk '{print $2}')
+
+WORKSPACE=<workspace>
+REPO=<repo>
+PR_ID=<id>
+
+# Write the description to a file, then lift it into the JSON body via jq.
+# This avoids heredoc / shell-quoting issues (literal \" and \* leaking into
+# the published description).
+DESC_FILE=$(mktemp -t "pr-${PR_ID}-description.XXXXXX") || exit 1
+trap 'rm -f "$DESC_FILE"' EXIT
+cat > "$DESC_FILE" <<'MD'
+## Summary
+- …
+MD
+
+JSON_BODY=$(jq -n --arg desc "$(cat "$DESC_FILE")" '{description: $desc}')
+
+curl -fsS -u "$USER_BB:$PASS_BB" -X PUT \
+  -H "Content-Type: application/json" \
+  -d "$JSON_BODY" \
+  "https://api.bitbucket.org/2.0/repositories/$WORKSPACE/$REPO/pullrequests/$PR_ID"
+```
+
+Other fields go in the same JSON body: `title`, `destination: {branch: {name: "<branch>"}}`, `reviewers: [{uuid: "<uuid>"}]`. The REST `PUT` performs a *partial* update — only the supplied fields change. See the [Bitbucket Cloud REST API v2.0 docs](https://developer.atlassian.com/cloud/bitbucket/rest/api-group-pullrequests/#api-repositories-workspace-repo-slug-pullrequests-pull-request-id-put) for the full schema.
+
+## 10. What this skill does NOT do
 
 By design, the scripts **do not** wrap these operations. If a user explicitly requests one, run raw `bb` and **always confirm before executing**:
 
