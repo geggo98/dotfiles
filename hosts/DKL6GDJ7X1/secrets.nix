@@ -10,5 +10,6 @@
   office_vpn_prefix = { };
   boundary_cluster_url = { };
   boundary_services = { };
-  vault_addr = { };
+  vault_addr_staging = { };
+  vault_addr_production = { };
 }
