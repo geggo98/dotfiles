@@ -1,5 +1,5 @@
 ---
-name: pr-bb
+name: bitbucket-pr
 description: "Read and manage Bitbucket Cloud pull requests, comments, and tasks via the `bb` CLI (gildas/bitbucket-cli v0.18.0+). Use when reviewing PR feedback, replying to comments, creating tasks/PRs, or marking review tasks done."
 context: fork
 allowed-tools: Bash(./scripts/bitbucket_pr.sh *) Bash(./scripts/bitbucket_pr_comments.sh *) Bash(./scripts/bitbucket_pr_tasks.sh *) Bash(zsh *)
@@ -28,7 +28,7 @@ Bitbucket's hierarchy: **PR → comment → task** (tasks may also live on the P
 | `${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_comments.sh` | Comment operations |
 | `${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_tasks.sh`    | Task operations    |
 
-Run any script with `--help` to see its full grammar. All three share the same exit codes and env vars (see §6, §7).
+All three are **zsh** scripts that source `${CLAUDE_SKILL_DIR}/scripts/_lib.sh` for shared helpers (logging, prerequisite checks, stdin reading, output buffering). Run them directly — they refuse to run under bash. Run any script with `--help` for its full grammar. All three share the same exit codes and env vars (see §6, §7).
 
 ## 3. Usage by resource
 
@@ -36,8 +36,10 @@ Run any script with `--help` to see its full grammar. All three share the same e
 
 ```bash
 # List open PRs in the workspace/repo configured for bb
-./scripts/bitbucket_pr.sh list                 # default state OPEN
-./scripts/bitbucket_pr.sh list MERGED          # OPEN | MERGED | DECLINED | SUPERSEDED
+./scripts/bitbucket_pr.sh list                       # default state OPEN, formatted JSON
+./scripts/bitbucket_pr.sh list MERGED                # OPEN | MERGED | DECLINED | SUPERSEDED
+./scripts/bitbucket_pr.sh list --format tsv          # ~10x smaller for browsing
+./scripts/bitbucket_pr.sh list MERGED --format tsv
 
 # Fetch one PR as JSON
 ./scripts/bitbucket_pr.sh get 1234
@@ -65,8 +67,10 @@ MD
 ### Comments
 
 ```bash
-# All comments on a PR (id + content + inline flag)
+# All comments on a PR — JSON filtered to {id, content, inline}
 ./scripts/bitbucket_pr_comments.sh list 1234
+# Or compact TSV (bb's native columns: id, created_on, updated_on, file, user, content)
+./scripts/bitbucket_pr_comments.sh list 1234 --format tsv
 
 # Raw markdown of one comment
 ./scripts/bitbucket_pr_comments.sh get 1234 5678
@@ -95,8 +99,10 @@ echo "Updated wording." | \
 ### Tasks (new in `bb` v0.18.0)
 
 ```bash
-# All tasks on a PR
+# All tasks on a PR — formatted JSON
 ./scripts/bitbucket_pr_tasks.sh list 1234
+# Or compact TSV (id, state, creator, created_on, updated_on, resolved_on, resolved_by, content)
+./scripts/bitbucket_pr_tasks.sh list 1234 --format tsv
 
 # One task
 ./scripts/bitbucket_pr_tasks.sh get 1234 4242
@@ -134,10 +140,11 @@ echo "Fixed in <commit-hash>" | \
 
 ## 5. Output format
 
-- `list` / `get` commands return JSON (passed through `bb --output json`).
-- `bitbucket_pr_comments.sh list` is **filtered** down to `{id, content, inline}` per comment for compactness; pipe through `jq` for filtering: `... list 1234 | jq 'map(select(.inline))'`.
-- `bitbucket_pr_comments.sh get` returns the raw markdown body only (no JSON wrapper).
-- Mutating commands echo the JSON of the created/updated resource on success.
+- **Default: pretty-printed JSON.** Every `list` / `get` / `create` / `update` / `resolve` / `reopen` call goes through `bb --output json` and the JSON is emitted verbatim (already indented by `bb`).
+- **TSV opt-in on `list`:** every `list` command accepts `--format json|tsv`. TSV is `bb`'s native tab-separated output — roughly **10× smaller** than JSON for `pr list` (measured: 256 KB → 26 KB), **7×** for `comment list`, **12×** for `task list`. Use it when you only need to browse / pick an id and don't need to filter with `jq`.
+- `bitbucket_pr_comments.sh list` (JSON path) is **filtered** down to `{id, content, inline}` per comment for compactness; pipe further through `jq` for selection: `... list 1234 | jq 'map(select(.inline))'`. The TSV path keeps `bb`'s columns: `id, created_on, updated_on, file, user, content`.
+- `bitbucket_pr_comments.sh get` returns the raw markdown body only (no JSON wrapper); when spilled, the tempfile suffix is `.md`.
+- **Spillover for large outputs.** If a command's output exceeds `BB_OUTPUT_MAX_BYTES` (default **32 768**), it is written to `${TMPDIR:-/tmp}/bb-<label>.XXXXXX.<ext>` (`<ext>` ∈ `json` / `tsv` / `md`) and stdout shows a header (size, line count, full path) followed by a 10-line preview. Read the full result with `jq . <path>` (JSON) or `column -t -s $'\t' <path>` (TSV). Raise the threshold if needed: `BB_OUTPUT_MAX_BYTES=65536 ./scripts/bitbucket_pr.sh get 1234`.
 
 ## 6. Exit codes
 
@@ -151,14 +158,17 @@ echo "Fixed in <commit-hash>" | \
 
 ## 7. Environment variables
 
-| Variable        | Description                              |
-|-----------------|------------------------------------------|
-| `BITBUCKET_CLI` | Path to the `bb` binary (default `bb`)   |
-| `JQ_PATH`       | Path to `jq` (default `jq`)              |
-| `BB_PROFILE`    | (Read by `bb`) which profile to use      |
-| `BB_OUTPUT_FORMAT` | (Read by `bb`) default output format  |
+| Variable               | Description                                                                                  |
+|------------------------|----------------------------------------------------------------------------------------------|
+| `BITBUCKET_CLI`        | Path to the `bb` binary (default `bb`)                                                       |
+| `JQ_PATH`              | Path to `jq` (default `jq`)                                                                  |
+| `BB_OUTPUT_MAX_BYTES`  | Spill output larger than this to a tempfile (default `32768`; matches `database` skill)      |
+| `BB_PROFILE`           | (Read by `bb`) which profile to use                                                          |
+| `BB_OUTPUT_FORMAT`     | (Documented for `bb` — but see warning below)                                                |
 
-`bb` picks workspace/repository defaults from its own config (`~/.config/bitbucket/config-cli.yml` or `~/.bitbucket-cli`) and its keychain-stored credentials. The scripts pass `--output json` per call, so `BB_OUTPUT_FORMAT` does not affect them.
+`bb` picks workspace/repository defaults from its own config (`~/.config/bitbucket/config-cli.yml` or `~/Library/Application Support/bitbucket/config-cli.yml`) and its keychain-stored credentials.
+
+> **⚠ `BB_OUTPUT_FORMAT` is silently ignored by `bb` v0.18.0.** Running `env BB_OUTPUT_FORMAT=json bb pr list` falls back to the default `table` output (with ASCII borders) instead of JSON. Only the explicit `-o/--output` flag is honoured. The wrapper scripts always pass `--output` per call, so this does not affect them — but raw `bb` invocations need the flag too.
 
 ## 8. Troubleshooting
 
@@ -171,6 +181,8 @@ echo "Fixed in <commit-hash>" | \
 | `pr task --help` unknown command | `bb` is pre-v0.18.0 | Confirm `bb --version` reports `0.18.0`; tasks require v0.18.0+ |
 | Auth / 401 errors | Profile not set up or token expired | Reconfigure with `bb profile create` / `bb profile update`; check `BB_PROFILE` |
 | `bb pr update`: `unsupported protocol scheme ""` | Bug in `bb` v0.18.0 (URL built without API base) | See [§9 Known bugs](#9-known-bugs-bb-v0180) — use `curl` REST workaround |
+| Output goes to a tempfile (header + preview only) | Output exceeded `BB_OUTPUT_MAX_BYTES` (default 32 KB) | Read the tempfile with `jq . <path>` / `column -t -s $'\t' <path>`, or raise the cap: `BB_OUTPUT_MAX_BYTES=65536 …`. For `list`, try `--format tsv` first — it's usually small enough to stay inline. |
+| `ERROR: This script requires zsh but is running under bash.` | Invoked via `bash ./scripts/...` | Run the script directly (`./scripts/bitbucket_pr.sh ...`) or with `zsh ./scripts/...`. |
 
 ## 9. Known bugs (bb v0.18.0)
 

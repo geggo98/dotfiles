@@ -1,12 +1,9 @@
-#!/usr/bin/env bash
-
-set -euo pipefail
-
+#!/bin/zsh
 # Bitbucket PR Comments Script
 # Wraps stable bb (gildas/bitbucket-cli v0.18.0+) PR comment operations.
 #
 # Usage:
-#   bitbucket_pr_comments.sh list    <pr-id>
+#   bitbucket_pr_comments.sh list    <pr-id> [--format json|tsv]
 #   bitbucket_pr_comments.sh get     <pr-id> <comment-id>
 #   bitbucket_pr_comments.sh create  <pr-id> [--file PATH --line N] [--parent CID]   # body via stdin
 #   bitbucket_pr_comments.sh update  <pr-id> <comment-id>                            # new body via stdin
@@ -15,63 +12,48 @@ set -euo pipefail
 #
 # Hidden / dangerous operations (use raw `bb` if needed): delete.
 
+if [ -n "${BASH_VERSION:-}" ]; then
+  echo >&2 "ERROR: This script requires zsh but is running under bash."
+  echo >&2 "Run it directly (./scripts/bitbucket_pr_comments.sh) or with: zsh scripts/bitbucket_pr_comments.sh"
+  exit 1
+fi
+set -eEuo pipefail
+
+. "${0:A:h}/_lib.sh"
+
 BITBUCKET_CLI="${BITBUCKET_CLI:-bb}"
 JQ_PATH="${JQ_PATH:-jq}"
 
-RED='\033[0;31m'
-GREEN='\033[0;32m'
-YELLOW='\033[0;33m'
-NC='\033[0m'
-
-log_error()   { echo -e "${RED}Error: $1${NC}" >&2; }
-log_success() { echo -e "${GREEN}$1${NC}"; }
-log_info()    { echo -e "${YELLOW}Info: $1${NC}" >&2; }
-
-check_prerequisites() {
-  local missing=()
-  command -v "$BITBUCKET_CLI" >/dev/null 2>&1 || missing+=("Bitbucket CLI ('$BITBUCKET_CLI')")
-  command -v "$JQ_PATH"       >/dev/null 2>&1 || missing+=("jq ('$JQ_PATH')")
-  if [ ${#missing[@]} -gt 0 ]; then
-    log_error "Missing prerequisites:"
-    for tool in "${missing[@]}"; do echo "  - $tool" >&2; done
-    exit 2
-  fi
-}
-
-validate_numeric() {
-  if ! [[ "$1" =~ ^[0-9]+$ ]]; then
-    log_error "Invalid $2: '$1' (must be numeric)"
-    exit 1
-  fi
-}
-
-read_stdin_content() {
-  local __varname="$1"
-  if [ -t 0 ]; then
-    log_error "This command expects comment body on stdin (e.g., echo \"text\" | $0 ...)"
-    exit 1
-  fi
-  local __content
-  __content=$(cat)
-  if [ -z "$__content" ]; then
-    log_error "Received empty content on stdin"
-    exit 1
-  fi
-  printf -v "$__varname" '%s' "$__content"
-}
-
 cmd_list() {
-  local pr_id="$1"
+  local pr_id="$1"; shift
   validate_numeric "$pr_id" "PR ID"
 
-  log_info "Fetching comments for PR #$pr_id..."
+  local format="json"
+  while (( $# > 0 )); do
+    case "$1" in
+      --format)
+        (( $# >= 2 )) || { log_error "--format requires json|tsv"; exit 1; }
+        format="$2"; shift 2 ;;
+      *) log_error "Unknown list flag: '$1'"; exit 1 ;;
+    esac
+  done
+  case "$format" in json|tsv) ;; *) log_error "Invalid --format '$format' (expected json|tsv)"; exit 1 ;; esac
+
+  log_info "Fetching comments for PR #$pr_id (format=$format)..."
   local output
-  if ! output=$("$BITBUCKET_CLI" pr comment list --pullrequest "$pr_id" --output json 2>&1); then
+  if ! output=$("$BITBUCKET_CLI" pr comment list --pullrequest "$pr_id" --output "$format" 2>&1); then
     log_error "Failed to fetch comments for PR #$pr_id"
     log_error "Bitbucket CLI output: $output"
     exit 3
   fi
-  echo "$output" | "$JQ_PATH" 'map({id, content, inline})'
+
+  if [[ "$format" == "json" ]]; then
+    # Keep the projection to {id, content, inline} for compactness on JSON.
+    printf '%s\n' "$output" | "$JQ_PATH" 'map({id, content, inline})' \
+      | buffer_output --label "comments-list-${pr_id}" --ext json
+  else
+    printf '%s\n' "$output" | buffer_output --label "comments-list-${pr_id}" --ext tsv
+  fi
 }
 
 cmd_get() {
@@ -86,7 +68,8 @@ cmd_get() {
     log_error "Bitbucket CLI output: $output"
     exit 4
   fi
-  echo "$output" | "$JQ_PATH" -r '.content'
+  printf '%s\n' "$output" | "$JQ_PATH" -r '.content' \
+    | buffer_output --label "comments-get-${pr_id}-${comment_id}" --ext md
 }
 
 cmd_create() {
@@ -94,28 +77,28 @@ cmd_create() {
   validate_numeric "$pr_id" "PR ID"
 
   local file="" line="" parent=""
-  while [ $# -gt 0 ]; do
+  while (( $# > 0 )); do
     case "$1" in
-      --file)   [ $# -ge 2 ] || { log_error "--file requires PATH";   exit 1; }; file="$2";   shift 2 ;;
-      --line)   [ $# -ge 2 ] || { log_error "--line requires N";      exit 1; }; line="$2";   shift 2 ;;
-      --parent) [ $# -ge 2 ] || { log_error "--parent requires CID";  exit 1; }; parent="$2"; shift 2 ;;
+      --file)   (( $# >= 2 )) || { log_error "--file requires PATH";   exit 1; }; file="$2";   shift 2 ;;
+      --line)   (( $# >= 2 )) || { log_error "--line requires N";      exit 1; }; line="$2";   shift 2 ;;
+      --parent) (( $# >= 2 )) || { log_error "--parent requires CID";  exit 1; }; parent="$2"; shift 2 ;;
       *) log_error "Unknown create flag: '$1'"; exit 1 ;;
     esac
   done
-  [ -z "$line"   ] || validate_numeric "$line"   "line number"
-  [ -z "$parent" ] || validate_numeric "$parent" "parent comment ID"
-  if [ -n "$line" ] && [ -z "$file" ]; then
+  [[ -z "$line"   ]] || validate_numeric "$line"   "line number"
+  [[ -z "$parent" ]] || validate_numeric "$parent" "parent comment ID"
+  if [[ -n "$line" ]] && [[ -z "$file" ]]; then
     log_error "--line requires --file (inline comments need a file path)"
     exit 1
   fi
 
   local body
-  read_stdin_content body
+  body="$(read_stdin_content)"
 
   local -a args=(pr comment create --pullrequest "$pr_id" --comment "$body")
-  [ -n "$file"   ] && args+=(--file   "$file")
-  [ -n "$line"   ] && args+=(--line   "$line")
-  [ -n "$parent" ] && args+=(--parent "$parent")
+  [[ -n "$file"   ]] && args+=(--file   "$file")
+  [[ -n "$line"   ]] && args+=(--line   "$line")
+  [[ -n "$parent" ]] && args+=(--parent "$parent")
 
   log_info "Creating comment on PR #$pr_id${file:+ on $file${line:+:$line}}${parent:+ (reply to $parent)}..."
   local output
@@ -124,7 +107,7 @@ cmd_create() {
     log_error "Bitbucket CLI output: $output"
     exit 3
   fi
-  echo "$output"
+  printf '%s\n' "$output" | buffer_output --label "comments-create-${pr_id}" --ext json
 }
 
 cmd_update() {
@@ -133,7 +116,7 @@ cmd_update() {
   validate_numeric "$comment_id" "Comment ID"
 
   local body
-  read_stdin_content body
+  body="$(read_stdin_content)"
 
   log_info "Updating comment #$comment_id on PR #$pr_id..."
   local output
@@ -143,7 +126,7 @@ cmd_update() {
     log_error "Bitbucket CLI output: $output"
     exit 3
   fi
-  echo "$output"
+  printf '%s\n' "$output" | buffer_output --label "comments-update-${pr_id}-${comment_id}" --ext json
 }
 
 cmd_resolve() {
@@ -153,12 +136,12 @@ cmd_resolve() {
 
   log_info "Resolving comment #$comment_id on PR #$pr_id..."
   local output
-  if ! output=$("$BITBUCKET_CLI" pr comment resolve "$comment_id" --pullrequest "$pr_id" 2>&1); then
+  if ! output=$("$BITBUCKET_CLI" pr comment resolve "$comment_id" --pullrequest "$pr_id" --output json 2>&1); then
     log_error "Failed to resolve comment #$comment_id on PR #$pr_id"
     log_error "Bitbucket CLI output: $output"
     exit 3
   fi
-  echo "$output"
+  printf '%s\n' "$output" | buffer_output --label "comments-resolve-${pr_id}-${comment_id}" --ext json
 }
 
 cmd_reopen() {
@@ -168,12 +151,12 @@ cmd_reopen() {
 
   log_info "Reopening comment #$comment_id on PR #$pr_id..."
   local output
-  if ! output=$("$BITBUCKET_CLI" pr comment reopen "$comment_id" --pullrequest "$pr_id" 2>&1); then
+  if ! output=$("$BITBUCKET_CLI" pr comment reopen "$comment_id" --pullrequest "$pr_id" --output json 2>&1); then
     log_error "Failed to reopen comment #$comment_id on PR #$pr_id"
     log_error "Bitbucket CLI output: $output"
     exit 3
   fi
-  echo "$output"
+  printf '%s\n' "$output" | buffer_output --label "comments-reopen-${pr_id}-${comment_id}" --ext json
 }
 
 show_usage() {
@@ -181,7 +164,7 @@ show_usage() {
 Usage: bitbucket_pr_comments.sh <command> <pr-id> [args...]
 
 Commands:
-  list    <pr-id>                                       JSON array of {id,content,inline} for all comments
+  list    <pr-id> [--format json|tsv]                   JSON (default; filtered to {id,content,inline}) or TSV.
   get     <pr-id> <comment-id>                          Raw markdown of one comment
   create  <pr-id> [--file PATH --line N] [--parent CID] Body via stdin; --file/--line for inline; --parent for replies
   update  <pr-id> <comment-id>                          New body via stdin
@@ -191,31 +174,32 @@ Commands:
 Hidden (use raw bb if needed): delete.
 
 Environment:
-  BITBUCKET_CLI    Path to bb         (default: bb)
-  JQ_PATH          Path to jq         (default: jq)
+  BITBUCKET_CLI         Path to bb               (default: bb)
+  JQ_PATH               Path to jq               (default: jq)
+  BB_OUTPUT_MAX_BYTES   Spill output > N bytes to a tempfile (default: 32768)
 
 Exit codes: 0 success, 1 bad args, 2 missing CLI, 3 API/network failure, 4 not found.
 EOF
 }
 
 main() {
-  [ $# -ge 1 ] || { log_error "Missing command"; show_usage; exit 1; }
+  (( $# >= 1 )) || { log_error "Missing command"; show_usage; exit 1; }
   case "$1" in -h|--help|help) show_usage; exit 0 ;; esac
 
   check_prerequisites
   local command="$1"; shift
-  [ $# -ge 1 ] || { log_error "$command requires at least <pr-id>"; show_usage; exit 1; }
+  (( $# >= 1 )) || { log_error "$command requires at least <pr-id>"; show_usage; exit 1; }
 
   case "$command" in
     list)    cmd_list    "$@" ;;
-    get)     [ $# -ge 2 ] || { log_error "get requires <pr-id> <comment-id>";     exit 1; }
+    get)     (( $# >= 2 )) || { log_error "get requires <pr-id> <comment-id>";     exit 1; }
              cmd_get     "$@" ;;
     create)  cmd_create  "$@" ;;
-    update)  [ $# -ge 2 ] || { log_error "update requires <pr-id> <comment-id>";  exit 1; }
+    update)  (( $# >= 2 )) || { log_error "update requires <pr-id> <comment-id>";  exit 1; }
              cmd_update  "$@" ;;
-    resolve) [ $# -ge 2 ] || { log_error "resolve requires <pr-id> <comment-id>"; exit 1; }
+    resolve) (( $# >= 2 )) || { log_error "resolve requires <pr-id> <comment-id>"; exit 1; }
              cmd_resolve "$@" ;;
-    reopen)  [ $# -ge 2 ] || { log_error "reopen requires <pr-id> <comment-id>";  exit 1; }
+    reopen)  (( $# >= 2 )) || { log_error "reopen requires <pr-id> <comment-id>";  exit 1; }
              cmd_reopen  "$@" ;;
     *) log_error "Unknown command: '$command'"; show_usage; exit 1 ;;
   esac
