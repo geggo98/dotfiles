@@ -22,6 +22,22 @@ check_prerequisites() {
   fi
 }
 
+# warn_if_no_bitbucket_remote — non-fatal heads-up. `bb` resolves the
+# workspace/repository from the git remote of $PWD (its --workspace/--repository
+# default to "determined from the git configuration"); from a directory with no
+# bitbucket.org remote it fails with "Error: Argument repository is missing".
+# Always returns 0 — it only warns, never blocks. Run the scripts from inside the
+# target repo's working tree, not from the skill directory.
+warn_if_no_bitbucket_remote() {
+  command -v git >/dev/null 2>&1 || return 0
+  local remotes
+  remotes=$(git remote -v 2>/dev/null) || true
+  if [[ "$remotes" != *bitbucket.org* ]]; then
+    log_info "No bitbucket.org git remote in $PWD — bb derives the workspace/repository from the current directory's git remote. Run this from inside the target repo's working tree (do not cd into the skill directory), or pass --workspace/--repository (or set profile defaults)."
+  fi
+  return 0
+}
+
 validate_numeric() {
   [[ "$1" =~ ^[0-9]+$ ]] || { log_error "Invalid $2: '$1' (must be numeric)"; exit 1; }
 }

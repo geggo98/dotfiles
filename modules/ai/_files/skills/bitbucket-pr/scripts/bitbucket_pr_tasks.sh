@@ -4,6 +4,11 @@
 # Tasks are work items attached to a PR or to a specific comment; in v0.18.0
 # they can be marked RESOLVED/UNRESOLVED via `bb pr task update --state`.
 #
+# NOTE: `bb pr task update --help` claims --state can be needs_work/complete/
+# pending, but those are WRONG — the Bitbucket Cloud API only accepts
+# RESOLVED/UNRESOLVED. Do not change the resolve/reopen mapping below to match
+# the help text.
+#
 # Usage:
 #   bitbucket_pr_tasks.sh list    <pr-id> [--format json|tsv]
 #   bitbucket_pr_tasks.sh get     <pr-id> <task-id>
@@ -164,6 +169,7 @@ main() {
   case "$1" in -h|--help|help) show_usage; exit 0 ;; esac
 
   check_prerequisites
+  warn_if_no_bitbucket_remote
   local command="$1"; shift
   (( $# >= 1 )) || { log_error "$command requires at least <pr-id>"; show_usage; exit 1; }
 
@@ -174,6 +180,8 @@ main() {
     create)  cmd_create  "$@" ;;
     update)  (( $# >= 2 )) || { log_error "update requires <pr-id> <task-id>";  exit 1; }
              cmd_update  "$@" ;;
+    # bb's --state help lies (needs_work/complete/pending); the Cloud API only
+    # accepts RESOLVED/UNRESOLVED — do not change these to match the help text.
     resolve) (( $# >= 2 )) || { log_error "resolve requires <pr-id> <task-id>"; exit 1; }
              cmd_set_state "$1" "$2" "RESOLVED" ;;
     reopen)  (( $# >= 2 )) || { log_error "reopen requires <pr-id> <task-id>";  exit 1; }

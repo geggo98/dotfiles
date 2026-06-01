@@ -187,6 +187,7 @@ main() {
   case "$1" in -h|--help|help) show_usage; exit 0 ;; esac
 
   check_prerequisites
+  warn_if_no_bitbucket_remote
   local command="$1"; shift
   (( $# >= 1 )) || { log_error "$command requires at least <pr-id>"; show_usage; exit 1; }
 
