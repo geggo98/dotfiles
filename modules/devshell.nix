@@ -12,7 +12,7 @@
 
         packages = [
           pkgs.nodejs
-          pkgs.nodePackages.pnpm
+          pkgs.pnpm
           unstable.pulumi-bin
           pkgs.sops
           pkgs.just # justfile

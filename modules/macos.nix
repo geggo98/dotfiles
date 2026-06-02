@@ -33,7 +33,7 @@
       });
     in
     {
-      system.stateVersion = 5;
+      system.stateVersion = 6;
 
       # PATH for GUI apps launched via launchd (Spotlight, Dock, etc.)
       # Uses launchctl setenv to bypass SIP restrictions on launchd.envVariables.
@@ -82,7 +82,13 @@
         ioskeleyMonoNerdFont # OSS Berkeley Mono lookalike (Iosevka build) + NF glyphs
         fira # Fira Sans (fallback for Nokia Sans Wide)
         monaspace # Monaspace Radon (fallback for Operator Mono)
-        iosevka
+        # Plain `iosevka` builds the full family from source via Node — on
+        # nixpkgs 26.05 (Node 24) this hits a libuv kqueue EINTR race on Darwin
+        # that stalls/aborts the build, and the day-old release isn't cached.
+        # nerd-fonts.iosevka (above) is a cache-friendly prebuilt + patched
+        # variant and covers our needs. Re-enable if a from-source build is ever
+        # actually required (and the upstream Node/libuv bug is fixed).
+        # iosevka
         jetbrains-mono
         victor-mono
       ];

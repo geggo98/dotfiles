@@ -9,7 +9,7 @@
   # Update single input with `nix flake lock --update-input <input-name>`
   inputs = {
     # Package sets
-    nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11"; # https://status.nixos.org/
+    nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05"; # https://status.nixos.org/
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
     nixpkgs-yt-dlp.url = "github:nixos/nixpkgs/nixos-unstable"; # independent yt-dlp updates
 
@@ -18,13 +18,13 @@
     import-tree.url = "github:vic/import-tree";
 
     # Environment/system management
-    darwin.url = "github:lnl7/nix-darwin/nix-darwin-25.11";
+    darwin.url = "github:nix-darwin/nix-darwin/nix-darwin-26.05";
     darwin.inputs.nixpkgs.follows = "nixpkgs";
 
     # Determinate Nix module for Nix Darwin
     determinate.url = "https://flakehub.com/f/DeterminateSystems/determinate/3";
 
-    home-manager.url = "github:nix-community/home-manager/release-25.11";
+    home-manager.url = "github:nix-community/home-manager/release-26.05";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
 
     # https://github.com/Mic92/sops-nix
@@ -42,8 +42,11 @@
     nixpkgs-llm-agents.url = "github:numtide/llm-agents.nix";
 
     # External dependencies
+    # Tracks nvf main: v0.8 (the latest tag) bundles blink-cmp 1.8.0, whose
+    # frizbee dep needs nightly portable_simd and fails on nixpkgs 26.05's
+    # stable rustc. main ships a buildable blink-cmp against current nixpkgs.
     nvf = {
-      url = "github:NotAShelf/nvf/v0.8";
+      url = "github:NotAShelf/nvf";
       inputs.nixpkgs.follows = "nixpkgs";
     };
 

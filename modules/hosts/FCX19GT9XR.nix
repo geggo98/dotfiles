@@ -62,7 +62,7 @@ in
         homeManager.base
         homeManager.secrets-FCX19GT9XR
       ];
-      home.stateVersion = "25.11";
+      home.stateVersion = "26.05";
     };
   };
 }

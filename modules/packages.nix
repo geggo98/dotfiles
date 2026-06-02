@@ -71,7 +71,7 @@
         lazygit
         python313Packages.markitdown
         mermaid-cli
-        nodePackages.typescript
+        typescript
         nodejs
         neovim
         pandoc
@@ -177,7 +177,6 @@
         nil
         nixd
         nixpkgs-fmt
-        nodePackages.node2nix
         zsh-forgit
       ] ++ lib.optionals stdenv.isDarwin [
         mas
