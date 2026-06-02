@@ -64,6 +64,66 @@ cat <<'MD' | ${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh update 1234 --descripti
 MD
 ```
 
+#### PR description conventions (attribution & prompt reference)
+
+When **you (the agent) create a PR via `create`** (or replace its description via
+`update`), compose the body as usual, then apply these conventions:
+
+**Attribution footer (on by default, opt-out).** Make the **very last line** of
+the description a single footer line: a robot emoji plus a note that the PR was
+created with help from this skill. **Match the language of the PR description:**
+
+- English body → ``🤖 Created with assistance from the `bitbucket-pr` skill.``
+- German body  → ``🤖 Erstellt mit Unterstützung des `bitbucket-pr` Skills.``
+
+Put a `---` separator on the line above the footer. Omit the footer only if the
+user asks you to.
+
+**No other AI attribution.** This footer is the *only* provenance line. Do **not**
+add `Co-Authored-By: Claude`, `Generated with Claude Code`, or any other AI/model
+byline anywhere in the PR description (commits are already covered by the global
+`includeCoAuthoredBy = false` Claude Code setting).
+
+**Original prompt as reviewer reference (off by default — ask first).**
+**Before** creating the PR, ask the user whether the original prompt that
+triggered the work should be included as a reference for the reviewer. If they
+agree:
+
+- Quote the prompt **verbatim** as a Markdown blockquote (`>`) under a short
+  heading (e.g. `### Original request` / `### Ursprünglicher Auftrag`).
+- Do **not** silently fix typos or mistakes in the original — mark them with
+  `[sic]`.
+- Capture the outcome of any clarifying follow-up questions either **inline** in
+  the quote (a short annotation next to the relevant phrase) **or** as a
+  **bullet list directly below** the quoted prompt — short, location-specific
+  clarifications inline; longer or multiple ones as a list.
+
+Order in the description: PR body → (optional) quoted-prompt block → `---` →
+🤖 footer (the footer always stays the **last** line).
+
+Example description (with prompt reference):
+
+````markdown
+## Summary
+- …
+
+## Test plan
+- [ ] …
+
+---
+
+### Original request
+> Pls add retry to the uploader, make it confgiurable [sic]
+
+Clarifications:
+- Max retries default: 3 (confirmed with author)
+- Backoff: exponential, capped at 30s
+
+---
+
+🤖 Created with assistance from the `bitbucket-pr` skill.
+````
+
 > **⚠ `update` is broken in bb v0.18.0** — see [§9 Known bugs](#9-known-bugs-bb-v0180). Until `bb ≥ 0.18.1` ships, use the `curl` REST workaround documented there for `update`. `create` is unaffected and should still go through this script (it pipes the description to `bb` via stdin, sidestepping heredoc escaping problems that bite when calling `bb pr create --description "..."` inline).
 
 ### Comments
