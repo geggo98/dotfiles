@@ -192,6 +192,8 @@ let
         enable = true;
         package = llm-agents.claude-code;
         settings = {
+          # Suppress the automatic "Co-Authored-By: Claude" byline in commits/PRs.
+          includeCoAuthoredBy = false;
           enabledPlugins = {
             "jdtls-lsp@claude-plugins-official" = true;
             "lua-lsp@claude-plugins-official" = true;
