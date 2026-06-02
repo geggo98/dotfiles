@@ -1,6 +1,6 @@
 #!/bin/zsh
 # Bitbucket Pull Request Script
-# Wraps stable bb (gildas/bitbucket-cli v0.18.0+) PR operations.
+# Wraps stable bb (gildas/bitbucket-cli v0.18.1+) PR operations.
 #
 # Usage:
 #   bitbucket_pr.sh list [--format json|tsv] [state]
