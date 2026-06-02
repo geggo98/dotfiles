@@ -1,6 +1,6 @@
 ---
 name: bitbucket-pr
-description: "Read and manage Bitbucket Cloud pull requests, comments, and tasks via the `bb` CLI (gildas/bitbucket-cli v0.18.0+). Use when reviewing PR feedback, replying to comments, creating tasks/PRs, or marking review tasks done."
+description: "Read and manage Bitbucket Cloud pull requests, comments, and tasks via the `bb` CLI (gildas/bitbucket-cli v0.18.1+). Use when reviewing PR feedback, replying to comments, creating tasks/PRs, or marking review tasks done."
 context: fork
 allowed-tools: Bash(./scripts/bitbucket_pr.sh *) Bash(./scripts/bitbucket_pr_comments.sh *) Bash(./scripts/bitbucket_pr_tasks.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_comments.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_tasks.sh *) Bash(zsh *)
 dependencies: "bb (Bitbucket CLI, installed via Nix on this host), jq"
@@ -124,7 +124,9 @@ Clarifications:
 🤖 Created with assistance from the `bitbucket-pr` skill.
 ````
 
-> **⚠ `update` is broken in bb v0.18.0** — see [§9 Known bugs](#9-known-bugs-bb-v0180). Until `bb ≥ 0.18.1` ships, use the `curl` REST workaround documented there for `update`. `create` is unaffected and should still go through this script (it pipes the description to `bb` via stdin, sidestepping heredoc escaping problems that bite when calling `bb pr create --description "..."` inline).
+> **Tip:** route `create` *and* `update` through these scripts — they pipe the
+> description to `bb` via stdin, sidestepping the heredoc escaping problems that
+> bite when calling `bb pr create/update --description "..."` inline.
 
 ### Comments
 
@@ -243,62 +245,22 @@ echo "Fixed in <commit-hash>" | \
 | `pr task --help` unknown command | `bb` is pre-v0.18.0 | Confirm `bb --version` reports `0.18.0`; tasks require v0.18.0+ |
 | Auth / 401 errors | Profile not set up or token expired | Reconfigure with `bb profile create` / `bb profile update`; check `BB_PROFILE` |
 | `Error: Argument repository is missing` (or operates on the wrong repo) | CWD has no `bitbucket.org` remote — script run from the skill dir, `/tmp`, or a non-Bitbucket repo | Invoke via `${CLAUDE_SKILL_DIR}/scripts/…` from **inside the target repo's working tree**; never `cd` into the skill directory. (You'll also see the non-fatal "No bitbucket.org git remote" warning.) |
-| `task resolve`/`reopen` rejected / invalid state | Used `needs_work`/`complete`/`pending` from `bb`'s `--state` help | Those values are wrong; the API only accepts `RESOLVED`/`UNRESOLVED` — the wrapper's `resolve`/`reopen` already send the correct ones. See [§9](#9-known-bugs-bb-v0180). |
-| `bb pr update`: `unsupported protocol scheme ""` | Bug in `bb` v0.18.0 (URL built without API base) | See [§9 Known bugs](#9-known-bugs-bb-v0180) — use `curl` REST workaround |
+| `task resolve`/`reopen` rejected / invalid state | Used `needs_work`/`complete`/`pending` from `bb`'s `--state` help | Those values are wrong; the API only accepts `RESOLVED`/`UNRESOLVED` — the wrapper's `resolve`/`reopen` already send the correct ones. See [§9](#9-known-quirks). |
 | Output goes to a tempfile (header + preview only) | Output exceeded `BB_OUTPUT_MAX_BYTES` (default 32 KB) | Read the tempfile with `jq . <path>` / `column -t -s $'\t' <path>`, or raise the cap: `BB_OUTPUT_MAX_BYTES=65536 …`. For `list`, try `--format tsv` first — it's usually small enough to stay inline. |
 | `ERROR: This script requires zsh but is running under bash.` | Invoked via `bash ${CLAUDE_SKILL_DIR}/scripts/...` | Run the script directly (`${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh ...`) or with `zsh ${CLAUDE_SKILL_DIR}/scripts/...`. |
 
-## 9. Known bugs (bb v0.18.0)
+## 9. Known quirks
 
-### `bb pr update` fails with `unsupported protocol scheme ""`
+> The `bb pr update` "unsupported protocol scheme" bug
+> ([gildas/bitbucket-cli#92]) is **fixed in v0.18.1** — the version installed via
+> Nix on this host. `update` now works through the script directly; no workaround
+> needed.
 
-**Affected:** `${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh update` (every flag combination). `list`, `get`, `create` are *not* affected.
-
-**Symptom:**
-
-```
-Failed to get pullrequest <id>: error.runtime
-Caused by:
-    Get "pullrequests/<id>": unsupported protocol scheme ""
-```
-
-**Cause:** `bb pr update` fetches the current PR before patching, but builds the GET URL as a bare path (`pullrequests/<id>`) instead of prefixing the API base (`https://api.bitbucket.org/2.0/repositories/<ws>/<repo>/`). Go's `http.Client` rejects relative URLs. Reproduce with `LOG_LEVEL=DEBUG LOG_DESTINATION=stderr bb pr update …`. `--workspace`, `--repository`, `--profile` do not change the behaviour.
-
-**Upstream status:** [gildas/bitbucket-cli#92](https://github.com/gildas/bitbucket-cli/issues/92) — open, labelled `bug`. Fixed on the [`dev` branch](https://github.com/gildas/bitbucket-cli/tree/dev) (commits `b833434` "missing path join", plus follow-ups `45ef589`, `d0e1ac9`, `dcb23cf` for the workspace-resolution chain that surfaces once the URL bug is gone). **No release tag yet** as of 2026-05-26 — owner has stated a new version is forthcoming. Delete this section once `bb ≥ 0.18.1` is installed via Nix and verified.
-
-**Workaround:** call the Bitbucket Cloud REST API directly with `curl`. Credentials live in `~/Library/Application Support/bitbucket/config-cli.yml` (the `user:` / `password:` fields — an App Password with `pullrequest:write` scope).
-
-```bash
-USER_BB=$(grep '^      user:'     "$HOME/Library/Application Support/bitbucket/config-cli.yml" | awk '{print $2}')
-PASS_BB=$(grep '^      password:' "$HOME/Library/Application Support/bitbucket/config-cli.yml" | awk '{print $2}')
-
-WORKSPACE=<workspace>
-REPO=<repo>
-PR_ID=<id>
-
-# Write the description to a file, then lift it into the JSON body via jq.
-# This avoids heredoc / shell-quoting issues (literal \" and \* leaking into
-# the published description).
-DESC_FILE=$(mktemp -t "pr-${PR_ID}-description.XXXXXX") || exit 1
-trap 'rm -f "$DESC_FILE"' EXIT
-cat > "$DESC_FILE" <<'MD'
-## Summary
-- …
-MD
-
-JSON_BODY=$(jq -n --arg desc "$(cat "$DESC_FILE")" '{description: $desc}')
-
-curl -fsS -u "$USER_BB:$PASS_BB" -X PUT \
-  -H "Content-Type: application/json" \
-  -d "$JSON_BODY" \
-  "https://api.bitbucket.org/2.0/repositories/$WORKSPACE/$REPO/pullrequests/$PR_ID"
-```
-
-Other fields go in the same JSON body: `title`, `destination: {branch: {name: "<branch>"}}`, `reviewers: [{uuid: "<uuid>"}]`. The REST `PUT` performs a *partial* update — only the supplied fields change. See the [Bitbucket Cloud REST API v2.0 docs](https://developer.atlassian.com/cloud/bitbucket/rest/api-group-pullrequests/#api-repositories-workspace-repo-slug-pullrequests-pull-request-id-put) for the full schema.
+[gildas/bitbucket-cli#92]: https://github.com/gildas/bitbucket-cli/issues/92
 
 ### `bb pr task update --state` help lists the wrong values
 
-`bb pr task update --help` (v0.18.0) advertises:
+`bb pr task update --help` (through v0.18.1) advertises:
 
 ```
 --state string   Updated state of the task. Can be one of needs_work, complete or pending
@@ -309,9 +271,10 @@ and `UNRESOLVED` for task state, and passing `needs_work` / `complete` /
 `pending` is rejected. The `resolve` / `reopen` subcommands of
 `bitbucket_pr_tasks.sh` already send `--state RESOLVED` / `--state UNRESOLVED`,
 so this only bites if you edit the wrapper or call raw `bb` — **do not** "fix"
-the mapping to match the help text. Unlike the `pr update` bug above, this is a
-documentation defect, not tied to a release: the `RESOLVED` / `UNRESOLVED` API
-contract is permanent, so this note stays even after `bb` upgrades.
+the mapping to match the help text. Unlike the now-fixed `pr update` bug noted
+above, this is a documentation defect, not tied to a release: the `RESOLVED` /
+`UNRESOLVED` API contract is permanent, so this note stays even after `bb`
+upgrades.
 
 ## 10. What this skill does NOT do
 

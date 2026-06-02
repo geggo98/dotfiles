@@ -1,6 +1,6 @@
 #!/bin/zsh
 # Bitbucket PR Tasks Script
-# Wraps stable bb (gildas/bitbucket-cli v0.18.0+) PR task operations.
+# Wraps stable bb (gildas/bitbucket-cli v0.18.1+) PR task operations.
 # Tasks are work items attached to a PR or to a specific comment; in v0.18.0
 # they can be marked RESOLVED/UNRESOLVED via `bb pr task update --state`.
 #

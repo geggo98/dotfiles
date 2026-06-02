@@ -1,6 +1,6 @@
 #!/bin/zsh
 # Bitbucket PR Comments Script
-# Wraps stable bb (gildas/bitbucket-cli v0.18.0+) PR comment operations.
+# Wraps stable bb (gildas/bitbucket-cli v0.18.1+) PR comment operations.
 #
 # Usage:
 #   bitbucket_pr_comments.sh list    <pr-id> [--format json|tsv]
