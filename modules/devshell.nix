@@ -15,6 +15,8 @@
           pkgs.nodePackages.pnpm
           unstable.pulumi-bin
           pkgs.sops
+          pkgs.just # justfile
+          pkgs.moreutils # ts
         ];
 
         git-hooks.hooks = {

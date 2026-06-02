@@ -7,6 +7,7 @@ default:
 
 # Warn if there are untracked files under modules/ or hosts/ — Nix flakes
 # only see git-tracked files, so untracked changes are silently ignored
+
 # by build/eval/check. Run `git add -N <paths>` to make them visible.
 _check-untracked:
     #!/usr/bin/env bash
@@ -18,13 +19,17 @@ _check-untracked:
         echo "$untracked" >&2
     fi
 
+# Run a developer shell
+shell:
+    nix develop --no-pure-eval
+
 # Build the current host configuration (without applying)
 build: _check-untracked
-    darwin-rebuild build --flake .
+    time darwin-rebuild build --flake . --keep-going --keep-failed -L | ts
 
 # Build a specific host configuration
 build-host host: _check-untracked
-    nix build '.#darwinConfigurations.{{host}}.system'
+    time nix build '.#darwinConfigurations.{{ host }}.system' --keep-going --keep-failed | ts
 
 # Run flake checks
 check: _check-untracked
@@ -44,7 +49,7 @@ update:
 
 # Update a single flake input
 update-input input:
-    nix flake lock --update-input {{input}}
+    nix flake lock --update-input {{ input }}
 
 # Show what would change between current system and new build
 diff: build
@@ -103,16 +108,16 @@ devshell:
 
 # Preview infrastructure changes
 pulumi-preview:
-    cd infra && pulumi preview
+    cd infra && time pulumi preview | ts
 
 # Apply infrastructure changes
 pulumi-up:
-    cd infra && pulumi up
+    cd infra && time pulumi up | ts
 
 # Show current infrastructure state
 pulumi-stack:
-    cd infra && pulumi stack
+    cd infra && time pulumi stack | ts
 
 # Install infra dependencies
 pulumi-install:
-    cd infra && pnpm install
+    cd infra && time pnpm install | ts
