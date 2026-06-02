@@ -185,3 +185,13 @@ Use the `/nix-dendritic-pattern` skill for guidance. In short:
 
 1. Add shell wrapper and server entry in `modules/mcp-servers.nix` (follow existing patterns)
 2. Ensure secret loading logic uses `$XDG_CONFIG_HOME/sops-nix/secrets`
+
+### Updating flake inputs
+
+- **nvf (Neovim):** Before bumping the `nvf` input (`modules/neovim.nix`), **check
+  the nvf release notes** for breaking option renames/removals:
+  <https://github.com/NotAShelf/nvf/tree/main/docs/manual/release-notes> (e.g.
+  `rl-0.9.md`). nvf changes `vim.*` option paths between releases (language
+  modules, `lsp.presets.*`, removed plugins), and these surface as eval errors.
+  Cross-reference `programs.nvf.settings` in `modules/neovim.nix` against the
+  notes before building.

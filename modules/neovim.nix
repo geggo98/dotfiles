@@ -57,7 +57,10 @@
             sql.enable = true;
             java.enable = true;
             kotlin.enable = true;
-            ts.enable = true;
+            # nvf 0.9 renamed `languages.ts` → `languages.typescript` and split
+            # JSX/TSX out into the separate `languages.tsx` module.
+            typescript.enable = true;
+            tsx.enable = true;
             go.enable = true;
             lua.enable = true;
             zig.enable = true;
@@ -81,7 +84,8 @@
             lspSignature.enable = false;
             otter-nvim.enable = true;
             nvim-docs-view.enable = true;
-            harper-ls.enable = true;
+            # nvf 0.9 moved `lsp.harper-ls` → `lsp.presets.harper`.
+            presets.harper.enable = true;
           };
 
           autocomplete = {
@@ -172,7 +176,7 @@
             obsidian.enable = false;
             neorg.enable = false;
             orgmode.enable = false;
-            mind-nvim.enable = true;
+            # mind.nvim was removed in nvf 0.9 (upstream repo deleted).
             todo-comments.enable = true;
           };
 

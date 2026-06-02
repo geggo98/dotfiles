@@ -5,7 +5,7 @@
       mysqladminPath = "${pkgs.mariadb.client}/bin/mysqladmin";
       redisCliPath = "${pkgs.redis}/bin/redis-cli";
       boundaryPath = "${pkgs.boundary}/bin/boundary";
-      pm2Path = "${pkgs.nodePackages.pm2}/bin/pm2";
+      pm2Path = "${pkgs.pm2}/bin/pm2";
 
       # Services list and cluster URL are decrypted from SOPS at activation. The
       # services JSON (name, type, port, targetId per entry) is inlined into the
@@ -227,7 +227,7 @@
       };
 
       deps = with pkgs; [
-        nodePackages.pm2
+        pm2
         boundary
         python3
         mariadb.client

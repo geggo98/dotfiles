@@ -55,7 +55,7 @@ in
         homeManager.vault
         homeManager.tunnelblick-raycast
       ];
-      home.stateVersion = "25.11";
+      home.stateVersion = "26.05";
     };
   };
 }

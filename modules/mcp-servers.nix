@@ -215,7 +215,7 @@ let
           };
         };
         mcpServers = claudeMcpServers;
-        skillsDir = ./ai/_files/skills;
+        skills = ./ai/_files/skills;
       };
 
       programs.opencode = {
@@ -225,7 +225,7 @@ let
           autoupdate = false;
           mcp = opencodeMcpServers;
         };
-        rules = root + "/AGENTS.md";
+        context = root + "/AGENTS.md";
       };
 
       programs.codex = {
