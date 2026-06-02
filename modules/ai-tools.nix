@@ -31,6 +31,11 @@
               shift
               exec claude-agent-acp --thinking-display summarized "$@"
             fi
+            # Enables Claude Code's full-screen TUI mode
+            # (https://code.claude.com/docs/en/fullscreen). The name CLAUDE_CODE_NO_FLICKER
+            # is misleading: it unlocks the full-screen TUI, not merely "no flicker".
+            # Interactive mode only — intentionally NOT set for ACP.
+            export CLAUDE_CODE_NO_FLICKER=1
             exec "/etc/profiles/per-user/''${USER}/bin/claude" --thinking-display summarized "$@"
           '';
         })
