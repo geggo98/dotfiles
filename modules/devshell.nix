@@ -10,6 +10,16 @@
       devenv.shells.default = {
         name = "nix-darwin";
 
+        # devenv.root defaults to `builtins.getEnv "PWD"`, which is "" under the
+        # pure evaluation `nix flake check` uses — tripping devenv's "could not
+        # determine the current directory" assertion. Fall back to the flake
+        # source path so the shell still evaluates for `nix flake check`;
+        # interactive shells (direnv / `nix develop --no-pure-eval`) set PWD and
+        # keep the original behaviour.
+        devenv.root =
+          let pwd = builtins.getEnv "PWD";
+          in if pwd != "" then pwd else toString inputs.self;
+
         packages = [
           pkgs.nodejs
           pkgs.pnpm
