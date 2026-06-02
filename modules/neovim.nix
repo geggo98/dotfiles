@@ -131,8 +131,11 @@
           };
 
           minimap = {
-            minimap-vim.enable = false;
-            codewindow.enable = true;
+            # codewindow.nvim requires the legacy `nvim-treesitter.ts_utils`,
+            # removed in nvim-treesitter's main-branch rewrite that nvf now
+            # bundles. Use minimap-vim (code-minimap based, treesitter-free).
+            minimap-vim.enable = true;
+            codewindow.enable = false;
           };
 
           dashboard = {
@@ -206,6 +209,13 @@
               action = "function () require('leap').leap { target_windows = require('leap.util').get_focusable_windows(), windows = require('leap.util').get_focusable_windows(), inclusive = true } end";
               lua = true;
               desc = "Leap (anywhere)";
+              silent = true;
+            }
+            {
+              key = "<leader>mm";
+              mode = [ "n" ];
+              action = "<cmd>MinimapToggle<CR>";
+              desc = "Toggle minimap";
               silent = true;
             }
           ];
