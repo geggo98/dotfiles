@@ -418,12 +418,21 @@ test('presenter layout adapts to wide viewport', async ({ page }) => {
 
 ## Smoke Test: Walk All Slides
 
-Verify that every slide renders without errors:
+Verify that every slide renders without errors. Capture **both** `pageerror` and
+`console` errors: a compile error (e.g. a bad template literal in a `slide-data`
+module) makes Vite return HTTP 500 and surfaces as `console` errors like `Failed to
+fetch dynamically imported module …/@slidev/slides/N/md` on **every** slide that
+imports the broken module — not as a `pageerror`. When many slides fail at once,
+read the dev-server output for the esbuild `file:line`.
 
 ```ts
 test('all slides render without errors', async ({ page }) => {
   const errors: string[] = []
   page.on('pageerror', err => errors.push(err.message))
+  page.on('console', m => {
+    if (m.type() === 'error' && /Failed to fetch dynamically imported module|500/i.test(m.text()))
+      errors.push('compile: ' + m.text())
+  })
 
   await page.goto('/')
 
@@ -509,3 +518,9 @@ test('slide with v-clicks after reveal', async ({ page }) => {
 Update snapshots: `bunx playwright test --update-snapshots`
 
 Snapshots are stored alongside test files in `playwright-tests/`. To keep a snapshot in version control: `git add -f playwright-tests/slide-1.png`.
+
+## See Also
+
+- [testing-overflow](testing-overflow.md) — detecting content clipped by the slide
+  canvas (the most common deck defect), the Monaco-fold trap, true dark-mode
+  rendering, and the bundled `check-slide-overflow.sh` checker.
