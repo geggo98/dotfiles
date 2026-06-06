@@ -108,15 +108,31 @@ await page.locator('#page-root .absolute.bottom-0.left-0').first().evaluate(el =
 await page.locator('button[title="Toggle dark mode"]').click();
 ```
 
-Alternatively, toggle dark mode via the `<html>` class directly:
+### Reliable: emulate `colorScheme` (drives `useDarkMode()`)
+
+For screenshots/visual checks, prefer a browser **context** with `colorScheme`. This
+drives Slidev's `useDarkMode()` reactive state, so components that read it — notably
+the **Monaco editor** — switch to their dark theme too:
 
 ```js
-// Switch to dark mode
-await page.evaluate(() => document.documentElement.classList.add('dark'));
-
-// Switch to light mode
-await page.evaluate(() => document.documentElement.classList.remove('dark'));
+const ctx = await browser.newContext({ viewport: { width: 1280, height: 720 }, colorScheme: 'dark' });
+const page = await ctx.newPage();
+await page.goto('http://localhost:3030/5', { waitUntil: 'networkidle' });
 ```
+
+### ⚠️ The `.dark` class toggle does NOT flip `useDarkMode()`
+
+```js
+// Visual page CSS flips, but useDarkMode()/Monaco do NOT — Monaco stays LIGHT,
+// giving false "dark" screenshots and bogus contrast findings. Avoid for QA.
+await page.evaluate(() => document.documentElement.classList.add('dark'));
+```
+
+Toggling the `<html>` class flips the `dark:`/`html.dark` CSS, but `useDarkMode()`
+(VueUse `useDark`) owns that class — it does not *observe* manual changes, so any
+component reading the composable keeps its previous theme. Use the `colorScheme`
+context above, or click the real toggle button (shown earlier), for a true dark
+render. See [testing-overflow](testing-overflow.md).
 
 ### Making the Navigation Bar Visible (outside Playwright)
 

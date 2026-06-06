@@ -6,7 +6,7 @@ description: >
   conference talks, code walkthroughs, teaching materials, or developer decks. Also trigger when the
   user mentions Slidev, sli.dev, slide decks with code, or wants to create developer-facing presentations.
 argument-hint: "<presentation topic or slides.md path>"
-allowed-tools: Read(references/*) Skill(tmux) Bash(bun *) Bash(bunx *) Bash(zsh *) Read
+allowed-tools: Read(references/*) Skill(tmux) Bash(bun *) Bash(bunx *) Bash(zsh *) Bash(deno *) Read
 ---
 
 # Slidev - Presentation Slides for Developers
@@ -41,21 +41,23 @@ bun run export        # Export to PDF (requires playwright-chromium)
 
 ### Dev Server (always use tmux skill)
 
-Start the Slidev dev server using the tmux skill (`Skill(tmux)`) and its `claude-tmux.sh` wrapper — never use raw tmux commands with variable expansion.
+The Slidev dev server needs a full TTY and will not run as a plain background subprocess of the agent. Start it through the tmux skill (`Skill(tmux)`), whose wrapper is **`tmux-use.sh`** (NOT `claude-tmux.sh`) — never use raw tmux commands with variable expansion. From this skill, reach the sibling tmux skill at `${CLAUDE_SKILL_DIR}/../tmux/scripts/tmux-use.sh`.
 
 **IMPORTANT: Always specify `--port` explicitly** (e.g. `--port 3030`). Without it, Slidev auto-picks a free port in 3030–4000, making it hard to find the server later. See [port-detection](references/port-detection.md) for details.
 
 If the port was forgotten, run `${CLAUDE_SKILL_DIR}/scripts/find-slidev-port.sh` to scan for running Slidev instances.
 
 ```bash
-# Start dev server in a tmux session (always pass --port!)
-${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh new -s claude-slidev -c 'bun run dev -- --port 3030'
+TMUX="${CLAUDE_SKILL_DIR}/../tmux/scripts/tmux-use.sh"   # the tmux skill's wrapper
 
-# Show the user how to monitor it
-${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh attach
+# Start the dev server in a tmux session (always pass --port!). Run from the
+# project root so `bun run dev` resolves the project's package.json.
+zsh "$TMUX" new -s claude-slidev -c 'cd /path/to/project && bun run dev -- --port 3030 ./<talk>/slides.md'
 
-# Wait for the server to be ready
-${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh wait -p 'localhost:3030' -T 30
+# Wait until it is serving, then show the user how to monitor it
+zsh "$TMUX" wait -p 'localhost:3030' -T 60
+zsh "$TMUX" attach          # prints the `tmux -S … attach` command for the user
+zsh "$TMUX" capture         # read recent server output (build errors etc.)
 ```
 
 **Verify**: After the dev server is ready, confirm slides load at `http://localhost:3030` with the browser-use skill. After `bun run export`, check the output PDF exists in the project root.
@@ -68,7 +70,16 @@ On first use, create `playwright-tests/.gitignore` via the Write tool with conte
 
 Then write scripts like `playwright-tests/debug-slide-5.ts` via the Write tool and run them with `bun run`. Screenshots land in `playwright-tests/` as well. Users can `git add -f` individual files they want to keep.
 
-**Cleanup**: When done, kill the session: `${CLAUDE_SKILL_DIR}/scripts/claude-tmux.sh kill -s claude-slidev`.
+**Overflow & visual QA**: Slidev silently clips anything past the slide canvas. After authoring content-heavy slides, run the bundled checker — it renders each slide at 1280×720, cycles tabs, checks light + **true dark**, and reports content past the canvas plus code hidden below the Monaco fold:
+
+```bash
+zsh ${CLAUDE_SKILL_DIR}/scripts/check-slide-overflow.sh 1-40 3030               # check a range
+zsh ${CLAUDE_SKILL_DIR}/scripts/check-slide-overflow.sh 1-40 3030 --shot ./playwright-tests/qa   # + screenshots for vision QA
+```
+
+See [testing-overflow](references/testing-overflow.md) for the why and the technique. (Needs `deno`.)
+
+**Cleanup**: When done, kill the session: `zsh "$TMUX" kill -s claude-slidev`.
 
 ## Basic Syntax
 
@@ -107,11 +118,13 @@ Presenter notes go here
 | Frontmatter | Per-slide configuration options | [core-frontmatter](references/core-frontmatter.md) |
 | CLI Commands | Dev, build, export, theme commands | [core-cli](references/core-cli.md) |
 | Components | Built-in Vue components | [core-components](references/core-components.md) |
+| Sections & TOC | Chapter dividers, `<Toc>`, and `hideInToc` | [authoring-sections-toc](references/authoring-sections-toc.md) |
 | Layouts | Built-in slide layouts | [core-layouts](references/core-layouts.md) |
 | Exporting | PDF, PPTX, PNG export options | [core-exporting](references/core-exporting.md) |
 | Hosting | Build and deploy to various platforms | [core-hosting](references/core-hosting.md) |
 | Global Context | $nav, $slidev, composables API | [core-global-context](references/core-global-context.md) |
 | Testing | E2E testing with Playwright | [testing-playwright](references/testing-playwright.md) |
+| Overflow & Visual QA | Canvas scaling, overflow/clipping detection, dark-mode caveats | [testing-overflow](references/testing-overflow.md) |
 | Port Detection | How Slidev picks ports, finding running instances | [port-detection](references/port-detection.md) |
 
 ## Feature Reference
