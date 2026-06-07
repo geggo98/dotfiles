@@ -37,6 +37,10 @@ zsh ${CLAUDE_SKILL_DIR}/scripts/check-slide-overflow.sh <range> [port]      # e.
 zsh ${CLAUDE_SKILL_DIR}/scripts/check-slide-overflow.sh 1-40 3030 --shot ./playwright-tests/qa
 # narrow the engine set for fast iteration (default is all three)
 zsh ${CLAUDE_SKILL_DIR}/scripts/check-slide-overflow.sh 1-40 3030 --browsers chromium,webkit
+# big deck on a beefy machine: split each lane's slides across N pages
+zsh ${CLAUDE_SKILL_DIR}/scripts/check-slide-overflow.sh 1-90 3030 --jobs 2
+# weak/contended dev server: lower the concurrent-navigation cap
+zsh ${CLAUDE_SKILL_DIR}/scripts/check-slide-overflow.sh 1-90 3030 --max-concurrency 3
 ```
 
 It exits non-zero when any slide overflows (or an engine fails to launch), and
@@ -44,6 +48,41 @@ reports both vertical overflow (`↧ +Npx`) and code hidden below a Monaco edito
 fold (`⏷`), tagged with the `[tab·engine·theme]` where it occurred. It is a Deno
 script (`npm:playwright` pinned + a co-located `--lock --frozen`), so it needs
 `deno`.
+
+### How it parallelizes (and why correctness survives it)
+
+The checker runs the `engine × theme` combinations as concurrent **lanes** (one
+browser process per engine, two contexts each), several times faster than a serial
+sweep. The single bottleneck is the shared **Vite dev server** every page hits, so
+a few things keep it both fast and honest:
+
+- **Boot once, then navigate in-SPA.** Each page does one full `goto` to load the
+  Slidev app (and Monaco's large ESM graph) a single time, then moves slide-to-slide
+  with client-side navigation (`pushState` + `popstate`). The naive alternative —
+  `goto('/N')` per slide — re-pulls that graph 6×N times and stampedes Vite, which
+  makes firefox/webkit serve transient module-load failures and half-render slides.
+- **Throttle the whole measurement, gate on real signals.** The entire per-slide
+  measure (nav → settle → tab-cycle → collect) runs under a `--max-concurrency`
+  semaphore, so reflow-heavy work doesn't all happen at once and starve itself.
+  Before measuring it waits for the active slide to be `slidev-page-${n}` and the
+  **network to go quiet** (the lazy chunk finished — else a still-loading slide
+  reads as `tabs:0` and is silently unchecked), then a fixed wall-clock settle for
+  render/reflow (a deterministic wait — rAF/MutationObserver "smart" settles proved
+  flaky/throttled in headless), and finally measures **twice and unions** the
+  findings (a borderline overflow can lag a frame). Transient module-load failures
+  are **retried** with a fresh reload; a persistent failure (e.g. a real compile-500)
+  survives the retries and is reported, never silently passed.
+
+Tunables: `--max-concurrency N` bounds concurrent slide measurements (default
+`min(lanes,4)`; raise it for more speed on a fast box, lower it on a weak/contended
+dev server); `--jobs N` runs N pages per lane to split a big deck's slides (default 1).
+
+**Borderline caveat.** Overflows within a few px of the tolerance (`--tol`, default
+2) render right at the wrap boundary, so under parallel CPU load *which* engine/theme
+lane reports them can vary run-to-run — but the **slide is still flagged** (some lane
+catches it). Findings comfortably past the canvas are stable. For the most
+deterministic per-lane result on a marginal case, re-run that slide with
+`--browsers <engine>` (near-serial) or a low `--max-concurrency`.
 
 ### Where the browsers come from (nix-pinned, with fallback)
 
@@ -65,9 +104,11 @@ Bump them in lockstep; the wrapper's runtime guard prints a clear warning (and f
 back to CDN) on skew rather than throwing the cryptic `Executable doesn't exist at
 …/chromium-1208/…`.
 
-**Cost.** Three engines × two themes ≈ 3× the wall-clock of a single-browser pass,
-and `--shot` writes 3× the PNGs (`slide-NN-<engine>-<theme>.png`). First run also
-realises the nix browser bundle (~hundreds of MB, once) into the store.
+**Cost.** The three engines × two themes run in parallel (see above), so a full
+sweep is ~one engine's wall-clock, not 3×; on a typical deck that is several times
+faster than a serial pass. `--shot` still writes 3× the PNGs
+(`slide-NN-<engine>-<theme>.png`). First run also realises the nix browser bundle
+(~hundreds of MB, once) into the store.
 
 ## Blind spots the checker is built to avoid
 

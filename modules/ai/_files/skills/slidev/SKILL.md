@@ -76,9 +76,10 @@ Then write scripts like `playwright-tests/debug-slide-5.ts` via the Write tool a
 zsh ${CLAUDE_SKILL_DIR}/scripts/check-slide-overflow.sh 1-40 3030               # check a range, all 3 engines
 zsh ${CLAUDE_SKILL_DIR}/scripts/check-slide-overflow.sh 1-40 3030 --shot ./playwright-tests/qa   # + per-engine screenshots for vision QA
 zsh ${CLAUDE_SKILL_DIR}/scripts/check-slide-overflow.sh 1-40 3030 --browsers chromium   # narrow for fast iteration
+zsh ${CLAUDE_SKILL_DIR}/scripts/check-slide-overflow.sh 1-90 3030 --max-concurrency 3   # weak/contended dev server
 ```
 
-Browsers are **nix-pinned** (`playwright-driver.browsers`, with `playwright install` as fallback). See [testing-overflow](references/testing-overflow.md) for the why and the technique. (Needs `deno`; `nix` for pinned browsers.)
+The engines run in **parallel** (engine × theme lanes; each page boots once then navigates in-SPA), so a full cross-browser sweep is several times faster than a serial pass while staying correctness-safe; tune with `--max-concurrency N` (default `min(lanes,4)`) and `--jobs N` (pages per lane). Browsers are **nix-pinned** (`playwright-driver.browsers`, with `playwright install` as fallback). See [testing-overflow](references/testing-overflow.md) for the why and the technique. (Needs `deno`; `nix` for pinned browsers.)
 
 **Cleanup**: When done, kill the session: `zsh "$TMUX" kill -s claude-slidev`.
 
