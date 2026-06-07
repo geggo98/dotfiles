@@ -1,10 +1,13 @@
 #!/usr/bin/env -S deno run --allow-env --allow-read --allow-write --allow-net --allow-run --allow-sys --lock=check-slide-overflow.lock --frozen
-// Overflow / clipping checker for Slidev decks.
+// Overflow / clipping checker for Slidev decks — CROSS-BROWSER.
 //
 // Slidev renders each slide on a fixed logical canvas (default 980×552) and
 // scales it to the viewport; anything past the boundary is CLIPPED silently in
 // present mode. This script renders each slide at 1280×720 and reports content
-// that escapes the canvas. It deliberately covers three blind spots that a
+// that escapes the canvas. Because clipping and text wrapping are
+// LAYOUT-ENGINE-SPECIFIC (a slide can fit in Chromium yet overflow in Gecko or
+// WebKit), it runs every slide through chromium + firefox + webkit by default
+// (narrow with --browsers). It deliberately covers three blind spots that a
 // naive element scan misses:
 //   1. bare TEXT NODES (measured via Range geometry, not just leaf elements) —
 //      e.g. the tail of a callout after an inline <strong>;
@@ -14,16 +17,22 @@
 //      (Monaco follows Slidev's useDarkMode(); a manual `.dark` class toggle
 //      does NOT flip it), and every tab button is cycled.
 //
-// Dependency + version are pinned in the import specifier below; the .sh
-// wrapper pins the full tree via a co-located --lock/--frozen.
+// Browsers: the .sh wrapper provisions a nix-pinned playwright-driver.browsers
+// bundle (PLAYWRIGHT_BROWSERS_PATH) whose Playwright version MUST equal the pin
+// below, falling back to `playwright install` otherwise. That version is
+// coupled across THREE places — this import specifier, the deno --lock, and the
+// nixpkgs rev in check-slide-overflow.sh — bump all three in lockstep.
 //
-// Usage:  check-slide-overflow.ts <range> [port] [--shot <dir>] [--vp WxH] [--tol N]
-//   <range>  e.g. "23" or "1-56"
-//   port     default 3030
-//   --shot   also write light+dark screenshots to <dir> (for agent vision QA)
-//   --vp     viewport, default 1280x720
-//   --tol    overflow tolerance px, default 2
-import { chromium, type Browser, type Page } from "npm:playwright@1.58.2";
+// Usage:  check-slide-overflow.ts <range> [port] [--shot <dir>] [--vp WxH] [--tol N] [--browsers a,b,c]
+//   <range>     e.g. "23" or "1-56"
+//   port        default 3030
+//   --shot      also write light+dark screenshots to <dir> (for agent vision QA)
+//   --vp        viewport, default 1280x720
+//   --tol       overflow tolerance px, default 2
+//   --browsers  comma list of chromium,firefox,webkit (default: all three)
+import { chromium, firefox, webkit, type Browser, type BrowserType, type Page } from "npm:playwright@1.58.2";
+
+const ENGINES: Record<string, BrowserType> = { chromium, firefox, webkit };
 
 function die(msg: string): never {
   console.error(msg);
@@ -34,6 +43,7 @@ const args = [...Deno.args];
 let shotDir: string | null = null;
 let vp = { width: 1280, height: 720 };
 let tol = 2;
+let engineNames = ["chromium", "firefox", "webkit"];
 const pos: string[] = [];
 for (let i = 0; i < args.length; i++) {
   const a = args[i];
@@ -42,9 +52,14 @@ for (let i = 0; i < args.length; i++) {
     const m = (args[++i] ?? "").match(/^(\d+)x(\d+)$/) ?? die("--vp WxH");
     vp = { width: +m[1], height: +m[2] };
   } else if (a === "--tol") tol = parseInt(args[++i] ?? "2", 10);
-  else pos.push(a);
+  else if (a === "--browsers") {
+    engineNames = (args[++i] ?? die("--browsers needs a comma list"))
+      .split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+    if (!engineNames.length) die("--browsers needs at least one engine");
+    for (const n of engineNames) if (!ENGINES[n]) die(`unknown browser: ${n} (pick from chromium,firefox,webkit)`);
+  } else pos.push(a);
 }
-const rangeSpec = pos[0] ?? die("Usage: check-slide-overflow.ts <range> [port] [--shot dir]");
+const rangeSpec = pos[0] ?? die("Usage: check-slide-overflow.ts <range> [port] [--shot dir] [--browsers a,b,c]");
 const port = pos[1] ? parseInt(pos[1], 10) : 3030;
 const rm = rangeSpec.match(/^(\d+)(?:-(\d+))?$/) ?? die(`bad range: ${rangeSpec}`);
 const start = +rm[1];
@@ -60,13 +75,12 @@ const TAB_SELECTOR = [
   "[role='tablist'] [role='tab']",
 ].join(", ");
 
-type Finding = { slide: number; theme: string; tab: string; kind: string; px: number; sel: string; text: string };
+type Finding = { slide: number; browser: string; theme: string; tab: string; kind: string; px: number; sel: string; text: string };
 const findings: Finding[] = [];
-const errors: { slide: number; theme: string; msg: string }[] = [];
+const errors: { slide: number; browser: string; theme: string; msg: string }[] = [];
+const launchFailed: string[] = [];
 
 if (shotDir) await Deno.mkdir(shotDir, { recursive: true }).catch(() => {});
-
-const browser: Browser = await chromium.launch();
 
 async function visibleSlideClass(page: Page): Promise<string | null> {
   return await page.evaluate(() => {
@@ -75,7 +89,7 @@ async function visibleSlideClass(page: Page): Promise<string | null> {
   });
 }
 
-async function collect(page: Page, slideCls: string, n: number, theme: string, tab: string) {
+async function collect(page: Page, slideCls: string, n: number, browser: string, theme: string, tab: string) {
   const rows = await page.evaluate(
     ({ VH, tol, slideCls }) => {
       const slide = document.querySelector(`.${slideCls}`);
@@ -130,7 +144,7 @@ async function collect(page: Page, slideCls: string, n: number, theme: string, t
     },
     { VH, tol, slideCls },
   );
-  for (const r of rows) findings.push({ slide: n, theme, tab, ...r });
+  for (const r of rows) findings.push({ slide: n, browser, theme, tab, ...r });
 }
 
 async function scrollInnerToBottom(page: Page, slideCls: string) {
@@ -143,65 +157,87 @@ async function scrollInnerToBottom(page: Page, slideCls: string) {
   await page.waitForTimeout(80);
 }
 
-for (const theme of ["light", "dark"] as const) {
-  const ctx = await browser.newContext({ viewport: vp, colorScheme: theme });
-  const page = await ctx.newPage();
-  page.on("pageerror", (e) => {
-    if (!/Wake Lock|remeasureFonts/i.test(e.message)) errors.push({ slide: -1, theme, msg: "pageerror: " + e.message.slice(0, 140) });
-  });
-  page.on("console", (m) => {
-    if (m.type() === "error") {
-      const t = m.text();
-      if (/Failed to fetch dynamically imported module|Internal Server Error|500/i.test(t))
-        errors.push({ slide: -1, theme, msg: "console: " + t.slice(0, 140) });
-    }
-  });
-
-  for (let n = start; n <= end; n++) {
-    try {
-      const resp = await page.goto(`${BASE}/${n}`, { waitUntil: "networkidle", timeout: 20000 });
-      if (!resp || !resp.ok()) { errors.push({ slide: n, theme, msg: `HTTP ${resp?.status()}` }); continue; }
-    } catch (e) {
-      errors.push({ slide: n, theme, msg: `goto failed: ${e}` });
-      continue;
-    }
-    await page.waitForTimeout(700); // Monaco mount + theme settle
-    const slideCls = await visibleSlideClass(page);
-    if (!slideCls) { errors.push({ slide: n, theme, msg: "no visible .slidev-page" }); continue; }
-
-    const tabs = page.locator(`.${slideCls}`).locator(TAB_SELECTOR);
-    const tabCount = await tabs.count();
-    if (tabCount === 0) {
-      await scrollInnerToBottom(page, slideCls);
-      await collect(page, slideCls, n, theme, "(no tabs)");
-    } else {
-      for (let i = 0; i < tabCount; i++) {
-        const label = (await tabs.nth(i).textContent())?.trim() || `tab${i}`;
-        await tabs.nth(i).click({ timeout: 2000 }).catch(() => {});
-        await page.waitForTimeout(220);
-        await scrollInnerToBottom(page, slideCls);
-        await collect(page, slideCls, n, theme, label);
-      }
-    }
-    if (shotDir) await page.screenshot({ path: `${shotDir}/slide-${String(n).padStart(2, "0")}-${theme}.png` });
-    Deno.stdout.writeSync(new TextEncoder().encode(`slide ${n} [${theme}]: ${findings.some((f) => f.slide === n && f.theme === theme) ? "ISSUE" : "ok"} (tabs:${tabCount})\n`));
+for (const engineName of engineNames) {
+  let browser: Browser;
+  try {
+    browser = await ENGINES[engineName].launch();
+  } catch (e) {
+    launchFailed.push(engineName);
+    errors.push({
+      slide: -1,
+      browser: engineName,
+      theme: "-",
+      msg: `launch failed — binary missing/incompatible. The wrapper normally provisions all engines (nix-pinned playwright-driver.browsers, or 'playwright install'). ${String(e).slice(0, 120)}`,
+    });
+    continue;
   }
-  await ctx.close();
+
+  for (const theme of ["light", "dark"] as const) {
+    const ctx = await browser.newContext({ viewport: vp, colorScheme: theme });
+    const page = await ctx.newPage();
+    page.on("pageerror", (e) => {
+      // Benign, engine-specific noise: Slidev's Screen Wake Lock request is
+      // denied in headless contexts, phrased differently per engine — Chromium
+      // says "Wake Lock", WebKit throws "NotAllowedError: Permission was denied".
+      if (!/Wake Lock|wakeLock|remeasureFonts|NotAllowedError|Permission was denied/i.test(e.message))
+        errors.push({ slide: -1, browser: engineName, theme, msg: "pageerror: " + e.message.slice(0, 140) });
+    });
+    page.on("console", (m) => {
+      if (m.type() === "error") {
+        const t = m.text();
+        if (/Failed to fetch dynamically imported module|Internal Server Error|500/i.test(t))
+          errors.push({ slide: -1, browser: engineName, theme, msg: "console: " + t.slice(0, 140) });
+      }
+    });
+
+    for (let n = start; n <= end; n++) {
+      try {
+        const resp = await page.goto(`${BASE}/${n}`, { waitUntil: "networkidle", timeout: 20000 });
+        if (!resp || !resp.ok()) { errors.push({ slide: n, browser: engineName, theme, msg: `HTTP ${resp?.status()}` }); continue; }
+      } catch (e) {
+        errors.push({ slide: n, browser: engineName, theme, msg: `goto failed: ${e}` });
+        continue;
+      }
+      await page.waitForTimeout(700); // Monaco mount + theme settle
+      const slideCls = await visibleSlideClass(page);
+      if (!slideCls) { errors.push({ slide: n, browser: engineName, theme, msg: "no visible .slidev-page" }); continue; }
+
+      const tabs = page.locator(`.${slideCls}`).locator(TAB_SELECTOR);
+      const tabCount = await tabs.count();
+      if (tabCount === 0) {
+        await scrollInnerToBottom(page, slideCls);
+        await collect(page, slideCls, n, engineName, theme, "(no tabs)");
+      } else {
+        for (let i = 0; i < tabCount; i++) {
+          const label = (await tabs.nth(i).textContent())?.trim() || `tab${i}`;
+          await tabs.nth(i).click({ timeout: 2000 }).catch(() => {});
+          await page.waitForTimeout(220);
+          await scrollInnerToBottom(page, slideCls);
+          await collect(page, slideCls, n, engineName, theme, label);
+        }
+      }
+      if (shotDir) await page.screenshot({ path: `${shotDir}/slide-${String(n).padStart(2, "0")}-${engineName}-${theme}.png` });
+      Deno.stdout.writeSync(new TextEncoder().encode(`slide ${n} [${engineName}/${theme}]: ${findings.some((f) => f.slide === n && f.browser === engineName && f.theme === theme) ? "ISSUE" : "ok"} (tabs:${tabCount})\n`));
+    }
+    await ctx.close();
+  }
+  await browser.close();
 }
-await browser.close();
 
 console.log("\n===== SUMMARY =====");
+const ran = engineNames.filter((n) => !launchFailed.includes(n));
 const bad = new Set([...findings.map((f) => f.slide), ...errors.map((e) => e.slide).filter((s) => s > 0)]);
 if (bad.size === 0 && errors.length === 0) {
-  console.log(`✓ slides ${start}–${end} clean (light + true dark, all tabs).`);
+  console.log(`✓ slides ${start}–${end} clean (${ran.join(" + ")}, light + true dark, all tabs).`);
   Deno.exit(0);
 }
-for (const e of errors) console.log(`⚠ slide ${e.slide > 0 ? e.slide : "?"} [${e.theme}] ${e.msg}`);
+for (const e of errors) console.log(`⚠ slide ${e.slide > 0 ? e.slide : "?"} [${e.browser}·${e.theme}] ${e.msg}`);
 for (const n of [...bad].sort((a, b) => a - b)) {
   const fs = findings.filter((f) => f.slide === n).sort((a, b) => b.px - a.px);
   if (!fs.length) continue;
   console.log(`\nSlide ${n}:`);
-  for (const f of fs.slice(0, 5)) console.log(`  ${f.kind === "fold" ? "⏷" : "↧"} +${f.px}px [${f.tab}·${f.theme}] ${f.sel} "${f.text}"`);
+  for (const f of fs.slice(0, 6)) console.log(`  ${f.kind === "fold" ? "⏷" : "↧"} +${f.px}px [${f.tab}·${f.browser}·${f.theme}] ${f.sel} "${f.text}"`);
 }
+if (launchFailed.length) console.log(`\n⚠ engines not tested: ${launchFailed.join(", ")} (failed to launch).`);
 console.log(`\n✗ ${bad.size} slide(s) need attention.`);
 Deno.exit(1);

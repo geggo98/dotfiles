@@ -11,6 +11,12 @@ mode — no scrollbar, no warning. So a slide can look fine while authoring and 
 its punchline on stage. This is the single most common deck defect; check for it
 after writing any content-heavy slide.
 
+Clipping and text wrapping are **layout-engine-specific** — a slide can fit in
+Chromium yet overflow in Gecko (Firefox) or WebKit because font metrics and
+line-breaking differ. So the bundled checker renders every slide through
+**chromium + firefox + webkit** by default; narrow with `--browsers` only for
+quick iteration, and run all three for final QA.
+
 ## The canvas-scaling model
 
 - Default logical canvas: `canvasWidth × canvasWidth/aspectRatio` = **980 × 552**
@@ -25,16 +31,43 @@ after writing any content-heavy slide.
 ## The bundled checker (recommended)
 
 ```bash
-# render each slide at 1280×720, cycle tabs, check light + TRUE dark
+# render each slide at 1280×720 across chromium+firefox+webkit, cycle tabs, light + TRUE dark
 zsh ${CLAUDE_SKILL_DIR}/scripts/check-slide-overflow.sh <range> [port]      # e.g. 1-40 3030
-# also write screenshots (light + true dark) for agent vision QA
+# also write screenshots (per engine, light + true dark) for agent vision QA
 zsh ${CLAUDE_SKILL_DIR}/scripts/check-slide-overflow.sh 1-40 3030 --shot ./playwright-tests/qa
+# narrow the engine set for fast iteration (default is all three)
+zsh ${CLAUDE_SKILL_DIR}/scripts/check-slide-overflow.sh 1-40 3030 --browsers chromium,webkit
 ```
 
-It exits non-zero when any slide overflows, and reports both vertical overflow
-(`↧ +Npx`) and code hidden below a Monaco editor's fold (`⏷`). It is a Deno script
-(`npm:playwright` pinned + a co-located `--lock --frozen`), so it needs `deno`; it
-reuses the project's installed Playwright Chromium.
+It exits non-zero when any slide overflows (or an engine fails to launch), and
+reports both vertical overflow (`↧ +Npx`) and code hidden below a Monaco editor's
+fold (`⏷`), tagged with the `[tab·engine·theme]` where it occurred. It is a Deno
+script (`npm:playwright` pinned + a co-located `--lock --frozen`), so it needs
+`deno`.
+
+### Where the browsers come from (nix-pinned, with fallback)
+
+The `.sh` wrapper provisions all three engines **reproducibly via Nix** before
+launching: it builds `playwright-driver.browsers` from a rev-pinned nixpkgs commit
+and exports `PLAYWRIGHT_BROWSERS_PATH` plus `PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS`
+(and `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD`). If `nix` is unavailable or the build
+fails, it falls back to `deno run npm:playwright install chromium firefox webkit`
+(CDN). The wrapper also runs `playwright-driver.browsers` on aarch64-darwin — the
+mac archives are Apple-signed and used as-is.
+
+**Version-lock invariant.** Playwright resolves browsers by *exact* revision
+(1.58.2 → `chromium-1208` / `firefox-1509` / `webkit-2248`); `PLAYWRIGHT_BROWSERS_PATH`
+only changes the lookup *root*, not the expected revision. So the nix bundle's
+`playwright-driver` version **must equal** the checker's pin. The pin lives in three
+coupled places — the `PW_VERSION`/`NIXPKGS_REF` in `check-slide-overflow.sh`, the
+`npm:playwright@…` specifier in `check-slide-overflow.ts`, and the deno `--lock`.
+Bump them in lockstep; the wrapper's runtime guard prints a clear warning (and falls
+back to CDN) on skew rather than throwing the cryptic `Executable doesn't exist at
+…/chromium-1208/…`.
+
+**Cost.** Three engines × two themes ≈ 3× the wall-clock of a single-browser pass,
+and `--shot` writes 3× the PNGs (`slide-NN-<engine>-<theme>.png`). First run also
+realises the nix browser bundle (~hundreds of MB, once) into the store.
 
 ## Blind spots the checker is built to avoid
 
@@ -74,9 +107,10 @@ These are the traps that make a naive "is anything below 720?" check report a fa
 ## Vision QA (what geometry can't see)
 
 Geometry catches vertical overflow and the Monaco fold; it cannot judge horizontal
-clipping, contrast, or "this looks wrong". Complement it: capture every slide in
-light **and true dark** (`--shot`), then have an agent review the PNGs for clipped
-content, unreadable/low-contrast text, literal HTML tags shown as text, and mojibake.
+clipping, contrast, or "this looks wrong". Complement it: capture every slide per
+engine in light **and true dark** (`--shot` writes `slide-NN-<engine>-<theme>.png`),
+then have an agent review the PNGs for clipped content, unreadable/low-contrast text,
+literal HTML tags shown as text, mojibake, and cross-engine rendering differences.
 For pixel-level regression, `await expect(page).toHaveScreenshot()` also works
 (see [testing-playwright](testing-playwright.md)).
 

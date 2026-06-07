@@ -70,14 +70,15 @@ On first use, create `playwright-tests/.gitignore` via the Write tool with conte
 
 Then write scripts like `playwright-tests/debug-slide-5.ts` via the Write tool and run them with `bun run`. Screenshots land in `playwright-tests/` as well. Users can `git add -f` individual files they want to keep.
 
-**Overflow & visual QA**: Slidev silently clips anything past the slide canvas. After authoring content-heavy slides, run the bundled checker — it renders each slide at 1280×720, cycles tabs, checks light + **true dark**, and reports content past the canvas plus code hidden below the Monaco fold:
+**Overflow & visual QA**: Slidev silently clips anything past the slide canvas. After authoring content-heavy slides, run the bundled checker — it renders each slide at 1280×720 across **chromium + firefox + webkit** (clipping is layout-engine-specific), cycles tabs, checks light + **true dark**, and reports content past the canvas plus code hidden below the Monaco fold:
 
 ```bash
-zsh ${CLAUDE_SKILL_DIR}/scripts/check-slide-overflow.sh 1-40 3030               # check a range
-zsh ${CLAUDE_SKILL_DIR}/scripts/check-slide-overflow.sh 1-40 3030 --shot ./playwright-tests/qa   # + screenshots for vision QA
+zsh ${CLAUDE_SKILL_DIR}/scripts/check-slide-overflow.sh 1-40 3030               # check a range, all 3 engines
+zsh ${CLAUDE_SKILL_DIR}/scripts/check-slide-overflow.sh 1-40 3030 --shot ./playwright-tests/qa   # + per-engine screenshots for vision QA
+zsh ${CLAUDE_SKILL_DIR}/scripts/check-slide-overflow.sh 1-40 3030 --browsers chromium   # narrow for fast iteration
 ```
 
-See [testing-overflow](references/testing-overflow.md) for the why and the technique. (Needs `deno`.)
+Browsers are **nix-pinned** (`playwright-driver.browsers`, with `playwright install` as fallback). See [testing-overflow](references/testing-overflow.md) for the why and the technique. (Needs `deno`; `nix` for pinned browsers.)
 
 **Cleanup**: When done, kill the session: `zsh "$TMUX" kill -s claude-slidev`.
 

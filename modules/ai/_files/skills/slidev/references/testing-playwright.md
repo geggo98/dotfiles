@@ -37,14 +37,21 @@ await page.screenshot({ path: 'playwright-tests/slide5.png', fullPage: false })
 await browser.close()
 ```
 
+For a cross-engine ad-hoc check, import `{ chromium, firefox, webkit }` and loop over
+them (`for (const engine of [chromium, firefox, webkit]) { … }`), tagging each
+screenshot with the engine name.
+
 ## Setup
 
 ### Install Dependencies
 
 ```bash
 bun add -D @playwright/test
-bunx playwright install chromium  # or: --with-deps chromium
+bunx playwright install chromium firefox webkit  # on Linux add --with-deps; not needed on macOS
 ```
+
+Test across all three engines — clipping, text wrapping, and many CSS behaviours
+are layout-engine-specific, so Chromium-only passing is not enough.
 
 ### Project Directory for Test Scripts
 
@@ -83,6 +90,8 @@ export default defineConfig({
   },
   projects: [
     { name: 'chromium', use: { browserName: 'chromium' } },
+    { name: 'firefox', use: { browserName: 'firefox' } },
+    { name: 'webkit', use: { browserName: 'webkit' } },
   ],
 })
 ```
@@ -104,8 +113,31 @@ export default defineConfig({
   use: {
     baseURL: 'http://localhost:3030',
   },
+  projects: [
+    { name: 'chromium', use: { browserName: 'chromium' } },
+    { name: 'firefox', use: { browserName: 'firefox' } },
+    { name: 'webkit', use: { browserName: 'webkit' } },
+  ],
 })
 ```
+
+### Nix-pinned browsers (optional, reproducible)
+
+Instead of `playwright install` (CDN), you can pin the browser binaries with Nix —
+the bundled overflow checker does this by default (see
+[testing-overflow](testing-overflow.md)). For your own `bunx playwright test` deck,
+point Playwright at a rev-pinned `playwright-driver.browsers` whose version **matches**
+your `@playwright/test` (Playwright resolves browsers by exact revision):
+
+```bash
+REF='github:nixos/nixpkgs/<rev-shipping-your-playwright-version>'
+export PLAYWRIGHT_BROWSERS_PATH="$(nix build --no-link --print-out-paths "$REF#playwright-driver.browsers")"
+export PLAYWRIGHT_SKIP_VALIDATE_HOST_REQUIREMENTS=1
+bunx playwright test
+```
+
+`playwright-driver.browsers` provides chromium/firefox/webkit on both Linux and
+aarch64-darwin. Keep `playwright install` as the simpler default for one-off decks.
 
 ## Slidev DOM Structure
 
