@@ -1,9 +1,9 @@
 ---
 name: bitbucket-pr
-description: "Read and manage Bitbucket Cloud pull requests, comments, and tasks via the `bb` CLI (gildas/bitbucket-cli v0.18.1+). Use when reviewing PR feedback, replying to comments, creating tasks/PRs, or marking review tasks done."
+description: "Read and manage Bitbucket Cloud pull requests, comments, and tasks via the `bb` CLI (gildas/bitbucket-cli v0.18.1+). Use when reviewing PR feedback, replying to comments, creating tasks/PRs, or marking review tasks done. Also bridges JIRA issues to their linked Bitbucket PRs/branches/repos via Jira's dev-status API — find the PR(s) for a JIRA key (e.g. VUKFZIF-1234), even in repos that aren't cloned locally."
 context: fork
-allowed-tools: Bash(./scripts/bitbucket_pr.sh *) Bash(./scripts/bitbucket_pr_comments.sh *) Bash(./scripts/bitbucket_pr_tasks.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_comments.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_tasks.sh *) Bash(zsh *)
-dependencies: "bb (Bitbucket CLI, installed via Nix on this host), jq"
+allowed-tools: Bash(./scripts/bitbucket_pr.sh *) Bash(./scripts/bitbucket_pr_comments.sh *) Bash(./scripts/bitbucket_pr_tasks.sh *) Bash(./scripts/bitbucket_jira.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_comments.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_tasks.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_jira.sh *) Bash(zsh *)
+dependencies: "bb (Bitbucket CLI, installed via Nix on this host), jq, curl (JIRA bridge). JIRA bridge credentials: jira_url / jira_username / jira_api_token via env (JIRA_URL, JIRA_USERNAME, JIRA_API_TOKEN / ATLASSIAN_API_TOKEN) or files in ~/.config/sops-nix/secrets"
 ---
 
 # Bitbucket Pull Request Skill
@@ -11,6 +11,10 @@ dependencies: "bb (Bitbucket CLI, installed via Nix on this host), jq"
 A wrapper around `bb` (Bitbucket Cloud CLI) exposing **stable, read- and safe-write** operations on PRs, comments, and tasks. Destructive operations (`merge`, `decline`, any `delete`) are intentionally **not** wrapped — use raw `bb` with explicit user approval if you really need them.
 
 > **⚠ Run these scripts from inside the target repository's git working tree, by their absolute `${CLAUDE_SKILL_DIR}/scripts/…` path — never `cd` into the skill directory.** `bb` resolves the workspace and repository from the **git remote of the current directory** (`--workspace`/`--repository` default to *"determined from the git configuration"*). A wrong CWD — the skill dir, `/tmp`, or any repo whose remote isn't `bitbucket.org` — fails with `Error: Argument repository is missing`. The scripts self-locate their own helpers (`${0:A:h}`), so the absolute path works from any CWD; just keep your shell in the repo you're operating on. The scripts emit a non-fatal warning when the current directory has no `bitbucket.org` remote.
+
+> **Two exceptions to "run inside the repo":**
+> 1. Pass `--repo <workspace>/<slug>` (or the native `--workspace`/`--repository` pair) to any `bitbucket_pr*.sh` command to target a specific repo regardless of CWD — needed for PRs in repos you haven't cloned (e.g. ones surfaced by `bitbucket_jira.sh`). It also silences the no-remote warning. See [§11](#11-jira--bitbucket-bridge).
+> 2. **`bitbucket_jira.sh` is workspace-global:** it talks to the Jira REST API directly, runs from **any CWD**, and ignores git/`bb` entirely.
 
 ## 1. Capability surface
 
@@ -29,10 +33,13 @@ Bitbucket's hierarchy: **PR → comment → task** (tasks may also live on the P
 | `${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh`          | PR-level operations |
 | `${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_comments.sh` | Comment operations |
 | `${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_tasks.sh`    | Task operations    |
+| `${CLAUDE_SKILL_DIR}/scripts/bitbucket_jira.sh`        | JIRA → Bitbucket bridge (find PRs/branches/repos for a JIRA key); see [§11](#11-jira--bitbucket-bridge) |
 
-All three are **zsh** scripts that source `${CLAUDE_SKILL_DIR}/scripts/_lib.sh` for shared helpers (logging, prerequisite checks, stdin reading, output buffering). Run them directly — they refuse to run under bash. Run any script with `--help` for its full grammar. All three share the same exit codes and env vars (see §6, §7).
+All four are **zsh** scripts that source `${CLAUDE_SKILL_DIR}/scripts/_lib.sh` for shared helpers (logging, prerequisite checks, stdin reading, output buffering, `--repo` target parsing). Run them directly — they refuse to run under bash. Run any script with `--help` for its full grammar. The three `bb` wrappers share the same exit codes and env vars (see §6, §7); `bitbucket_jira.sh` reuses the same exit-code scheme but talks to Jira, not `bb` (see §11).
 
 ## 3. Usage by resource
+
+> **Targeting another repo (any command below):** by default each command resolves the workspace/repository from the current git remote. Add `--repo <workspace>/<slug>` — or the native pair `--workspace <W> --repository <R>` — to operate on a different repo, **including one you haven't cloned**. The `<workspace>/<slug>` is exactly what `bitbucket_jira.sh repos` prints. This is the bridge from a JIRA lookup to reading that PR's comments/tasks (see [§11](#11-jira--bitbucket-bridge)).
 
 ### Pull requests
 
@@ -216,9 +223,9 @@ echo "Fixed in <commit-hash>" | \
 |---|---|
 | 0 | Success |
 | 1 | Invalid arguments / missing stdin / bad flag |
-| 2 | `bb` or `jq` not on PATH |
-| 3 | `bb` invocation failed (network, auth, server error) |
-| 4 | PR / comment / task not found |
+| 2 | `bb` / `jq` / `curl` not on PATH (JIRA bridge: also missing credentials) |
+| 3 | `bb` invocation or JIRA REST call failed (network, auth, server error) |
+| 4 | PR / comment / task / JIRA issue not found |
 
 ## 7. Environment variables
 
@@ -229,6 +236,13 @@ echo "Fixed in <commit-hash>" | \
 | `BB_OUTPUT_MAX_BYTES`  | Spill output larger than this to a tempfile (default `32768`; matches `database` skill)      |
 | `BB_PROFILE`           | (Read by `bb`) which profile to use                                                          |
 | `BB_OUTPUT_FORMAT`     | (Documented for `bb` — but see warning below)                                                |
+| `CURL_PATH`            | (JIRA bridge) Path to `curl` (default `curl`)                                                |
+| `JIRA_URL`             | (JIRA bridge) Jira base URL; else file `jira_url` in `$SOPS_SECRETS_DIR`                     |
+| `JIRA_USERNAME`        | (JIRA bridge) Jira account email for Basic auth; else file `jira_username`                   |
+| `JIRA_API_TOKEN`       | (JIRA bridge) Atlassian API token; falls back to `ATLASSIAN_API_TOKEN`, then files           |
+| `ATLASSIAN_API_TOKEN`  | (JIRA bridge) Fallback token (already exported in this shell)                                |
+| `SOPS_SECRETS_DIR`     | (JIRA bridge) sops-nix secrets dir (default `~/.config/sops-nix/secrets`)                    |
+| `JIRA_DEV_APPLICATION_TYPE` | (JIRA bridge) dev-status `applicationType` (default `bitbucket`)                        |
 
 `bb` resolves the **workspace and repository from the git remote of the current directory** (its `--workspace`/`--repository` flags default to *"determined from the git configuration"*), falling back to the active profile's defaults. **This is why the scripts must run from inside the target repo's working tree** — see the callout at the top. Credentials and any profile-level defaults come from `bb`'s own config (`~/.config/bitbucket/config-cli.yml` or `~/Library/Application Support/bitbucket/config-cli.yml`) and its keychain-stored credentials.
 
@@ -248,6 +262,10 @@ echo "Fixed in <commit-hash>" | \
 | `task resolve`/`reopen` rejected / invalid state | Used `needs_work`/`complete`/`pending` from `bb`'s `--state` help | Those values are wrong; the API only accepts `RESOLVED`/`UNRESOLVED` — the wrapper's `resolve`/`reopen` already send the correct ones. See [§9](#9-known-quirks). |
 | Output goes to a tempfile (header + preview only) | Output exceeded `BB_OUTPUT_MAX_BYTES` (default 32 KB) | Read the tempfile with `jq . <path>` / `column -t -s $'\t' <path>`, or raise the cap: `BB_OUTPUT_MAX_BYTES=65536 …`. For `list`, try `--format tsv` first — it's usually small enough to stay inline. |
 | `ERROR: This script requires zsh but is running under bash.` | Invoked via `bash ${CLAUDE_SKILL_DIR}/scripts/...` | Run the script directly (`${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh ...`) or with `zsh ${CLAUDE_SKILL_DIR}/scripts/...`. |
+| (JIRA bridge) `Missing Jira credentials` | `JIRA_URL`/`JIRA_USERNAME`/token absent from env **and** `$SOPS_SECRETS_DIR` | Set the env vars, or ensure the `jira_url`/`jira_username`/`jira_api_token` sops-nix secrets exist; confirm with `bitbucket_jira.sh whoami`. |
+| (JIRA bridge) empty `pullRequests` / `detail: []` | `--application-type stash` against a Cloud site, or the issue has no linked dev data | Use the default `bitbucket`; verify the issue really has a linked branch/PR. |
+| (JIRA bridge) `HTTP 401/403` | Wrong account/token, or token lacks access | `bitbucket_jira.sh whoami` shows the token's account; use the Jira token via Basic auth (not a Bitbucket Bearer token). |
+| (JIRA bridge) PR URL full of `%7B…%7D` UUIDs | `--no-resolve-repo` used, or multiple repos linked to the issue | Run without `--no-resolve-repo`; for multi-repo issues take the slug from `bitbucket_jira.sh repos`. |
 
 ## 9. Known quirks
 
@@ -286,3 +304,83 @@ By design, the scripts **do not** wrap these operations. If a user explicitly re
 - **`bb pr comment delete`** / **`bb pr task delete`** — destroy review history
 
 For everything else (anything not listed in §1 as "Read" or "Write (safe)"), prefer raw `bb <subcommand> --help` and surface the command to the user before running it.
+
+## 11. JIRA → Bitbucket bridge
+
+`bitbucket_jira.sh` answers **"which Bitbucket PRs/branches belong to this JIRA
+issue?"** — something `bb` cannot do (it only sees the current repo's git remote).
+Bitbucket reports development data back to Jira; this script reads it from Jira's
+**dev-status** REST endpoint. It is **workspace-global**: it talks to the Jira REST
+API directly, runs from **any CWD**, and uses `curl` + `jq` (no `bb`, no git).
+
+### Credentials (env first, then sops-nix files)
+
+Resolved in this order — the first non-empty wins; missing values produce a clear
+error listing what to set:
+
+| Value          | env                                        | else file in `$SOPS_SECRETS_DIR` (default `~/.config/sops-nix/secrets`) |
+|----------------|--------------------------------------------|------------------------------------------------------------------------|
+| Base URL       | `JIRA_URL`                                 | `jira_url`                                                              |
+| Username/email | `JIRA_USERNAME`                            | `jira_username`                                                         |
+| API token      | `JIRA_API_TOKEN` → `ATLASSIAN_API_TOKEN`   | `jira_api_token` → `atlassian_c24_bitbucket_api_token`                  |
+
+Auth is **HTTP Basic** (`"$JIRA_USERNAME:$JIRA_API_TOKEN"`) against the Jira site —
+an Atlassian API token works for Jira this way. (The same token does **not** work as
+a Bearer token against `api.bitbucket.org`; use the bridge, not raw Bitbucket API
+calls.) These are the same secrets the Atlassian MCP server uses.
+
+### Commands
+
+```bash
+# Resolve a Jira key to its numeric issue id (dev-status needs the id, not the key).
+${CLAUDE_SKILL_DIR}/scripts/bitbucket_jira.sh id VUKFZIF-2978              # → 123456
+${CLAUDE_SKILL_DIR}/scripts/bitbucket_jira.sh id VUKFZIF-2978 --format json # → {id,key,summary}
+
+# Pull requests linked to an issue (key OR numeric id). By default also resolves the
+# repo slug and rewrites the UUID-based PR URL to a clean one (single-repo case).
+${CLAUDE_SKILL_DIR}/scripts/bitbucket_jira.sh prs VUKFZIF-2978
+${CLAUDE_SKILL_DIR}/scripts/bitbucket_jira.sh prs VUKFZIF-2978 --state MERGED   # client-side filter
+${CLAUDE_SKILL_DIR}/scripts/bitbucket_jira.sh prs VUKFZIF-2978 --format tsv      # id, status, source, dest, repo, url, title
+${CLAUDE_SKILL_DIR}/scripts/bitbucket_jira.sh prs VUKFZIF-2978 --no-resolve-repo # skip the extra repository call (raw UUID URL)
+
+# Linked branches and repositories
+${CLAUDE_SKILL_DIR}/scripts/bitbucket_jira.sh branches VUKFZIF-2978
+${CLAUDE_SKILL_DIR}/scripts/bitbucket_jira.sh repos    VUKFZIF-2978              # prints the <workspace>/<slug>
+
+# Which account does the token belong to? (verifies auth; don't guess the login)
+${CLAUDE_SKILL_DIR}/scripts/bitbucket_jira.sh whoami
+```
+
+`prs` JSON shape: `{ issue: {id, key}, repositories: [{name, url, slug}], pullRequests:
+[{id, status, title, source, destination, author, lastUpdate, url, repo}] }`. With a
+single linked repo, each PR's `repo` is the `<workspace>/<slug>` and `url` is rewritten
+to `https://bitbucket.org/<slug>/pull-requests/<id>`. `--format tsv` emits one PR per
+row. Output spills to a tempfile past `BB_OUTPUT_MAX_BYTES`, same as the `bb` wrappers.
+
+### End-to-end: from a JIRA key to that PR's review surface
+
+The repo is usually **not** cloned locally, so feed the slug into the `bb` wrappers via
+`--repo` (see [§3](#3-usage-by-resource)) — no checkout required:
+
+```bash
+# 1. Find the PR id + repo slug for the ticket
+${CLAUDE_SKILL_DIR}/scripts/bitbucket_jira.sh prs VUKFZIF-2978 --format tsv
+#    1309   OPEN   feature/x   master   check24/kfz-if-versicherer   https://…/pull-requests/1309   …
+
+# 2. Read its comments / tasks from anywhere, targeting that repo explicitly
+${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_comments.sh list 1309 --repo check24/kfz-if-versicherer
+${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_tasks.sh    list 1309 --repo check24/kfz-if-versicherer
+```
+
+### Notes & gotchas
+
+- **`applicationType` must be `bitbucket`** (Bitbucket Cloud), the default. `stash`
+  (Bitbucket Server) returns an empty `detail: []` against a Cloud site. Override with
+  `--application-type T` or `$JIRA_DEV_APPLICATION_TYPE` only if you know you need it.
+- **Numeric issue id required by dev-status.** The script resolves a key → id for you
+  via `/rest/api/3/issue/{KEY}`; pass either a key or an id.
+- **UUID URLs.** dev-status PR URLs contain workspace/repo **UUIDs**, not slugs. `prs`
+  resolves the slug (one extra `dataType=repository` call) and cleans the URL when a
+  single repo is linked; with multiple repos it leaves the raw URL and lists the repos.
+- Exit codes match the rest of the skill (§6): `2` = missing prereq/credentials,
+  `3` = API/auth/network (run `whoami` to check the token), `4` = issue/resource not found.

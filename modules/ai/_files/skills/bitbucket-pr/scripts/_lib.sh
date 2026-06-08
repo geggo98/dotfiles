@@ -33,9 +33,50 @@ warn_if_no_bitbucket_remote() {
   local remotes
   remotes=$(git remote -v 2>/dev/null) || true
   if [[ "$remotes" != *bitbucket.org* ]]; then
-    log_info "No bitbucket.org git remote in $PWD — bb derives the workspace/repository from the current directory's git remote. Run this from inside the target repo's working tree (do not cd into the skill directory), or pass --workspace/--repository (or set profile defaults)."
+    log_info "No bitbucket.org git remote in $PWD — bb derives the workspace/repository from the current directory's git remote. Run this from inside the target repo's working tree (do not cd into the skill directory), or pass --repo <workspace>/<slug> (or --workspace/--repository, or set profile defaults)."
   fi
   return 0
+}
+
+# parse_repo_target — pull explicit Bitbucket repo-targeting flags out of the arg
+# list so `bb` can operate on a repo that is NOT the current directory's git
+# remote (e.g. PRs surfaced by bitbucket_jira.sh in repos that aren't cloned).
+# Accepts either:
+#   --repo <workspace>/<slug>          ergonomic; copy-paste from `bitbucket_jira.sh repos`
+#   --workspace <W> --repository <R>   explicit pair (bb's own flag names)
+# The flags may appear anywhere in the args (pre-parsed before subcommand dispatch).
+# Sets three globals for the caller:
+#   BB_TARGET           array of bb flags (e.g. --workspace W --repository R), empty when unset
+#   BB_TARGET_EXPLICIT  1 when a target was given, else 0 (used to skip the no-remote warning)
+#   BB_REST_ARGS        the remaining args, with the repo flags removed
+# Empty-array expansion "${BB_TARGET[@]}" is safe under zsh `set -u`.
+BB_TARGET=()
+BB_TARGET_EXPLICIT=0
+BB_REST_ARGS=()
+parse_repo_target() {
+  local ws="" repo="" combo=""
+  BB_TARGET=()
+  BB_TARGET_EXPLICIT=0
+  BB_REST_ARGS=()
+  while (( $# > 0 )); do
+    case "$1" in
+      --repo)       (( $# >= 2 )) || { log_error "--repo requires <workspace>/<slug>"; exit 1; }; combo="$2"; shift 2 ;;
+      --workspace)  (( $# >= 2 )) || { log_error "--workspace requires a value";        exit 1; }; ws="$2";    shift 2 ;;
+      --repository) (( $# >= 2 )) || { log_error "--repository requires a value";       exit 1; }; repo="$2";  shift 2 ;;
+      *) BB_REST_ARGS+=("$1"); shift ;;
+    esac
+  done
+  if [[ -n "$combo" ]]; then
+    ws="${combo%%/*}"; repo="${combo#*/}"
+    [[ -n "$ws" && -n "$repo" && "$ws" != "$combo" ]] \
+      || { log_error "--repo expects <workspace>/<slug> (got '$combo')"; exit 1; }
+  fi
+  if [[ -n "$ws" || -n "$repo" ]]; then
+    [[ -n "$ws" && -n "$repo" ]] \
+      || { log_error "Specify both workspace and repository (use --repo W/S, or both --workspace and --repository)"; exit 1; }
+    BB_TARGET=(--workspace "$ws" --repository "$repo")
+    BB_TARGET_EXPLICIT=1
+  fi
 }
 
 validate_numeric() {

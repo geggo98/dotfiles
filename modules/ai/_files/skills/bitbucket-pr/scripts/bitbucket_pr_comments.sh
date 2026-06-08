@@ -41,7 +41,7 @@ cmd_list() {
 
   log_info "Fetching comments for PR #$pr_id (format=$format)..."
   local output
-  if ! output=$("$BITBUCKET_CLI" pr comment list --pullrequest "$pr_id" --output "$format" 2>&1); then
+  if ! output=$("$BITBUCKET_CLI" pr comment list --pullrequest "$pr_id" "${BB_TARGET[@]}" --output "$format" 2>&1); then
     log_error "Failed to fetch comments for PR #$pr_id"
     log_error "Bitbucket CLI output: $output"
     exit 3
@@ -63,7 +63,7 @@ cmd_get() {
 
   log_info "Fetching comment #$comment_id from PR #$pr_id..."
   local output
-  if ! output=$("$BITBUCKET_CLI" pr comment get "$comment_id" --pullrequest "$pr_id" --output json 2>&1); then
+  if ! output=$("$BITBUCKET_CLI" pr comment get "$comment_id" --pullrequest "$pr_id" "${BB_TARGET[@]}" --output json 2>&1); then
     log_error "Failed to fetch comment #$comment_id from PR #$pr_id"
     log_error "Bitbucket CLI output: $output"
     exit 4
@@ -102,7 +102,7 @@ cmd_create() {
 
   log_info "Creating comment on PR #$pr_id${file:+ on $file${line:+:$line}}${parent:+ (reply to $parent)}..."
   local output
-  if ! output=$("$BITBUCKET_CLI" "${args[@]}" --output json 2>&1); then
+  if ! output=$("$BITBUCKET_CLI" "${args[@]}" "${BB_TARGET[@]}" --output json 2>&1); then
     log_error "Failed to create comment on PR #$pr_id"
     log_error "Bitbucket CLI output: $output"
     exit 3
@@ -121,7 +121,7 @@ cmd_update() {
   log_info "Updating comment #$comment_id on PR #$pr_id..."
   local output
   if ! output=$("$BITBUCKET_CLI" pr comment update "$comment_id" \
-                  --pullrequest "$pr_id" --comment "$body" --output json 2>&1); then
+                  --pullrequest "$pr_id" --comment "$body" "${BB_TARGET[@]}" --output json 2>&1); then
     log_error "Failed to update comment #$comment_id on PR #$pr_id"
     log_error "Bitbucket CLI output: $output"
     exit 3
@@ -136,7 +136,7 @@ cmd_resolve() {
 
   log_info "Resolving comment #$comment_id on PR #$pr_id..."
   local output
-  if ! output=$("$BITBUCKET_CLI" pr comment resolve "$comment_id" --pullrequest "$pr_id" --output json 2>&1); then
+  if ! output=$("$BITBUCKET_CLI" pr comment resolve "$comment_id" --pullrequest "$pr_id" "${BB_TARGET[@]}" --output json 2>&1); then
     log_error "Failed to resolve comment #$comment_id on PR #$pr_id"
     log_error "Bitbucket CLI output: $output"
     exit 3
@@ -151,7 +151,7 @@ cmd_reopen() {
 
   log_info "Reopening comment #$comment_id on PR #$pr_id..."
   local output
-  if ! output=$("$BITBUCKET_CLI" pr comment reopen "$comment_id" --pullrequest "$pr_id" --output json 2>&1); then
+  if ! output=$("$BITBUCKET_CLI" pr comment reopen "$comment_id" --pullrequest "$pr_id" "${BB_TARGET[@]}" --output json 2>&1); then
     log_error "Failed to reopen comment #$comment_id on PR #$pr_id"
     log_error "Bitbucket CLI output: $output"
     exit 3
@@ -173,6 +173,11 @@ Commands:
 
 Hidden (use raw bb if needed): delete.
 
+Repo targeting (any command; default: workspace/repository derived from the current git remote):
+  --repo <workspace>/<slug>            Operate on a specific repo (e.g. a slug from \`bitbucket_jira.sh repos\`),
+                                       even one not cloned locally. Suppresses the no-remote warning.
+  --workspace <W> --repository <R>     Same target, as bb's native flag pair.
+
 Environment:
   BITBUCKET_CLI         Path to bb               (default: bb)
   JQ_PATH               Path to jq               (default: jq)
@@ -187,7 +192,9 @@ main() {
   case "$1" in -h|--help|help) show_usage; exit 0 ;; esac
 
   check_prerequisites
-  warn_if_no_bitbucket_remote
+  parse_repo_target "$@"; set -- "${BB_REST_ARGS[@]}"
+  (( BB_TARGET_EXPLICIT )) || warn_if_no_bitbucket_remote
+  (( $# >= 1 )) || { log_error "Missing command"; show_usage; exit 1; }
   local command="$1"; shift
   (( $# >= 1 )) || { log_error "$command requires at least <pr-id>"; show_usage; exit 1; }
 
