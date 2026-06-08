@@ -48,7 +48,7 @@ cmd_list() {
 
   log_info "Fetching tasks for PR #$pr_id (format=$format)..."
   local output
-  if ! output=$("$BITBUCKET_CLI" pr task list --pullrequest "$pr_id" --output "$format" 2>&1); then
+  if ! output=$("$BITBUCKET_CLI" pr task list --pullrequest "$pr_id" "${BB_TARGET[@]}" --output "$format" 2>&1); then
     log_error "Failed to fetch tasks for PR #$pr_id"
     log_error "Bitbucket CLI output: $output"
     exit 3
@@ -63,7 +63,7 @@ cmd_get() {
 
   log_info "Fetching task #$task_id from PR #$pr_id..."
   local output
-  if ! output=$("$BITBUCKET_CLI" pr task get "$task_id" --pullrequest "$pr_id" --output json 2>&1); then
+  if ! output=$("$BITBUCKET_CLI" pr task get "$task_id" --pullrequest "$pr_id" "${BB_TARGET[@]}" --output json 2>&1); then
     log_error "Failed to fetch task #$task_id from PR #$pr_id"
     log_error "Bitbucket CLI output: $output"
     exit 4
@@ -96,7 +96,7 @@ cmd_create() {
 
   log_info "Creating task on PR #$pr_id${comment_id:+ (attached to comment $comment_id)}..."
   local output
-  if ! output=$("$BITBUCKET_CLI" "${args[@]}" --output json 2>&1); then
+  if ! output=$("$BITBUCKET_CLI" "${args[@]}" "${BB_TARGET[@]}" --output json 2>&1); then
     log_error "Failed to create task on PR #$pr_id"
     log_error "Bitbucket CLI output: $output"
     exit 3
@@ -115,7 +115,7 @@ cmd_update() {
   log_info "Updating task #$task_id content on PR #$pr_id..."
   local output
   if ! output=$("$BITBUCKET_CLI" pr task update "$task_id" \
-                  --pullrequest "$pr_id" --content "$content" --output json 2>&1); then
+                  --pullrequest "$pr_id" --content "$content" "${BB_TARGET[@]}" --output json 2>&1); then
     log_error "Failed to update task #$task_id on PR #$pr_id"
     log_error "Bitbucket CLI output: $output"
     exit 3
@@ -131,7 +131,7 @@ cmd_set_state() {
   log_info "Setting task #$task_id on PR #$pr_id to $state..."
   local output
   if ! output=$("$BITBUCKET_CLI" pr task update "$task_id" \
-                  --pullrequest "$pr_id" --state "$state" --output json 2>&1); then
+                  --pullrequest "$pr_id" --state "$state" "${BB_TARGET[@]}" --output json 2>&1); then
     log_error "Failed to set task #$task_id state to $state on PR #$pr_id"
     log_error "Bitbucket CLI output: $output"
     exit 3
@@ -155,6 +155,11 @@ Commands:
 
 Hidden (use raw bb if needed): delete.
 
+Repo targeting (any command; default: workspace/repository derived from the current git remote):
+  --repo <workspace>/<slug>            Operate on a specific repo (e.g. a slug from \`bitbucket_jira.sh repos\`),
+                                       even one not cloned locally. Suppresses the no-remote warning.
+  --workspace <W> --repository <R>     Same target, as bb's native flag pair.
+
 Environment:
   BITBUCKET_CLI         Path to bb               (default: bb)
   JQ_PATH               Path to jq               (default: jq)
@@ -169,7 +174,9 @@ main() {
   case "$1" in -h|--help|help) show_usage; exit 0 ;; esac
 
   check_prerequisites
-  warn_if_no_bitbucket_remote
+  parse_repo_target "$@"; set -- "${BB_REST_ARGS[@]}"
+  (( BB_TARGET_EXPLICIT )) || warn_if_no_bitbucket_remote
+  (( $# >= 1 )) || { log_error "Missing command"; show_usage; exit 1; }
   local command="$1"; shift
   (( $# >= 1 )) || { log_error "$command requires at least <pr-id>"; show_usage; exit 1; }
 
