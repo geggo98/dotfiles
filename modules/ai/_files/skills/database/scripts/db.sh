@@ -261,7 +261,8 @@ run_mssql() {
 }
 
 run_oracle() {
-  ensure_pkgs sql sqlcl
+  export NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1
+  ensure_pkgs sqlcl sqlcl
   local sql="$1"
   local rest="${DSN#oracle://}"
   local userpass="${rest%%@*}"
@@ -283,7 +284,7 @@ run_oracle() {
   [[ "$mode" == "read-only" ]] && preamble+=("set readonly on")
   local script
   script="$(printf '%s;\n' "${preamble[@]}"; printf '%s;\nexit\n' "$sql")"
-  printf '%s' "$script" | with_timeout "$timeout_dur" -- sql -S "$conn"
+  printf '%s' "$script" | with_timeout "$timeout_dur" -- sqlcl -S "$conn"
 }
 
 run_usql() {

@@ -290,7 +290,7 @@ ensure_pkgs() {
   local quoted_argv
   quoted_argv="$(printf ' %q' "$0" "${__ORIGINAL_ARGV[@]}")"
   quoted_argv="${quoted_argv# }"
-  local example="nix shell ${pkg_list_str} --command ${quoted_argv}"
+  local example="nix shell --impure ${pkg_list_str} --command ${quoted_argv}"
 
   if [[ -n "${__DB_SKILL_BOOTSTRAPPED-}" ]]; then
     die "still missing after auto-bootstrap: ${missing_cmds[*]}. The package(s) [${!pkg_set[*]}] may not provide the expected binary. Open a bug."
@@ -317,7 +317,7 @@ EOF
     "${missing_cmds[*]}" "${example}" >&2
 
   export __DB_SKILL_BOOTSTRAPPED=1
-  exec nix shell "${installables[@]}" --command "$0" "${__ORIGINAL_ARGV[@]}"
+  exec nix shell --impure "${installables[@]}" --command "$0" "${__ORIGINAL_ARGV[@]}"
 }
 
 # ---------------------------------------------------------------------------

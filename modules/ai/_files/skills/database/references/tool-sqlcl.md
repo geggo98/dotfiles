@@ -7,14 +7,18 @@ for new agent work.
 ## Install
 
 ```bash
-nix shell nixpkgs#sqlcl
+# sqlcl is unfree, and nixpkgs marks meta.platforms = x86_64-linux only.
+# It's pure Java, so it runs on any platform with a JDK — the UNSUPPORTED
+# override is safe. --impure lets nix read the NIXPKGS_ALLOW_* env vars.
+NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1 \
+  nix shell --impure nixpkgs#sqlcl
 ```
 
 ## Non-interactive patterns
 
 ```bash
 # JSON
-sql -S stefan/pw@//db:1521/XEPDB1 <<'EOF'
+sqlcl -S stefan/pw@//db:1521/XEPDB1 <<'EOF'
 set sqlformat json
 set echo off
 whenever sqlerror exit failure rollback
@@ -23,10 +27,10 @@ EOF
 
 # CSV
 echo "set sqlformat csv
-SELECT * FROM users;" | sql -S stefan/pw@//db/XEPDB1
+SELECT * FROM users;" | sqlcl -S stefan/pw@//db/XEPDB1
 
 # Script
-sql -S stefan/pw@//db/XEPDB1 @migration.sql
+sqlcl -S stefan/pw@//db/XEPDB1 @migration.sql
 ```
 
 ## Output formats (`set sqlformat ...`)
@@ -65,4 +69,5 @@ advisory — for hard guarantees rely on a least-privilege DB user.
 
 ## Docs
 
-<https://www.oracle.com/database/sqldeveloper/technologies/sqlcl/>
+- <https://www.oracle.com/database/sqldeveloper/technologies/sqlcl/>
+- <https://github.com/oracle/oracle-db-tools/tree/master/sqlcl>
