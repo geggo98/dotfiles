@@ -194,6 +194,15 @@ let
         settings = {
           # Suppress the automatic "Co-Authored-By: Claude" byline in commits/PRs.
           includeCoAuthoredBy = false;
+          # Default every session to "ultracode": xhigh reasoning effort + standing
+          # dynamic-workflow orchestration. `ultracode` is a real persisted settings
+          # key in claude-code (the resolver maps `settings.ultracode === true` to
+          # xhigh effort and turns on standing workflow orchestration). It requires
+          # workflows enabled and an xhigh-capable model (Opus 4.8 etc.). The
+          # interactive `/effort` slider never writes this; a settings file does.
+          # Set `enableWorkflows` explicitly since ultracode depends on it.
+          ultracode = true;
+          enableWorkflows = true;
           enabledPlugins = {
             "jdtls-lsp@claude-plugins-official" = true;
             "lua-lsp@claude-plugins-official" = true;
