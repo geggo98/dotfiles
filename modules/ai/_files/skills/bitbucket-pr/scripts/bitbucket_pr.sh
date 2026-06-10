@@ -5,7 +5,7 @@
 # Usage:
 #   bitbucket_pr.sh list [--format json|tsv] [state]
 #   bitbucket_pr.sh get <pr-id>
-#   bitbucket_pr.sh create <title> <source-branch> [destination-branch]   # description via stdin (optional)
+#   bitbucket_pr.sh create [--draft] <title> <source-branch> [destination-branch]   # description via stdin (optional)
 #   bitbucket_pr.sh update <pr-id> [--title <new-title>] [--description-from-stdin]
 #
 # Hidden / dangerous operations (use raw `bb` if you really need them):
@@ -62,12 +62,27 @@ cmd_get() {
 }
 
 cmd_create() {
-  local title="$1" source_branch="$2" dest_branch="${3:-}"
+  # --draft may appear anywhere among the positional args; everything else is
+  # collected positionally as <title> <source-branch> [destination-branch].
+  # Use a literal `--` before a title that legitimately starts with a dash.
+  local draft=false
+  local -a pos=()
+  while (( $# > 0 )); do
+    case "$1" in
+      --draft) draft=true; shift ;;
+      --)      shift; while (( $# > 0 )); do pos+=("$1"); shift; done ;;
+      -*)      log_error "Unknown create flag: '$1' (did you mean --draft?)"; exit 1 ;;
+      *)       pos+=("$1"); shift ;;
+    esac
+  done
+
+  local title="${pos[1]:-}" source_branch="${pos[2]:-}" dest_branch="${pos[3]:-}"
   [[ -n "$title" ]]         || { log_error "Title is required";         exit 1; }
   [[ -n "$source_branch" ]] || { log_error "Source branch is required"; exit 1; }
 
   local -a args=(pr create --title "$title" --source "$source_branch")
   [[ -n "$dest_branch" ]] && args+=(--destination "$dest_branch")
+  [[ "$draft" == true ]]  && args+=(--draft)
 
   if [ ! -t 0 ]; then
     local description
@@ -75,7 +90,8 @@ cmd_create() {
     args+=(--description "$description")
   fi
 
-  log_info "Creating PR '$title' from $source_branch${dest_branch:+ to $dest_branch}..."
+  local draft_note=""; [[ "$draft" == true ]] && draft_note="draft "
+  log_info "Creating ${draft_note}PR '$title' from $source_branch${dest_branch:+ to $dest_branch}..."
   local output
   if ! output=$("$BITBUCKET_CLI" "${args[@]}" "${BB_TARGET[@]}" --output json 2>&1); then
     log_error "Failed to create PR"
@@ -138,7 +154,10 @@ Commands:
   list [--format json|tsv] [state]              List PRs. state: OPEN|MERGED|DECLINED|SUPERSEDED (default OPEN).
                                                 --format defaults to json (formatted); tsv is ~10x smaller for browsing.
   get <pr-id>                                   Show one PR as JSON
-  create <title> <source-branch> [dest]         Create a PR; description optional via stdin
+  create [--draft] <title> <source-branch> [dest]
+                                                Create a PR (optionally as a draft); description optional via stdin.
+                                                Note: bb cannot read back or toggle draft state (get/list/update omit it);
+                                                verify via the REST API if needed.
   update <pr-id> [--title T] [--description-from-stdin]
                                                 Update title and/or description (description via stdin)
 
