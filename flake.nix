@@ -11,7 +11,17 @@
     # Package sets
     nixpkgs.url = "github:nixos/nixpkgs/nixos-26.05"; # https://status.nixos.org/
     nixpkgs-unstable.url = "github:nixos/nixpkgs/nixos-unstable";
-    nixpkgs-yt-dlp.url = "github:nixos/nixpkgs/nixos-unstable"; # independent yt-dlp updates
+    nixpkgs-yt-dlp.url = "github:nixos/nixpkgs/nixos-unstable"; # yt-dlp build recipe (deps/patches)
+    # yt-dlp source straight from upstream, pinned to a stable release tag — so
+    # the installed yt-dlp is the newest *released* version regardless of how
+    # stale the nixpkgs packaging is (nixos-unstable can lag releases by months).
+    # Not a flake, so flake = false; Nix hashes the source automatically. To
+    # upgrade, bump the tag below to the latest release from
+    # https://github.com/yt-dlp/yt-dlp/releases (then `just build`).
+    yt-dlp-src = {
+      url = "github:yt-dlp/yt-dlp/2026.06.09";
+      flake = false;
+    };
 
     # Flake structure
     flake-parts.url = "github:hercules-ci/flake-parts";
