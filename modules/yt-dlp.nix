@@ -1,8 +1,28 @@
 { inputs, ... }:
 {
-  flake.modules.homeManager.yt-dlp = { pkgs, ... }:
+  flake.modules.homeManager.yt-dlp = { pkgs, lib, ... }:
     let
+      # nixos-unstable supplies only the *build recipe* (runtime deps, patches,
+      # completion/man-page generation) — kept current so it stays compatible
+      # with bleeding-edge yt-dlp source.
       yt-dlp-pkgs = inputs.nixpkgs-yt-dlp.legacyPackages.${pkgs.stdenv.hostPlatform.system};
+
+      # The *source* comes straight from yt-dlp upstream via the `yt-dlp-src`
+      # flake input (pinned to a stable release tag in flake.nix). Whatever
+      # version nixpkgs has packaged is irrelevant — bump the tag to upgrade.
+      yt-dlp-src = inputs.yt-dlp-src;
+
+      # Read the upstream version stamp so the store path and `yt-dlp --version`
+      # report the real number (e.g. 2026.06.09) instead of nixpkgs' stale one.
+      versionLine = lib.findFirst (l: lib.hasPrefix "__version__" l)
+        "__version__ = '0-unstable'"
+        (lib.splitString "\n" (builtins.readFile "${yt-dlp-src}/yt_dlp/version.py"));
+      upstreamVersion = lib.elemAt (builtins.match "__version__ = '([^']+)'.*" versionLine) 0;
+
+      latest-yt-dlp = yt-dlp-pkgs.yt-dlp.overridePythonAttrs (_old: {
+        version = upstreamVersion;
+        src = yt-dlp-src;
+      });
     in
     {
       # ffmpeg is essential for yt-dlp: embed-thumbnail/embed-subs and
@@ -15,7 +35,7 @@
 
       programs.yt-dlp = {
         enable = true;
-        package = yt-dlp-pkgs.yt-dlp;
+        package = latest-yt-dlp;
         settings = {
           embed-thumbnail = true;
           embed-subs = true;

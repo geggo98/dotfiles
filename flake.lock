@@ -1507,7 +1507,8 @@
         "nixpkgs-yt-dlp": "nixpkgs-yt-dlp",
         "nvf": "nvf",
         "sops-nix": "sops-nix",
-        "worktrunk": "worktrunk"
+        "worktrunk": "worktrunk",
+        "yt-dlp-src": "yt-dlp-src"
       }
     },
     "rust-overlay": {
@@ -1696,6 +1697,23 @@
       "original": {
         "owner": "max-sixty",
         "repo": "worktrunk",
+        "type": "github"
+      }
+    },
+    "yt-dlp-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1781046511,
+        "narHash": "sha256-ykqTDPzKKIWRGSQmw2esCRKyYqDZKXRYDeba888tkDU=",
+        "owner": "yt-dlp",
+        "repo": "yt-dlp",
+        "rev": "7f7bdc974dc61d941d1a0d51c4e21a0fdb7b2d06",
+        "type": "github"
+      },
+      "original": {
+        "owner": "yt-dlp",
+        "ref": "2026.06.09",
+        "repo": "yt-dlp",
         "type": "github"
       }
     },
