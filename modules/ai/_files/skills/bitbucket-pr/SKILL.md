@@ -20,7 +20,7 @@ A wrapper around `bb` (Bitbucket Cloud CLI) exposing **stable, read- and safe-wr
 
 | Resource | Read | Write (safe) | Hidden (raw `bb` only) |
 |---|---|---|---|
-| PR      | `list`, `get` | `create`, `update` (title / description) | `merge`, `decline`, `approve`, `unapprove`, `request-changes` |
+| PR      | `list`, `get` | `create` (opt. `--draft`), `update` (title / description) | `merge`, `decline`, `approve`, `unapprove`, `request-changes` |
 | Comment | `list`, `get` | `create`, `update`, `resolve`, `reopen` | `delete` |
 | Task    | `list`, `get` | `create`, `update`, `resolve`, `reopen` | `delete` |
 
@@ -57,6 +57,10 @@ ${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh get 1234
 echo "Closes #999. Background: …" | \
   ${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh create "Add foo bar" feature/foo main
 
+# Create a draft PR (--draft may go before or after the positional args)
+echo "WIP, do not merge yet." | \
+  ${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh create --draft "Add foo bar" feature/foo main
+
 # Rename a PR
 ${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh update 1234 --title "Better title"
 
@@ -70,6 +74,13 @@ cat <<'MD' | ${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh update 1234 --descripti
 - [ ] Manual smoke
 MD
 ```
+
+> **⚠ Draft state is write-only through `bb` (v0.18.1).** `create --draft` sets it,
+> but `bb pr get` / `pr list` **omit the `draft` field entirely** and `bb pr update`
+> has **no `--draft` flag** — so this skill can neither read back nor toggle (publish /
+> un-publish) draft status. To confirm a PR is a draft, query the REST API directly:
+> `GET repositories/<ws>/<slug>/pullrequests/<id>?fields=id,draft,state` with the same
+> credentials `bb` stores (Basic auth, user + app password from `config-cli.yml`).
 
 #### PR description conventions (attribution & prompt reference)
 
