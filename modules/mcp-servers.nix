@@ -239,13 +239,27 @@ let
         context = root + "/AGENTS.md";
       };
 
+      # No `programs.codex.settings` here: that would materialize
+      # ~/.codex/config.toml as a read-only nix-store symlink, but Codex
+      # must write to it (directory trust, model choice via
+      # config/batchWrite). The managed part is merged into a regular
+      # writable file by the `codexConfig` activation script below.
       programs.codex = {
         enable = true;
         package = llm-agents.codex;
-        settings = {
-          mcp_servers = codexMcpServers;
-        };
       };
+
+      home.activation.codexConfig =
+        let
+          managedSettings = (pkgs.formats.toml { }).generate "codex-managed-settings" {
+            mcp_servers = codexMcpServers;
+          };
+          python = pkgs.python3.withPackages (ps: [ ps.tomli-w ]);
+        in
+        lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+          run ${python}/bin/python3 ${./ai/_files/codex-merge-config.py} \
+            ${managedSettings} "$HOME/.codex/config.toml"
+        '';
 
       home.packages = lib.attrValues mcpServerPkgs;
 
