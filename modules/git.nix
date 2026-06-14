@@ -5,7 +5,46 @@
       programs.git = {
         enable = true;
         lfs.enable = true;
-        ignores = [ "/.worktrees/" "/.devenv/" "/.direnv/" "/.devbox/" ".DS_Store" "/.pre-commit-config.yaml" ];
+        ignores = [
+          # Worktrees, dev shells, macOS, pre-commit
+          "/.worktrees/"
+          "/.devenv/"
+          "/.direnv/"
+          "/.devbox/"
+          ".DS_Store"
+          "/.pre-commit-config.yaml"
+
+          # Nix build symlinks
+          "/result"
+          "/result-*"
+
+          # Clojure / Leiningen / clj / clojure-lsp / clj-kondo / Calva / shadow-cljs
+          ".calva/"
+          ".cpcache/"
+          ".nrepl-port"
+          ".lsp/.cache/"
+          ".clj-kondo/.cache/"
+          ".shadow-cljs/"
+          ".lein-deps-sum"
+          ".lein-repl-history"
+          ".lein-plugins/"
+          ".lein-failures"
+
+          # Scala / Metals / Bloop / BSP / scala-cli
+          ".metals/"
+          ".bloop/"
+          ".bsp/"
+          ".scala-build/"
+
+          # JVM crash logs
+          "hs_err_pid*"
+          "replay_pid*.log"
+
+          # Node / JS / TS
+          "node_modules/"
+          "jspm_packages/"
+          "*.tsbuildinfo"
+        ];
         settings = {
           init.defaultBranch = "main";
           core.autocrlf = "input";
