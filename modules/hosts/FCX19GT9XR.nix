@@ -32,6 +32,7 @@ in
       "affinity-photo"
       "affinity-publisher"
       "balenaetcher"
+      "calibre" # nixpkgs calibre is broken on aarch64-darwin; use the cask
       "crossover"
       "chatgpt"
       "jdownloader"
