@@ -26,6 +26,7 @@ in
     system.primaryUser = "stefan";
 
     # Host-specific homebrew
+    my.homebrew.trustedTaps = [ "localsend/localsend" ];
     homebrew.brews = [ ];
     homebrew.casks = [
       "affinity-designer"
