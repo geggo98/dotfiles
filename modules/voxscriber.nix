@@ -79,5 +79,15 @@
     in
     {
       home.packages = [ voxscriber ];
+
+      # Pipe wrapper: read audio bytes on stdin, emit a Markdown transcript on
+      # stdout. Co-located with the package (dendritic one-aspect-per-file), like
+      # the +yt-dlp-transcript helper in modules/yt-dlp.nix. External .fish file
+      # because the body uses $argv/globs/command-substitution that inline Nix
+      # ''…'' would force-escape. Stage with `git add -N` before building.
+      programs.fish.functions."+transcribe-pipe" = {
+        body = builtins.readFile ./_files/shell/transcribe-pipe.fish;
+        description = "Transcribe piped audio bytes via voxscriber; Markdown to stdout. Usage: curl … | +transcribe-pipe | +wait-and-exec claude -p '…'. Forwards extra flags (--model/--speakers/…); do not pass --output or a second positional.";
+      };
     };
 }
