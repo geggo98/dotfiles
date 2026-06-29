@@ -21,6 +21,7 @@ in
       hm.supply-chain-hardening
       hm.misc
       hm.vscode
+      hm.voxscriber
       hm.yt-dlp
       hm.worktrunk
     ];
