@@ -32,6 +32,7 @@ let
         ollama_api_key = { };
         travily_api_key = { };
         z_ai_api_key = { };
+        huggingface_ro_token = { };
         slack_c24_api_key = { };
         atlassian_c24_bitbucket_api_token = { };
         confluence_url = { };

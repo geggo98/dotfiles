@@ -55,6 +55,13 @@
         export_nix_sops_secret_path Z_AI_API_KEY_PATH "${config.sops.secrets.z_ai_api_key.path}"
         export_nix_sops_secret_value Z_AI_API_KEY "${config.sops.secrets.z_ai_api_key.path}"
 
+        export_nix_sops_secret_path HF_TOKEN_PATH "${config.sops.secrets.huggingface_ro_token.path}"
+        export_nix_sops_secret_value HF_TOKEN "${config.sops.secrets.huggingface_ro_token.path}"
+        # huggingface_hub / transformers / datasets also honor the legacy alias
+        export_nix_sops_secret_value HUGGING_FACE_HUB_TOKEN "${config.sops.secrets.huggingface_ro_token.path}"
+        # LangChain reads HUGGINGFACEHUB_API_TOKEN
+        export_nix_sops_secret_value HUGGINGFACEHUB_API_TOKEN "${config.sops.secrets.huggingface_ro_token.path}"
+
         export_nix_sops_secret_path ABSENCE_IO_API_ID_PATH "${config.sops.secrets.absence_io_api_id.path}"
         export_nix_sops_secret_value ABSENCE_IO_API_ID "${config.sops.secrets.absence_io_api_id.path}"
 

@@ -19,6 +19,12 @@ regex = '''(?i)\b(sk-or-v1-[a-f0-9]{64})\b'''
 keywords = ["sk-or-"]
 
 [[rules]]
+id = "huggingface-token"
+description = "Hugging Face access token (user hf_, fine-grained, or org api_org_)"
+regex = '''\b((?:hf_|api_org_)[a-zA-Z0-9]{34,})\b'''
+keywords = ["hf_", "api_org_"]
+
+[[rules]]
 id = "check24-domain"
 description = "Check24 domain reference"
 regex = '''\.check24\.de'''
