@@ -176,7 +176,18 @@
           };
 
           notes = {
-            obsidian.enable = false;
+            obsidian = {
+              enable = true;
+              # obsidian.nvim (obsidian-nvim/obsidian.nvim fork) runs each
+              # workspace path through vim.fs.normalize, which expands ~ and
+              # env vars — so this stays portable across both Macs.
+              setupOpts.workspaces = [
+                {
+                  name = "work_notes";
+                  path = "~/Documents/Obsidian/work_notes";
+                }
+              ];
+            };
             neorg.enable = false;
             orgmode.enable = false;
             # mind.nvim was removed in nvf 0.9 (upstream repo deleted).
