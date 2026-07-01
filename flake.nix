@@ -37,6 +37,21 @@
     home-manager.url = "github:nix-community/home-manager/release-26.05";
     home-manager.inputs.nixpkgs.follows = "nixpkgs";
 
+    # Homebrew installation manager for nix-darwin — makes the `brew` binary
+    # Nix-managed and version-pinned (via brew-src below), so `brew trust`
+    # (Homebrew 6.0+) is always present and the version is deterministic
+    # across hosts. https://github.com/zhaofengli/nix-homebrew
+    nix-homebrew.url = "github:zhaofengli/nix-homebrew";
+    nix-homebrew.inputs.brew-src.follows = "brew-src";
+
+    # Pinned Homebrew source. Overrides nix-homebrew's bundled default so we
+    # control the exact brew version; bump the tag to upgrade (then `just build`).
+    # https://github.com/Homebrew/brew/releases
+    brew-src = {
+      url = "github:Homebrew/brew/6.0.6";
+      flake = false;
+    };
+
     # https://github.com/Mic92/sops-nix
     sops-nix.url = "github:Mic92/sops-nix";
     sops-nix.inputs.nixpkgs.follows = "nixpkgs";

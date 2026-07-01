@@ -25,6 +25,23 @@
         "type": "github"
       }
     },
+    "brew-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1782773693,
+        "narHash": "sha256-rnGj+lDW7xvxu2E5uWCWkN3ENmd45zL4dBnX1lGPmnA=",
+        "owner": "Homebrew",
+        "repo": "brew",
+        "rev": "2b3683acbeac84c27669195235785694b72e253e",
+        "type": "github"
+      },
+      "original": {
+        "owner": "Homebrew",
+        "ref": "6.0.6",
+        "repo": "brew",
+        "type": "github"
+      }
+    },
     "bun2nix": {
       "inputs": {
         "flake-parts": [
@@ -558,6 +575,26 @@
         "url": "https://flakehub.com/f/DeterminateSystems/nix-src/%2A"
       }
     },
+    "nix-homebrew": {
+      "inputs": {
+        "brew-src": [
+          "brew-src"
+        ]
+      },
+      "locked": {
+        "lastModified": 1781389246,
+        "narHash": "sha256-ORqLAo/hoJdsZC7UPAuEHev6S0+XIqKEC7vjo5prz1k=",
+        "owner": "zhaofengli",
+        "repo": "nix-homebrew",
+        "rev": "de7953a08ed4bb9245be043e468561c17b89130d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "zhaofengli",
+        "repo": "nix-homebrew",
+        "type": "github"
+      }
+    },
     "nix-index-database": {
       "inputs": {
         "nixpkgs": [
@@ -888,12 +925,14 @@
     },
     "root": {
       "inputs": {
+        "brew-src": "brew-src",
         "darwin": "darwin",
         "determinate": "determinate",
         "devenv": "devenv",
         "flake-parts": "flake-parts_3",
         "home-manager": "home-manager",
         "import-tree": "import-tree",
+        "nix-homebrew": "nix-homebrew",
         "nix-index-database": "nix-index-database",
         "nix-vscode-extensions": "nix-vscode-extensions",
         "nixpkgs": "nixpkgs_4",
