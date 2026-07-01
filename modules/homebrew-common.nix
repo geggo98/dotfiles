@@ -1,4 +1,4 @@
-{ ... }:
+{ inputs, ... }:
 {
   flake.modules.darwin.homebrew = { config, lib, pkgs, ... }:
     let
@@ -7,6 +7,12 @@
       brewfile = pkgs.writeText "Brewfile" config.homebrew.brewfile;
     in
     {
+      # nix-homebrew installs a Nix-managed, version-pinned brew (see flake input
+      # `brew-src`), so the `brew` binary is always Homebrew 6.0+ (with `brew trust`)
+      # and identical across hosts. It sets up the prefix via mkBefore on the homebrew
+      # activation script — the trust step below runs after it (mkOrder 750).
+      imports = [ inputs.nix-homebrew.darwinModules.nix-homebrew ];
+
       options.my.homebrew.trustedTaps = lib.mkOption {
         type = lib.types.listOf lib.types.str;
         default = [ ];
@@ -20,6 +26,17 @@
 
       config = {
         my.homebrew.trustedTaps = [ "hashicorp/tap" "typewhisper/tap" ];
+
+        # Nix-managed Homebrew installation. `user` is the prefix owner (per host,
+        # via system.primaryUser). autoMigrate adopts the existing /opt/homebrew,
+        # keeping installed formulae/casks. mutableTaps keeps tap management with
+        # brew (so `brew bundle` can tap) and avoids having to pin core/cask taps.
+        nix-homebrew = {
+          enable = true;
+          autoMigrate = true;
+          user = config.system.primaryUser;
+          mutableTaps = true;
+        };
 
         homebrew.enable = true;
         homebrew.caskArgs = {
@@ -145,11 +162,14 @@
         homebrew.onActivation.cleanup = "none"; # was "uninstall"; replaced by postActivation cleanup below
 
         # Trust third-party taps before nix-darwin runs `brew bundle`. Homebrew 6.0 refuses to
-        # load formulae/casks from untrusted taps; mkBefore prepends this to the homebrew
-        # activation script so it runs ahead of the bundle. Self-contained (own PATH + sudo drop
-        # to the brew user), mirroring the cleanup block below. brew trust canonicalizes each
-        # tap's git remote, so it is robust against the .git-suffix matching bug (brew #22604).
-        system.activationScripts.homebrew.text = lib.mkBefore (lib.optionalString (config.my.homebrew.trustedTaps != [ ]) ''
+        # load formulae/casks from untrusted taps. This shares the homebrew activation script
+        # with nix-homebrew's prefix setup (mkBefore, order 500) and nix-darwin's `brew bundle`
+        # (default, order 1000), so we order it strictly between them with mkOrder 750:
+        # nix-homebrew installs the pinned brew (6.0.x, `brew trust` present) -> we trust the
+        # taps on it -> bundle loads them. Self-contained (own PATH + sudo drop to the brew
+        # user), mirroring the cleanup block below. brew trust canonicalizes each tap's git
+        # remote, so it is robust against the .git-suffix matching bug (brew #22604).
+        system.activationScripts.homebrew.text = lib.mkOrder 750 (lib.optionalString (config.my.homebrew.trustedTaps != [ ]) ''
           if [ -f "${config.homebrew.prefix}/bin/brew" ]; then
             echo >&2 "Trusting third-party Homebrew taps (Homebrew 6 tap trust): ${lib.concatStringsSep ", " config.my.homebrew.trustedTaps}"
             PATH="${config.homebrew.prefix}/bin:$PATH" \
