@@ -2,31 +2,39 @@
 {
   flake.modules.homeManager.camoufox = { pkgs, lib, ... }:
     let
-      # Pinned Camoufox release. Per the supply-chain-hardening memory the
+      # Pinned Camoufox release. Per the supply-chain-hardening policy the
       # tagged version must be at least 14 days old at landing time. To bump:
       #   1. Pick a tag from https://github.com/daijro/camoufox/releases that
       #      is ≥14 days old.
-      #   2. Update `version` below.
-      #   3. Set both hashes to `lib.fakeHash`, run `just build`, read the
-      #      "got: sha256-..." lines, paste them back.
-      version = "135.0.1-beta.24";
+      #   2. Update `version` — the release tag, downloaded as `v${version}`.
+      #   3. The published binaries carry a build stamp ("alpha.N") that can
+      #      differ from the release tag ("beta.N") and even vary per platform,
+      #      so set `assetVersion` / `assetVersionLinux` to match the actual
+      #      asset filenames listed on the release page.
+      #   4. Set the affected hashes to `lib.fakeHash`, run `just build`, read
+      #      the "got: sha256-..." lines, paste them back.
+      version = "150.0.2-beta.25";
+      assetVersion = "150.0.2-alpha.25"; # mac.arm64 / mac.x86_64 asset stamp
+      assetVersionLinux = "150.0.2-alpha.26"; # lin.x86_64 asset stamp
 
       sys = pkgs.stdenv.hostPlatform.system;
 
-      # Asset name conventions used by the Camoufox release workflow.
+      # Asset name conventions used by the Camoufox release workflow. The
+      # release tag (`v${version}`) and the asset filename stamp
+      # (`assetVersion`) are tracked separately — see the bump notes above.
       asset =
         if sys == "aarch64-darwin" then {
-          file = "camoufox-${version}-mac.arm64.zip";
-          hash = "sha256-oVqEIQt6PY6+qEVFo/uElj3le5UtfijzETmjUYzodWs=";
+          file = "camoufox-${assetVersion}-mac.arm64.zip";
+          hash = "sha256-yxAIUddk5hWtfjm4TGD0SL1NKKUjoQ/oKB7tbcBIFSE=";
           executable = "Camoufox.app/Contents/MacOS/camoufox";
         }
         else if sys == "x86_64-darwin" then {
-          file = "camoufox-${version}-mac.x86_64.zip";
+          file = "camoufox-${assetVersion}-mac.x86_64.zip";
           hash = lib.fakeHash;
           executable = "Camoufox.app/Contents/MacOS/camoufox";
         }
         else if sys == "x86_64-linux" then {
-          file = "camoufox-${version}-lin.x86_64.zip";
+          file = "camoufox-${assetVersionLinux}-lin.x86_64.zip";
           hash = lib.fakeHash;
           executable = "camoufox-bin/camoufox";
         }

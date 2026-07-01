@@ -17,8 +17,8 @@ let
       # regressions and supply-chain risk and must not be used.
       npmVersions = {
         mcp-remote = "0.1.38";
-        context7-mcp = "v1.0.30";
-        zai-mcp-server = "0.1.2";
+        context7-mcp = "3.2.1";
+        zai-mcp-server = "0.1.4";
       };
 
       mcp-atlassian = (pkgs.writeShellApplication {

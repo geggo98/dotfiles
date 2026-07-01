@@ -3,8 +3,8 @@
   flake.modules.homeManager.bitbucket-cli = { pkgs, lib, ... }:
     let
       unstable = inputs.nixpkgs-unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system};
-      version = "0.18.1";
-      rev = "642a04a5228f414512c200ca2a5a211194fe2c9a"; # tag v0.18.1
+      version = "0.18.2";
+      rev = "ab8655edd3f042eaa6ee4a6244a15bd21603c1fa"; # tag v0.18.2
       bitbucket-cli = unstable.buildGoModule {
         pname = "bitbucket-cli";
         inherit version;
@@ -13,10 +13,10 @@
           owner = "gildas";
           repo = "bitbucket-cli";
           inherit rev;
-          hash = "sha256-YSA1J8QEuOsiXUY9vxCBAOIIiGLsxXCpuzrqvfHOwyY=";
+          hash = "sha256-XAyvB0opkmOriIEj8L3iYrAUPJCNsrzkBu/cd2tpuuc=";
         };
 
-        vendorHash = "sha256-Rimgeqv372Y2CiUA1ga+7XjtP/LpXjKrKZbWAsccohI=";
+        vendorHash = "sha256-S1tH62vQ1+JyzkXxdN6t+yHMSmiqQ6QIkRyYGCROGlg=";
 
         ldflags = [
           "-s"
