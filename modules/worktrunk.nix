@@ -33,5 +33,29 @@
           { precommit = "cp -P {{ primary_worktree_path }}/.pre-commit-config.yaml {{ worktree_path }}/.pre-commit-config.yaml 2>/dev/null || true"; }
         ];
       };
+
+    # ── Worktrunk plugins for the agent CLIs (all from the worktrunk flake input) ──
+    # Merges with the programs.{claude-code,codex,opencode} blocks in
+    # modules/mcp-servers.nix (home-manager combines definitions across modules).
+    # Every artifact is sourced from the whole-repo worktrunk store path.
+
+    # Claude Code: full plugin — config skill, activity markers (🤖/💬 in
+    # `wt list`), worktree-isolation hooks (routes Claude's isolation:"worktree"
+    # through `wt switch --create`), and the /wt-switch-create skill. Loaded via
+    # the claude-code module's --plugin-dir mechanism.
+    # NB: reference the flake-input subpath, not a repackaged subdir — the
+    # plugin's ./skills is a symlink to ../../skills that only resolves inside the
+    # whole-repo store path.
+    programs.claude-code.plugins = [ "${inputs.worktrunk}/plugins/worktrunk" ];
+
+    # Codex: only the config skill is meaningful (Codex exposes no activity/
+    # isolation hooks). Feed the skill dir directly, bypassing the interactive
+    # `/plugins` marketplace step. Symlinks ~/.codex/skills/worktrunk -> store dir.
+    programs.codex.skills.worktrunk = "${inputs.worktrunk}/skills/worktrunk";
+
+    # OpenCode: activity-tracking plugin (single .ts). Identical to the file
+    # `wt config plugins opencode install` writes, but store-pinned & declarative.
+    xdg.configFile."opencode/plugins/worktrunk.ts".source =
+      "${inputs.worktrunk}/dev/opencode-plugin.ts";
   };
 }

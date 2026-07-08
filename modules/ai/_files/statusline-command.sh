@@ -1,6 +1,7 @@
 #!/bin/sh
 # Claude Code statusLine command
-# Displays: directory, git branch, model (short), context %, tokens, rate limit, starship language modules
+# Displays: worktree path + git/CI status (Worktrunk), model (short), context %,
+# tokens, rate limit, starship language modules
 
 input=$(cat)
 
@@ -19,22 +20,52 @@ model=$(echo "$model_full" \
     | sed 's/Haiku/Hku/g' \
     | sed 's/Opus/Ops/g')
 
-# Shorten home directory to ~
-home="$HOME"
-short_cwd=$(echo "$cwd" | sed "s|^$home|~|")
+# Head segment: Worktrunk's abbreviated path + worktree/git/CI status, with a
+# pure-shell fallback.
 
-# Get git branch (skip optional locks to avoid conflicts)
-git_branch=$(git -C "$cwd" --no-optional-locks branch --show-current 2>/dev/null)
+# Fish-style path abbreviation: ~/dev/kfz/if -> ~/d/k/if (shorten every path
+# component except the last; $HOME -> ~). Used only by the fallback below.
+abbreviate_path() {
+    printf '%s' "$1" | sed "s|^$HOME|~|" | awk -F/ '{
+        out = "";
+        for (i = 1; i <= NF; i++) {
+            s = $i;
+            if (i < NF && length(s) > 0 && s != "~") s = substr(s, 1, 1);
+            out = (i == 1) ? s : out "/" s;
+        }
+        print out;
+    }'
+}
+
+# Ask Worktrunk for the rich head segment. Feed it NO JSON on stdin (</dev/null):
+# with empty stdin `wt` emits only the git-derived part (abbreviated path,
+# worktree markers, ahead/behind, diffstat, CI/PR) and omits model/context/
+# rate-limit — which we render ourselves below. Always wrapped in `gtimeout` so a
+# cold CI-cache network fetch can never stall the statusline.
+head_seg=""
+if command -v wt >/dev/null 2>&1; then
+    if command -v gtimeout >/dev/null 2>&1; then
+        head_seg=$(cd "$cwd" 2>/dev/null && gtimeout 3 wt list statusline --format=claude-code </dev/null 2>/dev/null)
+    else
+        # gtimeout absent (unexpected on this host): run wt directly rather than skip it.
+        head_seg=$(cd "$cwd" 2>/dev/null && wt list statusline --format=claude-code </dev/null 2>/dev/null)
+    fi
+fi
+
+# Fallback on any wt failure (missing binary, gtimeout kill, error exit, or empty
+# output outside a git repo): abbreviated path + branch, pure shell, never fails.
+if [ -z "$head_seg" ]; then
+    head_seg=$(abbreviate_path "$cwd")
+    git_branch=$(git -C "$cwd" --no-optional-locks branch --show-current 2>/dev/null)
+    if [ -n "$git_branch" ]; then
+        head_seg="${head_seg}  ${git_branch}"
+    fi
+fi
 
 # Build the status line parts
 
-# Directory
-parts="${short_cwd}"
-
-# Git branch
-if [ -n "$git_branch" ]; then
-    parts="${parts}  ${git_branch}"
-fi
+# Head segment (path + git/CI)
+parts="${head_seg}"
 
 # Separator
 parts="${parts}   "
