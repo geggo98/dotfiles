@@ -195,3 +195,21 @@ Use the `/nix-dendritic-pattern` skill for guidance. In short:
   modules, `lsp.presets.*`, removed plugins), and these surface as eval errors.
   Cross-reference `programs.nvf.settings` in `modules/neovim.nix` against the
   notes before building.
+
+### uv-based skill scripts (lockfiles + the read-only Nix store)
+
+Some skill helpers under `modules/ai/_files/skills/*/scripts/` are self-contained
+`uv` scripts (PEP-723 `# /// script` header) invoked from a thin zsh wrapper via
+`gtimeout … script.py`. Two rules keep them working once deployed:
+
+- **Always run with `--frozen`.** The shebang must be
+  `#!/usr/bin/env -S uv --quiet run --frozen --script`. Deployed skill files land
+  in `/nix/store` (**read-only**), so any attempt by `uv` to *update* the lockfile
+  at runtime fails. `--frozen` reads the lock without writing it.
+- **Commit the lockfile.** Each such script ships a sibling `script.py.lock`
+  (generated with `uv lock --script script.py`). Regenerate and commit it whenever
+  you change the PEP-723 `dependencies`. Like any new file, `git add -N` it so the
+  flake build picks it up (see "New files: stage them before building").
+
+Reference example: `modules/ai/_files/skills/grafana/scripts/grafana.py` (+`.lock`),
+also `bitbucket-pr/scripts/bitbucket_pr_reviewers.py`.
