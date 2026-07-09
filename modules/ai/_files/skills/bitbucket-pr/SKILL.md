@@ -20,7 +20,7 @@ A wrapper around `bb` (Bitbucket Cloud CLI) exposing **stable, read- and safe-wr
 
 | Resource | Read | Write (safe) | Hidden (raw `bb` only) |
 |---|---|---|---|
-| PR      | `list`, `get` | `create` (opt. `--draft`), `update` (title / description) | `merge`, `decline`, `approve`, `unapprove`, `request-changes` |
+| PR      | `list`, `get` | `create` (opt. `--draft`, `--reviewer`), `update` (title / description / `--add-reviewer` / `--remove-reviewer`) | `merge`, `decline`, `approve`, `unapprove`, `request-changes` |
 | Comment | `list`, `get` | `create`, `update`, `resolve`, `reopen` | `delete` |
 | Task    | `list`, `get` | `create`, `update`, `resolve`, `reopen` | `delete` |
 
@@ -61,8 +61,20 @@ echo "Closes #999. Background: …" | \
 echo "WIP, do not merge yet." | \
   ${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh create --draft "Add foo bar" feature/foo main
 
+# Create a PR with reviewers (--reviewer is optional, repeatable, and also accepts a
+# comma-separated list; a reviewer is a name, nickname, Account ID, or UUID).
+echo "Closes #999." | \
+  ${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh create --reviewer alice --reviewer bob "Add foo bar" feature/foo main
+# Use the repo/project default reviewers (pass 'default' as the FIRST reviewer)
+echo "Closes #999." | \
+  ${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh create --reviewer default "Add foo bar" feature/foo main
+
 # Rename a PR
 ${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh update 1234 --title "Better title"
+
+# Add / remove reviewers on an existing PR (both repeatable and comma-separated;
+# reviewer values as for create)
+${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh update 1234 --add-reviewer carol --remove-reviewer bob
 
 # Replace the description (multiline markdown via stdin)
 cat <<'MD' | ${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh update 1234 --description-from-stdin

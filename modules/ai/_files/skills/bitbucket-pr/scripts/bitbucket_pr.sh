@@ -66,12 +66,15 @@ cmd_create() {
   # collected positionally as <title> <source-branch> [destination-branch].
   # Use a literal `--` before a title that legitimately starts with a dash.
   local draft=false
-  local -a pos=()
+  local -a pos=() reviewers=()
   while (( $# > 0 )); do
     case "$1" in
       --draft) draft=true; shift ;;
+      --reviewer)
+        (( $# >= 2 )) || { log_error "--reviewer requires a value (name, nickname, Account ID, UUID, or 'default')"; exit 1; }
+        reviewers+=("$2"); shift 2 ;;
       --)      shift; while (( $# > 0 )); do pos+=("$1"); shift; done ;;
-      -*)      log_error "Unknown create flag: '$1' (did you mean --draft?)"; exit 1 ;;
+      -*)      log_error "Unknown create flag: '$1' (did you mean --draft or --reviewer?)"; exit 1 ;;
       *)       pos+=("$1"); shift ;;
     esac
   done
@@ -83,6 +86,10 @@ cmd_create() {
   local -a args=(pr create --title "$title" --source "$source_branch")
   [[ -n "$dest_branch" ]] && args+=(--destination "$dest_branch")
   [[ "$draft" == true ]]  && args+=(--draft)
+  # bb accepts --reviewer multiple times (and comma-separated values, and the
+  # sentinel `default` as the first reviewer); pass each collected value verbatim.
+  local r
+  for r in "${reviewers[@]}"; do args+=(--reviewer "$r"); done
 
   if [ ! -t 0 ]; then
     local description
@@ -91,7 +98,8 @@ cmd_create() {
   fi
 
   local draft_note=""; [[ "$draft" == true ]] && draft_note="draft "
-  log_info "Creating ${draft_note}PR '$title' from $source_branch${dest_branch:+ to $dest_branch}..."
+  local reviewer_note=""; (( ${#reviewers[@]} > 0 )) && reviewer_note=" (reviewers: ${(j:, :)reviewers})"
+  log_info "Creating ${draft_note}PR '$title' from $source_branch${dest_branch:+ to $dest_branch}${reviewer_note}..."
   local output
   if ! output=$("$BITBUCKET_CLI" "${args[@]}" "${BB_TARGET[@]}" --output json 2>&1); then
     log_error "Failed to create PR"
@@ -106,6 +114,7 @@ cmd_update() {
   validate_numeric "$pr_id" "PR ID"
 
   local new_title="" want_stdin_desc=false
+  local -a add_reviewers=() remove_reviewers=()
   while (( $# > 0 )); do
     case "$1" in
       --title)
@@ -113,14 +122,21 @@ cmd_update() {
         new_title="$2"; shift 2 ;;
       --description-from-stdin)
         want_stdin_desc=true; shift ;;
+      --add-reviewer)
+        (( $# >= 2 )) || { log_error "--add-reviewer requires a value (name, nickname, Account ID, or UUID)"; exit 1; }
+        add_reviewers+=("$2"); shift 2 ;;
+      --remove-reviewer)
+        (( $# >= 2 )) || { log_error "--remove-reviewer requires a value (name, nickname, Account ID, or UUID)"; exit 1; }
+        remove_reviewers+=("$2"); shift 2 ;;
       *)
         log_error "Unknown update flag: '$1'"
         exit 1 ;;
     esac
   done
 
-  if [[ -z "$new_title" ]] && [[ "$want_stdin_desc" == false ]]; then
-    log_error "update requires at least --title <t> or --description-from-stdin"
+  if [[ -z "$new_title" ]] && [[ "$want_stdin_desc" == false ]] \
+     && (( ${#add_reviewers[@]} == 0 )) && (( ${#remove_reviewers[@]} == 0 )); then
+    log_error "update requires at least --title <t>, --description-from-stdin, --add-reviewer, or --remove-reviewer"
     exit 1
   fi
 
@@ -135,6 +151,11 @@ cmd_update() {
     description="$(read_stdin_content)"
     args+=(--description "$description")
   fi
+  # bb accepts --add-reviewer / --remove-reviewer multiple times (and
+  # comma-separated values); pass each collected value verbatim.
+  local r
+  for r in "${add_reviewers[@]}";    do args+=(--add-reviewer "$r");    done
+  for r in "${remove_reviewers[@]}"; do args+=(--remove-reviewer "$r"); done
 
   log_info "Updating PR #$pr_id..."
   local output
@@ -154,12 +175,16 @@ Commands:
   list [--format json|tsv] [state]              List PRs. state: OPEN|MERGED|DECLINED|SUPERSEDED (default OPEN).
                                                 --format defaults to json (formatted); tsv is ~10x smaller for browsing.
   get <pr-id>                                   Show one PR as JSON
-  create [--draft] <title> <source-branch> [dest]
+  create [--draft] [--reviewer R]... <title> <source-branch> [dest]
                                                 Create a PR (optionally as a draft); description optional via stdin.
+                                                --reviewer is optional and repeatable (also comma-separated). R = name,
+                                                nickname, Account ID, or UUID; use 'default' as the first reviewer to pull
+                                                the repo/project default reviewers.
                                                 Note: bb cannot read back or toggle draft state (get/list/update omit it);
                                                 verify via the REST API if needed.
-  update <pr-id> [--title T] [--description-from-stdin]
-                                                Update title and/or description (description via stdin)
+  update <pr-id> [--title T] [--description-from-stdin] [--add-reviewer R]... [--remove-reviewer R]...
+                                                Update title and/or description (description via stdin), and/or
+                                                add/remove reviewers (repeatable, also comma-separated; R as above).
 
 Hidden (use raw bb if needed): merge, decline, approve, unapprove, request-changes.
 
