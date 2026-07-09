@@ -49,15 +49,21 @@ warn_if_no_bitbucket_remote() {
 #   BB_TARGET           array of bb flags (e.g. --workspace W --repository R), empty when unset
 #   BB_TARGET_EXPLICIT  1 when a target was given, else 0 (used to skip the no-remote warning)
 #   BB_REST_ARGS        the remaining args, with the repo flags removed
+#   BB_WS / BB_REPO     the resolved workspace / repository slug (empty when unset) — handy
+#                       for callers that need to build REST URLs, not just bb flags
 # Empty-array expansion "${BB_TARGET[@]}" is safe under zsh `set -u`.
 BB_TARGET=()
 BB_TARGET_EXPLICIT=0
 BB_REST_ARGS=()
+BB_WS=""
+BB_REPO=""
 parse_repo_target() {
   local ws="" repo="" combo=""
   BB_TARGET=()
   BB_TARGET_EXPLICIT=0
   BB_REST_ARGS=()
+  BB_WS=""
+  BB_REPO=""
   while (( $# > 0 )); do
     case "$1" in
       --repo)       (( $# >= 2 )) || { log_error "--repo requires <workspace>/<slug>"; exit 1; }; combo="$2"; shift 2 ;;
@@ -76,6 +82,8 @@ parse_repo_target() {
       || { log_error "Specify both workspace and repository (use --repo W/S, or both --workspace and --repository)"; exit 1; }
     BB_TARGET=(--workspace "$ws" --repository "$repo")
     BB_TARGET_EXPLICIT=1
+    BB_WS="$ws"
+    BB_REPO="$repo"
   fi
 }
 

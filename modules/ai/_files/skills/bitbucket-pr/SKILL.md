@@ -2,8 +2,8 @@
 name: bitbucket-pr
 description: "Read and manage Bitbucket Cloud pull requests, comments, and tasks via the `bb` CLI (gildas/bitbucket-cli v0.18.1+). Use when reviewing PR feedback, replying to comments, creating tasks/PRs, or marking review tasks done. Also bridges JIRA issues to their linked Bitbucket PRs/branches/repos via Jira's dev-status API — find the PR(s) for a JIRA key (e.g. VUKFZIF-1234), even in repos that aren't cloned locally."
 context: fork
-allowed-tools: Bash(./scripts/bitbucket_pr.sh *) Bash(./scripts/bitbucket_pr_comments.sh *) Bash(./scripts/bitbucket_pr_tasks.sh *) Bash(./scripts/bitbucket_jira.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_comments.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_tasks.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_jira.sh *) Bash(zsh *)
-dependencies: "bb (Bitbucket CLI, installed via Nix on this host), jq, curl (JIRA bridge). JIRA bridge credentials: jira_url / jira_username / jira_api_token via env (JIRA_URL, JIRA_USERNAME, JIRA_API_TOKEN / ATLASSIAN_API_TOKEN) or files in ~/.config/sops-nix/secrets"
+allowed-tools: Bash(./scripts/bitbucket_pr.sh *) Bash(./scripts/bitbucket_pr_comments.sh *) Bash(./scripts/bitbucket_pr_tasks.sh *) Bash(./scripts/bitbucket_jira.sh *) Bash(./scripts/bitbucket_pr_reviewers.py *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_comments.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_tasks.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_jira.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_reviewers.py *) Bash(zsh *)
+dependencies: "bb (Bitbucket CLI, installed via Nix on this host), jq, curl (JIRA bridge), uv (runs the reviewer REST helper bitbucket_pr_reviewers.py — httpx/pyyaml, pinned in its .py.lock). REST credentials reuse bb's config-cli.yml profile (or BITBUCKET_USER / BITBUCKET_APP_PASSWORD). JIRA bridge credentials: jira_url / jira_username / jira_api_token via env (JIRA_URL, JIRA_USERNAME, JIRA_API_TOKEN / ATLASSIAN_API_TOKEN) or files in ~/.config/sops-nix/secrets"
 ---
 
 # Bitbucket Pull Request Skill
@@ -20,7 +20,7 @@ A wrapper around `bb` (Bitbucket Cloud CLI) exposing **stable, read- and safe-wr
 
 | Resource | Read | Write (safe) | Hidden (raw `bb` only) |
 |---|---|---|---|
-| PR      | `list`, `get` | `create` (opt. `--draft`, `--reviewer`), `update` (title / description / `--add-reviewer` / `--remove-reviewer`) | `merge`, `decline`, `approve`, `unapprove`, `request-changes` |
+| PR      | `list`, `get` | `create` (opt. `--draft`, `--reviewer`), `update` (title / description / `--add-reviewer` / `--remove-reviewer`) — reviewers applied via the REST helper (see [§12](#12-reviewers-rest-bypass)) | `merge`, `decline`, `approve`, `unapprove`, `request-changes` |
 | Comment | `list`, `get` | `create`, `update`, `resolve`, `reopen` | `delete` |
 | Task    | `list`, `get` | `create`, `update`, `resolve`, `reopen` | `delete` |
 
@@ -34,8 +34,9 @@ Bitbucket's hierarchy: **PR → comment → task** (tasks may also live on the P
 | `${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_comments.sh` | Comment operations |
 | `${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_tasks.sh`    | Task operations    |
 | `${CLAUDE_SKILL_DIR}/scripts/bitbucket_jira.sh`        | JIRA → Bitbucket bridge (find PRs/branches/repos for a JIRA key); see [§11](#11-jira--bitbucket-bridge) |
+| `${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_reviewers.py`| Reviewer REST helper (`uv`+httpx) — sets reviewers by account_id/uuid, bypassing bb's hanging `--reviewer`; see [§12](#12-reviewers-rest-bypass). Called automatically by `bitbucket_pr.sh create/update`; also usable directly (`get`/`set`/`check-auth`). |
 
-All four are **zsh** scripts that source `${CLAUDE_SKILL_DIR}/scripts/_lib.sh` for shared helpers (logging, prerequisite checks, stdin reading, output buffering, `--repo` target parsing). Run them directly — they refuse to run under bash. Run any script with `--help` for its full grammar. The three `bb` wrappers share the same exit codes and env vars (see §6, §7); `bitbucket_jira.sh` reuses the same exit-code scheme but talks to Jira, not `bb` (see §11).
+The four **zsh** scripts source `${CLAUDE_SKILL_DIR}/scripts/_lib.sh` for shared helpers (logging, prerequisite checks, stdin reading, output buffering, `--repo` target parsing). Run them directly — they refuse to run under bash. Run any script with `--help` for its full grammar. The three `bb` wrappers share the same exit codes and env vars (see §6, §7); `bitbucket_jira.sh` reuses the same exit-code scheme but talks to Jira, not `bb` (see §11). `bitbucket_pr_reviewers.py` is a self-contained **uv** script (PEP-723 header + `.py.lock`) that talks REST, not `bb` (see §12).
 
 ## 3. Usage by resource
 
@@ -61,20 +62,22 @@ echo "Closes #999. Background: …" | \
 echo "WIP, do not merge yet." | \
   ${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh create --draft "Add foo bar" feature/foo main
 
-# Create a PR with reviewers (--reviewer is optional, repeatable, and also accepts a
-# comma-separated list; a reviewer is a name, nickname, Account ID, or UUID).
+# Create a PR with reviewers. --reviewer is optional, repeatable, and comma-separated.
+# Reviewers MUST be an account_id (557058:… or a 24-hex legacy id) or a uuid ({…}) —
+# NOT a name (see §12: bb's own --reviewer hangs on large workspaces; this uses REST).
 echo "Closes #999." | \
-  ${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh create --reviewer alice --reviewer bob "Add foo bar" feature/foo main
-# Use the repo/project default reviewers (pass 'default' as the FIRST reviewer)
-echo "Closes #999." | \
-  ${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh create --reviewer default "Add foo bar" feature/foo main
+  ${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh create \
+    --reviewer 557058:0c8e… --reviewer '{3bed4537-00c5-424b-a2b8-354e1e9c2353}' \
+    "Add foo bar" feature/foo main
+# 'default' is accepted but ignored — Bitbucket applies the repo's default reviewers
+# automatically on every PR, so a plain create already gets them.
 
 # Rename a PR
 ${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh update 1234 --title "Better title"
 
-# Add / remove reviewers on an existing PR (both repeatable and comma-separated;
-# reviewer values as for create)
-${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh update 1234 --add-reviewer carol --remove-reviewer bob
+# Add / remove reviewers on an existing PR (repeatable, comma-separated; account_id/uuid)
+${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh update 1234 \
+  --add-reviewer 557058:0c8e… --remove-reviewer 61433d33ff23ba007183aa81
 
 # Replace the description (multiline markdown via stdin)
 cat <<'MD' | ${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh update 1234 --description-from-stdin
@@ -246,8 +249,8 @@ echo "Fixed in <commit-hash>" | \
 |---|---|
 | 0 | Success |
 | 1 | Invalid arguments / missing stdin / bad flag |
-| 2 | `bb` / `jq` / `curl` not on PATH (JIRA bridge: also missing credentials) |
-| 3 | `bb` invocation or JIRA REST call failed (network, auth, server error) |
+| 2 | `bb` / `jq` / `curl` / `uv` / reviewer helper not on PATH (JIRA bridge & reviewer REST: also missing credentials) |
+| 3 | `bb` invocation, reviewer REST call, or JIRA REST call failed (network, auth, server error) |
 | 4 | PR / comment / task / JIRA issue not found |
 
 ## 7. Environment variables
@@ -256,8 +259,11 @@ echo "Fixed in <commit-hash>" | \
 |------------------------|----------------------------------------------------------------------------------------------|
 | `BITBUCKET_CLI`        | Path to the `bb` binary (default `bb`)                                                       |
 | `JQ_PATH`              | Path to `jq` (default `jq`)                                                                  |
+| `BB_TIMEOUT`           | Timeout guard around every `bb`/reviewer-helper call (default `120s`; a `timeout` DURATION). See [§12](#12-reviewers-rest-bypass). |
 | `BB_OUTPUT_MAX_BYTES`  | Spill output larger than this to a tempfile (default `32768`; matches `database` skill)      |
-| `BB_PROFILE`           | (Read by `bb`) which profile to use                                                          |
+| `BB_PROFILE`           | Which `bb`/`config-cli.yml` profile to use (read by `bb` **and** the reviewer REST helper)   |
+| `BITBUCKET_USER`       | (Reviewer REST) override the Basic-auth user; else the active `config-cli.yml` profile's `user` |
+| `BITBUCKET_APP_PASSWORD` | (Reviewer REST) override the app password; else the profile's `password`. `BITBUCKET_CONFIG` overrides the config path. |
 | `BB_OUTPUT_FORMAT`     | (Documented for `bb` — but see warning below)                                                |
 | `CURL_PATH`            | (JIRA bridge) Path to `curl` (default `curl`)                                                |
 | `JIRA_URL`             | (JIRA bridge) Jira base URL; else file `jira_url` in `$SOPS_SECRETS_DIR`                     |
@@ -277,6 +283,9 @@ echo "Fixed in <commit-hash>" | \
 |---|---|---|
 | `bb: command not found` | `bb` not on PATH | `bb` is installed via Nix on this host; rebuild: `just build && sudo darwin-rebuild switch --flake .` |
 | `jq: command not found` | `jq` not on PATH | Already in `home.packages`; same rebuild fix |
+| `create`/`update` **hangs** for ~minutes when reviewers are involved | You called **raw `bb pr create --reviewer` / `bb pr update --add-reviewer`** — bb enumerates the entire workspace member list client-side (hangs + HTTP 429 on huge workspaces like `check24`), for names AND uuids | Use this skill's `bitbucket_pr.sh create/update` (routes reviewers through the REST helper, never bb's flag). See [§12](#12-reviewers-rest-bypass). |
+| `Reviewer '…' is not an account_id or uuid` | Passed a display name/nickname as a reviewer | Reviewers must be an account_id (`557058:…` or 24-hex legacy) or uuid (`{…}`). Find them: `bitbucket_pr.sh get <id>` (reviewers/participants) or `bb user me`. |
+| `uv not found` / reviewer helper missing | `uv` not on PATH, or the `.py` helper isn't deployed | `uv` is in `home.packages`; rebuild. The helper lives beside the other scripts. |
 | `Error: Invalid PR ID` | Non-numeric input | Use numeric PR/comment/task ID |
 | `This command expects … on stdin` | Forgot to pipe content | `echo "text" \| ${CLAUDE_SKILL_DIR}/scripts/...` (or use a here-doc) |
 | `pr task --help` unknown command | `bb` is pre-v0.18.0 | Confirm `bb --version` reports `0.18.0`; tasks require v0.18.0+ |
@@ -407,3 +416,61 @@ ${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_tasks.sh    list 1309 --repo check24/kf
   single repo is linked; with multiple repos it leaves the raw URL and lists the repos.
 - Exit codes match the rest of the skill (§6): `2` = missing prereq/credentials,
   `3` = API/auth/network (run `whoami` to check the token), `4` = issue/resource not found.
+
+## 12. Reviewers (REST bypass)
+
+**Why reviewers don't go through `bb`.** `bb pr create --reviewer` and
+`bb pr update --add-reviewer` / `--remove-reviewer` validate each reviewer value
+by fetching the **entire workspace member list** on the client side (paginated
+50 at a time). On a small workspace that's a blip; on a very large one — e.g.
+`check24`, thousands of members — it never finishes: it pages for minutes and
+trips Bitbucket's **HTTP 429** rate limiter. This happens **whether the reviewer
+is given as a name, a nickname, an account_id, or a uuid** — the enumeration is
+unconditional, so IDs do *not* avoid it. (Verified against `bb` v0.18.2. `bb`
+does not cache the member list, so there's nothing to "prime" either.)
+
+**What this skill does instead.** `bitbucket_pr.sh create` / `update` run `bb`
+**without** any reviewer flag (that part is fast — a plain create even gets the
+repo's default reviewers automatically) and then set the requested reviewers via
+the Bitbucket **REST API** through `bitbucket_pr_reviewers.py`. The REST API
+accepts reviewers by `account_id`/`uuid` and validates them server-side with **no
+enumeration**. It does GET → merge → PUT: it reads the PR's current reviewers
+(so default reviewers are preserved), applies your adds/removes, and PUTs the
+result together with the PR's title/description/destination (a Bitbucket PUT
+drops any field you omit, so those are re-sent). Every `bb` and helper call is
+wrapped in a `timeout`/`gtimeout` guard (`$BB_TIMEOUT`, default `120s`) so a hang
+can never block.
+
+**Reviewer identifiers.** Must be an Atlassian `account_id` — either the modern
+`557058:0c8e…` form or a 24-hex legacy id (`61433d33ff23ba007183aa81`) — or a
+`uuid` in braces (`{3bed4537-…}`). Plain names are rejected (resolving them is
+the very enumeration we avoid). Find IDs with `bitbucket_pr.sh get <id>` (look
+under `reviewers`/`participants`) or `bb user me` for your own.
+
+**Credentials.** The helper reuses what `bb` already stores — the `user` /
+`password` (app password) of the active profile in `config-cli.yml` — or the env
+overrides `BITBUCKET_USER` / `BITBUCKET_APP_PASSWORD`. `BB_PROFILE` selects the
+profile; `BITBUCKET_CONFIG` overrides the config path.
+
+**Calling the helper directly** (it's a self-contained `uv` script — PEP-723
+header pinned by `bitbucket_pr_reviewers.py.lock`, run with `uv … --frozen`):
+
+```bash
+R=check24/kfz-if-versicherer
+# Read a PR's current reviewers (account_id + uuid + display_name)
+${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_reviewers.py get --pr 1234 --repo "$R"
+# Add / remove reviewers directly (repeatable)
+${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_reviewers.py set --pr 1234 --repo "$R" \
+  --add 557058:0c8e… --remove 61433d33ff23ba007183aa81
+# Preview the exact PUT without sending it
+${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_reviewers.py set --pr 1234 --repo "$R" \
+  --add 557058:0c8e… --dry-run
+# Verify credentials (GET /user)
+${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_reviewers.py check-auth
+```
+
+> **⚠ Lockfile is read-only in the Nix store.** `bitbucket_pr_reviewers.py.lock`
+> is deployed into `/nix/store` (read-only), so the shebang runs `uv … --frozen`
+> — it reads the lock but never tries to update it (an update would fail on the
+> RO store). To change dependencies, edit the PEP-723 header and regenerate with
+> `uv lock --script bitbucket_pr_reviewers.py`, then commit the refreshed lock.
