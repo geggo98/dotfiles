@@ -7,7 +7,11 @@
   # belong in modules/secrets.nix and are read from the global SOPS
   # file by default.
   #
-  # The host SOPS file (./secrets.enc.yaml) currently has only the
-  # placeholder marker, so this set is empty. Add an entry here when
-  # an FCX-only secret is encrypted into that file.
+  # BookFusion credentials for the bookfusion-api skill. sops-nix decrypts
+  # these to ~/.config/sops-nix/secrets/bookfusion_{username,password}, which
+  # the skill reads directly. Their values must be encrypted into
+  # ./secrets.enc.yaml (see repo CLAUDE.md / .sops.yaml FCX rule) before
+  # `darwin-rebuild switch`.
+  bookfusion_username = { };
+  bookfusion_password = { };
 }
