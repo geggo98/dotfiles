@@ -16,6 +16,14 @@ in
 
     nixpkgs.hostPlatform = "aarch64-darwin";
     nixpkgs.config.allowUnfree = true;
+    # pnpm-9.15.9 is an offline, build-time-only dependency of `prettier` (pulled
+    # in by nvf's conform-nvim formatter → @oxc-parser/binding-wasm32-wasi, which
+    # nixpkgs still builds with pnpm_9). nixpkgs marked pnpm_9 insecure over
+    # pnpm-as-package-manager CVEs, which don't apply to a sandboxed FOD build
+    # step. A clean pnpm_10 override isn't possible: prettier hardcodes the
+    # pnpm-deps FOD hash in an inner let-derivation, so `.override` can't reach
+    # it. Drop this once nixpkgs bumps binding-wasm32-wasi to pnpm_10.
+    nixpkgs.config.permittedInsecurePackages = [ "pnpm-9.15.9" ];
 
     my.identity = {
       hostName = "FCX19GT9XR";
