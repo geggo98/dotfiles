@@ -19,7 +19,7 @@
     # upgrade, bump the tag below to the latest release from
     # https://github.com/yt-dlp/yt-dlp/releases (then `just build`).
     yt-dlp-src = {
-      url = "github:yt-dlp/yt-dlp/2026.06.09";
+      url = "github:yt-dlp/yt-dlp/2026.07.04";
       flake = false;
     };
 
@@ -48,7 +48,7 @@
     # control the exact brew version; bump the tag to upgrade (then `just build`).
     # https://github.com/Homebrew/brew/releases
     brew-src = {
-      url = "github:Homebrew/brew/6.0.6";
+      url = "github:Homebrew/brew/6.0.9";
       flake = false;
     };
 
