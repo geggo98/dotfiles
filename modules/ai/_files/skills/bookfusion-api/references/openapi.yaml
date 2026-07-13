@@ -1,0 +1,2903 @@
+openapi: 3.1.0
+info:
+  title: BookFusion Mobile API (Reverse-Engineered from Android app v2.23.8)
+  version: 0.0.0-reveng-apiversion-10
+  summary: Unofficial reconstruction of the private JSON API used by the BookFusion Android reader app.
+  description: |-
+    UNOFFICIAL / REVERSE-ENGINEERED from the BookFusion Android app (com.bookfusion.android.reader v2.23.8),
+    decompiled with jadx. This is the private mobile JSON API (Retrofit2 + Gson) served at https://www.bookfusion.com.
+    It is NOT an official, documented, or supported API and can change without notice.
+
+    Auth: send header `X-Token: <token>` (obtained from the /api/v3/auth/* + /api/v3/signup flow).
+    The client also sends `X-Device`, `X-Capabilities: direct-upload`, and negotiates the API version via
+    `Accept: application/json; api_version=10`.
+
+    Field names/types come from preserved Gson @SerializedName annotations; each schema notes its source obfuscated class.
+    Some request/response bodies are inferred where obfuscation hid detail — treat as best-effort.
+servers:
+  - url: https://www.bookfusion.com
+security:
+  - XToken: []
+tags:
+  - name: Auth
+  - name: Books
+  - name: Bookshelves
+  - name: Series
+  - name: Highlights
+  - name: Libraries
+  - name: ReaderPresets
+  - name: ReaderSubscription
+  - name: Profile
+  - name: TTS
+  - name: Taxonomy
+paths:
+  /api/user/books/search:
+    post:
+      operationId: searchUserBooks
+      tags:
+        - Books
+      summary: Search/list the user's library books (filter, sort, paging).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookSearchRequest'
+      responses:
+        "200":
+          description: Matching books
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Book'
+      security:
+        - XToken: []
+  /api/user/books/{id}:
+    delete:
+      operationId: deleteUserBook
+      tags:
+        - Books
+      summary: Delete a book from the user's library.
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "204":
+          description: Book deleted (empty body)
+      security:
+        - XToken: []
+    patch:
+      operationId: updateUserBook
+      tags:
+        - Books
+      summary: 'Update a book''s metadata (multipart: JSON payload + optional cover image).'
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                payload:
+                  $ref: '#/components/schemas/UpdateBookRequest'
+                file:
+                  type: string
+                  format: binary
+                  description: optional cover image part
+              required:
+                - payload
+      responses:
+        "200":
+          description: Updated book
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Book'
+      security:
+        - XToken: []
+  /api/user/books/{number}/reading_position:
+    get:
+      operationId: getBookReadingPosition
+      tags:
+        - Books
+      summary: Get the current reading position for a book.
+      parameters:
+        - in: path
+          name: number
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: Reading position
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadingPosition'
+      security:
+        - XToken: []
+    post:
+      operationId: updateBookReadingPosition
+      tags:
+        - Books
+      summary: Update the reading position for a book.
+      parameters:
+        - in: path
+          name: number
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateBookPositionRequest'
+      responses:
+        "200":
+          description: Updated reading position
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReadingPosition'
+      security:
+        - XToken: []
+  /api/user/uploads/init:
+    post:
+      operationId: initBookUpload
+      tags:
+        - Books
+      summary: Initialize a direct book file upload; returns upload target URL/params.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UploadInitRequest'
+      responses:
+        "200":
+          description: Upload initialization result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UploadInit'
+      security:
+        - XToken: []
+  /api/user/uploads/finalize:
+    post:
+      operationId: finalizeBookUpload
+      tags:
+        - Books
+      summary: 'Finalize a book upload (multipart: JSON payload + optional cover image); returns the created book.'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                payload:
+                  $ref: '#/components/schemas/UploadFinalize'
+                file:
+                  type: string
+                  format: binary
+                  description: optional cover image part
+              required:
+                - payload
+      responses:
+        "200":
+          description: Created/updated book
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Book'
+      security:
+        - XToken: []
+  /api/v1/library/books/{number}/kindle:
+    post:
+      operationId: sendBookToKindle
+      tags:
+        - Books
+      summary: Send a library book to the user's Kindle.
+      parameters:
+        - in: path
+          name: number
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "204":
+          description: Queued (empty body)
+      security:
+        - XToken: []
+  /api/v1/library/books/{number}/track_time:
+    post:
+      operationId: trackBookReadingTime
+      tags:
+        - Books
+      summary: Record reading time (seconds) for a library book.
+      parameters:
+        - in: path
+          name: number
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddBookReadingTimeRequest'
+      responses:
+        "204":
+          description: Recorded (empty body)
+      security:
+        - XToken: []
+  /api/v2/library/books/{number}/bookmarks:
+    get:
+      operationId: listBookBookmarks
+      tags:
+        - Books
+      summary: List bookmarks for a library book.
+      parameters:
+        - in: path
+          name: number
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: Bookmarks
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Bookmark'
+      security:
+        - XToken: []
+    post:
+      operationId: addBookBookmark
+      tags:
+        - Books
+      summary: Add a bookmark to a library book.
+      parameters:
+        - in: path
+          name: number
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AddBookBookmarkRequest'
+      responses:
+        "200":
+          description: Created bookmark
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bookmark'
+      security:
+        - XToken: []
+  /api/v2/library/books/{number}/bookmarks/{id}/delete:
+    post:
+      operationId: deleteBookBookmark
+      tags:
+        - Books
+      summary: Delete a bookmark from a library book.
+      parameters:
+        - in: path
+          name: number
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "204":
+          description: Bookmark deleted (empty body)
+      security:
+        - XToken: []
+  /api/user/libraries/search:
+    post:
+      operationId: searchLibraries
+      tags:
+        - Libraries
+      summary: Search/discover public and shared libraries
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LibrarySearchRequest'
+      responses:
+        "200":
+          description: Matching libraries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Library'
+      security:
+        - XToken: []
+  /api/user/libraries/{slug}/authors/search:
+    post:
+      operationId: searchLibraryAuthors
+      tags:
+        - Libraries
+      summary: Search authors within a specific library
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthorSearchRequest'
+      responses:
+        "200":
+          description: Matching authors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Author'
+      security:
+        - XToken: []
+  /api/user/libraries/{slug}/book_lists/search:
+    post:
+      operationId: searchLibraryBookLists
+      tags:
+        - Libraries
+      summary: Search book lists (curated collections) within a library
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LibraryBookListSearchRequest'
+      responses:
+        "200":
+          description: Matching book lists
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LibraryBookList'
+      security:
+        - XToken: []
+  /api/user/libraries/{slug}/books/search:
+    post:
+      operationId: searchLibraryBooks
+      tags:
+        - Libraries
+      summary: Search books within a specific library
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookSearchRequest'
+      responses:
+        "200":
+          description: Matching books
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Book'
+      security:
+        - XToken: []
+  /api/user/libraries/{slug}/categories/search:
+    post:
+      operationId: searchLibraryCategories
+      tags:
+        - Libraries
+      summary: Search categories within a specific library
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Matching categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Category'
+      security:
+        - XToken: []
+  /api/user/libraries/{slug}/tags/search:
+    post:
+      operationId: searchLibraryTags
+      tags:
+        - Libraries
+      summary: Search tags within a specific library
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TagSearchRequest'
+      responses:
+        "200":
+          description: Matching tags
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Tag'
+      security:
+        - XToken: []
+  /api/user/libraries/book_lists/{categoryId}/books/search:
+    post:
+      operationId: searchLibraryBookListBooks
+      tags:
+        - Libraries
+      summary: Search books within a library book list (collection)
+      parameters:
+        - in: path
+          name: categoryId
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookSearchRequest'
+      responses:
+        "200":
+          description: Matching books
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Book'
+      security:
+        - XToken: []
+  /api/user/libraries/books/{book_id}/borrow:
+    get:
+      operationId: checkBorrowBook
+      tags:
+        - Libraries
+      summary: Check whether a library book can be borrowed
+      parameters:
+        - in: path
+          name: book_id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: Borrow eligibility
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BorrowBookResponse'
+      security:
+        - XToken: []
+    post:
+      operationId: borrowBook
+      tags:
+        - Libraries
+      summary: Borrow a book from a library; returns the borrowed book
+      parameters:
+        - in: path
+          name: book_id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: Borrowed book
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Book'
+      security:
+        - XToken: []
+  /api/user/libraries/books/{book_id}/related_books:
+    get:
+      operationId: getRelatedLibraryBooks
+      tags:
+        - Libraries
+      summary: Get books related to a given library book
+      parameters:
+        - in: path
+          name: book_id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "200":
+          description: Related books
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Book'
+      security:
+        - XToken: []
+  /api/user/libraries/membership:
+    get:
+      operationId: getLibraryMemberships
+      tags:
+        - Libraries
+      summary: List libraries the current user is a member of
+      responses:
+        "200":
+          description: Member libraries
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Library'
+      security:
+        - XToken: []
+  /api/v3/libraries/{slug}/join:
+    post:
+      operationId: joinLibrary
+      tags:
+        - Libraries
+      summary: Join a library by slug
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Joined (no content)
+      security:
+        - XToken: []
+  /api/v3/libraries/{slug}/leave:
+    post:
+      operationId: leaveLibrary
+      tags:
+        - Libraries
+      summary: Leave a library by slug
+      parameters:
+        - in: path
+          name: slug
+          required: true
+          schema:
+            type: string
+      responses:
+        "204":
+          description: Left (no content)
+      security:
+        - XToken: []
+  /api/user/highlights:
+    post:
+      operationId: createHighlight
+      tags:
+        - Highlights
+      summary: 'Create a book highlight/annotation (multipart: optional binary + JSON payload)'
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                binary:
+                  type: string
+                  format: binary
+                  description: Optional quote image (MultipartBody.Part, part name 'binary')
+                payload:
+                  $ref: '#/components/schemas/HighlightCreateRequest'
+              required:
+                - payload
+      responses:
+        "200":
+          description: Created highlight
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Highlight'
+      security:
+        - XToken: []
+  /api/user/highlights/{id}:
+    patch:
+      operationId: updateHighlight
+      tags:
+        - Highlights
+      summary: Update a highlight's note, tags and color
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HighlightUpdateRequest'
+      responses:
+        "200":
+          description: Updated highlight
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Highlight'
+      security:
+        - XToken: []
+    delete:
+      operationId: deleteHighlight
+      tags:
+        - Highlights
+      summary: Delete a highlight
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "204":
+          description: Deleted (empty body, kotlin.Unit)
+      security:
+        - XToken: []
+  /api/user/highlights/search:
+    post:
+      operationId: searchHighlights
+      tags:
+        - Highlights
+      summary: Search/list highlights with filters and paging
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HighlightSearchRequest'
+      responses:
+        "200":
+          description: Matching highlights
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Highlight'
+      security:
+        - XToken: []
+  /api/user/highlights/authors/search:
+    post:
+      operationId: searchHighlightAuthors
+      tags:
+        - Highlights
+      summary: Search authors that appear in the user's highlights
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HighlightAuthorsSearchRequest'
+      responses:
+        "200":
+          description: Matching authors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Author'
+      security:
+        - XToken: []
+  /api/user/highlights/categories/search:
+    post:
+      operationId: searchHighlightCategories
+      tags:
+        - Highlights
+      summary: List categories that appear in the user's highlights (no request body)
+      responses:
+        "200":
+          description: Categories
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Category'
+      security:
+        - XToken: []
+  /api/user/highlights/colors:
+    get:
+      operationId: listHighlightColors
+      tags:
+        - Highlights
+      summary: List highlight colors used by the user with last-used timestamps
+      responses:
+        "200":
+          description: Colors
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/HighlightColor'
+      security:
+        - XToken: []
+  /api/user/highlights/tags:
+    get:
+      operationId: listHighlightTags
+      tags:
+        - Highlights
+      summary: List all highlight tag names for the user
+      responses:
+        "200":
+          description: Tag names
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: string
+      security:
+        - XToken: []
+  /api/user/highlights/tags/search:
+    post:
+      operationId: searchHighlightTags
+      tags:
+        - Highlights
+      summary: Search highlight tags (optionally including book tags) with per-tag book counts
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HighlightTagsSearchRequest'
+      responses:
+        "200":
+          description: Matching tags
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/HighlightTag'
+      security:
+        - XToken: []
+  /api/user/highlights/export:
+    post:
+      operationId: exportHighlights
+      tags:
+        - Highlights
+      summary: Export a book's highlights in the requested content type; returns a binary file
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HighlightExportRequest'
+      responses:
+        "200":
+          description: Exported highlights file
+          content:
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+      security:
+        - XToken: []
+  /api/user/highlights/export/formats:
+    get:
+      operationId: listHighlightExportFormats
+      tags:
+        - Highlights
+      summary: List available highlight export formats
+      responses:
+        "200":
+          description: Export formats
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/HighlightExportFormat'
+      security:
+        - XToken: []
+  /api/v3/signup:
+    post:
+      operationId: signup
+      tags:
+        - Auth
+      summary: Register a new account with email/password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SignupRequest'
+      responses:
+        "200":
+          description: Auth result (token on success, or field errors)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+      security:
+        - XToken: []
+  /api/v3/auth.json:
+    post:
+      operationId: authenticate
+      tags:
+        - Auth
+      summary: Authenticate with email and password
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AuthRequest'
+      responses:
+        "200":
+          description: Auth result (token on success, or field errors)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+      security:
+        - XToken: []
+  /api/v3/auth/challenge:
+    get:
+      operationId: authChallenge
+      tags:
+        - Auth
+      summary: Determine login type/challenge for an email (password vs web login)
+      parameters:
+        - in: query
+          name: email
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Auth challenge result including loginType and optional web url
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+      security:
+        - XToken: []
+  /api/v3/auth/token:
+    post:
+      operationId: updateAuthToken
+      tags:
+        - Auth
+      summary: Exchange a request token for a session token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpdateTokenRequest'
+      responses:
+        "200":
+          description: Auth result with session token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+      security:
+        - XToken: []
+  /api/v3/auth/facebook:
+    post:
+      operationId: authFacebook
+      tags:
+        - Auth
+      summary: Authenticate/sign up via Facebook access token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FacebookAuthRequest'
+      responses:
+        "200":
+          description: Auth result (token on success, or field errors)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+      security:
+        - XToken: []
+  /api/user/auth/google:
+    post:
+      operationId: authGoogle
+      tags:
+        - Auth
+      summary: Authenticate/sign up via Google id_token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GoogleAuthRequest'
+      responses:
+        "200":
+          description: Auth result (token on success, or field errors)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+      security:
+        - XToken: []
+  /api/v1/profile/facebook/disconnect:
+    post:
+      operationId: disconnectFacebook
+      tags:
+        - Auth
+      summary: Disconnect the linked Facebook account from the current profile
+      responses:
+        "200":
+          description: Auth/profile result
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthResponse'
+      security:
+        - XToken: []
+  /api/user/series:
+    post:
+      operationId: createSeries
+      tags:
+        - Series
+      summary: Create a new series
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SeriesCreateRequest'
+      responses:
+        "200":
+          description: Created series
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Series'
+      security:
+        - XToken: []
+  /api/user/series/{id}:
+    delete:
+      operationId: deleteSeries
+      tags:
+        - Series
+      summary: Delete a series
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "204":
+          description: Series deleted (empty body)
+      security:
+        - XToken: []
+    patch:
+      operationId: updateSeries
+      tags:
+        - Series
+      summary: Update a series
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SeriesUpdateRequest'
+      responses:
+        "200":
+          description: Updated series
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Series'
+      security:
+        - XToken: []
+  /api/user/series/search:
+    post:
+      operationId: searchSeries
+      tags:
+        - Series
+      summary: Search / list the user's series
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SeriesSearchRequest'
+      responses:
+        "200":
+          description: Matching series
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Series'
+      security:
+        - XToken: []
+  /api/user/series/{id}/books/search:
+    post:
+      operationId: searchSeriesBooks
+      tags:
+        - Series
+      summary: Search / list books within a series
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SeriesBooksSearchRequest'
+      responses:
+        "200":
+          description: Matching books in the series
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Book'
+      security:
+        - XToken: []
+  /api/user/bookshelves:
+    post:
+      operationId: createBookshelf
+      tags:
+        - Bookshelves
+      summary: Create a new bookshelf
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookshelfCreateRequest'
+      responses:
+        "200":
+          description: Created bookshelf
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bookshelf'
+      security:
+        - XToken: []
+  /api/user/bookshelves/search:
+    post:
+      operationId: searchBookshelves
+      tags:
+        - Bookshelves
+      summary: List the user's bookshelves (no request body)
+      responses:
+        "200":
+          description: List of bookshelves
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Bookshelf'
+      security:
+        - XToken: []
+  /api/user/bookshelves/{id}:
+    delete:
+      operationId: deleteBookshelf
+      tags:
+        - Bookshelves
+      summary: Delete a bookshelf
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "204":
+          description: Bookshelf deleted (empty body)
+      security:
+        - XToken: []
+    patch:
+      operationId: updateBookshelf
+      tags:
+        - Bookshelves
+      summary: Update a bookshelf
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BookshelfUpdateRequest'
+      responses:
+        "200":
+          description: Updated bookshelf
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Bookshelf'
+      security:
+        - XToken: []
+  /api/user/reader_presets:
+    post:
+      operationId: createReaderPreset
+      tags:
+        - ReaderPresets
+      summary: Create a reader preset (reader settings profile)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReaderPresetRequest'
+      responses:
+        "200":
+          description: Created reader preset
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReaderPreset'
+      security:
+        - XToken: []
+  /api/user/reader_presets/search:
+    post:
+      operationId: searchReaderPresets
+      tags:
+        - ReaderPresets
+      summary: List/search the user's reader presets (no request body observed)
+      responses:
+        "200":
+          description: Array of reader presets
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/ReaderPreset'
+      security:
+        - XToken: []
+  /api/user/reader_presets/{id}:
+    patch:
+      operationId: updateReaderPreset
+      tags:
+        - ReaderPresets
+      summary: Update a reader preset by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReaderPresetRequest'
+      responses:
+        "200":
+          description: Updated reader preset
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReaderPreset'
+      security:
+        - XToken: []
+    delete:
+      operationId: deleteReaderPreset
+      tags:
+        - ReaderPresets
+      summary: Delete a reader preset by id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        "204":
+          description: Reader preset deleted (empty body, returns Void)
+      security:
+        - XToken: []
+  /api/user/reader_subscription:
+    get:
+      operationId: getReaderSubscription
+      tags:
+        - ReaderSubscription
+      summary: Get the current user's reader (billing) subscription
+      responses:
+        "200":
+          description: Current subscription
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReaderSubscription'
+      security:
+        - XToken: []
+    post:
+      operationId: createReaderSubscription
+      tags:
+        - ReaderSubscription
+      summary: Create/activate a reader subscription from a Play Store purchase token
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateReaderSubscriptionRequest'
+      responses:
+        "200":
+          description: Created/updated subscription
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReaderSubscription'
+      security:
+        - XToken: []
+  /api/user/reader_subscription/pricing:
+    get:
+      operationId: getReaderSubscriptionPricing
+      tags:
+        - ReaderSubscription
+      summary: Get available subscription plans and pricing
+      responses:
+        "200":
+          description: Billing plans and pricing details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReaderSubscriptionPricing'
+      security:
+        - XToken: []
+  /api/v1/user:
+    get:
+      operationId: getUser
+      tags:
+        - Profile
+      summary: Get the current authenticated user's profile.
+      parameters: []
+      responses:
+        "200":
+          description: Current user profile
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+      security:
+        - XToken: []
+  /api/v1/profile/settings:
+    post:
+      operationId: updateProfileSettings
+      tags:
+        - Profile
+      summary: Update profile settings (e.g. Kindle delivery name).
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ProfileSettingsRequest'
+      responses:
+        "200":
+          description: Updated profile settings
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProfileSettings'
+      security:
+        - XToken: []
+  /api/user/profile:
+    patch:
+      operationId: updateUserProfile
+      tags:
+        - Profile
+      summary: Update the user's profile. Sent as multipart/form-data with a JSON part named 'payload' (allows an optional avatar file alongside the JSON).
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                payload:
+                  $ref: '#/components/schemas/UpdateUserRequest'
+              required:
+                - payload
+      responses:
+        "204":
+          description: Profile updated (empty body)
+      security:
+        - XToken: []
+  /api/user/tts:
+    post:
+      operationId: getTtsCredentials
+      tags:
+        - TTS
+      summary: Obtain text-to-speech service credentials (streaming URL + token) for the current user.
+      parameters: []
+      responses:
+        "200":
+          description: TTS credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TtsCredentials'
+      security:
+        - XToken: []
+  /api/user/authors/search:
+    post:
+      operationId: searchAuthors
+      tags:
+        - Taxonomy
+      summary: Search authors in the user's library by name (paginated).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchRequest'
+      responses:
+        "200":
+          description: List of matching authors.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Author'
+      security:
+        - XToken: []
+  /api/user/tags/search:
+    post:
+      operationId: searchTags
+      tags:
+        - Taxonomy
+      summary: Search tags in the user's library by name (paginated).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchRequest'
+      responses:
+        "200":
+          description: List of matching tags.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Tag'
+      security:
+        - XToken: []
+  /api/user/categories/search:
+    post:
+      operationId: searchCategories
+      tags:
+        - Taxonomy
+      summary: List/search categories in the user's library. No request body is sent (the decompiled interface method takes no @Body parameter).
+      responses:
+        "200":
+          description: List of categories.
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Category'
+      security:
+        - XToken: []
+components:
+  securitySchemes:
+    XToken:
+      type: apiKey
+      in: header
+      name: X-Token
+      description: BookFusion auth token; empty when logged out. Obtained via /api/v3/auth/* or /api/v3/signup.
+  schemas:
+    Book:
+      type: object
+      description: 'source: o.UnobservedErrorNotifier (BookResponse)'
+      properties:
+        id:
+          type: integer
+          format: int64
+        number:
+          type: integer
+          format: int64
+        title:
+          type: string
+        summary:
+          type: string
+        language:
+          type: string
+        url:
+          type: string
+        added_at:
+          type: string
+        published_at:
+          type: string
+        updated_at:
+          type: string
+        last_read_at:
+          type: string
+        expires_at:
+          type: string
+        creation_token:
+          type: string
+        publisher_name:
+          type: string
+        download_size:
+          type: integer
+          format: int64
+          description: 'json key: download_size'
+        bookshelf_book_id:
+          type: integer
+          format: int64
+        format:
+          $ref: '#/components/schemas/BookFormat'
+        type:
+          $ref: '#/components/schemas/ContentType'
+          description: 'json key: type'
+        enhancement_type:
+          $ref: '#/components/schemas/BookEnhancementType'
+        cover:
+          $ref: '#/components/schemas/BookCover'
+        authors:
+          type: array
+          items:
+            $ref: '#/components/schemas/Author'
+        categories:
+          type: array
+          items:
+            $ref: '#/components/schemas/Category'
+        bookshelves:
+          type: array
+          items:
+            $ref: '#/components/schemas/Bookshelf'
+        series:
+          type: array
+          items:
+            $ref: '#/components/schemas/Series'
+        tags:
+          type: array
+          items:
+            type: string
+        lists:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookListType'
+        permissions:
+          $ref: '#/components/schemas/BookPermissions'
+        reading_position:
+          $ref: '#/components/schemas/ReadingPosition'
+        source:
+          $ref: '#/components/schemas/BookSource'
+    Author:
+      type: object
+      description: 'source: o.Task (Author)'
+      properties:
+        name:
+          type: string
+    Category:
+      type: object
+      description: 'source: o.TaskTaskCompletionSource (toString: BookCategoryResponse). Library/book category.'
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        term:
+          type: string
+        books_count:
+          type: integer
+        dc_subjects:
+          description: unstructured (Object in source)
+        lcc_subjects:
+          description: unstructured (Object in source)
+        children:
+          type: array
+          items: {}
+          description: nested categories (Object list in source)
+    Bookshelf:
+      type: object
+      description: 'source: o.continueWithTask (BookshelfResponse)'
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        creation_token:
+          type: string
+        updated_at:
+          type: string
+        smart:
+          type: boolean
+    Series:
+      type: object
+      description: 'source: o.getMacOutputStream (SeriesResponse)'
+      properties:
+        id:
+          type: integer
+          format: int64
+        title:
+          type: string
+        index:
+          type: string
+        creation_token:
+          type: string
+        added_at:
+          type: string
+        updated_at:
+          type: string
+    BookCover:
+      type: object
+      description: 'source: o.r8lambdaQoNVukAwpAmpCBG00KhcvF3aGA (BookCover)'
+      properties:
+        url:
+          type: string
+    BookPermissions:
+      type: object
+      description: 'source: o.accessgetIMMEDIATE_EXECUTORcp (BookPermissions)'
+      properties:
+        update_metadata:
+          type: boolean
+        send_to_kindle:
+          type: boolean
+        export:
+          type: boolean
+    BookSource:
+      type: object
+      description: 'source: o.accesssetUnobservedExceptionHandlercp (BookSource)'
+      properties:
+        book_id:
+          type: integer
+          format: int64
+        type:
+          $ref: '#/components/schemas/BookSourceType'
+        user:
+          $ref: '#/components/schemas/BookSourceUser'
+        library:
+          $ref: '#/components/schemas/BookSourceLibrary'
+        borrow:
+          $ref: '#/components/schemas/BookSourceBorrow'
+    BookSourceLibrary:
+      type: object
+      description: 'source: o.accessgetTASK_TRUEcp (BookSourceLibrary)'
+      properties:
+        id:
+          type: integer
+          format: int64
+        slug:
+          type: string
+    BookSourceUser:
+      type: object
+      description: 'source: o.continueWhiledefault (BookSourceUser)'
+      properties:
+        username:
+          type: string
+        display_name:
+          type: string
+        avatar_url:
+          type: string
+    BookSourceBorrow:
+      type: object
+      description: 'source: o.cancelled (BookSourceBorrow)'
+      properties:
+        title:
+          type: string
+        disabled_with:
+          type: string
+    BookFormat:
+      type: string
+      description: 'source: o.setSelectedBookIds (book file format)'
+      enum:
+        - epub
+        - pdf
+        - unknown
+    ContentType:
+      type: string
+      description: 'source: o.getEinkConfig (book vs article)'
+      enum:
+        - book
+        - article
+    BookEnhancementType:
+      type: string
+      description: 'source: o.getGridConfig (enhancement type)'
+      enum:
+        - interactive
+    BookSourceType:
+      type: string
+      description: 'source: o.delayfacebook_bolts_release (book source type)'
+      enum:
+        - store
+        - library
+        - user
+    BookListType:
+      type: string
+      description: 'source: o.r8lambdaw4uoirbyWIqXDnj9OLerFvaYFpY (reading list type)'
+      enum:
+        - all
+        - favorites
+        - currently_reading
+        - planned_to_read
+        - completed
+    BookSortType:
+      type: string
+      description: 'source: o.accessgetUnobservedExceptionHandlercp (book sort key)'
+      enum:
+        - relevance-asc
+        - relevance-desc
+        - added_at-asc
+        - added_at-desc
+        - last_read_at-asc
+        - last_read_at-desc
+        - author-asc
+        - author-desc
+        - title-asc
+        - title-desc
+        - reading_progress-asc
+        - reading_progress-desc
+        - file_size-asc
+        - file_size-desc
+    BookSearchRequest:
+      type: object
+      description: 'source: o.accesscompleteImmediately (GetBooksRequest)'
+      properties:
+        ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+        query:
+          type: string
+          description: 'json key: query (searchQuery)'
+        sort:
+          $ref: '#/components/schemas/BookSortType'
+        category_ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+        tags:
+          type: array
+          items:
+            type: string
+        authors:
+          type: array
+          items:
+            type: string
+        bookshelf_id:
+          type: integer
+          format: int64
+        bookshelf_book_id:
+          type: integer
+          format: int64
+        list:
+          $ref: '#/components/schemas/BookListType'
+        page:
+          type: integer
+        per_page:
+          type: integer
+        url:
+          type: string
+        types:
+          type: array
+          items:
+            $ref: '#/components/schemas/ContentType'
+          description: 'json key: types (contentTypes)'
+    UpdateBookRequest:
+      type: object
+      description: 'source: o.whenAnyResultlambda3 (UpdateBookRequest) - sent as multipart ''payload'' JSON part; coverFilePath is a local file path, not serialized'
+      properties:
+        title:
+          type: string
+        summary:
+          type: string
+        language:
+          type: string
+        authors:
+          type: array
+          items:
+            type: string
+        tags:
+          type: array
+          items:
+            type: string
+        category_ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+        bookshelf_ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+        lists:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookListType'
+          description: 'json key: lists (listTypes)'
+        series:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookSeriesIndex'
+          description: 'json key: series (seriesIndexes)'
+    BookSeriesIndex:
+      type: object
+      description: 'source: o.TaskCompanionExternalSyntheticLambda1 (UpdateBookSeriesIndexRequest)'
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: seriesId
+        index:
+          type: string
+    ReadingPosition:
+      type: object
+      description: 'source: o.finalize (BookPositionResponse)'
+      properties:
+        chapter_index:
+          type: integer
+        percentage:
+          type: number
+        page_position_in_book:
+          type: number
+          description: positionInBook
+        cfi:
+          type: string
+        updated_at:
+          type: string
+    UpdateBookPositionRequest:
+      type: object
+      description: 'source: o.completeImmediatelylambda5 (UpdateBookPositionRequest)'
+      properties:
+        chapter_index:
+          type: integer
+        percentage:
+          type: number
+        page_position_in_book:
+          type: number
+          description: positionInBook
+        cfi:
+          type: string
+      required:
+        - chapter_index
+        - percentage
+        - page_position_in_book
+    UploadInitRequest:
+      type: object
+      description: 'source: o.completeImmediately (InitBookUploadingRequest)'
+      properties:
+        filename:
+          type: string
+        digest:
+          type: string
+        file_size:
+          type: integer
+        creation_token:
+          type: string
+        type:
+          type: string
+      required:
+        - filename
+        - digest
+    UploadInit:
+      type: object
+      description: 'source: o.UnobservedTaskException (InitBookUploadingResponse)'
+      properties:
+        code:
+          type: string
+        message:
+          type: string
+        url:
+          type: string
+        params:
+          type: object
+          additionalProperties:
+            type: string
+          description: uploadParams key/value form fields for the direct upload
+        action:
+          type: string
+    UploadFinalize:
+      type: object
+      description: 'source: o.r8lambda3E1phMJrmdxVmkkN6CJLVkY4X7E (FinalizeBookUploadingRequest) - sent as multipart ''payload'' JSON part; coverFilePath is a local file path, not serialized'
+      properties:
+        key:
+          type: string
+          description: uploadKey
+        digest:
+          type: string
+        creation_token:
+          type: string
+        title:
+          type: string
+        authors:
+          type: array
+          items:
+            type: string
+        type:
+          type: string
+        language:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        published_at:
+          type: string
+        publisher_name:
+          type: string
+        url:
+          type: string
+        bookshelf_ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+      required:
+        - digest
+    AddBookReadingTimeRequest:
+      type: object
+      description: 'source: o.TaskExternalSyntheticLambda2 (AddBookReadingTimeRequest)'
+      properties:
+        duration:
+          type: integer
+          description: readingTime in seconds
+      required:
+        - duration
+    Bookmark:
+      type: object
+      description: 'source: o.TaskCompletionSource (BookBookmarkResponse)'
+      properties:
+        id:
+          type: integer
+          format: int64
+        title:
+          type: string
+          description: 'chapterName (json key: title)'
+        chapter_index:
+          type: integer
+        page_position_in_book:
+          type: number
+          description: positionInBook
+        updated_at:
+          type: string
+    AddBookBookmarkRequest:
+      type: object
+      description: 'source: o.TaskExternalSyntheticLambda4 (AddBookBookmarkRequest)'
+      properties:
+        title:
+          type: string
+          description: 'chapterName (json key: title)'
+        chapter_index:
+          type: integer
+        page_position_in_book:
+          type: number
+          description: positionInBook
+      required:
+        - title
+        - chapter_index
+    Library:
+      type: object
+      description: 'source: o.createDefaultCrypto (toString: LibraryResponse). Returned by /api/user/libraries/search and /membership.'
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Library external id
+        slug:
+          type: string
+        name:
+          type: string
+        joined:
+          type: boolean
+        can_join:
+          type: boolean
+        book_count:
+          type: integer
+        type:
+          $ref: '#/components/schemas/LibraryType'
+        logo_url:
+          type: string
+        description:
+          type: string
+        disclaimer:
+          type: string
+    LibraryType:
+      type: string
+      description: 'source: o.trySetError (enum). Library visibility/access type.'
+      enum:
+        - invitation
+        - private
+        - public
+        - subscription
+    LibrarySearchRequest:
+      type: object
+      description: 'source: o.completeAfterTask (toString: GetLibrariesRequest). Body for /api/user/libraries/search.'
+      properties:
+        ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+        query:
+          type: string
+          description: search query
+        page:
+          type: integer
+        per_page:
+          type: integer
+    LibraryBookListSearchRequest:
+      type: object
+      description: 'source: o.completeAfterTasklambda7lambda6 (toString: GetLibraryCategoriesRequest). Body for /api/user/libraries/{slug}/book_lists/search.'
+      properties:
+        ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+        query:
+          type: string
+        page:
+          type: integer
+        per_page:
+          type: integer
+    LibraryBookList:
+      type: object
+      description: 'source: o.checkLength (toString: LibraryCategoryResponse). A book list/collection within a library.'
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+    BookContentType:
+      type: string
+      description: 'source: o.getEinkConfig (enum). Content type filter.'
+      enum:
+        - article
+        - book
+    AuthorSearchRequest:
+      type: object
+      description: 'source: o.r8lambdauoRtdt2OWqp6q4fWfL3JgUR3Ds (toString: GetAuthorsRequest). Body for /api/user/libraries/{slug}/authors/search.'
+      properties:
+        name:
+          type: string
+          description: search query (serialized as 'name')
+        page:
+          type: integer
+        per_page:
+          type: integer
+    TagSearchRequest:
+      type: object
+      description: 'source: o.calllambda2 (toString: GetTagsRequest). Body for /api/user/libraries/{slug}/tags/search.'
+      properties:
+        name:
+          type: string
+          description: search query (serialized as 'name')
+        page:
+          type: integer
+        per_page:
+          type: integer
+    Tag:
+      type: object
+      description: 'source: o.Common (toString: BookTagResponse). Book/library tag.'
+      properties:
+        name:
+          type: string
+    BorrowBookResponse:
+      type: object
+      description: 'source: o.CheckedKeyChain (toString: BorrowBookResponse). Returned by GET /api/user/libraries/books/{book_id}/borrow.'
+      properties:
+        can_borrow:
+          type: boolean
+        message:
+          type: string
+    Highlight:
+      type: object
+      description: 'source: o.setObserved (BookHighlightResponse)'
+      properties:
+        id:
+          type: integer
+          format: int64
+        quote_text:
+          type: string
+        quote_html:
+          type: string
+        note:
+          type: string
+          description: highlight comment/note
+        chapter_index:
+          type: integer
+        chapter_path:
+          type: array
+          items:
+            type: string
+        chapter_title:
+          type: string
+        start_offset:
+          type: integer
+        end_offset:
+          type: integer
+        quote_url:
+          type: string
+        start_x:
+          type: number
+        end_x:
+          type: number
+        start_y:
+          type: number
+        end_y:
+          type: number
+        position_percentage:
+          type: number
+        added_at:
+          type: string
+        updated_at:
+          type: string
+        share_url:
+          type: string
+        color:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        book:
+          $ref: '#/components/schemas/Book'
+        quote_image_url:
+          type: string
+        quote_image_width:
+          type: number
+        quote_image_height:
+          type: number
+    HighlightCreateRequest:
+      type: object
+      description: 'source: o.TaskCompanion (AddBookHighlightRequest); sent as the ''payload'' multipart part'
+      properties:
+        book_id:
+          type: integer
+          format: int64
+        quote_text:
+          type: string
+        quote_html:
+          type: string
+        chapter_index:
+          type: integer
+        page:
+          type: integer
+        start_offset:
+          type: integer
+        end_offset:
+          type: integer
+        start_x:
+          type: number
+        end_x:
+          type: number
+        start_y:
+          type: number
+        end_y:
+          type: number
+        chapter_title:
+          type: string
+        chapter_path:
+          type: array
+          items:
+            type: string
+        position_percentage:
+          type: number
+        added_at:
+          type: string
+        color:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        note:
+          type: string
+        quote_image_width:
+          type: number
+        quote_image_height:
+          type: number
+    HighlightUpdateRequest:
+      type: object
+      description: 'source: o.whenAnylambda4 (UpdateBookHighlightRequest)'
+      properties:
+        note:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        color:
+          type: string
+    HighlightSearchRequest:
+      type: object
+      description: 'source: o.accesscompleteAfterTask (GetBookHighlightsRequest)'
+      properties:
+        book_id:
+          type: integer
+          format: int64
+        page:
+          type: integer
+        per_page:
+          type: integer
+        query:
+          type: string
+        category_ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+        tags:
+          type: array
+          items:
+            type: string
+        authors:
+          type: array
+          items:
+            type: string
+        types:
+          type: array
+          items:
+            $ref: '#/components/schemas/HighlightContentType'
+    HighlightContentType:
+      type: string
+      description: 'source: o.getEinkConfig; serialized via toApiValue()'
+      enum:
+        - book
+        - article
+    HighlightAuthorsSearchRequest:
+      type: object
+      description: 'source: o.r8lambdauoRtdt2OWqp6q4fWfL3JgUR3Ds (GetAuthorsRequest)'
+      properties:
+        name:
+          type: string
+          description: search query
+        page:
+          type: integer
+        per_page:
+          type: integer
+    HighlightTagsSearchRequest:
+      type: object
+      description: 'source: o.r8lambdaq2Ff09IZK45SnsZzj0ugITrz00 (GetBooksHighlightsTagsRequest)'
+      properties:
+        name:
+          type: string
+          description: search query
+        include_book_tags:
+          type: boolean
+        page:
+          type: integer
+        per_page:
+          type: integer
+    HighlightExportRequest:
+      type: object
+      description: 'source: o.r8lambdavghfHKR40AbY9FdgJrGGct8vNWA (GetBookHighlightsForExportRequest)'
+      properties:
+        book_id:
+          type: integer
+          format: int64
+        content_type:
+          type: string
+      required:
+        - book_id
+        - content_type
+    HighlightExportFormat:
+      type: object
+      description: 'source: o.getTask (BookHighlightExportFormatResponse)'
+      properties:
+        name:
+          type: string
+        content_type:
+          type: string
+        extension:
+          type: string
+    HighlightColor:
+      type: object
+      description: 'source: o.TaskUnobservedExceptionHandler (BookHighlightColorResponse)'
+      properties:
+        color:
+          type: string
+        used_at:
+          type: string
+    HighlightTag:
+      type: object
+      description: 'source: o.setCancelled (BookHighlightTagResponse)'
+      properties:
+        books_count:
+          type: integer
+        name:
+          type: string
+    AuthResponse:
+      type: object
+      description: 'source: o.TaskCompanionExternalSyntheticLambda4 (toString: AuthResponse). Shared response body for all Auth endpoints. On success ''token'' is the session token; on validation failure the *Errors arrays and ''error'' are populated.'
+      properties:
+        token:
+          type: string
+          description: Session/auth token to use as X-Token header
+        type:
+          $ref: '#/components/schemas/AuthLoginType'
+          description: json key 'type'; login type/challenge outcome
+        url:
+          type: string
+          description: Web login URL (when loginType=web)
+        error:
+          type: string
+          description: General error message
+        email:
+          type: array
+          items:
+            type: string
+          description: json key 'email'; email field validation errors
+        password:
+          type: array
+          items:
+            type: string
+          description: json key 'password'; password field validation errors
+        profile.date_of_birth:
+          type: array
+          items:
+            type: string
+          description: date_of_birth field validation errors
+        profile.adult_confirmed:
+          type: array
+          items:
+            type: string
+          description: adult_confirmed field validation errors
+        messages:
+          $ref: '#/components/schemas/AuthMessage'
+          description: json key 'messages'; nested field-error messages
+    AuthMessage:
+      type: object
+      description: 'source: o.runActionfacebook_bolts_release (toString: AuthMessage)'
+      properties:
+        full_name:
+          type: array
+          items:
+            type: string
+          description: full_name field validation errors
+    AuthLoginType:
+      type: string
+      description: 'source: o.throwIfCancellationRequestedfacebook_bolts_release.e1 (enum). SerializedName values.'
+      enum:
+        - password
+        - web
+    AuthRequest:
+      type: object
+      description: 'source: o.r8lambdakKbvbQ2mxYM2be0LoouIdHONvgc (toString: AuthRequest). Body for /api/v3/auth.json (email/password login; also carries optional signup-ish fields).'
+      properties:
+        full_name:
+          type: string
+          description: json key 'full_name' (Java field 'name')
+        email:
+          type: string
+        password:
+          type: string
+        adult_confirmed:
+          type: boolean
+        date_of_birth:
+          type: string
+    SignupRequest:
+      type: object
+      description: 'source: o.r8lambdakKbvbQ2mxYM2be0LoouIdHONvgc (toString: AuthRequest). Same DTO class used as body for /api/v3/signup.'
+      properties:
+        full_name:
+          type: string
+          description: json key 'full_name' (Java field 'name')
+        email:
+          type: string
+        password:
+          type: string
+        adult_confirmed:
+          type: boolean
+        date_of_birth:
+          type: string
+    FacebookAuthRequest:
+      type: object
+      description: 'source: o.r8lambdagsdpz4xyyYr2qdVvXhKrWwN7dIo (toString: FacebookAuthRequest). Body for /api/v3/auth/facebook.'
+      properties:
+        facebook_token:
+          type: string
+          description: json key 'facebook_token' (Java field 'token')
+        email:
+          type: string
+        adult_confirmed:
+          type: boolean
+        date_of_birth:
+          type: string
+    GoogleAuthRequest:
+      type: object
+      description: 'source: o.completeAfterTasklambda7 (toString: GoogleAuthRequest). Body for /api/user/auth/google.'
+      properties:
+        id_token:
+          type: string
+          description: json key 'id_token' (Java field 'token')
+        email:
+          type: string
+        full_name:
+          type: string
+        adult_confirmed:
+          type: boolean
+        date_of_birth:
+          type: string
+    UpdateTokenRequest:
+      type: object
+      description: 'source: o.TaskCompanionExternalSyntheticLambda2 (toString: UpdateTokenRequest). Body for /api/v3/auth/token.'
+      properties:
+        request_token:
+          type: string
+          description: json key 'request_token' (Java field 'token')
+    SeriesCreateRequest:
+      type: object
+      description: 'source: o.getCipherInputStream (AddSeriesRequest)'
+      required:
+        - title
+        - creation_token
+      properties:
+        title:
+          type: string
+        creation_token:
+          type: string
+    SeriesUpdateRequest:
+      type: object
+      description: 'source: o.CryptoAlgo (UpdateSeriesRequest). Note: the ''id'' field is present but always serialized as null; the series id is taken from the path.'
+      properties:
+        id:
+          type: integer
+          format: int64
+          description: Always null in practice (constructor forces null).
+        title:
+          type: string
+    SeriesSearchRequest:
+      type: object
+      description: 'source: o.getMacInputStream (GetSeriesRequest)'
+      properties:
+        ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+        query:
+          type: string
+        sort:
+          $ref: '#/components/schemas/SeriesSortType'
+        category_ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+        tags:
+          type: array
+          items:
+            type: string
+        authors:
+          type: array
+          items:
+            type: string
+        bookshelf_id:
+          type: integer
+          format: int64
+        bookshelf_book_id:
+          type: integer
+          format: int64
+        list:
+          $ref: '#/components/schemas/BookListType'
+        page:
+          type: integer
+        per_page:
+          type: integer
+    SeriesBooksSearchRequest:
+      type: object
+      description: 'source: o.getCipherMetaDataLength (GetSeriesBooksRequest)'
+      properties:
+        query:
+          type: string
+        sort:
+          $ref: '#/components/schemas/BookSortType'
+        category_ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+        tags:
+          type: array
+          items:
+            type: string
+        authors:
+          type: array
+          items:
+            type: string
+        types:
+          type: array
+          items:
+            $ref: '#/components/schemas/BookContentType'
+        page:
+          type: integer
+        per_page:
+          type: integer
+    SeriesSortType:
+      type: string
+      description: 'source: o.isAvailable — sort options for series search'
+      enum:
+        - relevance-asc
+        - relevance-desc
+        - added_at-asc
+        - added_at-desc
+        - title-asc
+        - title-desc
+    BookshelfCreateRequest:
+      type: object
+      description: 'source: o.onSuccessTask (AddBookshelfRequest)'
+      required:
+        - name
+        - creation_token
+      properties:
+        name:
+          type: string
+        creation_token:
+          type: string
+    BookshelfUpdateRequest:
+      type: object
+      description: 'source: o.waitForCompletion (UpdateBookshelfRequest)'
+      required:
+        - name
+      properties:
+        name:
+          type: string
+    ReaderPreset:
+      type: object
+      description: 'source: o.createCrypto256Bits (ReaderSettingsResponse). A saved reader settings profile.'
+      properties:
+        id:
+          type: integer
+          format: int64
+        name:
+          type: string
+        font_family:
+          type: string
+        font_style:
+          $ref: '#/components/schemas/ReaderFontStyle'
+        direction:
+          $ref: '#/components/schemas/ReaderViewDirection'
+        scrolling_view:
+          type: boolean
+        two_columns:
+          type: boolean
+        line_height:
+          type: number
+        scale:
+          type: number
+        color_scheme:
+          type: string
+        text_color:
+          type: string
+        background_color:
+          type: string
+        link_color:
+          type: string
+        page_animation:
+          $ref: '#/components/schemas/ReaderPageAnimation'
+        vertical_margin:
+          type: integer
+        horizontal_margin:
+          type: integer
+        screen_orientation:
+          $ref: '#/components/schemas/ReaderScreenOrientation'
+        text_alignment:
+          $ref: '#/components/schemas/ReaderTextAlignment'
+        playback_speed:
+          type: number
+          description: audio playback rate
+        auto_turn_pages:
+          type: boolean
+        text_to_speech:
+          type: boolean
+        hyphenation:
+          type: boolean
+        paragraph_spacing:
+          type: number
+        tap_zones:
+          $ref: '#/components/schemas/TapZones'
+        updated_at:
+          type: string
+    ReaderPresetRequest:
+      type: object
+      description: 'source: o.delaylambda0 (ReaderSettingsRequest). Request body for create/update reader preset.'
+      properties:
+        name:
+          type: string
+        font_family:
+          type: string
+        font_style:
+          $ref: '#/components/schemas/ReaderFontStyle'
+        direction:
+          $ref: '#/components/schemas/ReaderViewDirection'
+        scrolling_view:
+          type: boolean
+        two_columns:
+          type: boolean
+        line_height:
+          type: number
+        scale:
+          type: number
+        color_scheme:
+          type: string
+        text_color:
+          type: string
+        background_color:
+          type: string
+        link_color:
+          type: string
+        page_animation:
+          $ref: '#/components/schemas/ReaderPageAnimation'
+        vertical_margin:
+          type: integer
+        horizontal_margin:
+          type: integer
+        screen_orientation:
+          $ref: '#/components/schemas/ReaderScreenOrientation'
+        text_alignment:
+          $ref: '#/components/schemas/ReaderTextAlignment'
+        playback_speed:
+          type: number
+          description: audio playback rate
+        auto_turn_pages:
+          type: boolean
+        text_to_speech:
+          type: boolean
+        hyphenation:
+          type: boolean
+        paragraph_spacing:
+          type: number
+        tap_zones:
+          $ref: '#/components/schemas/TapZones'
+        creation_token:
+          type: string
+          description: client-generated idempotency token
+    ReaderFontStyle:
+      type: string
+      description: 'source: o.setGridConfig'
+      enum:
+        - regular
+        - bold
+        - italic
+        - bold_italic
+    ReaderViewDirection:
+      type: string
+      description: 'source: o.r8lambda7VRqu_HzIWBnG0tAPUZtW9aQFlg'
+      enum:
+        - ltr
+        - rtl
+        - none
+    ReaderPageAnimation:
+      type: string
+      description: 'source: o.getData'
+      enum:
+        - none
+        - slide
+        - curl
+    ReaderScreenOrientation:
+      type: string
+      description: 'source: o.setLoadMoreEvent'
+      enum:
+        - auto
+        - portrait
+        - landscape
+    ReaderTextAlignment:
+      type: string
+      description: 'source: o.setWithSelectionMode'
+      enum:
+        - default
+        - right
+        - left
+        - justify
+        - center
+    TapZones:
+      type: object
+      description: 'source: com.bookfusion.common.model.TapZones. Tap-zone action mapping plus margins for the reader.'
+      properties:
+        actions:
+          type: object
+          description: 'Map keyed by tap-zone location (top_left, top_center, top_right, center_left, center_center, center_right, bottom_left, bottom_center, bottom_right) to a TapZoneAction. source: HashMap<o.buildHighlightModel, o.buildHighlightModellambda1>'
+          additionalProperties:
+            $ref: '#/components/schemas/TapZoneAction'
+        margins:
+          $ref: '#/components/schemas/TapZoneMargins'
+    TapZoneAction:
+      type: string
+      description: 'source: o.buildHighlightModellambda1'
+      enum:
+        - nothing
+        - left_page
+        - right_page
+        - toggle_toolbar
+        - toggle_play
+        - toggle_automatic_scroll
+        - play_forward
+        - play_backward
+    TapZoneMargins:
+      type: object
+      description: 'source: com.bookfusion.common.model.TapZoneMargins. Fractional edge margins (0..1) delimiting the tap zones.'
+      properties:
+        left:
+          type: number
+        top:
+          type: number
+        right:
+          type: number
+        bottom:
+          type: number
+    ReaderSubscription:
+      type: object
+      description: 'source: o.TaskcontinueWhilepredicateContinuation1 (BillingSubscriptionResponse). The user''s current reader subscription.'
+      properties:
+        plan:
+          $ref: '#/components/schemas/ReaderSubscriptionPlan'
+        source:
+          $ref: '#/components/schemas/ReaderSubscriptionSource'
+        books_usage:
+          type: integer
+        storage_usage:
+          type: integer
+          format: int64
+        manage_url:
+          type: string
+        play_store_purchase_token:
+          type: string
+    CreateReaderSubscriptionRequest:
+      type: object
+      description: 'source: o.r8lambdaYYwVcCncJnkZmjWtCkzhKb3WqgQ (CreateBillingSubscriptionRequest).'
+      required:
+        - play_store_purchase_token
+      properties:
+        play_store_purchase_token:
+          type: string
+    ReaderSubscriptionSource:
+      type: string
+      description: 'source: o.Continuation'
+      enum:
+        - stripe
+        - app_store
+        - play_store
+    ReaderSubscriptionPricing:
+      type: object
+      description: 'source: o.unobservedException (BillingPlansResponse). Available plans and pricing.'
+      properties:
+        plans:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReaderSubscriptionPlan'
+        details_url:
+          type: string
+        promo:
+          type: string
+    ReaderSubscriptionPlan:
+      type: object
+      description: 'source: o.TaskCompanionExternalSyntheticLambda5 (BillingPlanResponse). A single subscription plan/tier.'
+      properties:
+        tier:
+          type: integer
+          format: int64
+        top_tier:
+          type: boolean
+        name:
+          type: string
+        details:
+          type: array
+          items:
+            type: string
+        interval:
+          $ref: '#/components/schemas/ReaderSubscriptionInterval'
+        books_limit:
+          type: integer
+        storage_limit:
+          type: integer
+          format: int64
+        file_size_limit:
+          type: integer
+          format: int64
+        play_store_product:
+          type: string
+          description: productId
+        play_store_product_plan:
+          type: string
+          description: offerId
+    ReaderSubscriptionInterval:
+      type: string
+      description: 'source: o.ExecutorException'
+      enum:
+        - monthly
+        - yearly
+    User:
+      type: object
+      description: 'source: o.computeMacAad (toString name UserResponse) — GET /api/v1/user response.'
+      properties:
+        id:
+          type: string
+          description: External user id (Java field externalId).
+        email:
+          type: string
+        full_name:
+          type: string
+        kindle_name:
+          type: string
+        bio:
+          type: string
+        date_of_birth:
+          type: string
+        facebook:
+          $ref: '#/components/schemas/FacebookAccount'
+        analytics_id:
+          type: string
+        loyal_customer:
+          type: boolean
+          description: Java field loyal.
+    FacebookAccount:
+      type: object
+      description: 'source: o.Core (toString name FacebookResponse) — connected Facebook account info nested in User.'
+      properties:
+        name:
+          type: string
+    ProfileSettingsRequest:
+      type: object
+      description: 'source: o.delaylambda1 (toString name ProfileSettingsRequest) — POST /api/v1/profile/settings body.'
+      properties:
+        kindle_name:
+          type: string
+    ProfileSettings:
+      type: object
+      description: 'source: o.createPasswordBasedKeyDerivation (toString name ProfileSettingsResponse) — POST /api/v1/profile/settings response.'
+      properties:
+        email:
+          type: string
+        kindle_name:
+          type: string
+    UpdateUserRequest:
+      type: object
+      description: 'source: o.TaskCompanionExternalSyntheticLambda3 (toString name UpdateUserRequest) — JSON ''payload'' part of the multipart PATCH /api/user/profile request.'
+      properties:
+        id:
+          type: string
+          description: External user id (Java field externalId).
+        full_name:
+          type: string
+        email:
+          type: string
+        bio:
+          type: string
+        date_of_birth:
+          type: string
+        current_password:
+          type: string
+        password:
+          type: string
+          description: New password (Java field newPassword).
+    TtsCredentials:
+      type: object
+      description: 'source: o.decrypt (toString name TtsCredentialsResponse) — POST /api/user/tts response.'
+      properties:
+        url:
+          type: string
+        token:
+          type: string
+        preview_token:
+          type: string
+        expires_at:
+          type: string
+    SearchRequest:
+      type: object
+      description: 'source: o.r8lambdauoRtdt2OWqp6q4fWfL3JgUR3Ds (Authors, GetAuthorsRequest) and o.calllambda2 (Tags, GetTagsRequest); both are structurally identical taxonomy search bodies.'
+      properties:
+        name:
+          type: string
+          description: Search query matched against the author/tag name (Java field searchQuery).
+        page:
+          type: integer
+          description: 1-based page number (nullable).
+        per_page:
+          type: integer
+          description: Page size (nullable).

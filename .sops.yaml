@@ -3,7 +3,7 @@ creation_rules:
     pgp: ["B6CA7BD9B0973FBF981C3B1E7C8C077F1B72E98B"]
     age: ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIItmRvgucsqvH3CkT74Iz0/Qurs8QGopIyThHJqRmE94", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKFr5M5JvZRT4GHj57xF9jng6f/w+pflOLLh6pc6c+EP", "age1vygfenpy584kvfdge57ep2vwqqe33zd4auanwu7frmf0tht5jq0q5ugmgd", "age1ae3vaq0cwzd8y0eatczdz7dz26m3mpxfnelwfxle9mqdachftd7q96fvaz"]
   - path_regex: ^hosts/FCX19GT9XR/secrets\.enc\.yaml$
-    pgp: ["B6CA7BD9B0973FBF981C3B1E7C8C077F1B72E98B"]
-    age: ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIItmRvgucsqvH3CkT74Iz0/Qurs8QGopIyThHJqRmE94", "age1vygfenpy584kvfdge57ep2vwqqe33zd4auanwu7frmf0tht5jq0q5ugmgd"]
+    pgp: ["B6CA7BD9B0973FBF981C3B1E7C8C077F1B72E98B", "36A6E3D6E5D729A721639CD84019D2B96C630FDD"]
+    age: ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIItmRvgucsqvH3CkT74Iz0/Qurs8QGopIyThHJqRmE94", "age1vygfenpy584kvfdge57ep2vwqqe33zd4auanwu7frmf0tht5jq0q5ugmgd", "age1ae3vaq0cwzd8y0eatczdz7dz26m3mpxfnelwfxle9mqdachftd7q96fvaz"]
   - path_regex: ^hosts/DKL6GDJ7X1/secrets\.enc\.yaml$
     age: ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKFr5M5JvZRT4GHj57xF9jng6f/w+pflOLLh6pc6c+EP", "age1vygfenpy584kvfdge57ep2vwqqe33zd4auanwu7frmf0tht5jq0q5ugmgd", "age1ae3vaq0cwzd8y0eatczdz7dz26m3mpxfnelwfxle9mqdachftd7q96fvaz"]
