@@ -7,7 +7,7 @@ description: >-
   categories; get reading positions, bookmarks, user profile, subscription; and (gated) create/update
   or delete items. Triggers on: BookFusion, my BookFusion library, list my books/highlights, export
   highlights, BookFusion reading position, replace BookFusion web scraping.
-argument-hint: "<command> [--param value ...] [--data '<json>'] [--pretty] [--dangerous] | login | list | help"
+argument-hint: "<command> [--param value ...] [--data '<json>'] [--dry-run] [--pretty] [--dangerous] | login | list | help"
 allowed-tools: >-
   Bash(${CLAUDE_SKILL_DIR}/scripts/bookfusion.sh *)
   Bash(bash ${CLAUDE_SKILL_DIR}/scripts/bookfusion.sh *)
@@ -15,8 +15,8 @@ allowed-tools: >-
   Read
 dependencies: >-
   kotlin (auto-bootstrapped via `nix shell nixpkgs#kotlin` when not on PATH; JDK 11+ used for HTTP);
-  one Kotlin dependency (Gson) resolved from Maven Central on first run and cached. jq optional for
-  post-processing JSON output.
+  two Kotlin dependencies (Gson for JSON, SnakeYAML for reading the OpenAPI spec) resolved from Maven
+  Central on first run and cached. jq optional for post-processing JSON output.
 ---
 
 # bookfusion-api
@@ -60,6 +60,31 @@ ${CLAUDE_SKILL_DIR}/scripts/bookfusion.sh deleteUserBook --id 12345 --dangerous
 - Multipart (`createHighlight`, `updateUserBook`, `finalizeBookUpload`, `updateUserProfile`):
   `--data` = JSON `payload` part, `--file PATH` = optional binary part.
 
+## Request validation (fast feedback, before the round trip)
+Every request body (and path/query params) is validated against [`references/openapi.yaml`](references/openapi.yaml)
+**before** it is sent, so mistakes surface locally instead of as an opaque server error after a wasted call.
+- **Safe mistakes are auto-fixed** and reported as `fix:` lines on stderr: numeric-string → integer/number
+  (`"20"`→`20`), `"true"`/`"false"` → boolean, a scalar where an array is expected is wrapped (`"5"`→`[5]`,
+  then its element is coerced too), and enum values are snapped to the correct case (`"Book"`→`"book"`).
+  The corrected value is what gets sent.
+- **Unfixable mistakes are `error:` lines and block the request (exit `2`) before any network call**: a missing
+  required field (reported with its expected type/enum — never invented) or a type that can't be safely coerced
+  (e.g. `"abc"` for an integer). Fix them in one shot from the messages.
+- **Unknown fields and unknown enum values are `warn:` only and still send** — the spec is reverse-engineered and
+  may be incomplete; a `(did you mean 'query'?)` hint is added when a close match exists. `fix:` notes never print
+  secret values.
+
+```bash
+# Validate offline and print the effective request — never sends, never logs in:
+${CLAUDE_SKILL_DIR}/scripts/bookfusion.sh searchHighlights --dry-run --data '{"book_id":"111","page":"2"}'
+```
+- `--dry-run` — validate + print the request, do not send (exit `2` if it has hard errors, else `0`).
+- `--force` — send even when validation found hard errors (still coerces and prints them).
+- `--no-validate` — skip validation/coercion entirely (e.g. if the spec is wrong for a given endpoint).
+
+Note: a bare `{}` body now **fails fast** for commands that have required fields (e.g. `addBookBookmark`,
+`updateBookReadingPosition`) instead of round-tripping to a server error — supply the fields, or use `--force`/`--no-validate`.
+
 ## Output & context economy
 Designed to keep the agent context small and secret-free:
 - **Lists → TSV by default** (`--format auto`), which is far more compact than JSON. Use `--format jsonl`
@@ -93,7 +118,7 @@ Rate limiting is enforced before **every** request via a file-locked timestamp, 
 separate CLI invocations too (default ≈ one request per 200 ms). Set a lower `--base-url` for tests.
 
 ## Exit codes
-`0` ok · `2` usage error · `3` auth failure · `4` blocked (DANGEROUS without `--dangerous`, or EXCLUDED) · `5` HTTP error (status + body printed) · `6` I/O / network error.
+`0` ok · `2` usage error (incl. validation hard-fail / `--dry-run` with errors) · `3` auth failure · `4` blocked (DANGEROUS without `--dangerous`, or EXCLUDED) · `5` HTTP error (status + body printed) · `6` I/O / network error.
 
 ## Tests
 `bash ${CLAUDE_SKILL_DIR}/tests/integration_test.sh` runs the client against a local stdlib mock
