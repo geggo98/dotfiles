@@ -7,6 +7,11 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 KTS="$SCRIPT_DIR/bookfusion.main.kts"
 
+# Point the client at the shipped OpenAPI spec so it can validate requests before sending
+# (respect a pre-set value; the client also accepts --spec PATH). See references/openapi.yaml.
+: "${BOOKFUSION_OPENAPI:="$(cd "$SCRIPT_DIR/.." && pwd)/references/openapi.yaml"}"
+export BOOKFUSION_OPENAPI
+
 if [[ ! -f "$KTS" ]]; then
   echo "bookfusion: client not found at $KTS" >&2
   exit 6

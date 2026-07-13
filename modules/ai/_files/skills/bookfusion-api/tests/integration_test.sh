@@ -83,6 +83,76 @@ BIGOUT="$(run searchUserBooks --data '{}' --max-bytes 5 2>/dev/null)"
 BIGFILE="$(printf '%s' "$BIGOUT" | tail -1)"
 [[ -f "$BIGFILE" ]] && ok "large output written to temp file ($BIGFILE)" || no "expected a temp file path on stdout, got: $BIGOUT"
 
+# ---- request validation / auto-coercion (OpenAPI-driven) ----
+run login >/dev/null 2>&1   # ensure a cached token so echo tests don't add auto-login noise
+
+echo "== test 9: --dry-run validates offline, sends nothing =="
+: >"$REQLOG"
+run searchUserBooks --dry-run --data '{"query":"k"}' >/dev/null 2>&1; code=$?
+[[ $code -eq 0 ]] && ok "dry-run of a valid request exits 0" || no "dry-run expected exit 0, got $code"
+[[ ! -s "$REQLOG" ]] && ok "dry-run made no HTTP request" || no "dry-run hit the network: $(cat "$REQLOG")"
+
+echo "== test 10: dry-run + missing required fields -> exit 2, still no network =="
+: >"$REQLOG"
+ERR="$(run updateBookReadingPosition --number 1 --dry-run --data '{}' 2>&1 1>/dev/null)"; code=$?
+[[ $code -eq 2 ]] && ok "dry-run with missing required exits 2" || no "expected exit 2, got $code"
+[[ ! -s "$REQLOG" ]] && ok "invalid dry-run made no HTTP request" || no "invalid dry-run hit the network"
+echo "$ERR" | grep -q "error:.*chapter_index" && ok "missing required field reported (chapter_index)" || no "missing-required not reported: $ERR"
+
+echo "== test 11: default mode hard-fails a malformed request before sending =="
+: >"$REQLOG"
+ERR="$(run addBookBookmark --number 1 --data '{}' 2>&1 1>/dev/null)"; code=$?
+[[ $code -eq 2 ]] && ok "missing required -> exit 2" || no "expected exit 2, got $code"
+[[ ! -s "$REQLOG" ]] && ok "blocked request never reached the server" || no "malformed request was sent anyway"
+echo "$ERR" | grep -q "title" && echo "$ERR" | grep -q "chapter_index" && ok "both missing fields listed" || no "fields not both listed: $ERR"
+
+echo "== test 12: datatype coercion reaches the server as the right type =="
+OUT="$(run searchHighlights --data '{"book_id":"111","page":"2"}' 2>/dev/null)"
+echo "$OUT" | grep -q '"book_id":111' && ok "string->integer coercion sent as integer (book_id)" || no "book_id not coerced: $OUT"
+echo "$OUT" | grep -q '"page":2' && ok "string->integer coercion sent as integer (page)" || no "page not coerced: $OUT"
+
+echo "== test 13: scalar->array wrap + nested item coercion =="
+OUT="$(run searchHighlights --data '{"category_ids":"5","tags":"kube"}' 2>/dev/null)"
+echo "$OUT" | grep -q '"category_ids":\[5\]' && ok "scalar wrapped in array + int-coerced (category_ids:[5])" || no "category_ids not [5]: $OUT"
+echo "$OUT" | grep -q '"tags":\["kube"\]' && ok "scalar wrapped in string array (tags:[\"kube\"])" || no "tags not [\"kube\"]: $OUT"
+
+echo "== test 14: case-insensitive enum snapping =="
+OUT="$(run searchHighlights --data '{"types":["Book"]}' 2>/dev/null)"
+echo "$OUT" | grep -q '"types":\["book"\]' && ok "enum snapped Book->book on the wire" || no "enum not snapped: $OUT"
+
+echo "== test 15: unknown field warns but still sends =="
+: >"$REQLOG"
+ERR="$(run searchHighlights --data '{"quary":"x"}' 2>&1 1>/dev/null)"; code=$?
+[[ $code -eq 0 ]] && ok "unknown field does not block (exit 0)" || no "unknown field blocked, exit $code"
+grep -q "POST /api/user/highlights/search" "$REQLOG" && ok "request with unknown field was sent" || no "request not sent"
+echo "$ERR" | grep -q "warn:.*unknown field.*query" && ok "unknown field warned with did-you-mean (query)" || no "no did-you-mean warning: $ERR"
+
+echo "== test 16: --force sends despite hard errors =="
+: >"$REQLOG"
+ERR="$(run addBookBookmark --number 1 --force --data '{}' 2>&1 1>/dev/null)"; code=$?
+[[ $code -eq 0 ]] && ok "--force sends despite errors (exit 0)" || no "--force expected exit 0, got $code"
+grep -q "POST /api/v2/library/books/1/bookmarks" "$REQLOG" && ok "--force request reached the server" || no "--force request not sent"
+echo "$ERR" | grep -q "error:" && ok "--force still reports the errors" || no "--force suppressed errors: $ERR"
+
+echo "== test 17: --no-validate bypasses validation =="
+: >"$REQLOG"
+ERR="$(run addBookBookmark --number 1 --no-validate --data '{}' 2>&1 1>/dev/null)"; code=$?
+[[ $code -eq 0 ]] && ok "--no-validate sends (exit 0)" || no "--no-validate expected exit 0, got $code"
+{ echo "$ERR" | grep -q "error:" || echo "$ERR" | grep -q "fix:"; } && no "--no-validate emitted validation output" || ok "--no-validate produced no validation diagnostics"
+
+echo "== test 18: uncoercible datatype hard-errors before sending =="
+: >"$REQLOG"
+ERR="$(run searchHighlights --data '{"page":"abc"}' 2>&1 1>/dev/null)"; code=$?
+[[ $code -eq 2 ]] && ok "uncoercible value -> exit 2" || no "expected exit 2, got $code"
+[[ ! -s "$REQLOG" ]] && ok "uncoercible request never sent" || no "uncoercible request was sent"
+echo "$ERR" | grep -q "error:.*page" && ok "error names the offending field (page)" || no "error did not name page: $ERR"
+
+echo "== test 19: missing spec degrades gracefully (still works) =="
+OUT="$(run searchUserBooks --spec /nonexistent/openapi.yaml --data '{}' 2>/dev/null)"
+ERR="$(run searchUserBooks --spec /nonexistent/openapi.yaml --data '{}' 2>&1 1>/dev/null)"
+echo "$OUT" | grep -q "Kubernetes Up & Running" && ok "request works when spec is unavailable" || no "request failed without spec: $OUT"
+echo "$ERR" | grep -q "spec unavailable" && ok "spec-unavailable note printed" || no "no degradation note: $ERR"
+
 echo "==================="
 echo "PASS=$pass FAIL=$fail"
 [[ $fail -eq 0 ]]

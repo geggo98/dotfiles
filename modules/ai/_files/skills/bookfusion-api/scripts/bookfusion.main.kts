@@ -1,6 +1,7 @@
 #!/usr/bin/env kotlin
 @file:Repository("https://repo1.maven.org/maven2")
 @file:DependsOn("com.google.code.gson:gson:2.11.0")
+@file:DependsOn("org.yaml:snakeyaml:2.3")
 
 /*
  * bookfusion-api skill — CLI client for the (reverse-engineered) BookFusion mobile JSON API.
@@ -22,7 +23,12 @@ import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import com.google.gson.JsonPrimitive
+import org.yaml.snakeyaml.LoaderOptions
+import org.yaml.snakeyaml.Yaml
+import org.yaml.snakeyaml.constructor.SafeConstructor
 import java.io.RandomAccessFile
+import java.math.BigDecimal
+import java.math.BigInteger
 import java.net.URI
 import java.net.URLEncoder
 import java.net.http.HttpClient
@@ -388,7 +394,7 @@ fun multipartBody(payloadJson: String, filePath: String?): Pair<ByteArray, Strin
 }
 
 // ---------------------------------------------------------------------------- arg parsing
-val BOOL_FLAGS = setOf("--dangerous", "--pretty", "--data-stdin", "--stdout", "--help", "-h")
+val BOOL_FLAGS = setOf("--dangerous", "--pretty", "--data-stdin", "--stdout", "--help", "-h", "--dry-run", "--force", "--no-validate")
 fun parse(argv: List<String>): Triple<String?, MutableMap<String, String>, MutableSet<String>> {
     var command: String? = null
     val opts = mutableMapOf<String, String>()
@@ -433,6 +439,10 @@ USAGE:
 
 FLAGS:
   --dangerous            required to run a DANGEROUS (destructive) command
+  --dry-run              validate the request offline and print it; do NOT send (no network/login)
+  --force                send even if validation found hard errors (still coerces + reports)
+  --no-validate          skip OpenAPI request validation/coercion entirely
+  --spec PATH            OpenAPI spec used for validation (env BOOKFUSION_OPENAPI; set by the wrapper)
   --data '<json>'        request body (also --data-file PATH, --data-stdin)
   --file PATH            binary part for multipart commands (upload/cover/highlight image)
   --format F             output format: auto (default) | tsv | jsonl | json (env BOOKFUSION_FORMAT)
@@ -448,6 +458,13 @@ FLAGS:
 OUTPUT (context economy): lists render as compact TSV by default; large responses and any response
 containing credentials are written to a temp file (0600 for credentials) — stdout then carries only the
 file path plus a short redacted preview on stderr. Sensitive keys (token/password/…) are never printed.
+
+VALIDATION: request bodies (and path/query params) are checked against the shipped OpenAPI spec before
+sending. Safe datatype/shape mistakes are auto-fixed and reported as 'fix:' lines (e.g. "20"→20,
+scalar→[scalar], enum case). Missing required fields and uncoercible types are 'error:' lines and, by
+default, block the request (exit 2) BEFORE any round trip. Unknown fields / unknown enum values are
+'warn:' lines and still send (the spec is reverse-engineered and may be incomplete). Use --dry-run to
+validate only, --force to send despite errors, --no-validate to skip. Fixes never print secret values.
 
 CREDENTIALS (first non-empty wins; values never printed):
   username: --username-file > ${'$'}BOOKFUSION_USERNAME > ${'$'}BOOKFUSION_USERNAME_FILE >
@@ -471,6 +488,233 @@ fun listCommands(): String {
     sb.append("\n== EXCLUDED (intentionally not available) ==\n")
     EXCLUDED.forEach { (id, why) -> sb.append("  %-30s %s\n".format(id, why)) }
     return sb.toString()
+}
+
+// ---------------------------------------------------------------------------- request validation
+// Validate the outgoing request against the shipped OpenAPI spec BEFORE sending, so the agent gets
+// local, field-level feedback in one shot instead of a wasted HTTP round trip. Safe datatype/shape
+// mistakes are auto-fixed (coerced); mistakes we cannot safely fix (missing required fields,
+// uncoercible types) are hard errors. The spec is reverse-engineered/unversioned, so unknown fields
+// and unknown enum values are WARNINGS (still sent), and --force / --no-validate always override.
+@Suppress("UNCHECKED_CAST")
+fun asMap(o: Any?): Map<String, Any?>? = o as? Map<String, Any?>
+@Suppress("UNCHECKED_CAST")
+fun asList(o: Any?): List<Any?>? = o as? List<Any?>
+
+private var SPEC_LOADED = false
+private var SPEC_CACHE: Map<String, Any?>? = null
+fun loadSpec(specOpt: String?): Map<String, Any?>? {
+    if (SPEC_LOADED) return SPEC_CACHE
+    SPEC_LOADED = true
+    val p = (specOpt ?: System.getenv("BOOKFUSION_OPENAPI"))?.takeIf { it.isNotBlank() } ?: return null
+    val path = Paths.get(p.replaceFirst("~", System.getProperty("user.home")))
+    if (!Files.exists(path)) return null
+    SPEC_CACHE = try {
+        asMap(Yaml(SafeConstructor(LoaderOptions())).load<Any?>(Files.readString(path)))
+    } catch (_: Exception) { null }
+    return SPEC_CACHE
+}
+
+/** Resolve a (possibly chained) `$ref` node into the schema it points at; returns the node unchanged if not a ref. */
+fun resolveRef(spec: Map<String, Any?>, node: Any?): Any? {
+    var cur = node
+    var guard = 0
+    while (guard++ < 32) {
+        val ref = asMap(cur)?.get("\$ref") as? String ?: return cur
+        var t: Any? = spec
+        for (part in ref.removePrefix("#/").split("/")) t = asMap(t)?.get(part) ?: return null
+        cur = t
+    }
+    return cur
+}
+
+fun operationNode(spec: Map<String, Any?>, cmd: Cmd): Map<String, Any?>? =
+    asMap(asMap(asMap(spec["paths"])?.get(cmd.path))?.get(cmd.method.lowercase()))
+
+/** The raw request-body schema node ($ref or inline) for an operation: the JSON body, or the multipart `payload` part. */
+fun requestSchema(spec: Map<String, Any?>, op: Map<String, Any?>, multipart: Boolean): Any? {
+    val content = asMap(asMap(op["requestBody"])?.get("content")) ?: return null
+    return if (multipart) {
+        val sch = asMap(resolveRef(spec, asMap(content["multipart/form-data"])?.get("schema"))) ?: return null
+        asMap(sch["properties"])?.get("payload")
+    } else asMap(content["application/json"])?.get("schema")
+}
+
+class VCtx {
+    val fixes = mutableListOf<String>()
+    val warns = mutableListOf<String>()
+    val errors = mutableListOf<String>()
+}
+
+fun jpath(base: String, key: String): String = if (base.isEmpty()) key else "$base.$key"
+fun jtype(e: JsonElement): String = when {
+    e.isJsonNull -> "null"; e.isJsonArray -> "array"; e.isJsonObject -> "object"
+    e.isJsonPrimitive -> e.asJsonPrimitive.let { if (it.isBoolean) "boolean" else if (it.isNumber) "number" else "string" }
+    else -> "unknown"
+}
+/** Redact a value in a diagnostic message when the field it belongs to is sensitive (token/password/…). */
+fun redactVal(path: String, v: String): String {
+    val leaf = path.substringAfterLast('.').substringBefore('[')
+    return if (isSensitiveKey(leaf)) "***REDACTED***" else v
+}
+
+fun levenshtein(a: String, b: String): Int {
+    val dp = IntArray(b.length + 1) { it }
+    for (i in 1..a.length) {
+        var prev = dp[0]; dp[0] = i
+        for (j in 1..b.length) {
+            val tmp = dp[j]
+            dp[j] = if (a[i - 1] == b[j - 1]) prev else 1 + minOf(prev, dp[j], dp[j - 1])
+            prev = tmp
+        }
+    }
+    return dp[b.length]
+}
+/** Closest candidate within a small edit distance, for did-you-mean hints (never used to auto-rewrite). */
+fun closest(s: String, candidates: Collection<String>): String? {
+    var best: String? = null; var bestD = Int.MAX_VALUE
+    for (c in candidates) { val d = levenshtein(s.lowercase(), c.lowercase()); if (d in 1 until bestD) { bestD = d; best = c } }
+    val threshold = minOf(2, Math.ceil(s.length / 3.0).toInt())
+    return if (best != null && bestD <= threshold) best else null
+}
+
+fun typeHint(spec: Map<String, Any?>, schemaRaw: Any?): String {
+    val s = asMap(resolveRef(spec, schemaRaw)) ?: return ""
+    asList(s["enum"])?.let { return " (one of [${it.joinToString(", ")}])" }
+    val t = s["type"] as? String ?: return ""
+    if (t == "array") {
+        val items = asMap(resolveRef(spec, s["items"]))
+        asList(items?.get("enum"))?.let { return " (array of [${it.joinToString(", ")}])" }
+        return (items?.get("type") as? String)?.let { " (array of $it)" } ?: " (array)"
+    }
+    return " ($t)"
+}
+
+fun coerceEnum(value: JsonElement, enum: List<Any?>, path: String, vc: VCtx): JsonElement {
+    val members = enum.map { it?.toString() ?: "null" }
+    if (!value.isJsonPrimitive || value.asJsonPrimitive.isBoolean) {
+        vc.errors.add("$path: expected one of [${members.joinToString(", ")}], got ${jtype(value)}"); return value
+    }
+    val s = value.asString
+    if (s in members) return value
+    members.firstOrNull { it.equals(s, ignoreCase = true) }?.let {
+        vc.fixes.add("$path: '$s' → '$it' (enum case)"); return JsonPrimitive(it)
+    }
+    val hint = closest(s, members)?.let { " (did you mean '$it'?)" } ?: ""
+    vc.warns.add("$path: '$s' not in enum [${members.joinToString(", ")}]$hint — sending as-is")
+    return value
+}
+
+/** Coerce a scalar toward the schema-declared primitive type. Returns the (possibly replaced) element. */
+fun coerceScalar(value: JsonElement, target: String, path: String, vc: VCtx): JsonElement {
+    if (value.isJsonNull) return value
+    if (value.isJsonObject || value.isJsonArray) { vc.errors.add("$path: expected $target, got ${jtype(value)}"); return value }
+    val p = value.asJsonPrimitive
+    when (target) {
+        "integer" -> {
+            if (p.isNumber) {
+                val bd = try { BigDecimal(p.asString) } catch (_: Exception) { null }
+                if (bd != null && bd.stripTrailingZeros().scale() <= 0) return JsonPrimitive(bd.toBigIntegerExact() as BigInteger)
+                vc.errors.add("$path: expected integer, got non-integral number ${redactVal(path, p.asString)}"); return value
+            }
+            if (p.isString) {
+                val s = p.asString.trim(); val bi = s.toBigIntegerOrNull()
+                if (bi != null) { vc.fixes.add("$path: \"${redactVal(path, s)}\" → ${redactVal(path, s)} (string→integer)"); return JsonPrimitive(bi) }
+                vc.errors.add("$path: expected integer, got string \"${redactVal(path, s)}\""); return value
+            }
+            vc.errors.add("$path: expected integer, got boolean"); return value
+        }
+        "number" -> {
+            if (p.isNumber) return value
+            if (p.isString) {
+                val s = p.asString.trim(); val bd = s.toBigDecimalOrNull()
+                if (bd != null) { vc.fixes.add("$path: \"${redactVal(path, s)}\" → ${redactVal(path, s)} (string→number)"); return JsonPrimitive(bd) }
+                vc.errors.add("$path: expected number, got string \"${redactVal(path, s)}\""); return value
+            }
+            vc.errors.add("$path: expected number, got boolean"); return value
+        }
+        "boolean" -> {
+            if (p.isBoolean) return value
+            if (p.isString) when (p.asString.trim().lowercase()) {
+                "true" -> { vc.fixes.add("$path: \"${p.asString}\" → true (string→boolean)"); return JsonPrimitive(true) }
+                "false" -> { vc.fixes.add("$path: \"${p.asString}\" → false (string→boolean)"); return JsonPrimitive(false) }
+                else -> { vc.errors.add("$path: expected boolean, got string \"${redactVal(path, p.asString)}\""); return value }
+            }
+            vc.errors.add("$path: expected boolean, got number ${redactVal(path, p.asString)}"); return value
+        }
+        "string" -> {
+            if (p.isString) return value
+            vc.fixes.add("$path: ${redactVal(path, p.asString)} → \"${redactVal(path, p.asString)}\" (${jtype(value)}→string)")
+            return JsonPrimitive(p.asString)
+        }
+        else -> return value
+    }
+}
+
+/** Recursively validate + coerce a Gson tree against an OpenAPI schema; mutates objects/arrays in place. */
+fun validate(spec: Map<String, Any?>, schemaRaw: Any?, value: JsonElement, path: String, vc: VCtx, depth: Int): JsonElement {
+    if (depth > 32) return value
+    val schema = asMap(resolveRef(spec, schemaRaw)) ?: return value        // unknown/empty schema → accept anything
+    asList(schema["enum"])?.let { return coerceEnum(value, it, path, vc) }
+    return when (schema["type"] as? String) {
+        "object" -> validateObject(spec, schema, value, path, vc, depth)
+        "array" -> validateArray(spec, schema, value, path, vc, depth)
+        "integer", "number", "boolean", "string" -> coerceScalar(value, schema["type"] as String, path, vc)
+        else -> value                                                      // untyped → accept
+    }
+}
+
+fun validateObject(spec: Map<String, Any?>, schema: Map<String, Any?>, value: JsonElement, path: String, vc: VCtx, depth: Int): JsonElement {
+    if (value.isJsonNull) return value
+    if (!value.isJsonObject) { vc.errors.add("${path.ifEmpty { "body" }}: expected object, got ${jtype(value)}"); return value }
+    val obj = value.asJsonObject
+    val props = asMap(schema["properties"]) ?: emptyMap()
+    val addProps = schema["additionalProperties"]                          // Map (schema) | Boolean | absent
+    for (r in (asList(schema["required"])?.mapNotNull { it as? String } ?: emptyList())) {
+        if (!obj.has(r) || obj.get(r).isJsonNull) vc.errors.add("${jpath(path, r)}: missing required field${typeHint(spec, props[r])}")
+    }
+    for (k in obj.keySet().toList()) {
+        val childSchema = props[k]
+        when {
+            childSchema != null -> obj.add(k, validate(spec, childSchema, obj.get(k), jpath(path, k), vc, depth + 1))
+            asMap(addProps) != null -> obj.add(k, validate(spec, addProps, obj.get(k), jpath(path, k), vc, depth + 1))
+            addProps == true || addProps == false -> {}                     // additionalProperties:true → accept; :false is not used in this spec
+            else -> {
+                val hint = closest(k, props.keys)?.let { " (did you mean '$it'?)" } ?: ""
+                vc.warns.add("${jpath(path, k)}: unknown field$hint — sending as-is")
+            }
+        }
+    }
+    return value
+}
+
+fun validateArray(spec: Map<String, Any?>, schema: Map<String, Any?>, value: JsonElement, path: String, vc: VCtx, depth: Int): JsonElement {
+    if (value.isJsonNull) return value
+    val arr = if (value.isJsonArray) value.asJsonArray
+    else JsonArray().also { it.add(value); vc.fixes.add("$path: wrapped ${jtype(value)} in a 1-element array") }
+    val items = schema["items"]
+    if (asMap(resolveRef(spec, items)).isNullOrEmpty()) return arr          // items:{} or none → accept any element
+    for (i in 0 until arr.size()) arr.set(i, validate(spec, items, arr.get(i), "$path[$i]", vc, depth + 1))
+    return arr
+}
+
+/** Light type-check of path/query params (integer/number). Bad values warn (URL is still faithful), never block. */
+fun checkParams(spec: Map<String, Any?>, op: Map<String, Any?>, opts: Map<String, String>, vc: VCtx) {
+    for (pAny in (asList(op["parameters"]) ?: return)) {
+        val p = asMap(pAny) ?: continue
+        val name = p["name"] as? String ?: continue
+        val v = opts["--$name"]?.trim() ?: continue
+        when (asMap(resolveRef(spec, p["schema"]))?.get("type") as? String) {
+            "integer" -> if (v.toBigIntegerOrNull() == null) vc.warns.add("--$name: expected integer, got \"$v\" — sending as-is")
+            "number" -> if (v.toBigDecimalOrNull() == null) vc.warns.add("--$name: expected number, got \"$v\" — sending as-is")
+        }
+    }
+}
+
+fun printDiag(vc: VCtx) {
+    vc.fixes.forEach { err("fix: $it") }
+    vc.warns.forEach { err("warn: $it") }
+    vc.errors.forEach { err("error: $it") }
 }
 
 // ---------------------------------------------------------------------------- main
@@ -518,12 +762,50 @@ for (p in cmd.pathParams) {
 val query = cmd.queryParams.mapNotNull { q -> opts["--$q"]?.let { "$q=${enc(it)}" } }.joinToString("&")
 val url = baseUrl + path + (if (query.isNotEmpty()) "?$query" else "")
 
+// body (read offline first; validation/coercion run BEFORE any network so bad requests fail fast)
+val rawBodyStr = readBody(cmd, opts, flags)
+var outBody: String? = rawBodyStr
+val vc = VCtx()
+val doValidate = "--no-validate" !in flags
+val validatable = cmd.hasBody || cmd.multipart || cmd.pathParams.isNotEmpty() || cmd.queryParams.isNotEmpty()
+if (doValidate && validatable) {
+    val spec = loadSpec(opts["--spec"])
+    val op = spec?.let { operationNode(it, cmd) }
+    when {
+        spec == null -> err("note: spec unavailable; skipping request validation")
+        op == null -> err("note: no spec entry for ${cmd.method} ${cmd.path}; skipping request validation")
+        else -> {
+            checkParams(spec, op, opts, vc)
+            val tree = if (cmd.hasBody || cmd.multipart) rawBodyStr?.let { parseOrNull(it) } else null
+            if (tree != null) requestSchema(spec, op, cmd.multipart)?.let { sch ->
+                outBody = GSON.toJson(validate(spec, sch, tree, "", vc, 0))   // coercions reach the wire
+            }
+            printDiag(vc)
+        }
+    }
+}
+
+// --dry-run: report the (validated, coerced) request and stop — never touches the network or auto-login.
+if ("--dry-run" in flags) {
+    err("dry-run: ${vc.fixes.size} fixes, ${vc.warns.size} warns, ${vc.errors.size} errors; would ${cmd.method} $url")
+    outBody?.let { b -> parseOrNull(b)?.let { println(if (pretty) PRETTY.toJson(redactTree(it)) else GSON.toJson(redactTree(it))) } }
+    exitProcess(if (vc.errors.isNotEmpty()) EX_USAGE else EX_OK)
+}
+// Default: block a definitely-malformed request before the round trip. --force sends anyway.
+if (vc.errors.isNotEmpty()) {
+    if ("--force" !in flags) {
+        err("hint: fix the body, or re-run with --force to send anyway (or --no-validate to skip checks)")
+        exitProcess(EX_USAGE)
+    }
+    err("note: --force set; sending despite ${vc.errors.size} validation error(s)")
+}
+
 // auth: attach token unless this is an auth/public command
 val token = if (cmd.id in AUTH_CMDS) (cachedToken(baseUrl, null, opts) ?: "") else ensureToken(baseUrl, minIntervalMs, device, opts)
 val ctx = Ctx(baseUrl, minIntervalMs, token, device)
 
-// body
-val rawBody = readBody(cmd, opts, flags)
+// body bytes from the (possibly coerced) request body
+val rawBody = outBody
 val (bodyBytes, contentType) = when {
     cmd.multipart -> multipartBody(rawBody ?: "{}", opts["--file"])
     rawBody != null -> rawBody.toByteArray() to "application/json"

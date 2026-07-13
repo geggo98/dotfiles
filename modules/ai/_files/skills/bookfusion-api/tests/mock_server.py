@@ -9,7 +9,8 @@ Behaviour:
   POST /api/v3/auth.json      -> 200 {"token":"test-token-123"} if email+password present, else 401.
   POST /api/user/books/search -> 200 canned book array, but only if X-Token == test-token-123 (else 401).
   DELETE /api/user/books/{id} -> 204 (no body).
-  anything else               -> 200 {"ok": true}.
+  any other POST              -> 200 {"received": <parsed request body>}  (lets tests assert coerced types).
+  anything else               -> 200 {"ok": true} / echo.
 """
 import json
 import sys
@@ -61,7 +62,12 @@ class H(BaseHTTPRequestHandler):
             if self.headers.get("X-Token") != TOKEN:
                 return self._send(401, {"error": "unauthorized"})
             return self._send(200, BOOKS)
-        return self._send(200, {"ok": True})
+        # Fallback: echo the received JSON body so tests can assert coerced types reached the wire.
+        try:
+            parsed = json.loads(body or b"{}")
+        except Exception:
+            parsed = None
+        return self._send(200, {"received": parsed})
 
     def do_GET(self):
         self._log()
