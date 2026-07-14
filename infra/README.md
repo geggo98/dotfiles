@@ -172,6 +172,21 @@ delta — `nix copy` skips paths already present in R2.
   sudo launchctl kickstart -k system/systems.determinate.nix-daemon   # or reboot
   ```
   Substituter (pull) settings are read per client invocation and need no restart.
+- **Fresh machine (disaster recovery):** the first `darwin-rebuild switch` on a
+  freshly installed Mac runs *before* `nix.custom.conf` exists, so R2 is not yet
+  a substituter — and that first build is the most expensive one. Its ~3.3 GiB
+  delta (the paths not on `cache.nixos.org`: nvf, llm-agents, yt-dlp, overlays …)
+  would be compiled from source. Pre-fetch it from R2 first instead:
+  ```bash
+  just bootstrap <serial>                 # e.g. DKL6GDJ7X1 — sudo; pulls the R2 delta into the store
+  sudo darwin-rebuild switch --flake .    # then apply (everything is already local)
+  ```
+  `just bootstrap` runs `sudo nix build` with explicit `--extra-substituters` /
+  `--extra-trusted-public-keys`: **root** is an always-trusted user, so the
+  daemon honors them even before our `trusted-users` setting is applied — no
+  `accept-flake-config`, no deployed config required. (The same R2 entry also
+  sits in the flake's `nixConfig`, so a trusted user's ad-hoc `sudo nix build`
+  of this flake reaches R2 too, subject to `accept-flake-config`.)
 
 Secrets:
 

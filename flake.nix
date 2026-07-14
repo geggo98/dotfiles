@@ -95,10 +95,17 @@
     };
   };
 
+  # Substituters offered to anyone building this flake (each honored only for a
+  # trusted user who accepts it — accept-flake-config). numtide/devenv front the
+  # llm-agents/devenv builds; nix-cache.pub.schwetschke.dev is our shared R2
+  # cache (modules/nix-cache.nix). R2 is listed here — on top of the
+  # nix.custom.conf substituter that covers steady-state — so a FRESH machine's
+  # first build can pull the ~3.3 GiB delta (paths not on cache.nixos.org)
+  # instead of compiling it, before nix.custom.conf exists. See `just bootstrap`.
   nixConfig = {
     # https://github.com/numtide/llm-agents.nix/blob/main/flake.nix
-    extra-substituters = [ "https://numtide.cachix.org" "https://devenv.cachix.org" ];
-    extra-trusted-public-keys = [ "numtide.cachix.org-1:2ps1kLBUWjxIneOy1Ik6cQjb41X0iXVXeHigGmycPPE=" "devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw=" ];
+    extra-substituters = [ "https://numtide.cachix.org" "https://devenv.cachix.org" "https://nix-cache.pub.schwetschke.dev" ];
+    extra-trusted-public-keys = [ "numtide.cachix.org-1:2ps1kLBUWjxIneOy1Ik6cQjb41X0iXVXeHigGmycPPE=" "devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw=" "nix-cache.pub.schwetschke.dev-1:R3UAHtpY90nzsAtEm3LDaWsEAHYQK6YG+i8mYxTgL10=" ];
   };
 
   outputs = inputs:
