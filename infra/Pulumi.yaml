@@ -3,4 +3,8 @@ runtime:
   name: nodejs
   options:
     packagemanager: pnpm
+# TypeScript is compiled to dist/ (tsc, ESM) and run from there — the source
+# lives in src/, so without an explicit entrypoint pulumi errors with "No
+# entrypoint found". The `just pulumi` wrapper runs `pnpm build` first.
+main: dist/index.js
 description: Cloud infrastructure for nix-darwin managed hosts
