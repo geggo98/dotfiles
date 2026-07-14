@@ -4,3 +4,10 @@
 allowBuilds:
   '@pulumi/command': true
   protobufjs: true
+
+# Supply-chain hardening: a newly published version must be >= 24h (1440 min)
+# old before pnpm will resolve it, blunting a same-day malicious-publish window
+# on lockfile refreshes (pnpm update / re-resolve). The committed, integrity-
+# pinned pnpm-lock.yaml stays authoritative; this only gates which NEW versions
+# are eligible. pnpm 11 reads this from pnpm-workspace.yaml (NOT .npmrc).
+minimumReleaseAge: 1440
