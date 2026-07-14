@@ -174,3 +174,21 @@ cache-seed:
 # Push specific paths (repair/ad hoc), e.g. `just cache-push /run/current-system`
 cache-push *paths:
     NIX_CACHE_S3_URL='{{ R2_S3_URL }}' bash modules/_files/nix-cache/nix-cache-push "$@"
+
+# Bootstrap a fresh machine: pre-fetch the R2-cached delta (the paths NOT on
+# cache.nixos.org) into the store BEFORE the first switch, so that first —
+# otherwise most expensive — build downloads them instead of compiling from
+# source. Needs sudo: on a fresh box the login user isn't a trusted-user yet
+# (that only lands at the first activation) and nix.custom.conf doesn't exist,
+# so only a root (always-trusted) invocation with explicit flags makes the
+# daemon honor R2. Then apply the printed switch. Example: `just bootstrap DKL6GDJ7X1`
+bootstrap host:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    sudo nix build --no-link \
+      --extra-substituters 'https://nix-cache.pub.schwetschke.dev' \
+      --extra-trusted-public-keys 'nix-cache.pub.schwetschke.dev-1:R3UAHtpY90nzsAtEm3LDaWsEAHYQK6YG+i8mYxTgL10=' \
+      '.#darwinConfigurations.{{ host }}.system'
+    echo
+    echo "R2 delta is in the local store. Now apply it:"
+    echo "  sudo darwin-rebuild switch --flake ."
