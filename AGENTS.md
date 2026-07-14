@@ -92,6 +92,7 @@ Each module defines a single aspect across all relevant configuration classes (d
 | `darwin-wiring.nix` | Defines `configurations.darwin` option and wires it to `flake.darwinConfigurations` |
 | `macos.nix` | macOS-specific defaults (dock, finder, trackpad, system preferences) via `flake.modules.darwin.macos` |
 | `determinate.nix` | Determinate Nix module settings (`nix.enable = false`) via `flake.modules.darwin.determinate` |
+| `nix-cache.nix` | Shared Cloudflare R2 Nix binary cache — substituter + signed `post-build-hook` push — via `flake.modules.darwin.nix-cache`. Bucket/domain provisioned in `infra/`; details in `infra/README.md` |
 | `homebrew-common.nix` | Shared Homebrew configuration via `flake.modules.darwin.homebrew` |
 | `shells.nix` | Shell configuration (Fish, Zsh, Bash) via `flake.modules.homeManager.shell` |
 | `git.nix` | Git configuration via `flake.modules.homeManager.git` |
@@ -123,6 +124,7 @@ Host-specific secrets declarations live in **`hosts/<serial>/secrets.nix`**.
 - **Auto-import:** `import-tree ./modules` auto-discovers all module files
 - **Nix management:** Determinate Nix manages the Nix installation, not nix-darwin's built-in `nix.enable`
 - **SIP restriction:** `launchd.envVariables` is blocked by macOS System Integrity Protection. To set environment variables for GUI apps (e.g. PATH), use a `launchd.user.agents` entry that runs `/bin/launchctl setenv` at login instead
+- **Binary cache (R2):** both hosts share a Cloudflare R2 cache (`modules/nix-cache.nix`). Pull is a public custom-domain substituter; push is a signed `nix copy` (root `post-build-hook`, or `just cache-seed`/`cache-push`). The hook is referenced by the **stable** `/run/current-system/sw/bin` path, but Determinate's `nix-daemon` reads the hook setting only at startup and `darwin-rebuild switch` does **not** restart it — after first enabling the cache, run `sudo launchctl kickstart -k system/systems.determinate.nix-daemon` (or reboot) once. Push credentials: `r2_secret_access_key` stores a Cloudflare API token (`cfat_…`) whose SHA-256 the push script derives as the S3 secret
 
 ## Coding Style & Naming Conventions
 
