@@ -36,6 +36,12 @@ description = "Boundary target ID (ttcp_ prefix)"
 regex = '''ttcp_[A-Za-z0-9]{8,}'''
 keywords = ["ttcp_"]
 
+[[rules]]
+id = "cloudflare-api-token"
+description = "Cloudflare API token (cfat_ prefix; doubles as the R2 S3 secret via SHA-256)"
+regex = '''cfat_[A-Za-z0-9_-]{20,}'''
+keywords = ["cfat_"]
+
 [[allowlists]]
 description = "Files that legitimately contain these patterns"
 paths = [
@@ -48,6 +54,7 @@ paths = [
 description = "SOPS-encrypted secrets (ciphertext + metadata are not real leaks)"
 paths = [
   '''^secrets/secrets\.enc\.yaml$''',
+  '''^secrets/infra\.enc\.yaml$''',
   '''^hosts/[^/]+/secrets\.enc\.yaml$''',
 ]
 

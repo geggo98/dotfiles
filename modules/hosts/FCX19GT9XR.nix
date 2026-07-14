@@ -9,6 +9,7 @@ in
       darwin.identity
       darwin.macos
       darwin.determinate
+      darwin.nix-cache
       darwin.homebrew
       darwin.overlays
       darwin.pmset-hibernatemode

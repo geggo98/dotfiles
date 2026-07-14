@@ -47,6 +47,13 @@ let
         "c24_bi_kfz_prod_stefan_schwetschke.json" = { };
         "c24_bi_kfz_test_liquibase.json" = { };
         "c24_bi_kfz_prod_liquibase.json" = { };
+
+        # R2 binary cache (modules/nix-cache.nix): S3 push credentials + NAR
+        # signing secret key. Read by nix-cache-push (user) and the root
+        # post-build-hook (root reads the user's decrypted files).
+        r2_access_key_id = { };
+        r2_secret_access_key = { };
+        nix_cache_signing_key = { };
       };
     in
     {

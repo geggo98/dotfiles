@@ -1,0 +1,90 @@
+#!/usr/bin/env bash
+# Push Nix store paths to the Cloudflare R2 binary cache, signed.
+#
+# Usage:
+#   nix-cache-push --seed [TARGET]   push the delta of a closure (default
+#                                    /run/current-system) that is NOT already
+#                                    available on cache.nixos.org
+#   nix-cache-push PATH...           push exactly these paths (the post-build
+#                                    hook passes $OUT_PATHS, which are freshly
+#                                    built and therefore already the delta)
+#
+# Environment:
+#   NIX_CACHE_S3_URL       required, e.g.
+#     s3://nix-cache?endpoint=<acct>.r2.cloudflarestorage.com&region=auto
+#   NIX_CACHE_SECRETS_DIR  directory holding r2_access_key_id,
+#                          r2_secret_access_key and nix_cache_signing_key
+#                          (default: ${XDG_CONFIG_HOME:-$HOME/.config}/sops-nix/secrets)
+#                          r2_secret_access_key may be either a native R2 S3
+#                          secret (64 lowercase hex) or a Cloudflare API token
+#                          (`cfat_…`); for a token the S3 secret is its SHA-256
+#                          digest, which we derive below.
+#
+# Best-effort by design: the caller (post-build-hook) wraps this in a timeout
+# and `|| true` so a slow or unreachable R2 never fails or hangs a build.
+set -euo pipefail
+
+s3_url="${NIX_CACHE_S3_URL:?NIX_CACHE_S3_URL is required}"
+secrets_dir="${NIX_CACHE_SECRETS_DIR:-${XDG_CONFIG_HOME:-$HOME/.config}/sops-nix/secrets}"
+
+akid_file="$secrets_dir/r2_access_key_id"
+secret_file="$secrets_dir/r2_secret_access_key"
+signing_key="$secrets_dir/nix_cache_signing_key"
+
+for f in "$akid_file" "$secret_file" "$signing_key"; do
+  if [[ ! -r "$f" ]]; then
+    echo "nix-cache-push: cannot read secret $f" >&2
+    exit 1
+  fi
+done
+
+AWS_ACCESS_KEY_ID="$(<"$akid_file")"
+# Cloudflare R2 accepts either a native S3 secret access key (64 lowercase hex)
+# or a Cloudflare API token, for which the S3 secret is the SHA-256 hex digest
+# of the token value. We keep the raw `cfat_…` token in sops and derive the
+# digest here; a value already in 64-hex form is used verbatim. Rationale for
+# storing the token rather than the pre-computed digest: a leaked plaintext copy
+# is caught by the dedicated `cloudflare-api-token` gitleaks rule (.gitleaks.toml),
+# whereas the 64-hex digest is indistinguishable from random hex and would slip
+# past scanning. sha256sum (Linux) / shasum (macOS, /usr/bin) cover both the user
+# seed and the restricted-PATH root post-build-hook.
+secret_value="$(<"$secret_file")"
+if [[ "$secret_value" =~ ^[0-9a-f]{64}$ ]]; then
+  AWS_SECRET_ACCESS_KEY="$secret_value"
+elif command -v sha256sum >/dev/null 2>&1; then
+  AWS_SECRET_ACCESS_KEY="$(printf '%s' "$secret_value" | sha256sum | cut -d' ' -f1)"
+else
+  AWS_SECRET_ACCESS_KEY="$(printf '%s' "$secret_value" | shasum -a 256 | cut -d' ' -f1)"
+fi
+export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+
+paths=()
+if [[ "${1:-}" == "--seed" ]]; then
+  shift
+  target="${1:-/run/current-system}"
+  echo "nix-cache-push: filtering closure of $target against cache.nixos.org ..." >&2
+  # Capture into a variable first: a `< <(nix-store …)` process substitution
+  # does NOT propagate its failure under `set -e` (the loop would just read zero
+  # lines and falsely report success). An assignment does, so an invalid target
+  # or an unreachable daemon aborts instead of silently pushing nothing.
+  requisites="$(nix-store --query --requisites "$target")"
+  while IFS= read -r p; do
+    [[ -n "$p" ]] || continue
+    h="${p##*/}"
+    h="${h%%-*}"
+    if ! curl -sfI --max-time 10 "https://cache.nixos.org/${h}.narinfo" >/dev/null 2>&1; then
+      paths+=("$p")
+    fi
+  done <<< "$requisites"
+  echo "nix-cache-push: ${#paths[@]} path(s) not on cache.nixos.org" >&2
+else
+  paths=("$@")
+fi
+
+if [[ "${#paths[@]}" -eq 0 ]]; then
+  echo "nix-cache-push: nothing to push" >&2
+  exit 0
+fi
+
+echo "nix-cache-push: uploading ${#paths[@]} path(s) to R2 ..." >&2
+exec nix copy --to "${s3_url}&secret-key=${signing_key}" "${paths[@]}"

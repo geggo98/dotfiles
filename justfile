@@ -1,6 +1,11 @@
 # Nix-darwin configuration tasks
 # Safe for LLM agents — no sudo, no destructive operations
 
+# Pass recipe arguments to shebang recipes as real positional params ($@/$1…),
+# so variadic wrappers (e.g. `pulumi`) can forward them via "$@" without the
+# word-splitting/globbing that raw `{{ args }}` interpolation would cause.
+set positional-arguments
+
 # Default: list available tasks
 default:
     @just --list
@@ -106,18 +111,66 @@ devshell:
 
 # --- Pulumi (infra/) ---
 
+# One-time per machine: install the sops age identity so the CLI decrypts secrets automatically
+sops-age-setup:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # Derived from the workstation SSH key (non-default name, so sops can't find
+    # it; ~/.ssh/id_ed25519 is a different key). Written to sops' per-OS default
+    # key location (macOS: Application Support; else XDG) so no env is needed.
+    case "$(uname)" in
+      Darwin) dir="$HOME/Library/Application Support/sops/age" ;;
+      *)      dir="${XDG_CONFIG_HOME:-$HOME/.config}/sops/age" ;;
+    esac
+    mkdir -p "$dir"
+    nix run nixpkgs#ssh-to-age -- -i "$HOME/.ssh/id_ed25519_sops_nopw" -private-key > "$dir/keys.txt"
+    chmod 600 "$dir/keys.txt"
+    echo "Wrote $dir/keys.txt — sops can now decrypt without extra env."
+
+# Run any pulumi command in infra/ with the Pulumi Cloud + Cloudflare tokens from SOPS (needs sops-age-setup once)
+pulumi *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    PULUMI_ACCESS_TOKEN="$(sops -d --extract '["pulumi_access_token"]' secrets/infra.enc.yaml)"
+    export PULUMI_ACCESS_TOKEN
+    # The default cloudflare provider (and CLI `pulumi import`) reads this env var.
+    CLOUDFLARE_API_TOKEN="$(sops -d --extract '["cloudflare_api_token"]' secrets/infra.enc.yaml)"
+    export CLOUDFLARE_API_TOKEN
+    cd infra
+    # pulumi runs the compiled dist/index.js (see Pulumi.yaml `main`), so rebuild
+    # it first — tsc is fast/incremental and keeps the program in sync. pulumi +
+    # pnpm live in the devenv shell; fall back to it when not already active
+    # (e.g. non-interactive `just` without a loaded direnv). Args are forwarded
+    # via "$@" (see `set positional-arguments`), so quoting/whitespace survives.
+    if command -v pulumi >/dev/null 2>&1 && command -v pnpm >/dev/null 2>&1; then
+      pnpm run --silent build
+      pulumi "$@"
+    else
+      nix develop ../ --no-pure-eval -c bash -euc 'pnpm run --silent build && pulumi "$@"' -- "$@"
+    fi
+
 # Preview infrastructure changes
-pulumi-preview:
-    cd infra && time pulumi preview | ts
+pulumi-preview: (pulumi "preview")
 
 # Apply infrastructure changes
-pulumi-up:
-    cd infra && time pulumi up | ts
+pulumi-up: (pulumi "up")
 
 # Show current infrastructure state
-pulumi-stack:
-    cd infra && time pulumi stack | ts
+pulumi-stack: (pulumi "stack")
 
 # Install infra dependencies
 pulumi-install:
     cd infra && time pnpm install | ts
+
+# --- Nix binary cache (Cloudflare R2) ---
+
+# Endpoint of the S3 push target (public pull URL is the custom domain).
+R2_S3_URL := "s3://nix-cache?endpoint=81e63dbf073ca45ebf67c430beac09a4.r2.cloudflarestorage.com&region=auto"
+
+# Seed R2 with the current system's delta (paths not already on cache.nixos.org)
+cache-seed:
+    NIX_CACHE_S3_URL='{{ R2_S3_URL }}' bash modules/_files/nix-cache/nix-cache-push --seed
+
+# Push specific paths (repair/ad hoc), e.g. `just cache-push /run/current-system`
+cache-push *paths:
+    NIX_CACHE_S3_URL='{{ R2_S3_URL }}' bash modules/_files/nix-cache/nix-cache-push "$@"
