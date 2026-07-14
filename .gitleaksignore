@@ -1,0 +1,7 @@
+# SOPS-encrypted secrets: gitleaks' default rules false-positive on the
+# high-entropy ciphertext (the pre-commit hook runs gitleaks without our
+# .gitleaks.toml allowlist). These fingerprints are the encrypted values, not
+# real leaks — the plaintext tokens are verified caught by pulumi-api-token /
+# cloudflare-api-token rules.
+secrets/infra.enc.yaml:pulumi-api-token:1
+secrets/infra.enc.yaml:generic-api-key:2

@@ -1,0 +1,6 @@
+# Approve build scripts for these trusted first-party dependencies so pnpm 11
+# runs their postinstall (Pulumi's gRPC/protobuf plumbing). Pinned in the
+# committed pnpm-lock.yaml.
+allowBuilds:
+  '@pulumi/command': true
+  protobufjs: true
