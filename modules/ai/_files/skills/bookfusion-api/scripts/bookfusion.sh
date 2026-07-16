@@ -20,7 +20,7 @@ fi
 if command -v kotlin >/dev/null 2>&1; then
   exec kotlin "$KTS" "$@"
 elif command -v nix >/dev/null 2>&1; then
-  # First invocation compiles the script and resolves the single Gson dependency (cached afterwards).
+  # First invocation compiles the script and resolves its two dependencies (Gson + SnakeYAML), cached afterwards.
   exec nix shell nixpkgs#kotlin --command kotlin "$KTS" "$@"
 else
   echo "bookfusion: need 'kotlin' or 'nix' on PATH to run the client" >&2

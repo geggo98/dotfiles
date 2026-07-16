@@ -4,6 +4,7 @@ All 64 wrapped commands (2 endpoints are intentionally excluded — see bottom).
 OpenAPI `operationId`. Full request/response schemas are in [`openapi.yaml`](openapi.yaml).
 
 Invoke as: `bookfusion <command> [--<pathparam> V ...] [--data '<json>'] [--pretty] [--dangerous]`
+For many writes in one login, pipe JSONL ops into `bookfusion batch` (see [`SKILL.md`](../SKILL.md#bulk-changes--batch-one-login-one-jvm)).
 
 ## Danger tiers
 - **SAFE** — reads/searches. Default-allowed. This is what replaces web scraping.
@@ -22,12 +23,31 @@ Commands marked `body = —` take no body (the app sends none); just call them w
 
 ## Multipart commands
 `createHighlight`, `updateUserBook`, `finalizeBookUpload`, `updateUserProfile` use `multipart/form-data`:
-`--data` supplies the JSON `payload` part; optional `--file PATH` supplies the binary part
-(cover image / highlight quote image). Example:
+`--data` supplies the JSON `payload` part; optional `--file PATH` supplies the binary part (cover image /
+highlight quote image). The CLI picks the correct binary part name per endpoint — `binary` for
+`createHighlight`, `file` for the others. Example:
 ```
 bookfusion updateUserProfile --data '{"full_name":"Jane Doe"}'
-bookfusion finalizeBookUpload --data '{"upload_id":123}' --file ./cover.jpg
 ```
+
+## Uploading a book (init → finalize)
+`finalizeBookUpload` requires `digest` (the file's content hash), not an `upload_id`. The flow is
+`initBookUpload` (returns an upload target) → upload the file → `finalizeBookUpload`:
+```
+# 1) init returns { url, params, action } describing where to PUT the file
+bookfusion initBookUpload --data '{"filename":"book.epub","digest":"<sha256>","file_size":123456,"type":"book"}'
+# 2) upload the bytes to that target (out of band), then finalize with the SAME digest:
+bookfusion finalizeBookUpload --data '{"key":"<uploadKey>","digest":"<sha256>","title":"My Book"}' --file ./cover.jpg
+```
+
+## Bookshelves & series: assign by id, not name
+`bookshelf_ids` / `category_ids` take integer **ids**, and there is no assign-by-name. Recipe:
+1. `searchBookshelves --data '{"query":"Work"}'` (or `createBookshelf --data '{"name":"Work"}'`) → the id.
+   `createSeries` / `createBookshelf` need a `creation_token`; omit it and the CLI auto-generates one.
+2. Read the book's current `bookshelves[].id` (via `searchUserBooks`), because `updateUserBook` **replaces**
+   the whole set (see [`SKILL.md`](../SKILL.md) "Editing book metadata").
+3. `updateUserBook --id <book> --dangerous --data '{"bookshelf_ids":[<existing...>,<newId>]}'`.
+For many such edits, pipe JSONL into `bookfusion batch --dangerous` (one login).
 
 ## Full command table
 

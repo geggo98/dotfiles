@@ -40,10 +40,19 @@ Never paste passwords inline in a shared shell; prefer env, a `0600` file, or so
 
 ## Secrets never reach the context
 Credentials are write-only from the agent's point of view: the client resolves them, uses them, and
-never prints them. Any *response* that carries a credential (e.g. an auth `token`, `getTtsCredentials`)
-is written to a `0600` temp file (full value on disk) and only a **redacted** preview + the file path are
-surfaced — sensitive keys print as `***REDACTED***`. If an `auth*` command returns a token, it is cached
-and stripped from output automatically.
+never prints them. Any *response* that carries a credential (e.g. an auth `token`, or `getTtsCredentials`,
+which returns `token` + `preview_token` + a signed streaming `url`) is written to a `0600` temp file (full
+value on disk) and only a **redacted** preview + the file path are surfaced. Sensitive keys print as
+`***REDACTED***`: the exact set, anything containing `password`, and anything ending in `_token` (so
+`preview_token` is caught); a `url`/`*_url` value is redacted too when it sits in the same object as a
+credential (so the TTS streaming URL is masked while ordinary book `read_url`s are not). If an `auth*`
+command returns a token, it is cached and stripped from output automatically.
+
+## Stale token → automatic re-auth
+A non-auth command whose cached token is rejected (HTTP 401) clears the cache and re-authenticates **once**,
+then retries; if it still fails, the command exits `3` (auth). This does not apply when the token is pinned
+via `$BOOKFUSION_TOKEN` / `--token-file` / `$BOOKFUSION_TOKEN_FILE` (those are not auto-refreshable) — such a
+401 surfaces directly. `bookfusion login` forces a fresh token; `bookfusion logout` clears the cache.
 
 ## Using sops-nix on this machine
 sops-nix decrypts each declared secret to an individual **plaintext file** under

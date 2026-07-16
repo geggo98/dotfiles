@@ -66,6 +66,9 @@ data class Cmd(
     val id: String, val method: String, val path: String, val tier: Tier,
     val pathParams: List<String>, val queryParams: List<String>,
     val hasBody: Boolean, val multipart: Boolean,
+    // Name of the multipart binary part. Real API: createHighlight expects "binary", every other
+    // multipart command (updateUserBook, finalizeBookUpload, updateUserProfile) expects "file".
+    val filePart: String = "file",
 )
 
 // commands whose purpose IS authentication / account creation — never auto-login for these
@@ -124,7 +127,7 @@ val REGISTRY = listOf(
     Cmd("authenticate", "POST", "/api/v3/auth.json", Tier.WRITE, listOf(), listOf(), true, false),
     Cmd("borrowBook", "POST", "/api/user/libraries/books/{book_id}/borrow", Tier.WRITE, listOf("book_id"), listOf(), false, false),
     Cmd("createBookshelf", "POST", "/api/user/bookshelves", Tier.WRITE, listOf(), listOf(), true, false),
-    Cmd("createHighlight", "POST", "/api/user/highlights", Tier.WRITE, listOf(), listOf(), true, true),
+    Cmd("createHighlight", "POST", "/api/user/highlights", Tier.WRITE, listOf(), listOf(), true, true, "binary"),
     Cmd("createReaderPreset", "POST", "/api/user/reader_presets", Tier.WRITE, listOf(), listOf(), true, false),
     Cmd("createSeries", "POST", "/api/user/series", Tier.WRITE, listOf(), listOf(), true, false),
     Cmd("exportHighlights", "POST", "/api/user/highlights/export", Tier.WRITE, listOf(), listOf(), true, false),
@@ -170,6 +173,16 @@ fun writePrivate(path: Path, content: String) {
 
 fun enc(s: String): String = URLEncoder.encode(s, StandardCharsets.UTF_8)
 
+/** Expand only a LEADING ~ / ~/ to $HOME (a mid-path ~, e.g. ./backup~1/x, must be left intact). */
+fun expandTilde(p: String): String {
+    val home = System.getProperty("user.home")
+    return when {
+        p == "~" -> home
+        p.startsWith("~/") -> home + p.substring(1)
+        else -> p
+    }
+}
+
 /** Persistent, per-install pseudo device id (mirrors the app's X-Device). */
 fun deviceId(): String {
     val f = stateDir().resolve("device-id")
@@ -183,7 +196,7 @@ fun deviceId(): String {
 data class Resolved(val value: String, val source: String)
 
 fun readFileTrim(p: String): String? = try {
-    val path = Paths.get(p.replaceFirst("~", System.getProperty("user.home")))
+    val path = Paths.get(expandTilde(p))
     if (Files.exists(path)) Files.readString(path).trim().ifBlank { null } else null
 } catch (_: Exception) { null }
 
@@ -209,7 +222,9 @@ fun rateGate(minIntervalMs: Long) {
     RandomAccessFile(f, "rw").use { raf ->
         raf.channel.lock().use {   // held during sleep → serializes concurrent invocations
             val last = try { raf.seek(0); raf.readLine()?.trim()?.toLongOrNull() ?: 0L } catch (_: Exception) { 0L }
-            val wait = last + minIntervalMs - System.currentTimeMillis()
+            // Clamp to one interval: a stale/clock-skewed FUTURE timestamp must never make us sleep
+            // (unboundedly) while holding the cross-process file lock.
+            val wait = (last + minIntervalMs - System.currentTimeMillis()).coerceAtMost(minIntervalMs)
             if (wait > 0) Thread.sleep(wait)
             val now = System.currentTimeMillis()
             raf.setLength(0); raf.seek(0); raf.writeBytes(now.toString())
@@ -222,7 +237,9 @@ val CLIENT: HttpClient = HttpClient.newBuilder().connectTimeout(Duration.ofSecon
 
 data class Ctx(val baseUrl: String, val minIntervalMs: Long, val token: String, val device: String)
 
-fun send(ctx: Ctx, method: String, url: String, body: ByteArray?, contentType: String?): HttpResponse<String> {
+// Response bodies are read as raw bytes so binary payloads (exported PDFs, cover images, TTS audio)
+// survive byte-exact; text responses are decoded on demand via bodyText().
+fun send(ctx: Ctx, method: String, url: String, body: ByteArray?, contentType: String?): HttpResponse<ByteArray> {
     rateGate(ctx.minIntervalMs)
     val b = HttpRequest.newBuilder(URI.create(url))
         .timeout(Duration.ofSeconds(60))
@@ -235,8 +252,22 @@ fun send(ctx: Ctx, method: String, url: String, body: ByteArray?, contentType: S
     if (contentType != null) b.header("Content-Type", contentType)
     val pub = if (body != null) HttpRequest.BodyPublishers.ofByteArray(body) else HttpRequest.BodyPublishers.noBody()
     b.method(method, pub)
-    return try { CLIENT.send(b.build(), HttpResponse.BodyHandlers.ofString()) }
+    return try { CLIENT.send(b.build(), HttpResponse.BodyHandlers.ofByteArray()) }
     catch (e: Exception) { die(EX_IO, "network error: ${e.message}") }
+}
+
+fun bodyText(resp: HttpResponse<ByteArray>): String = String(resp.body(), StandardCharsets.UTF_8)
+/** A response is text (JSON/TSV path) when its Content-Type is textual; a missing CT is treated as text (legacy behavior). */
+fun isTextResponse(ct: String?): Boolean {
+    val c = ct?.lowercase() ?: return true
+    return c.contains("json") || c.startsWith("text/") || c.contains("xml") ||
+        c.contains("javascript") || c.contains("x-www-form-urlencoded")
+}
+fun extForContentType(ct: String?): String = when {
+    ct == null -> "bin"
+    ct.contains("pdf") -> "pdf"; ct.contains("epub") -> "epub"; ct.contains("zip") -> "zip"
+    ct.contains("png") -> "png"; ct.contains("jpeg") || ct.contains("jpg") -> "jpg"
+    else -> "bin"
 }
 
 // ---------------------------------------------------------------------------- token cache + login
@@ -263,7 +294,7 @@ fun doLogin(base: String, minInterval: Long, device: String, opts: Map<String, S
     val payload = JsonObject().apply { addProperty("email", user.value); addProperty("password", pass.value) }
     val ctx = Ctx(base, minInterval, "", device)
     val resp = send(ctx, "POST", "$base/api/v3/auth.json", GSON.toJson(payload).toByteArray(), "application/json")
-    val obj = try { JsonParser.parseString(resp.body()).asJsonObject } catch (_: Exception) { JsonObject() }
+    val obj = try { JsonParser.parseString(bodyText(resp)).asJsonObject } catch (_: Exception) { JsonObject() }
     val token = obj.get("token")?.takeIf { !it.isJsonNull }?.asString
     if (resp.statusCode() !in 200..299 || token.isNullOrBlank()) {
         val e = obj.get("error")?.takeIf { !it.isJsonNull }?.asString ?: "unknown error"
@@ -292,7 +323,14 @@ val SENSITIVE_KEYS = setOf(
     "token", "access_token", "refresh_token", "id_token", "facebook_token", "google_token",
     "api_token", "api_key", "apikey", "password", "client_secret", "secret", "authenticity_token",
 )
-fun isSensitiveKey(k: String): Boolean { val l = k.lowercase(); return l in SENSITIVE_KEYS || l.contains("password") }
+fun isSensitiveKey(k: String): Boolean {
+    val l = k.lowercase()
+    // exact set, any *password*, and any *_token (catches preview_token from getTtsCredentials)
+    return l in SENSITIVE_KEYS || l.contains("password") || l.endsWith("_token")
+}
+/** A URL-bearing key. Redacted ONLY when it sits in the same object as a real credential (see redactTree),
+ *  so a signed TTS streaming `url` is masked while ordinary book `read_url`/cover `url` are left intact. */
+fun isUrlKey(k: String): Boolean { val l = k.lowercase(); return l == "url" || l.endsWith("_url") }
 
 fun parseOrNull(s: String): JsonElement? = try { JsonParser.parseString(s) } catch (_: Exception) { null }
 
@@ -304,8 +342,10 @@ fun treeHasSensitive(e: JsonElement?): Boolean = when {
 }
 fun redactTree(e: JsonElement): JsonElement = when {
     e.isJsonObject -> JsonObject().also { o ->
+        val hasSecretSibling = e.asJsonObject.entrySet().any { isSensitiveKey(it.key) }
         e.asJsonObject.entrySet().forEach { (k, v) ->
-            o.add(k, if (isSensitiveKey(k)) JsonPrimitive("***REDACTED***") else redactTree(v))
+            val mask = isSensitiveKey(k) || (isUrlKey(k) && hasSecretSibling)
+            o.add(k, if (mask) JsonPrimitive("***REDACTED***") else redactTree(v))
         }
     }
     e.isJsonArray -> JsonArray().also { a -> e.asJsonArray.forEach { a.add(redactTree(it)) } }
@@ -371,8 +411,16 @@ fun writeOrInline(full: String, redacted: String, hasSecret: Boolean, records: I
     println(path.toString())                             // stdout = the file path (machine-usable)
 }
 
+/** Write a binary response body byte-exact to a file (never inline: it would corrupt the terminal/context). */
+fun emitBytes(bytes: ByteArray, ct: String?, o: OutOpts) {
+    val path = if (o.outPath != null) Paths.get(o.outPath) else Files.createTempFile("$SKILL_NAME-", ".${extForContentType(ct)}")
+    Files.write(path, bytes)
+    err("output: binary content-type=$ct bytes=${bytes.size} file=$path")
+    println(path.toString())                             // stdout = the file path (byte-exact file)
+}
+
 // ---------------------------------------------------------------------------- multipart
-fun multipartBody(payloadJson: String, filePath: String?): Pair<ByteArray, String> {
+fun multipartBody(payloadJson: String, filePath: String?, partName: String): Pair<ByteArray, String> {
     val boundary = "----bookfusion" + UUID.randomUUID().toString().replace("-", "")
     val out = java.io.ByteArrayOutputStream()
     fun w(s: String) = out.write(s.toByteArray(StandardCharsets.UTF_8))
@@ -381,11 +429,12 @@ fun multipartBody(payloadJson: String, filePath: String?): Pair<ByteArray, Strin
     w("Content-Type: application/json\r\n\r\n")
     w(payloadJson); w("\r\n")
     if (filePath != null) {
-        val f = Paths.get(filePath)
+        val f = Paths.get(expandTilde(filePath))
         if (!Files.exists(f)) die(EX_USAGE, "--file not found: $filePath")
         val name = f.fileName.toString()
         w("--$boundary\r\n")
-        w("Content-Disposition: form-data; name=\"file\"; filename=\"$name\"\r\n")
+        // Part name differs per endpoint (see Cmd.filePart): "binary" for createHighlight, "file" otherwise.
+        w("Content-Disposition: form-data; name=\"$partName\"; filename=\"$name\"\r\n")
         w("Content-Type: application/octet-stream\r\n\r\n")
         out.write(Files.readAllBytes(f)); w("\r\n")
     }
@@ -394,7 +443,10 @@ fun multipartBody(payloadJson: String, filePath: String?): Pair<ByteArray, Strin
 }
 
 // ---------------------------------------------------------------------------- arg parsing
-val BOOL_FLAGS = setOf("--dangerous", "--pretty", "--data-stdin", "--stdout", "--help", "-h", "--dry-run", "--force", "--no-validate")
+val BOOL_FLAGS = setOf(
+    "--dangerous", "--pretty", "--data-stdin", "--stdout", "--help", "-h", "--dry-run", "--force", "--no-validate",
+    "--quiet", "--continue-on-error", "--stop-on-error",
+)
 fun parse(argv: List<String>): Triple<String?, MutableMap<String, String>, MutableSet<String>> {
     var command: String? = null
     val opts = mutableMapOf<String, String>()
@@ -435,6 +487,7 @@ $SKILL_NAME — CLI for the (reverse-engineered, unofficial) BookFusion mobile A
 
 USAGE:
   bookfusion <command> [--param value ...] [--data '<json>' | --data-file P | --data-stdin] [flags]
+  bookfusion batch [--dangerous] [--continue-on-error|--stop-on-error]   # JSONL ops on stdin, one login
   bookfusion login | logout | whoami | list | help
 
 FLAGS:
@@ -447,8 +500,11 @@ FLAGS:
   --file PATH            binary part for multipart commands (upload/cover/highlight image)
   --format F             output format: auto (default) | tsv | jsonl | json (env BOOKFUSION_FORMAT)
   --pretty               pretty-print JSON output
+  --quiet                for WRITE/DANGEROUS commands, suppress the 2xx response body (print only 'ok:' on stderr)
   --stdout               force full output inline (only for small, non-credential responses)
   --out PATH             write the full response to PATH instead of a temp file
+  --continue-on-error    (batch) keep going after a failing op — the default; exit non-zero if any failed
+  --stop-on-error        (batch) stop at the first failing op
   --preview-lines N      lines of redacted preview to show for filed output (default 10; 0 = none)
   --max-bytes N          inline size limit; larger responses go to a temp file (env BOOKFUSION_OUTPUT_MAX_BYTES)
   --base-url URL         override API base (env BOOKFUSION_BASE_URL; default $DEFAULT_BASE)
@@ -507,7 +563,7 @@ fun loadSpec(specOpt: String?): Map<String, Any?>? {
     if (SPEC_LOADED) return SPEC_CACHE
     SPEC_LOADED = true
     val p = (specOpt ?: System.getenv("BOOKFUSION_OPENAPI"))?.takeIf { it.isNotBlank() } ?: return null
-    val path = Paths.get(p.replaceFirst("~", System.getProperty("user.home")))
+    val path = Paths.get(expandTilde(p))
     if (!Files.exists(path)) return null
     SPEC_CACHE = try {
         asMap(Yaml(SafeConstructor(LoaderOptions())).load<Any?>(Files.readString(path)))
@@ -717,18 +773,207 @@ fun printDiag(vc: VCtx) {
     vc.errors.forEach { err("error: $it") }
 }
 
+// ---------------------------------------------------------------------------- request pipeline
+// The single-command flow and the batch loop share the SAME two steps so behavior can't drift:
+//   prepareRequest() — offline: build URL + validate/coerce the body. No network, no login, never exits.
+//   dispatch()       — network: build body bytes, send, cache auth tokens, classify text vs binary.
+// prepareRequest never calls die(); a hard problem is returned as `block=(exitCode,message)`.
+
+/** Strict numeric option: absent → default; present-but-unparseable → usage error (mirrors --format). */
+fun <T : Number> numOrDie(raw: String?, name: String, parse: (String) -> T?, default: T): T {
+    if (raw == null) return default
+    return parse(raw.trim()) ?: die(EX_USAGE, "$name must be numeric, got \"$raw\"")
+}
+
+fun emitResult(res: RunResult, o: OutOpts) {
+    if (res.bytes != null) emitBytes(res.bytes, res.contentType, o) else emit(res.body, o)
+}
+
+fun clearTokenCache() {
+    try { Files.newDirectoryStream(stateDir(), "token-*.json").use { s -> s.forEach { Files.deleteIfExists(it) } } } catch (_: Exception) {}
+}
+/** True when the token comes from an env/file override (BOOKFUSION_TOKEN[_FILE] / --token-file) — not auto-refreshable. */
+fun tokenIsOverridden(opts: Map<String, String>): Boolean =
+    !System.getenv("BOOKFUSION_TOKEN").isNullOrBlank() || opts["--token-file"] != null || !System.getenv("BOOKFUSION_TOKEN_FILE").isNullOrBlank()
+
+// Real API: createSeries/createBookshelf/createReaderPreset require a client-generated `creation_token`
+// (idempotency key). We auto-generate one when omitted so a bare create doesn't hard-fail validation.
+val CREATION_TOKEN_CMDS = setOf("createSeries", "createBookshelf", "createReaderPreset")
+fun injectCreationToken(cmd: Cmd, rawBody: String?): String? {
+    if (cmd.id !in CREATION_TOKEN_CMDS || rawBody == null) return rawBody
+    val el = parseOrNull(rawBody) ?: return rawBody
+    if (!el.isJsonObject) return rawBody
+    val o = el.asJsonObject
+    val cur = o.get("creation_token")
+    val missing = cur == null || cur.isJsonNull || (cur.isJsonPrimitive && cur.asString.isBlank())
+    if (!missing) return rawBody
+    o.addProperty("creation_token", UUID.randomUUID().toString())
+    err("note: injected client-generated creation_token for ${cmd.id}")
+    return GSON.toJson(o)
+}
+
+data class Prepared(
+    val url: String,
+    val outBody: String?,
+    val vc: VCtx,
+    val block: Pair<Int, String>?,   // non-null => do NOT send: (exitCode, message)
+    val forceable: Boolean,          // true when the block is a validation error (--force can override)
+)
+
+fun prepareRequest(cmd: Cmd, opts: Map<String, String>, flags: Set<String>, rawBody: String?, baseUrl: String): Prepared {
+    val vc = VCtx()
+    var path = cmd.path
+    for (p in cmd.pathParams) {
+        val v = opts["--$p"] ?: return Prepared("", rawBody, vc, EX_USAGE to "missing required path param --$p for ${cmd.id}", false)
+        path = path.replace("{$p}", enc(v))
+    }
+    val query = cmd.queryParams.mapNotNull { q -> opts["--$q"]?.let { "$q=${enc(it)}" } }.joinToString("&")
+    val url = baseUrl + path + (if (query.isNotEmpty()) "?$query" else "")
+    var outBody: String? = rawBody
+    val doValidate = "--no-validate" !in flags
+    val validatable = cmd.hasBody || cmd.multipart || cmd.pathParams.isNotEmpty() || cmd.queryParams.isNotEmpty()
+    if (doValidate && validatable) {
+        val spec = loadSpec(opts["--spec"])
+        val op = spec?.let { operationNode(it, cmd) }
+        when {
+            spec == null -> err("note: spec unavailable; skipping request validation")
+            op == null -> err("note: no spec entry for ${cmd.method} ${cmd.path}; skipping request validation")
+            else -> {
+                checkParams(spec, op, opts, vc)
+                val tree = if (cmd.hasBody || cmd.multipart) rawBody?.let { parseOrNull(it) } else null
+                if (tree != null) requestSchema(spec, op, cmd.multipart)?.let { sch ->
+                    outBody = GSON.toJson(validate(spec, sch, tree, "", vc, 0))   // coercions reach the wire
+                }
+            }
+        }
+    }
+    val block = if (vc.errors.isNotEmpty() && "--force" !in flags)
+        (EX_USAGE to "fix the body, or re-run with --force (send anyway) / --no-validate (skip checks)") else null
+    return Prepared(url, outBody, vc, block, vc.errors.isNotEmpty())
+}
+
+data class RunResult(
+    val status: String,        // "ok" | "error"
+    val http: Int?,            // HTTP status, or null when the request was never sent
+    val body: String,          // decoded text body ("" when binary or not sent)
+    val contentType: String?,
+    val bytes: ByteArray?,     // non-null when the response body is binary
+    val error: String?,        // reason when status=="error" and nothing was sent
+    val exitCode: Int,
+)
+
+fun dispatch(cmd: Cmd, opts: Map<String, String>, prep: Prepared, ctx: Ctx): RunResult {
+    prep.block?.let { return RunResult("error", null, "", null, null, it.second, it.first) }
+    val rawBody = prep.outBody
+    val bodyBytes: ByteArray?
+    val contentType: String?
+    if (cmd.multipart) {
+        val filePath = opts["--file"]
+        if (filePath != null && !Files.exists(Paths.get(expandTilde(filePath))))
+            return RunResult("error", null, "", null, null, "--file not found: $filePath", EX_USAGE)
+        val mp = multipartBody(rawBody ?: "{}", filePath, cmd.filePart)
+        bodyBytes = mp.first; contentType = mp.second
+    } else if (rawBody != null) {
+        bodyBytes = rawBody.toByteArray(); contentType = "application/json"
+    } else { bodyBytes = null; contentType = null }
+    val resp = send(ctx, cmd.method, prep.url, bodyBytes, contentType)
+    val code = resp.statusCode()
+    val ct = resp.headers().firstValue("content-type").orElse(null)
+    // Cache a token returned by an auth command; never let it reach output.
+    if (cmd.id in AUTH_CMDS && code in 200..299) {
+        parseOrNull(bodyText(resp))?.let { p ->
+            if (p.isJsonObject) p.asJsonObject.get("token")?.takeIf { !it.isJsonNull }?.asString?.ifBlank { null }?.let { tok ->
+                val cache = JsonObject().apply { addProperty("token", tok); addProperty("savedAt", System.currentTimeMillis()) }
+                writePrivate(tokenCachePath(ctx.baseUrl, null), GSON.toJson(cache))
+                err("note: response contained a token — cached; it is redacted from output")
+            }
+        }
+    }
+    val st = if (code in 200..299) "ok" else "error"
+    return if (isTextResponse(ct)) RunResult(st, code, bodyText(resp), ct, null, null, EX_OK)
+    else RunResult(st, code, "", ct, resp.body(), null, EX_OK)
+}
+
+// ---------------------------------------------------------------------------- batch (one JVM, one login, many ops)
+data class BatchOp(val command: String, val pathId: String?, val lineOpts: Map<String, String>, val rawBody: String?)
+
+/** Parse one JSONL line: {"command":..,"<pathparam>":..,"data":{..},"file":".."}. Returns null on malformed input. */
+fun parseBatchLine(line: String): BatchOp? {
+    val el = parseOrNull(line) ?: return null
+    if (!el.isJsonObject) return null
+    val o = el.asJsonObject
+    val command = o.get("command")?.takeIf { it.isJsonPrimitive }?.asString ?: return null
+    val lineOpts = mutableMapOf<String, String>()
+    var pathId: String? = null
+    for ((k, v) in o.entrySet()) {
+        when (k) {
+            "command", "data" -> {}
+            "file" -> if (!v.isJsonNull) lineOpts["--file"] = v.asString
+            else -> if (!v.isJsonNull) {
+                val s = if (v.isJsonPrimitive) v.asString else GSON.toJson(v)
+                lineOpts["--$k"] = s
+                if (k == "id" || k == "number") pathId = s
+            }
+        }
+    }
+    val data = o.get("data")
+    val rawBody = if (data != null && !data.isJsonNull) GSON.toJson(data) else null
+    return BatchOp(command, pathId, lineOpts, rawBody)
+}
+
+fun batchBody(cmd: Cmd, rawBody: String?): String? = if (!cmd.hasBody && !cmd.multipart) null else (rawBody ?: "{}")
+
+fun runBatch(baseUrl: String, minIntervalMs: Long, device: String, opts: Map<String, String>, flags: Set<String>): Nothing {
+    if ("--continue-on-error" in flags && "--stop-on-error" in flags)
+        die(EX_USAGE, "choose only one of --continue-on-error / --stop-on-error")
+    val stopOnError = "--stop-on-error" in flags
+    var token = ensureToken(baseUrl, minIntervalMs, device, opts)   // ONE login for the whole batch
+    var reauthed = false
+    var n = 0; var okN = 0; var errN = 0
+    val reader = System.`in`.bufferedReader()
+    while (true) {
+        val line = reader.readLine() ?: break
+        if (line.isBlank()) continue
+        n++
+        val out = JsonObject().apply { addProperty("line", n) }
+        fun fail(msg: String) { out.addProperty("status", "error"); out.addProperty("error", msg); println(GSON.toJson(out)); errN++ }
+        val op = parseBatchLine(line)
+        if (op == null) { fail("invalid JSON or missing 'command'"); if (stopOnError) break else continue }
+        out.addProperty("command", op.command); op.pathId?.let { out.addProperty("id", it) }
+        if (op.command in EXCLUDED) { fail("excluded command"); if (stopOnError) break else continue }
+        val cmd = REGISTRY[op.command]
+        if (cmd == null) { fail("unknown command"); if (stopOnError) break else continue }
+        if (cmd.tier == Tier.DANGEROUS && "--dangerous" !in flags) { fail("DANGEROUS — re-run batch with --dangerous"); if (stopOnError) break else continue }
+        val body = injectCreationToken(cmd, batchBody(cmd, op.rawBody))
+        val prep = prepareRequest(cmd, op.lineOpts, flags, body, baseUrl)
+        printDiag(prep.vc)
+        var res = dispatch(cmd, op.lineOpts, prep, Ctx(baseUrl, minIntervalMs, token, device))
+        if (res.http == 401 && cmd.id !in AUTH_CMDS && !reauthed && !tokenIsOverridden(opts)) {
+            err("note: token rejected (401); clearing cache and re-authenticating once for the batch")
+            clearTokenCache(); reauthed = true
+            token = ensureToken(baseUrl, minIntervalMs, device, opts)
+            res = dispatch(cmd, op.lineOpts, prep, Ctx(baseUrl, minIntervalMs, token, device))
+        }
+        out.addProperty("status", res.status); res.http?.let { out.addProperty("http", it) }; res.error?.let { out.addProperty("error", it) }
+        println(GSON.toJson(out))
+        if (res.status == "ok") okN++ else { errN++; if (stopOnError) break }
+    }
+    err("batch: $n ops, $okN ok, $errN error")
+    exitProcess(if (errN > 0) EX_HTTP else EX_OK)
+}
+
 // ---------------------------------------------------------------------------- main
 val (command, opts, flags) = parse(args.toList())
 
 val baseUrl = (opts["--base-url"] ?: System.getenv("BOOKFUSION_BASE_URL") ?: DEFAULT_BASE).trimEnd('/')
-val rate = (opts["--rate"] ?: System.getenv("BOOKFUSION_RATE_LIMIT"))?.toDoubleOrNull() ?: DEFAULT_RATE
+val rate = numOrDie(opts["--rate"] ?: System.getenv("BOOKFUSION_RATE_LIMIT"), "--rate", { it.toDoubleOrNull() }, DEFAULT_RATE)
 val minIntervalMs = if (rate <= 0) 0L else Math.round(1000.0 / rate)
-val maxBytes = (opts["--max-bytes"] ?: System.getenv("BOOKFUSION_OUTPUT_MAX_BYTES"))?.toIntOrNull() ?: DEFAULT_MAX_BYTES
+val maxBytes = numOrDie(opts["--max-bytes"] ?: System.getenv("BOOKFUSION_OUTPUT_MAX_BYTES"), "--max-bytes", { it.toIntOrNull() }, DEFAULT_MAX_BYTES)
 val pretty = "--pretty" in flags
 val device = deviceId()
 val fmt = (opts["--format"] ?: System.getenv("BOOKFUSION_FORMAT") ?: "auto").lowercase()
 if (fmt !in setOf("auto", "tsv", "jsonl", "json")) die(EX_USAGE, "--format must be auto|tsv|jsonl|json")
-val outOpts = OutOpts(fmt, pretty, maxBytes, opts["--preview-lines"]?.toIntOrNull() ?: 10, "--stdout" in flags, opts["--out"])
+val outOpts = OutOpts(fmt, pretty, maxBytes, numOrDie(opts["--preview-lines"], "--preview-lines", { it.toIntOrNull() }, 10), "--stdout" in flags, opts["--out"])
 
 if (command == null || command == "help" || "--help" in flags || "-h" in flags) { println(usage()); exitProcess(EX_OK) }
 
@@ -744,6 +989,7 @@ when (command) {
         println("""{"status":"ok","message":"logged in, token cached"}""".let { if (pretty) PRETTY.toJson(JsonParser.parseString(it)) else it })
         exitProcess(EX_OK)
     }
+    "batch" -> runBatch(baseUrl, minIntervalMs, device, opts, flags)   // reads JSONL from stdin; never returns
 }
 
 val cmdName = if (command == "whoami") "getUser" else command
@@ -753,82 +999,41 @@ val cmd = REGISTRY[cmdName] ?: die(EX_USAGE, "unknown command: $command  (run `b
 if (cmd.tier == Tier.DANGEROUS && "--dangerous" !in flags)
     die(EX_GATED, "'${cmd.id}' is DANGEROUS (${cmd.method} ${cmd.path}). Re-run with --dangerous to proceed.")
 
-// build path (substitute {param}) and query string
-var path = cmd.path
-for (p in cmd.pathParams) {
-    val v = opts["--$p"] ?: die(EX_USAGE, "missing required path param --$p for ${cmd.id}")
-    path = path.replace("{$p}", enc(v))
-}
-val query = cmd.queryParams.mapNotNull { q -> opts["--$q"]?.let { "$q=${enc(it)}" } }.joinToString("&")
-val url = baseUrl + path + (if (query.isNotEmpty()) "?$query" else "")
-
-// body (read offline first; validation/coercion run BEFORE any network so bad requests fail fast)
-val rawBodyStr = readBody(cmd, opts, flags)
-var outBody: String? = rawBodyStr
-val vc = VCtx()
-val doValidate = "--no-validate" !in flags
-val validatable = cmd.hasBody || cmd.multipart || cmd.pathParams.isNotEmpty() || cmd.queryParams.isNotEmpty()
-if (doValidate && validatable) {
-    val spec = loadSpec(opts["--spec"])
-    val op = spec?.let { operationNode(it, cmd) }
-    when {
-        spec == null -> err("note: spec unavailable; skipping request validation")
-        op == null -> err("note: no spec entry for ${cmd.method} ${cmd.path}; skipping request validation")
-        else -> {
-            checkParams(spec, op, opts, vc)
-            val tree = if (cmd.hasBody || cmd.multipart) rawBodyStr?.let { parseOrNull(it) } else null
-            if (tree != null) requestSchema(spec, op, cmd.multipart)?.let { sch ->
-                outBody = GSON.toJson(validate(spec, sch, tree, "", vc, 0))   // coercions reach the wire
-            }
-            printDiag(vc)
-        }
-    }
-}
+// prepare (offline): build URL + validate/coerce the body — no network, no login yet.
+val rawBodyStr = injectCreationToken(cmd, readBody(cmd, opts, flags))
+val prep = prepareRequest(cmd, opts, flags, rawBodyStr, baseUrl)
+printDiag(prep.vc)
 
 // --dry-run: report the (validated, coerced) request and stop — never touches the network or auto-login.
 if ("--dry-run" in flags) {
-    err("dry-run: ${vc.fixes.size} fixes, ${vc.warns.size} warns, ${vc.errors.size} errors; would ${cmd.method} $url")
-    outBody?.let { b -> parseOrNull(b)?.let { println(if (pretty) PRETTY.toJson(redactTree(it)) else GSON.toJson(redactTree(it))) } }
-    exitProcess(if (vc.errors.isNotEmpty()) EX_USAGE else EX_OK)
+    err("dry-run: ${prep.vc.fixes.size} fixes, ${prep.vc.warns.size} warns, ${prep.vc.errors.size} errors; would ${cmd.method} ${prep.url}")
+    prep.outBody?.let { b -> parseOrNull(b)?.let { println(if (pretty) PRETTY.toJson(redactTree(it)) else GSON.toJson(redactTree(it))) } }
+    exitProcess(if (prep.vc.errors.isNotEmpty()) EX_USAGE else EX_OK)
 }
 // Default: block a definitely-malformed request before the round trip. --force sends anyway.
-if (vc.errors.isNotEmpty()) {
-    if ("--force" !in flags) {
-        err("hint: fix the body, or re-run with --force to send anyway (or --no-validate to skip checks)")
-        exitProcess(EX_USAGE)
-    }
-    err("note: --force set; sending despite ${vc.errors.size} validation error(s)")
+if (prep.block != null) {
+    if (prep.forceable && "--force" in flags) err("note: --force set; sending despite ${prep.vc.errors.size} validation error(s)")
+    else die(prep.block.first, "hint: ${prep.block.second}")
 }
 
 // auth: attach token unless this is an auth/public command
 val token = if (cmd.id in AUTH_CMDS) (cachedToken(baseUrl, null, opts) ?: "") else ensureToken(baseUrl, minIntervalMs, device, opts)
-val ctx = Ctx(baseUrl, minIntervalMs, token, device)
+var res = dispatch(cmd, opts, prep, Ctx(baseUrl, minIntervalMs, token, device))
 
-// body bytes from the (possibly coerced) request body
-val rawBody = outBody
-val (bodyBytes, contentType) = when {
-    cmd.multipart -> multipartBody(rawBody ?: "{}", opts["--file"])
-    rawBody != null -> rawBody.toByteArray() to "application/json"
-    else -> null to null
+// stale cached token → clear cache + re-authenticate once (env/file token overrides are not auto-refreshable)
+if (res.http == 401 && cmd.id !in AUTH_CMDS && !tokenIsOverridden(opts)) {
+    err("note: token rejected (401); clearing cache and re-authenticating once")
+    clearTokenCache()
+    res = dispatch(cmd, opts, prep, Ctx(baseUrl, minIntervalMs, ensureToken(baseUrl, minIntervalMs, device, opts), device))
 }
 
-val resp = send(ctx, cmd.method, url, bodyBytes, contentType)
-
-// If an auth command returned a token, cache it and do NOT let it reach the terminal/context.
-if (cmd.id in AUTH_CMDS && resp.statusCode() in 200..299) {
-    parseOrNull(resp.body())?.let { p ->
-        if (p.isJsonObject) p.asJsonObject.get("token")?.takeIf { !it.isJsonNull }?.asString?.ifBlank { null }?.let { tok ->
-            val cache = JsonObject().apply { addProperty("token", tok); addProperty("savedAt", System.currentTimeMillis()) }
-            writePrivate(tokenCachePath(baseUrl, null), GSON.toJson(cache))
-            err("note: response contained a token — cached; it is redacted from output")
-        }
-    }
+if (res.http == null) { res.error?.let { err(it) }; exitProcess(res.exitCode) }   // never sent (e.g. bad --file)
+if (res.http !in 200..299) {
+    err("HTTP ${res.http} for ${cmd.method} ${cmd.path}")
+    emitResult(res, outOpts)
+    exitProcess(if (res.http == 401 && cmd.id !in AUTH_CMDS) EX_AUTH else EX_HTTP)
 }
-
-if (resp.statusCode() !in 200..299) {
-    err("HTTP ${resp.statusCode()} for ${cmd.method} $path")
-    emit(resp.body(), outOpts)
-    exitProcess(EX_HTTP)
-}
-emit(resp.body(), outOpts)
+// success — --quiet suppresses the (large) body echo for non-SAFE writes; errors above still print
+if ("--quiet" in flags && cmd.tier != Tier.SAFE) err("ok: ${cmd.id} -> HTTP ${res.http}")
+else emitResult(res, outOpts)
 exitProcess(EX_OK)
