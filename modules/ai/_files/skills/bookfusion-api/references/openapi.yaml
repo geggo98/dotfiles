@@ -1503,6 +1503,9 @@ components:
         number:
           type: integer
           format: int64
+        read_time:
+          type: integer
+          description: 'seconds read; present in real /api/user/books/search responses (absent from the original reverse-engineered spec)'
         title:
           type: string
         summary:
@@ -1511,6 +1514,10 @@ components:
           type: string
         url:
           type: string
+          description: 'DECLARED but never observed (0/129 real responses carry `url`). The real reader deep-link is read_url — code against read_url, not url.'
+        read_url:
+          type: string
+          description: 'reader deep-link, e.g. https://reader.bookfusion.com/books/8902995-…?type=pdf; present in real responses, absent from the original spec'
         added_at:
           type: string
         published_at:
@@ -1532,8 +1539,22 @@ components:
         bookshelf_book_id:
           type: integer
           format: int64
+          description: 'conditional — only present for library/borrowed books, not owned uploads'
         format:
           $ref: '#/components/schemas/BookFormat'
+        formats:
+          type: array
+          description: 'per-format download entries (a book may ship several: AZW3/EPUB/MOBI/PDF); present in real responses, absent from the original spec'
+          items:
+            type: object
+            properties:
+              name:
+                type: string
+              download_size:
+                type: integer
+                format: int64
+              content_type:
+                type: string
         type:
           $ref: '#/components/schemas/ContentType'
           description: 'json key: type'
@@ -1624,6 +1645,7 @@ components:
           type: string
         index:
           type: string
+          description: 'numeric server-side; a sent "202401" comes back as "202401.0" (compare numerically, not as a string)'
         creation_token:
           type: string
         added_at:
@@ -1636,6 +1658,13 @@ components:
       properties:
         url:
           type: string
+        blurhash:
+          type: string
+          description: 'BlurHash placeholder string; present in real responses (absent from the original spec)'
+        width:
+          type: integer
+        height:
+          type: integer
     BookPermissions:
       type: object
       description: 'source: o.accessgetIMMEDIATE_EXECUTORcp (BookPermissions)'
@@ -1646,6 +1675,9 @@ components:
           type: boolean
         export:
           type: boolean
+        return:
+          type: boolean
+          description: 'whether a borrowed library book can be returned; present in real responses (absent from the original spec)'
     BookSource:
       type: object
       description: 'source: o.accesssetUnobservedExceptionHandlercp (BookSource)'
@@ -1788,7 +1820,15 @@ components:
           description: 'json key: types (contentTypes)'
     UpdateBookRequest:
       type: object
-      description: 'source: o.whenAnyResultlambda3 (UpdateBookRequest) - sent as multipart ''payload'' JSON part; coverFilePath is a local file path, not serialized'
+      description: >-
+        source: o.whenAnyResultlambda3 (UpdateBookRequest) - sent as multipart 'payload' JSON part; coverFilePath is a local file path, not serialized.
+        MERGE SEMANTICS (verified live): an OMITTED field is left unchanged; a SENT scalar (title/summary/language/publisher_name/published_at)
+        overwrites; a SENT array (authors/tags/category_ids/bookshelf_ids/lists/series) REPLACES the whole set — e.g. {"bookshelf_ids":[5]} removes
+        the book from every other shelf. Clearing a field by omission is impossible; whether [] / "" clears a set is UNVERIFIED. There is NO structured
+        `isbn`/identifier field here or in the Book response (confirmed by decompiling the Android app v2.23.8: no `isbn` literal exists in any book
+        model, and the app's own update model carries none). The ISBN shown in the *website* editor is a web-only field this mobile API never exposes;
+        an ISBN that shows up in this API does so only as free text in `tags`. NOTE: the app's decompiled UpdateBookRequest lists only 8 fields and even
+        omits `tags`, yet the server accepts `tags` and (verified) `publisher_name`/`published_at` — so the server accepts a SUPERSET of the app's model.
       properties:
         title:
           type: string
@@ -1796,6 +1836,12 @@ components:
           type: string
         language:
           type: string
+        publisher_name:
+          type: string
+          description: 'editable via updateUserBook PATCH — VERIFIED live (probe 2026-07-15: set then restored; omitted fields preserved)'
+        published_at:
+          type: string
+          description: 'publication date; editable via updateUserBook PATCH — VERIFIED live (probe 2026-07-15)'
         authors:
           type: array
           items:
@@ -1834,6 +1880,7 @@ components:
           description: seriesId
         index:
           type: string
+          description: 'stored numerically server-side: send "202401" and it round-trips as "202401.0". Compare indices numerically, not by string equality, when checking idempotency.'
     ReadingPosition:
       type: object
       description: 'source: o.finalize (BookPositionResponse)'

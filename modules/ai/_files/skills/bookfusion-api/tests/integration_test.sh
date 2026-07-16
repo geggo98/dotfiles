@@ -12,7 +12,8 @@ TMP="$(mktemp -d)"
 export XDG_STATE_HOME="$TMP/state"   # isolate token cache / device id / rate-limit stamp
 PORTFILE="$TMP/port"
 REQLOG="$TMP/reqlog"
-: >"$REQLOG"
+BODYLOG="$TMP/reqlog.body"   # mock logs one JSON object per request here (outgoing body/headers/parts)
+: >"$REQLOG"; : >"$BODYLOG"
 
 pass=0; fail=0
 ok(){ echo "  PASS: $1"; pass=$((pass+1)); }
@@ -22,7 +23,7 @@ cleanup(){ [[ -n "${MOCK_PID:-}" ]] && kill "$MOCK_PID" 2>/dev/null; rm -rf "$TM
 trap cleanup EXIT
 
 echo "== starting mock =="
-python3 "$HERE/mock_server.py" "$PORTFILE" "$REQLOG" & MOCK_PID=$!
+python3 "$HERE/mock_server.py" "$PORTFILE" "$REQLOG" "$BODYLOG" & MOCK_PID=$!
 for _ in $(seq 1 50); do [[ -s "$PORTFILE" ]] && break; sleep 0.1; done
 PORT="$(cat "$PORTFILE" 2>/dev/null || true)"
 [[ -n "$PORT" ]] || { echo "mock failed to start"; exit 1; }
@@ -152,6 +153,120 @@ OUT="$(run searchUserBooks --spec /nonexistent/openapi.yaml --data '{}' 2>/dev/n
 ERR="$(run searchUserBooks --spec /nonexistent/openapi.yaml --data '{}' 2>&1 1>/dev/null)"
 echo "$OUT" | grep -q "Kubernetes Up & Running" && ok "request works when spec is unavailable" || no "request failed without spec: $OUT"
 echo "$ERR" | grep -q "spec unavailable" && ok "spec-unavailable note printed" || no "no degradation note: $ERR"
+
+# ---- fixes B1/B2/B5/B6, features U2/U6/batch, and exit-code / wire-behavior gaps ----
+run login >/dev/null 2>&1   # ensure a cached token for the endpoint tests below
+
+echo "== test 20: multipart binary part is named 'binary' for createHighlight, 'file' otherwise (B1) =="
+# REAL BEHAVIOR: createHighlight expects the image part named 'binary'; updateUserBook expects 'file'.
+head -c 16 /dev/urandom >"$TMP/q.png"
+: >"$BODYLOG"; run createHighlight --no-validate --data '{"book_id":111,"quote_text":"x"}' --file "$TMP/q.png" >/dev/null 2>&1
+grep -q '"binary"' "$BODYLOG" && ok "createHighlight sent binary part named 'binary'" || no "createHighlight part name wrong: $(cat "$BODYLOG")"
+: >"$BODYLOG"; run updateUserBook --id 111 --dangerous --no-validate --data '{"title":"T"}' --file "$TMP/q.png" >/dev/null 2>&1
+grep -q '"file"' "$BODYLOG" && ok "updateUserBook sent binary part named 'file'" || no "updateUserBook part name wrong: $(cat "$BODYLOG")"
+
+echo "== test 21: getTtsCredentials — token/preview_token never in context; file is 0600 (B2) =="
+STDOUT="$(run getTtsCredentials 2>/dev/null)"
+STDERR="$(run getTtsCredentials 2>&1 1>/dev/null)"
+{ echo "$STDOUT"; echo "$STDERR"; } | grep -q "tts-token-xyz" && no "tts token leaked to context!" || ok "tts token never in context"
+{ echo "$STDOUT"; echo "$STDERR"; } | grep -q "tts-preview-abc" && no "tts preview_token leaked to context!" || ok "preview_token never in context (endsWith _token)"
+echo "$STDERR" | grep -q "contains-credentials=yes" && ok "tts response flagged + filed" || no "tts response not filed"
+FILE="$(printf '%s' "$STDOUT" | tail -1)"
+if [[ -f "$FILE" ]]; then
+  PERM="$(stat -f '%Lp' "$FILE" 2>/dev/null || stat -c '%a' "$FILE" 2>/dev/null)"
+  [[ "$PERM" == "600" ]] && ok "credential file is 0600" || no "expected 0600, got $PERM"
+else no "credential file missing: $FILE"; fi
+
+echo "== test 22: a mid-path '~' in --data-file is not mangled (B5) =="
+mkdir -p "$TMP/te~st"; printf '{"query":"k"}' >"$TMP/te~st/b.json"
+OUT="$(run searchUserBooks --data-file "$TMP/te~st/b.json" 2>/dev/null)"; code=$?
+{ [[ $code -eq 0 ]] && echo "$OUT" | grep -q "Kubernetes"; } && ok "mid-path ~ preserved in --data-file" || no "mid-path ~ mangled: code=$code out=$OUT"
+
+echo "== test 23: a future rate-limit timestamp does not stall the next call (B6) =="
+STATE="$XDG_STATE_HOME/bookfusion-api-skill"; mkdir -p "$STATE"
+printf '%s' "$(( $(python3 -c 'import time;print(int(time.time()*1000))') + 3600000 ))" >"$STATE/last-request"
+START="$(date +%s)"; run getUser --rate 1 >/dev/null 2>&1; END="$(date +%s)"
+[[ $((END-START)) -lt 5 ]] && ok "future timestamp clamped (call took $((END-START))s)" || no "call stalled $((END-START))s on a future timestamp"
+
+echo "== test 24: --quiet suppresses the 2xx body for non-SAFE commands (U2) =="
+OUT="$(run addBookBookmark --number 1 --quiet --data '{"title":"t","chapter_index":0}' 2>/dev/null)"
+[[ -z "$OUT" ]] && ok "--quiet produced no stdout body" || no "--quiet still printed: $OUT"
+ERR="$(run addBookBookmark --number 1 --quiet --data '{"title":"t","chapter_index":0}' 2>&1 1>/dev/null)"
+echo "$ERR" | grep -qi "^ok:" && ok "--quiet prints an 'ok:' line on stderr" || no "no ok: line: $ERR"
+
+echo "== test 25: an unparseable numeric flag value fails fast (U6) =="
+for pair in "--rate abc" "--max-bytes foo" "--preview-lines x"; do
+  # shellcheck disable=SC2086
+  run getUser $pair >/dev/null 2>&1; code=$?
+  [[ $code -eq 2 ]] && ok "$pair -> exit 2" || no "$pair expected exit 2, got $code"
+done
+
+echo "== test 26: batch runs many ops with ONE login, JSONL results, continue-on-error (batch) =="
+run logout >/dev/null 2>&1; : >"$REQLOG"
+OUT="$(printf '%s\n' \
+  '{"command":"searchUserBooks","data":{"query":"k"}}' \
+  '{"command":"getUser"}' \
+  '{"command":"bogusCommand"}' | run batch 2>/dev/null)"; code=$?
+[[ $(printf '%s\n' "$OUT" | grep -c '"line":') -eq 3 ]] && ok "batch emitted 3 result lines" || no "batch line count wrong: $OUT"
+printf '%s\n' "$OUT" | grep -q '"line":1.*"status":"ok"' && ok "batch op 1 ok" || no "batch op1 not ok: $OUT"
+printf '%s\n' "$OUT" | grep -q '"line":3.*"status":"error"' && ok "batch op 3 (unknown command) errored" || no "batch op3 not error: $OUT"
+[[ $code -ne 0 ]] && ok "batch exits non-zero when an op fails" || no "batch exit should be non-zero, got $code"
+[[ "$(grep -c 'POST /api/v3/auth.json' "$REQLOG")" -eq 1 ]] && ok "batch logged in exactly once" || no "batch login count = $(grep -c 'POST /api/v3/auth.json' "$REQLOG")"
+: >"$REQLOG"
+OUT="$(printf '%s\n' '{"command":"deleteUserBook","id":111}' | run batch 2>/dev/null)"
+printf '%s\n' "$OUT" | grep -q '"status":"error"' && ok "batch delete without --dangerous is refused per-line" || no "batch delete not refused: $OUT"
+grep -q "DELETE /api/user/books/111" "$REQLOG" && no "batch sent a DELETE despite no --dangerous!" || ok "batch made no DELETE without --dangerous"
+
+echo "== test 27: auth failures exit 3 (EX_AUTH) =="
+( unset BOOKFUSION_USERNAME BOOKFUSION_PASSWORD; run logout >/dev/null 2>&1; run getUser >/dev/null 2>&1; [[ $? -eq 3 ]] ) && ok "missing credentials -> exit 3" || no "missing creds not exit 3"
+( export BOOKFUSION_PASSWORD="wrongpass"; run logout >/dev/null 2>&1; run login >/dev/null 2>&1; [[ $? -eq 3 ]] ) && ok "bad credentials -> exit 3" || no "bad creds not exit 3"
+run login >/dev/null 2>&1   # restore a cached token for the remaining tests
+
+echo "== test 28: an HTTP error exits 5 (EX_HTTP) =="
+run getBookReadingPosition --number 999 >/dev/null 2>&1; code=$?
+[[ $code -eq 5 ]] && ok "404 -> exit 5" || no "expected exit 5, got $code"
+
+echo "== test 29: a network failure exits 6 (EX_IO) =="
+BOOKFUSION_BASE_URL="http://127.0.0.1:1" run getUser >/dev/null 2>&1; code=$?
+[[ $code -eq 6 ]] && ok "connection refused -> exit 6" || no "expected exit 6, got $code"
+
+echo "== test 30: a secret in the request body is SENT but never printed to context =="
+: >"$BODYLOG"
+STDOUT="$(run authenticate --data '{"email":"test@example.com","password":"s3cr3t-outgoing"}' 2>/dev/null)"
+STDERR="$(run authenticate --data '{"email":"test@example.com","password":"s3cr3t-outgoing"}' 2>&1 1>/dev/null)"
+grep -q "s3cr3t-outgoing" "$BODYLOG" && ok "secret body reached the server (proves it was sent)" || no "secret not in outgoing body: $(cat "$BODYLOG")"
+{ echo "$STDOUT"; echo "$STDERR"; } | grep -q "s3cr3t-outgoing" && no "outgoing secret leaked to context!" || ok "outgoing secret never printed to context"
+
+echo "== test 31: --no-validate sends raw; --force still coerces the coercible fields =="
+OUT="$(run searchHighlights --no-validate --data '{"page":"2"}' 2>/dev/null)"
+echo "$OUT" | grep -q '"page":"2"' && ok "--no-validate sent page as a raw string" || no "--no-validate altered the body: $OUT"
+OUT="$(run addBookBookmark --number 1 --force --data '{"chapter_index":"3"}' 2>/dev/null)"
+echo "$OUT" | grep -q '"chapter_index":3' && ok "--force still coerced chapter_index to int on the wire" || no "--force did not coerce: $OUT"
+
+echo "== test 32: DANGEROUS gate precedes dry-run; --dangerous --dry-run sends nothing =="
+: >"$REQLOG"
+run deleteUserBook --id 1 --dry-run >/dev/null 2>&1; code=$?
+[[ $code -eq 4 ]] && ok "dry-run of a DANGEROUS command without --dangerous still exits 4" || no "expected exit 4, got $code"
+run deleteUserBook --id 1 --dangerous --dry-run >/dev/null 2>&1; code=$?
+{ [[ $code -eq 0 ]] && [[ ! -s "$REQLOG" ]]; } && ok "--dangerous --dry-run validates offline, sends nothing" || no "dangerous dry-run: code=$code reqlog=$(cat "$REQLOG")"
+
+echo "== test 34: a stale cached token triggers one clear + re-auth, then succeeds (B4) =="
+run login >/dev/null 2>&1
+for f in "$XDG_STATE_HOME"/bookfusion-api-skill/token-*.json; do
+  python3 -c "import json,sys;p=sys.argv[1];d=json.load(open(p));d['token']='stale-bad';json.dump(d,open(p,'w'))" "$f"
+done
+: >"$REQLOG"
+run getUser >/dev/null 2>&1; code=$?
+[[ $code -eq 0 ]] && ok "stale token recovered via one re-auth (exit 0)" || no "stale-token recovery failed, exit $code"
+grep -q "POST /api/v3/auth.json" "$REQLOG" && ok "re-authenticated after the 401" || no "no re-auth observed: $(cat "$REQLOG")"
+
+echo "== test 33: exportHighlights binary response is written byte-exact (B3) =="
+OUT="$(run exportHighlights --no-validate --data '{}' 2>/dev/null)"
+BINFILE="$(printf '%s' "$OUT" | tail -1)"
+if [[ -f "$BINFILE" ]]; then
+  SIZE="$(wc -c <"$BINFILE" | tr -d ' ')"
+  [[ "$SIZE" == "17" ]] && ok "binary export written byte-exact (17 bytes)" || no "binary size wrong: $SIZE (UTF-8 round-trip would inflate it)"
+else no "no binary file path on stdout: $OUT"; fi
 
 echo "==================="
 echo "PASS=$pass FAIL=$fail"

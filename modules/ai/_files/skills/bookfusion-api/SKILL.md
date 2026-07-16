@@ -43,7 +43,7 @@ Full request/response schemas: [`references/openapi.yaml`](references/openapi.ya
 ## Danger tiers (`bookfusion list` shows each command's tier)
 - **SAFE** — reads/searches. Default-allowed. This is the scraping replacement.
 - **WRITE** — non-destructive mutations (create/update, upload, reading position, kindle, borrow, join/leave). Default-allowed.
-- **DANGEROUS** — destructive (all deletes + `updateUserBook` metadata overwrite). **Refused unless `--dangerous`** is passed (exit code 4).
+- **DANGEROUS** — all deletes **and `updateUserBook`** (see "Editing book metadata" — it is the *only* path to change a book's title/tags/shelves/series, so even a routine edit needs `--dangerous`). **Refused unless `--dangerous`** is passed (exit code 4).
 - **EXCLUDED** — `createReaderSubscription` (payment) and `disconnectFacebook` are intentionally NOT wrapped. (No account-delete endpoint exists in the API.)
 
 ```bash
@@ -58,7 +58,40 @@ ${CLAUDE_SKILL_DIR}/scripts/bookfusion.sh deleteUserBook --id 12345 --dangerous
 - Query params: `--email a@b.c` (used by `authChallenge`).
 - Body: `--data '<json>'`, `--data-file PATH`, or `--data-stdin`. Missing body defaults to `{}`.
 - Multipart (`createHighlight`, `updateUserBook`, `finalizeBookUpload`, `updateUserProfile`):
-  `--data` = JSON `payload` part, `--file PATH` = optional binary part.
+  `--data` = JSON `payload` part, `--file PATH` = optional binary part (the CLI names the binary part
+  correctly per endpoint — `binary` for `createHighlight`, `file` for the rest).
+
+## Editing book metadata (`updateUserBook`) — merge/replace semantics
+`updateUserBook` is DANGEROUS and is the **only** way to change a book's metadata (title, summary, tags,
+bookshelves, series, authors, publisher_name, published_at). Its update rules (verified live) matter:
+- An **omitted** field is left **unchanged** — you cannot clear a field by omitting it.
+- A sent **scalar** (`title`/`summary`/`language`/`publisher_name`/`published_at`) **overwrites** the old
+  value. (`publisher_name` and `published_at` writability was verified live — the Android app's own update
+  model omits them, and even omits `tags`, yet the server accepts all three.)
+- A sent **array** (`tags`, `bookshelf_ids`, `authors`, `series`) **replaces the entire set**. So
+  `{"bookshelf_ids":[5]}` does *not* add shelf 5 — it removes the book from every other shelf. To add a
+  shelf, read the book's current `bookshelves[].id`, union your new id in, and send the full list.
+- There is **no structured `isbn` field** anywhere in this API — confirmed by decompiling the Android app
+  (v2.23.8): no `isbn` literal in any book model. The ISBN you see in the **website** editor is a web-only
+  field this mobile API neither returns nor accepts, so it cannot be read or cleared from here. An ISBN that
+  *does* show up in this API lives as free text in `tags` (only editable via the `tags` array).
+  `creation_token` for `createSeries`/`createBookshelf` is auto-generated when you omit it.
+
+## Bulk changes — `batch` (one login, one JVM)
+Each CLI call cold-starts a JVM (~2 s), so many single writes are slow. For bulk work use `batch`, which
+reads **JSONL from stdin** (one op per line), logs in **once**, and prints one compact result line per op:
+```bash
+printf '%s\n' \
+  '{"command":"updateUserBook","id":10798945,"data":{"tags":["css","debugging"]}}' \
+  '{"command":"updateUserBook","id":10798946,"data":{"bookshelf_ids":[96027]}}' \
+  | ${CLAUDE_SKILL_DIR}/scripts/bookfusion.sh batch --dangerous
+# -> {"line":1,"command":"updateUserBook","id":"10798945","status":"ok","http":200}
+#    stderr: batch: 2 ops, 2 ok, 0 error
+```
+Response bodies are suppressed (results only). Default is continue-on-error (exit non-zero if any op
+failed); use `--stop-on-error` to halt at the first failure. A per-line DANGEROUS op still requires the
+batch-level `--dangerous`. Re-run failed lines to resume — the tool invents no server-side idempotency.
+For single writes, `--quiet` likewise suppresses the ~1 KB response echo (prints only `ok: …` on stderr).
 
 ## Request validation (fast feedback, before the round trip)
 Every request body (and path/query params) is validated against [`references/openapi.yaml`](references/openapi.yaml)
@@ -117,9 +150,24 @@ Do **not** paste passwords inline in a shared shell — prefer env, a `0600` fil
 Rate limiting is enforced before **every** request via a file-locked timestamp, so it holds across
 separate CLI invocations too (default ≈ one request per 200 ms). Set a lower `--base-url` for tests.
 
+Throughput note: sequential single-command runs are bounded by the **~2 s JVM cold-start per invocation**,
+not by the rate limit (so the effective rate is ~0.5 req/s, well under the 5 req/s cap). For many writes,
+use `batch` (one JVM + one login) — that is where the rate limit actually governs pace.
+
 ## Exit codes
 `0` ok · `2` usage error (incl. validation hard-fail / `--dry-run` with errors) · `3` auth failure · `4` blocked (DANGEROUS without `--dangerous`, or EXCLUDED) · `5` HTTP error (status + body printed) · `6` I/O / network error.
 
+## First run
+The very first invocation (cold cache) bootstraps the Kotlin toolchain via `nix` and resolves the two
+Maven dependencies, printing JVM / dependency-resolver / nix noise to **stderr**. That is normal one-time
+setup, not an error — judge success by the **exit code**, not by stderr volume.
+
+## Editing this skill
+The installed files under `~/.claude/skills/bookfusion-api/` are **read-only symlinks into the Nix store**
+(home-manager). Do not edit them in place. Make changes in the source at
+`~/.config/nix-darwin/modules/ai/_files/skills/bookfusion-api/`, then re-activate with `darwin-rebuild switch`.
+
 ## Tests
 `bash ${CLAUDE_SKILL_DIR}/tests/integration_test.sh` runs the client against a local stdlib mock
-(`--base-url http://127.0.0.1:PORT`) — no real BookFusion account needed.
+(`--base-url http://127.0.0.1:PORT`) — no real BookFusion account needed. The mock's canned responses double
+as documentation of the real API's behavior (see the `# REAL BEHAVIOR:` comments in `tests/mock_server.py`).
