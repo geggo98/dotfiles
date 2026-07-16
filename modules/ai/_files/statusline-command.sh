@@ -118,4 +118,28 @@ if [ -n "$lang_parts" ]; then
     parts="${parts}  |${lang_parts}"
 fi
 
+# AI provider status (ai-watch.dev): up to 3 non-operational AI services, each
+# prefixed 🔴 (e.g. "🔴 Claude API 🔴 OpenAI API"). curl self-caps with
+# --max-time 2, but wrap the whole curl|jq pipe in gtimeout too (like the wt
+# call above) so a stalled connection can never hang the statusline. Any
+# failure (offline, DNS, non-zero exit) or all-operational -> empty string,
+# and the segment below is skipped.
+ai_jq='[.services[] | select(.status != "operational") | "🔴 " + .name] | .[0:3] | join(" ")'
+ai_fetch='curl -sf --max-time 2 https://ai-watch.dev/api/status/cached | jq -r "$1"'
+if command -v gtimeout >/dev/null 2>&1; then
+    ai_status=$(gtimeout 3 sh -c "$ai_fetch" _ "$ai_jq" 2>/dev/null || true)
+else
+    # gtimeout absent (unexpected): rely on curl --max-time alone.
+    ai_status=$(sh -c "$ai_fetch" _ "$ai_jq" 2>/dev/null || true)
+fi
+
+if [ -n "$ai_status" ]; then
+    # Make the 🔴 block a clickable OSC 8 hyperlink to ai-watch.dev. The ESC
+    # bytes are materialized by printf inside a command substitution, so the
+    # final `printf "%s" "$parts"` emits them verbatim. Terminals without OSC 8
+    # support (e.g. Terminal.app) simply render the plain text unchanged.
+    ai_status=$(printf '\033]8;;https://ai-watch.dev/\033\\%s\033]8;;\033\\' "$ai_status")
+    parts="${parts}   ${ai_status}"
+fi
+
 printf "%s" "$parts"
