@@ -14,6 +14,7 @@
         };
       };
       customSettings = {
+        "auto-optimise-store" = "true";
         "download-buffer-size" = "1073741824";
         "trusted-users" = [ "root" "stefan" "stefan.schwetschke" ];
         "eval-cores" = "0";

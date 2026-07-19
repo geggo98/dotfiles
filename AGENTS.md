@@ -32,6 +32,8 @@ A `justfile` provides safe, pre-approved commands that agents can run without us
 | `just deps` | Show flake dependency tree |
 | `just eval` | Evaluate flake outputs (fast syntax check) |
 | `just show-derivation` | Show derivation of current host build |
+| `just gc` | Collect user-level garbage, keeping the last 7 days of generations |
+| `just optimise` | Deduplicate the store (hard-link identical files) |
 
 ### New files: stage them before building
 
@@ -71,6 +73,10 @@ nix build .#darwinConfigurations.FCX19GT9XR.system
 
 # Show package delta between current and new system
 nix store diff-closures /run/current-system result
+
+# Full system-wide garbage collection (prunes the system profile too). Runs
+# automatically every week via modules/nix-gc.nix; this is the manual one-off.
+sudo nix-collect-garbage --delete-older-than 7d
 ```
 
 ## Architecture
