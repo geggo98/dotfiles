@@ -420,7 +420,14 @@ fun emitBytes(bytes: ByteArray, ct: String?, o: OutOpts) {
 }
 
 // ---------------------------------------------------------------------------- multipart
-fun multipartBody(payloadJson: String, filePath: String?, partName: String): Pair<ByteArray, String> {
+fun imageContentType(name: String): String = when (name.substringAfterLast('.', "").lowercase()) {
+    "jpg", "jpeg" -> "image/jpeg"; "png" -> "image/png"; "webp" -> "image/webp"; "gif" -> "image/gif"; else -> "image/jpeg"
+}
+
+// Build a multipart body. `payloadJson` -> part "payload"; `filePath` -> part `partName` (octet-stream);
+// `coverPath` -> part "cover" (image/*). The COVER part name MUST be "cover": the server ignores a cover
+// sent under the "file" part on updateUserBook (returns 200 but leaves the cover unchanged) — verified live.
+fun multipartBody(payloadJson: String, filePath: String?, partName: String, coverPath: String? = null): Pair<ByteArray, String> {
     val boundary = "----bookfusion" + UUID.randomUUID().toString().replace("-", "")
     val out = java.io.ByteArrayOutputStream()
     fun w(s: String) = out.write(s.toByteArray(StandardCharsets.UTF_8))
@@ -438,14 +445,126 @@ fun multipartBody(payloadJson: String, filePath: String?, partName: String): Pai
         w("Content-Type: application/octet-stream\r\n\r\n")
         out.write(Files.readAllBytes(f)); w("\r\n")
     }
+    if (coverPath != null) {
+        val f = Paths.get(expandTilde(coverPath))
+        if (!Files.exists(f)) die(EX_USAGE, "--cover not found: $coverPath")
+        val name = f.fileName.toString()
+        w("--$boundary\r\n")
+        w("Content-Disposition: form-data; name=\"cover\"; filename=\"$name\"\r\n")
+        w("Content-Type: ${imageContentType(name)}\r\n\r\n")
+        out.write(Files.readAllBytes(f)); w("\r\n")
+    }
     w("--$boundary--\r\n")
     return out.toByteArray() to "multipart/form-data; boundary=$boundary"
+}
+
+// ---------------------------------------------------------------------------- uploadBook (high-level: init -> S3 -> finalize -> auto-cover)
+// BookFusion server-side extracts a cover from these formats on upload; all others (pdf/chm/djvu/prc/cbz/...) upload cover-less.
+val AUTO_COVER_FMT = setOf("epub", "mobi", "azw3", "azw")
+
+fun sha256File(p: Path): String {
+    val md = java.security.MessageDigest.getInstance("SHA-256")
+    Files.newInputStream(p).use { ins -> val buf = ByteArray(1 shl 16); while (true) { val n = ins.read(buf); if (n < 0) break; md.update(buf, 0, n) } }
+    return md.digest().joinToString("") { "%02x".format(it) }
+}
+/** Run an external command with a wall-clock cap; returns exit code (124 timeout, 127 launch failure). */
+fun runCapped(seconds: Long, vararg cmd: String): Int = try {
+    val p = ProcessBuilder(*cmd).redirectOutput(ProcessBuilder.Redirect.DISCARD).redirectError(ProcessBuilder.Redirect.DISCARD).start()
+    if (!p.waitFor(seconds, java.util.concurrent.TimeUnit.SECONDS)) { p.destroyForcibly(); 124 } else p.exitValue()
+} catch (_: Exception) { 127 }
+/** Render the first page of a book to a JPEG via macOS Quick Look / sips. Returns the image path, or null if
+ *  unavailable. The temp dir (rendered PNG + JPEG) is registered for deletion at JVM exit — after the caller's PATCH. */
+fun renderFirstPageCover(src: Path): Path? {
+    if (!System.getProperty("os.name").lowercase().contains("mac")) return null
+    val tmp = Files.createTempDirectory("bf-cover")
+    tmp.toFile().deleteOnExit()
+    val jpg = tmp.resolve("cover.jpg")
+    val png = tmp.resolve(src.fileName.toString() + ".png")
+    runCapped(90, "qlmanage", "-t", "-s", "1200", "-o", tmp.toString(), src.toString())
+    if (Files.exists(png)) runCapped(30, "sips", "-s", "format", "jpeg", png.toString(), "--out", jpg.toString())
+    if (!Files.exists(jpg) || Files.size(jpg) == 0L) runCapped(60, "sips", "-s", "format", "jpeg", "-Z", "1200", src.toString(), "--out", jpg.toString())
+    png.toFile().deleteOnExit(); jpg.toFile().deleteOnExit()   // deleted in reverse-registration order → dir empties, then goes
+    return if (Files.exists(jpg) && Files.size(jpg) > 0) jpg else null
+}
+/** POST a presigned S3 form (arbitrary text fields + a trailing "file" part). No auth headers. Returns HTTP status. */
+fun s3PostForm(url: String, fields: Map<String, String>, fileName: String, bytes: ByteArray): Int {
+    val boundary = "----bfs3" + UUID.randomUUID().toString().replace("-", "")
+    val out = java.io.ByteArrayOutputStream(); fun w(s: String) = out.write(s.toByteArray(StandardCharsets.UTF_8))
+    for ((k, v) in fields) { w("--$boundary\r\n"); w("Content-Disposition: form-data; name=\"$k\"\r\n\r\n"); w(v); w("\r\n") }
+    w("--$boundary\r\n"); w("Content-Disposition: form-data; name=\"file\"; filename=\"$fileName\"\r\n"); w("Content-Type: application/octet-stream\r\n\r\n")
+    out.write(bytes); w("\r\n"); w("--$boundary--\r\n")
+    val client = java.net.http.HttpClient.newHttpClient()
+    val req = HttpRequest.newBuilder(URI.create(url)).timeout(Duration.ofMinutes(15))
+        .header("Content-Type", "multipart/form-data; boundary=$boundary")
+        .POST(HttpRequest.BodyPublishers.ofByteArray(out.toByteArray())).build()
+    return try { client.send(req, HttpResponse.BodyHandlers.discarding()).statusCode() } catch (e: Exception) { die(EX_IO, "S3 network error: ${e.message}") }
+}
+
+/** uploadBook <file>: init -> S3 -> finalize; then, by DEFAULT, set a rendered first-page cover when the book
+ *  would otherwise have none (non-auto-cover format). --cover PATH overrides the image; --no-cover disables. */
+fun doUploadBook(baseUrl: String, minIntervalMs: Long, device: String, opts: Map<String, String>, flags: Set<String>): Nothing {
+    val local = opts["--file"] ?: die(EX_USAGE, "uploadBook needs --file PATH  [--title T] [--type book] [--cover IMG | --no-cover]")
+    val f = Paths.get(expandTilde(local)); if (!Files.exists(f)) die(EX_USAGE, "file not found: $local")
+    val fname = f.fileName.toString(); val ext = fname.substringAfterLast('.', "").lowercase()
+    val title = opts["--title"] ?: fname.substringBeforeLast('.')
+    val type = opts["--type"] ?: "book"
+    val explicit = opts["--cover"]
+    // Validate an explicit --cover up front (mirror the generic multipart path) so a typo fails fast with a
+    // clear message instead of silently uploading the book cover-less and reporting a misleading render note.
+    if (explicit != null && !Files.exists(Paths.get(expandTilde(explicit)))) die(EX_USAGE, "--cover not found: $explicit")
+    // --dry-run must NOT perform the (irreversible) upload: report the plan and stop before any network/login.
+    if ("--dry-run" in flags) {
+        val coverPlan = if ("--no-cover" in flags) "none" else explicit ?: "auto-render-if-needed"
+        err("dry-run: would init→S3→finalize \"$title\" ($type, ${Files.size(f)} bytes) from $local, cover=[$coverPlan]; NO network performed")
+        val plan = JsonObject().apply {
+            addProperty("status", "dry-run"); addProperty("file", local); addProperty("title", title); addProperty("type", type); addProperty("cover", coverPlan)
+        }
+        println(if ("--pretty" in flags) PRETTY.toJson(plan) else GSON.toJson(plan))
+        exitProcess(EX_OK)
+    }
+    val ctx = Ctx(baseUrl, minIntervalMs, ensureToken(baseUrl, minIntervalMs, device, opts), device)
+    val digest = sha256File(f); val size = Files.size(f)
+    val initPayload = JsonObject().apply { addProperty("filename", fname); addProperty("digest", digest); addProperty("file_size", size); addProperty("type", type) }
+    val initResp = send(ctx, "POST", "$baseUrl/api/user/uploads/init", GSON.toJson(initPayload).toByteArray(), "application/json")
+    val initObj = parseOrNull(bodyText(initResp))?.let { if (it.isJsonObject) it.asJsonObject else null } ?: JsonObject()
+    var bookObj: JsonObject? = null; var bookId: String? = null
+    if (initResp.statusCode() == 422 && initObj.get("code")?.takeIf { !it.isJsonNull }?.asString == "upload_book_exists") {
+        bookObj = initObj.getAsJsonObject("book"); bookId = bookObj?.get("id")?.asString
+        err("note: identical file already in library (id=$bookId); not re-uploading")
+    } else if (initResp.statusCode() in 200..299) {
+        val url = initObj.get("url")?.asString ?: die(EX_HTTP, "init returned no upload url")
+        val params = initObj.getAsJsonObject("params") ?: die(EX_HTTP, "init returned no params")
+        val fields = linkedMapOf<String, String>(); params.entrySet().forEach { (k, v) -> fields[k] = if (v.isJsonPrimitive) v.asString else GSON.toJson(v) }
+        val s3 = s3PostForm(url, fields, fname, Files.readAllBytes(f))
+        if (s3 !in 200..399) die(EX_HTTP, "S3 upload failed (HTTP $s3)")
+        val key = fields["key"] ?: die(EX_HTTP, "init params missing key")
+        val finPayload = JsonObject().apply { addProperty("key", key); addProperty("digest", digest); addProperty("title", title) }
+        val mp = multipartBody(GSON.toJson(finPayload), null, "file")
+        val finResp = send(ctx, "POST", "$baseUrl/api/user/uploads/finalize", mp.first, mp.second)
+        if (finResp.statusCode() !in 200..299) die(EX_HTTP, "finalize failed (HTTP ${finResp.statusCode()}): ${bodyText(finResp)}")
+        bookObj = parseOrNull(bodyText(finResp))?.let { if (it.isJsonObject) it.asJsonObject else null }; bookId = bookObj?.get("id")?.asString
+    } else die(EX_HTTP, "init failed (HTTP ${initResp.statusCode()}): ${bodyText(initResp)}")
+    if (bookId == null) die(EX_HTTP, "no book id after upload")
+
+    // default auto-cover: set when missing & format won't auto-extract; --cover overrides; --no-cover disables
+    val hasCover = bookObj?.get("cover")?.let { !it.isJsonNull } == true
+    if ("--no-cover" !in flags && (explicit != null || (!hasCover && ext !in AUTO_COVER_FMT))) {
+        val img = explicit?.let { Paths.get(expandTilde(it)) } ?: renderFirstPageCover(f)
+        if (img != null && Files.exists(img)) {
+            val cmp = multipartBody("{}", null, "file", img.toString())   // cover goes in the "cover" part (see multipartBody)
+            val cv = send(ctx, "PATCH", "$baseUrl/api/user/books/$bookId", cmp.first, cmp.second)
+            if (cv.statusCode() in 200..299) err("note: cover set for book $bookId") else err("warn: cover PATCH returned HTTP ${cv.statusCode()}")
+        } else err("note: no cover set (cannot render .$ext here — pass --cover PATH, or --no-cover to silence)")
+    }
+    val outJson = bookObj?.let { GSON.toJson(it) } ?: """{"id":"$bookId"}"""
+    println(if ("--pretty" in flags) PRETTY.toJson(JsonParser.parseString(outJson)) else outJson)
+    exitProcess(EX_OK)
 }
 
 // ---------------------------------------------------------------------------- arg parsing
 val BOOL_FLAGS = setOf(
     "--dangerous", "--pretty", "--data-stdin", "--stdout", "--help", "-h", "--dry-run", "--force", "--no-validate",
-    "--quiet", "--continue-on-error", "--stop-on-error",
+    "--quiet", "--continue-on-error", "--stop-on-error", "--no-cover",
 )
 fun parse(argv: List<String>): Triple<String?, MutableMap<String, String>, MutableSet<String>> {
     var command: String? = null
@@ -487,6 +606,7 @@ $SKILL_NAME — CLI for the (reverse-engineered, unofficial) BookFusion mobile A
 
 USAGE:
   bookfusion <command> [--param value ...] [--data '<json>' | --data-file P | --data-stdin] [flags]
+  bookfusion uploadBook --file PATH [--title T] [--type book] [--cover IMG|--no-cover]   # init->S3->finalize->cover
   bookfusion batch [--dangerous] [--continue-on-error|--stop-on-error]   # JSONL ops on stdin, one login
   bookfusion login | logout | whoami | list | help
 
@@ -497,7 +617,10 @@ FLAGS:
   --no-validate          skip OpenAPI request validation/coercion entirely
   --spec PATH            OpenAPI spec used for validation (env BOOKFUSION_OPENAPI; set by the wrapper)
   --data '<json>'        request body (also --data-file PATH, --data-stdin)
-  --file PATH            binary part for multipart commands (upload/cover/highlight image)
+  --file PATH            binary part for multipart commands; on uploadBook it is the local book file
+  --cover PATH           cover image (jpg/png) — sent as the "cover" multipart part on updateUserBook/finalize.
+                         updateUserBook's "file" part is IGNORED by the server for covers; "cover" is required.
+  --no-cover             (uploadBook) do NOT auto-render/set a first-page cover for cover-less formats
   --format F             output format: auto (default) | tsv | jsonl | json (env BOOKFUSION_FORMAT)
   --pretty               pretty-print JSON output
   --quiet                for WRITE/DANGEROUS commands, suppress the 2xx response body (print only 'ok:' on stderr)
@@ -871,7 +994,10 @@ fun dispatch(cmd: Cmd, opts: Map<String, String>, prep: Prepared, ctx: Ctx): Run
         val filePath = opts["--file"]
         if (filePath != null && !Files.exists(Paths.get(expandTilde(filePath))))
             return RunResult("error", null, "", null, null, "--file not found: $filePath", EX_USAGE)
-        val mp = multipartBody(rawBody ?: "{}", filePath, cmd.filePart)
+        val coverPath = opts["--cover"]
+        if (coverPath != null && !Files.exists(Paths.get(expandTilde(coverPath))))
+            return RunResult("error", null, "", null, null, "--cover not found: $coverPath", EX_USAGE)
+        val mp = multipartBody(rawBody ?: "{}", filePath, cmd.filePart, coverPath)
         bodyBytes = mp.first; contentType = mp.second
     } else if (rawBody != null) {
         bodyBytes = rawBody.toByteArray(); contentType = "application/json"
@@ -909,6 +1035,7 @@ fun parseBatchLine(line: String): BatchOp? {
         when (k) {
             "command", "data" -> {}
             "file" -> if (!v.isJsonNull) lineOpts["--file"] = v.asString
+            "cover" -> if (!v.isJsonNull) lineOpts["--cover"] = v.asString
             else -> if (!v.isJsonNull) {
                 val s = if (v.isJsonPrimitive) v.asString else GSON.toJson(v)
                 lineOpts["--$k"] = s
@@ -990,6 +1117,7 @@ when (command) {
         exitProcess(EX_OK)
     }
     "batch" -> runBatch(baseUrl, minIntervalMs, device, opts, flags)   // reads JSONL from stdin; never returns
+    "uploadBook" -> doUploadBook(baseUrl, minIntervalMs, device, opts, flags)   // init->S3->finalize->auto-cover; never returns
 }
 
 val cmdName = if (command == "whoami") "getUser" else command
