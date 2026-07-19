@@ -1054,7 +1054,8 @@ fun runBatch(baseUrl: String, minIntervalMs: Long, device: String, opts: Map<Str
     if ("--continue-on-error" in flags && "--stop-on-error" in flags)
         die(EX_USAGE, "choose only one of --continue-on-error / --stop-on-error")
     val stopOnError = "--stop-on-error" in flags
-    var token = ensureToken(baseUrl, minIntervalMs, device, opts)   // ONE login for the whole batch
+    val dryRun = "--dry-run" in flags
+    var token = if (dryRun) "" else ensureToken(baseUrl, minIntervalMs, device, opts)   // ONE login for the whole batch (skipped on --dry-run)
     var reauthed = false
     var n = 0; var okN = 0; var errN = 0
     val reader = System.`in`.bufferedReader()
@@ -1074,6 +1075,14 @@ fun runBatch(baseUrl: String, minIntervalMs: Long, device: String, opts: Map<Str
         val body = injectCreationToken(cmd, batchBody(cmd, op.rawBody))
         val prep = prepareRequest(cmd, op.lineOpts, flags, body, baseUrl)
         printDiag(prep.vc)
+        if (dryRun) {   // validate + report the would-be request; never dispatch, never log in
+            out.addProperty("status", "dry-run"); out.addProperty("would", "${cmd.method} ${prep.url}")
+            prep.outBody?.let { b -> parseOrNull(b)?.let { out.add("body", redactTree(it)) } }
+            if (prep.vc.errors.isNotEmpty()) out.addProperty("errors", prep.vc.errors.size)
+            println(GSON.toJson(out))
+            if (prep.vc.errors.isNotEmpty()) { errN++; if (stopOnError) break } else okN++
+            continue
+        }
         var res = dispatch(cmd, op.lineOpts, prep, Ctx(baseUrl, minIntervalMs, token, device))
         if (res.http == 401 && cmd.id !in AUTH_CMDS && !reauthed && !tokenIsOverridden(opts)) {
             err("note: token rejected (401); clearing cache and re-authenticating once for the batch")
@@ -1085,8 +1094,8 @@ fun runBatch(baseUrl: String, minIntervalMs: Long, device: String, opts: Map<Str
         println(GSON.toJson(out))
         if (res.status == "ok") okN++ else { errN++; if (stopOnError) break }
     }
-    err("batch: $n ops, $okN ok, $errN error")
-    exitProcess(if (errN > 0) EX_HTTP else EX_OK)
+    err("batch${if (dryRun) " (dry-run)" else ""}: $n ops, $okN ok, $errN error")
+    exitProcess(if (errN > 0) (if (dryRun) EX_USAGE else EX_HTTP) else EX_OK)
 }
 
 // ---------------------------------------------------------------------------- main
