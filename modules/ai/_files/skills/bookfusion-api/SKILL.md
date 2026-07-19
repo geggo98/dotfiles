@@ -60,6 +60,10 @@ ${CLAUDE_SKILL_DIR}/scripts/bookfusion.sh deleteUserBook --id 12345 --dangerous
 - Multipart (`createHighlight`, `updateUserBook`, `finalizeBookUpload`, `updateUserProfile`):
   `--data` = JSON `payload` part, `--file PATH` = optional binary part (the CLI names the binary part
   correctly per endpoint — `binary` for `createHighlight`, `file` for the rest).
+- Book **covers**: `--cover PATH` sends the image as the `cover` part (a `file`-part cover is ignored by
+  the server). `uploadBook --file book.pdf` does init→S3→finalize and, by default, auto-renders + sets a
+  first-page cover for cover-less formats (PDF/CHM/…; EPUB/MOBI/AZW3 auto-cover). See
+  [`references/covers.md`](references/covers.md). Opt out with `--no-cover`; override with `--cover`.
 
 ## Editing book metadata (`updateUserBook`) — merge/replace semantics
 `updateUserBook` is DANGEROUS and is the **only** way to change a book's metadata (title, summary, tags,

@@ -23,22 +23,34 @@ Commands marked `body = —` take no body (the app sends none); just call them w
 
 ## Multipart commands
 `createHighlight`, `updateUserBook`, `finalizeBookUpload`, `updateUserProfile` use `multipart/form-data`:
-`--data` supplies the JSON `payload` part; optional `--file PATH` supplies the binary part (cover image /
-highlight quote image). The CLI picks the correct binary part name per endpoint — `binary` for
-`createHighlight`, `file` for the others. Example:
+`--data` supplies the JSON `payload` part; `--file PATH` supplies the binary part (`binary` for
+`createHighlight`, `file` for the others). Book **covers** are a separate part named `cover` — use
+`--cover PATH` (NOT `--file`, which the server ignores for covers). Example:
 ```
 bookfusion updateUserProfile --data '{"full_name":"Jane Doe"}'
+bookfusion updateUserBook --dangerous --id 123 --cover cover.jpg --data '{}'   # set/replace a cover
 ```
 
-## Uploading a book (init → finalize)
-`finalizeBookUpload` requires `digest` (the file's content hash), not an `upload_id`. The flow is
-`initBookUpload` (returns an upload target) → upload the file → `finalizeBookUpload`:
+## Uploading a book (init → finalize), with auto-cover
+`finalizeBookUpload` requires `digest` (the file's content hash), not an `upload_id`. High-level helper
+`uploadBook` runs the whole flow and, by DEFAULT, renders + sets a first-page cover when the format has
+none (PDF/CHM/DJVU/…). EPUB/MOBI/AZW3 get a cover server-side, so no render is done for them.
 ```
-# 1) init returns { url, params, action } describing where to PUT the file
+bookfusion uploadBook --file book.pdf --title "My Book"      # upload + auto-cover (macOS qlmanage/sips)
+bookfusion uploadBook --file book.pdf --cover my.jpg          # supply the cover image yourself
+bookfusion uploadBook --file book.epub                        # no render; EPUB auto-covers
+bookfusion uploadBook --file book.pdf --no-cover              # skip the cover
+```
+Manual primitives (out-of-band byte upload) still work:
+```
+# 1) init returns { url, params, action } describing where to POST the file
 bookfusion initBookUpload --data '{"filename":"book.epub","digest":"<sha256>","file_size":123456,"type":"book"}'
-# 2) upload the bytes to that target (out of band), then finalize with the SAME digest:
-bookfusion finalizeBookUpload --data '{"key":"<uploadKey>","digest":"<sha256>","title":"My Book"}' --file ./cover.jpg
+# 2) POST the bytes to that target (out of band), then finalize with the SAME digest:
+bookfusion finalizeBookUpload --data '{"key":"<uploadKey>","digest":"<sha256>","title":"My Book"}'
+# 3) for a cover-less format, set a cover afterwards:
+bookfusion updateUserBook --dangerous --id <id> --cover ./cover.jpg --data '{}'
 ```
+Cover details & the "cover"-vs-"file" gotcha: [`references/covers.md`](covers.md).
 
 ## Bookshelves & series: assign by id, not name
 `bookshelf_ids` / `category_ids` take integer **ids**, and there is no assign-by-name. Recipe:

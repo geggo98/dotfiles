@@ -93,10 +93,18 @@ paths:
               properties:
                 payload:
                   $ref: '#/components/schemas/UpdateBookRequest'
+                cover:
+                  type: string
+                  format: binary
+                  description: >-
+                    Cover image (jpg/png). VERIFIED live 2026-07-19: to set/replace a book's cover the
+                    image part MUST be named "cover" with an image Content-Type. A part named "file"
+                    (below) is silently IGNORED for covers — the request 200s but cover stays null.
+                    Payload may be {}. See references/covers.md. CLI: `updateUserBook --cover PATH`.
                 file:
                   type: string
                   format: binary
-                  description: optional cover image part
+                  description: 'legacy/no-op for covers — server ignores it here; use the "cover" part instead'
               required:
                 - payload
       responses:
