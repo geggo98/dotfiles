@@ -10,6 +10,7 @@ in
       darwin.macos
       darwin.determinate
       darwin.nix-cache
+      darwin.nix-gc
       darwin.homebrew
       darwin.overlays
       darwin.pmset-hibernatemode

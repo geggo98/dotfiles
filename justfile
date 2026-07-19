@@ -85,6 +85,18 @@ eval: _check-untracked
 show-derivation:
     nix derivation show '.#darwinConfigurations.FCX19GT9XR.system' | nix run nixpkgs#jq -- .
 
+# --- Store maintenance ---
+
+# Deduplicate the store by hard-linking identical files (safe, reversible)
+optimise:
+    nix store optimise
+
+# Collect user-level garbage, keeping generations from the last 7 days. The
+# system profile is pruned automatically every week (see modules/nix-gc.nix);
+# a one-off full sweep is `sudo nix-collect-garbage --delete-older-than 7d`.
+gc:
+    nix-collect-garbage --delete-older-than 7d
+
 # Decrypt and view the Boundary reference doc (hosts/DKL6GDJ7X1/BOUNDARY.md.gpg)
 view-boundary-doc:
     gpg --decrypt hosts/DKL6GDJ7X1/BOUNDARY.md.gpg | less -R
