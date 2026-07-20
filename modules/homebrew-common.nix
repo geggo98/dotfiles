@@ -55,6 +55,7 @@
           "thaw" # Menu bar manager, open-source Bartender replacement (stonerl/Thaw)
           "beardie"
           "brave-browser"
+          "chatgpt"
           "claude"
           "conductor"
           "dash"
