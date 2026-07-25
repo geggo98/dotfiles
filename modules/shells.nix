@@ -119,6 +119,21 @@
           body = builtins.readFile ./_files/shell/wait-and-exec.fish;
           description = "Block until stdin has data, then exec the given command (passes stdin through). --timeout N for hard abort, --wait-eof to buffer via sponge.";
         };
+        "+darwin-rebuild-switch" = {
+          body = ''
+            # Select the flake attr by hardware serial (IOPlatformSerialNumber) so a
+            # transiently drifted LocalHostName — macOS's "-2" Bonjour suffix on a name
+            # collision — can't break attr selection the way a bare `--flake <dir>` does.
+            set -l serial (ioreg -c IOPlatformExpertDevice -d 2 | string match -rg 'IOPlatformSerialNumber" = "([^"]+)"')
+            if test -z "$serial"
+              echo "Error: could not determine hardware serial" >&2
+              return 1
+            end
+            echo "→ sudo darwin-rebuild switch --flake ~/.config/nix-darwin#$serial $argv" >&2
+            sudo darwin-rebuild switch --flake "$HOME/.config/nix-darwin#$serial" $argv
+          '';
+          description = "Apply this host's nix-darwin config, selecting the flake attr by hardware serial (drift-safe against the macOS -2 hostname bump).";
+        };
       };
       shellAbbrs = {
         # forgit abbreviations
@@ -154,8 +169,6 @@
         "+pmset-hibernate-disk" = "sudo pmset-hibernatemode disk";
 
         "+ssh-add-yubikey" = "env SSH_AUTH_SOCK={$HOME}.ssh/agent ssh-add {$HOME}/.ssh/id_es255519_sk";
-
-        "+darwin-rebuild-switch" = "sudo darwin-rebuild switch --flake ~/.config/nix-darwin";
 
         "+grep" = "ug";
         "+grep-tui" = "ug -Q";

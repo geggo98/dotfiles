@@ -14,7 +14,7 @@ The repository follows the **Dendritic Pattern** for Nix flake structure — use
 
 ## Build, Test, and Development Commands
 
-A `justfile` provides safe, pre-approved commands that agents can run without user approval. Raw `nix` and `darwin-rebuild` commands require user approval.
+A `justfile` provides safe, pre-approved commands that agents can run without user approval. Raw `nix` and `darwin-rebuild` commands require user approval. The **only** exceptions in the justfile are `just switch` / `just switch-host`, which apply the system config with `sudo` — these are for the user to run interactively, not agents.
 
 ### Safe commands (via justfile, no approval needed)
 

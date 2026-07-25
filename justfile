@@ -1,5 +1,7 @@
 # Nix-darwin configuration tasks
-# Safe for LLM agents — no sudo, no destructive operations
+# Recipes are sandbox-safe for LLM agents (no sudo, non-destructive) EXCEPT
+# `switch` / `switch-host`, which apply the system config with sudo — run those
+# interactively yourself, not from an agent.
 
 # Pass recipe arguments to shebang recipes as real positional params ($@/$1…),
 # so variadic wrappers (e.g. `pulumi`) can forward them via "$@" without the
@@ -35,6 +37,24 @@ build: _check-untracked
 # Build a specific host configuration
 build-host host: _check-untracked
     time nix build '.#darwinConfigurations.{{ host }}.system' --keep-going --keep-failed | ts
+
+# --- Apply configuration (needs sudo; interactive — NOT agent-safe) ---
+
+# Apply THIS host's configuration. Selects the flake attr by hardware serial
+# (IOPlatformSerialNumber) so a transiently drifted LocalHostName — macOS's
+# "-2" Bonjour suffix on a name collision — can't break attr selection the way
+# a bare `--flake .` does. Extra args are forwarded, e.g. `just switch --dry-run`.
+switch *args:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    serial=$(ioreg -c IOPlatformExpertDevice -d 2 | awk -F'"' '/IOPlatformSerialNumber/{print $4}')
+    [ -n "$serial" ] || { echo "could not determine hardware serial" >&2; exit 1; }
+    echo "→ sudo darwin-rebuild switch --flake .#${serial} $*" >&2
+    sudo darwin-rebuild switch --flake ".#${serial}" "$@"
+
+# Apply a SPECIFIC host by name, e.g. `just switch-host DKL6GDJ7X1`
+switch-host host:
+    sudo darwin-rebuild switch --flake ".#{{ host }}"
 
 # Run flake checks
 check: _check-untracked
