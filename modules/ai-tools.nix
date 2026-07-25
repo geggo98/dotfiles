@@ -17,7 +17,15 @@
           llm-gemini = true;
           llm-cmd = true;
         })
-        llm-agents.agent-browser
+        # agent-browser temporarily disabled (2026-07-25): on nixpkgs-llm-agents
+        # @be7d518 (agent-browser 0.33.0) the dashboard pnpm-deps FOD does not
+        # reproduce on aarch64-darwin — upstream pins
+        # sha256-tkEhkGO5/JTkzySDEsTmjr5+SEXzk8V0217iQhFhfCw= but the fetch yields
+        # sha256-qfXtPRp1ohg3uuJPNljmqmqh+lCAkqyHorTFvTyFIJ4= (dashboard deps
+        # resolve time-dependently via pnpm minimumReleaseAge, so the pinned hash
+        # drifts). The old ~26 min SIGKILL is gone; this is a separate hash
+        # mismatch. Re-enable once upstream ships a reproducible pnpm-deps hash.
+        # llm-agents.agent-browser
         llm-agents.ccusage
         pkgs.tmux # required by the tmux skill for headless interactive sessions
 

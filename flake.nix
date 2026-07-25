@@ -64,14 +64,15 @@
     devenv.url = "github:cachix/devenv";
 
     # https://github.com/numtide/llm-agents.nix
-    # Pinned to the commit *before* 62903bf ("packages: pin GitHub sources by tag
-    # instead of rev"). That commit bumped agent-browser so its dashboard's
-    # pnpm-deps FOD honours pnpm's `minimumReleaseAge` supply-chain policy
-    # (pnpm-workspace.yaml) and runs a ~26 min registry check over 1136 packages,
-    # then gets SIGKILLed (exit 137) during `just build`. Drop the pinned rev to
-    # resume tracking main once upstream stops enforcing minimumReleaseAge in the
-    # offline deps fetch.
-    nixpkgs-llm-agents.url = "github:numtide/llm-agents.nix/bdd25e713cb3e3a08021121b19023efa13cd10b7";
+    # Tracks main. Was temporarily pinned to the commit *before* 62903bf
+    # ("packages: pin GitHub sources by tag instead of rev"), which bumped
+    # agent-browser so its dashboard pnpm-deps FOD ran a ~26 min registry check
+    # over the full ~1200-package workspace (pnpm `minimumReleaseAge`) and got
+    # SIGKILLed (exit 137) during `just build`. Upstream has since restricted the
+    # deps fetch to the `dashboard` workspace with a pinned hash (see
+    # packages/agent-browser/package.nix: `pnpmWorkspaces = [ "dashboard" ]`), so
+    # the offline fetch no longer scans the registry — pin lifted 2026-07-25.
+    nixpkgs-llm-agents.url = "github:numtide/llm-agents.nix";
 
     # External dependencies
     # Tracks nvf main: v0.8 (the latest tag) bundles blink-cmp 1.8.0, whose
