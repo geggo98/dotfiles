@@ -64,15 +64,23 @@
     devenv.url = "github:cachix/devenv";
 
     # https://github.com/numtide/llm-agents.nix
-    # Tracks main. Was temporarily pinned to the commit *before* 62903bf
-    # ("packages: pin GitHub sources by tag instead of rev"), which bumped
-    # agent-browser so its dashboard pnpm-deps FOD ran a ~26 min registry check
-    # over the full ~1200-package workspace (pnpm `minimumReleaseAge`) and got
-    # SIGKILLed (exit 137) during `just build`. Upstream has since restricted the
-    # deps fetch to the `dashboard` workspace with a pinned hash (see
-    # packages/agent-browser/package.nix: `pnpmWorkspaces = [ "dashboard" ]`), so
-    # the offline fetch no longer scans the registry — pin lifted 2026-07-25.
+    # Tracks main. Source for claude-code, codex, opencode, gemini-cli, ccusage
+    # and the ACP shims. Deliberately *not* the source for agent-browser — see
+    # modules/agent-browser.nix for why that one comes from release binaries.
     nixpkgs-llm-agents.url = "github:numtide/llm-agents.nix";
+
+    # agent-browser: source of truth for both the version and the skill bodies
+    # consumed by modules/agent-browser.nix. That module reads the version from
+    # this input's package.json and fetches the matching prebuilt release binary,
+    # so binary and skill-data can never drift apart.
+    # Upgrade: bump the tag -> `just agent-browser-hashes <version>` -> paste the
+    # printed hashes into modules/agent-browser.nix -> `just build`.
+    # Pinned by tag, not rev: github archive URLs are ambiguous when a repo has a
+    # branch and tag of the same name (llm-agents hit this in 62903bf).
+    agent-browser-src = {
+      url = "github:vercel-labs/agent-browser/v0.33.0";
+      flake = false;
+    };
 
     # External dependencies
     # Tracks nvf main: v0.8 (the latest tag) bundles blink-cmp 1.8.0, whose

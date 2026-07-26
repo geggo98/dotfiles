@@ -601,3 +601,21 @@ ${CLAUDE_SKILL_DIR}/scripts/web-browser.sh --silent close --all
 | [templates/dogfood-report-template.md](templates/dogfood-report-template.md)   | Copy into output dir as the dogfood report file  |
 | [templates/bypass-anubis.sh](templates/bypass-anubis.sh)                       | End-to-end Anubis bypass + state hand-off        |
 | [templates/bypass-turnstile.sh](templates/bypass-turnstile.sh)                 | End-to-end Cloudflare Turnstile bypass           |
+
+## Upstream skill bodies (always version-matched to the binary)
+
+For topics this skill doesn't cover, the CLI serves Vercel's own skill texts:
+
+```bash
+${CLAUDE_SKILL_DIR}/scripts/web-browser.sh skills list
+${CLAUDE_SKILL_DIR}/scripts/web-browser.sh skills get derive-client   # record traffic -> reusable API client
+${CLAUDE_SKILL_DIR}/scripts/web-browser.sh skills get vercel-sandbox  # run in ephemeral Vercel microVMs
+```
+
+Available: `core`, `dogfood`, `derive-client`, `electron`, `slack`, `agentcore`,
+`vercel-sandbox`. Add `--full` for their references and templates.
+
+For `electron`, `slack`, `agentcore` and `dogfood`, prefer the local sources — they
+are adapted to this wrapper and to sops-nix secret loading: the `electron-ui` and
+`slack-ui` skills, [references/aws-agentcore.md](references/aws-agentcore.md), and
+[references/issue-taxonomy.md](references/issue-taxonomy.md).

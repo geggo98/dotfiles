@@ -76,6 +76,21 @@ update:
 update-input input:
     nix flake lock --update-input {{ input }}
 
+# Recompute the agent-browser release-binary hashes for modules/agent-browser.nix
+# after bumping the agent-browser-src tag in flake.nix. Prints the ready-to-paste
+# `assets` attrset. Example: `just agent-browser-hashes 0.34.0`
+agent-browser-hashes version:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    base="https://github.com/vercel-labs/agent-browser/releases/download/v{{ version }}"
+    for pair in aarch64-darwin:darwin-arm64 x86_64-darwin:darwin-x64 \
+                x86_64-linux:linux-musl-x64 aarch64-linux:linux-musl-arm64; do
+        sys="${pair%%:*}"
+        asset="agent-browser-${pair##*:}"
+        hash=$(nix store prefetch-file --json "$base/$asset" | nix run nixpkgs#jq -- -r .hash)
+        printf '    %-14s = { asset = "%s"; hash = "%s"; };\n' "$sys" "$asset" "$hash"
+    done
+
 # Show what would change between current system and new build
 diff: build
     nix store diff-closures /run/current-system ./result
