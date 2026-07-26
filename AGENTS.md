@@ -204,6 +204,17 @@ Use the `/nix-dendritic-pattern` skill for guidance. In short:
   Cross-reference `programs.nvf.settings` in `modules/neovim.nix` against the
   notes before building.
 
+- **agent-browser:** pinned in **two** places. Bump the `agent-browser-src` tag in
+  `flake.nix` (that tag is also where the version comes from — it is read out of the
+  input's `package.json`), then run `just agent-browser-hashes <version>` and paste the
+  printed `assets` attrset into `modules/agent-browser.nix`, then `just build`. Do
+  **not** switch back to `nixpkgs-llm-agents.agent-browser` or `nixpkgs.agent-browser`
+  without re-checking the pnpm dashboard FOD: it resolves time-dependently (pnpm
+  `minimumReleaseAge`) and drifts off its pinned hash on its own. The release binary
+  carries no skill bodies, so `modules/agent-browser.nix` points
+  `AGENT_BROWSER_SKILLS_DIR` at `$out/skill-data` copied from the same tag — keep those
+  two in sync or `agent-browser skills get` breaks.
+
 ### uv-based skill scripts (lockfiles + the read-only Nix store)
 
 Some skill helpers under `modules/ai/_files/skills/*/scripts/` are self-contained

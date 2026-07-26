@@ -1,5 +1,22 @@
 {
   "nodes": {
+    "agent-browser-src": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1784827976,
+        "narHash": "sha256-praWvAgWoDmWqXzh/kxdfQAPGkVS4qkb0pPYtMWO/N8=",
+        "owner": "vercel-labs",
+        "repo": "agent-browser",
+        "rev": "1ed371f3af472cc0d6cd8fdaea75d1a085ff7534",
+        "type": "github"
+      },
+      "original": {
+        "owner": "vercel-labs",
+        "ref": "v0.33.0",
+        "repo": "agent-browser",
+        "type": "github"
+      }
+    },
     "brew-src": {
       "flake": false,
       "locked": {
@@ -853,6 +870,7 @@
     },
     "root": {
       "inputs": {
+        "agent-browser-src": "agent-browser-src",
         "brew-src": "brew-src",
         "darwin": "darwin",
         "determinate": "determinate",
