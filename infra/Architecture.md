@@ -132,7 +132,7 @@ flowchart LR
 | Component | Responsible for | NOT responsible for |
 |---|---|---|
 | Git repo | Pulumi code, Nix flake, both encrypted SOPS files, justfile | Decryption keys, Pulumi state |
-| Developer laptop | `pulumi up`, `darwin-rebuild switch`, `sops edit`, holding the Age private key | Long-lived state |
+| Developer laptop | `pulumi up`, `just switch`, `sops edit`, holding the Age private key | Long-lived state |
 | `secrets/secrets.enc.yaml` | Host-runtime secrets distributed by sops-nix to macOS workstations | Anything CI needs to read |
 | `secrets/infra.enc.yaml` | Tokens needed to *run* Pulumi (state backend, providers, deploy keys) | Host-runtime secrets unrelated to infra |
 | Pulumi Cloud | Resource state, encryption-as-a-service, web UI, history | Secret distribution to runtime |

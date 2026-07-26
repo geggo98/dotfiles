@@ -281,7 +281,7 @@ echo "Fixed in <commit-hash>" | \
 
 | Symptom | Likely cause | Fix |
 |---|---|---|
-| `bb: command not found` | `bb` not on PATH | `bb` is installed via Nix on this host; rebuild: `just build && sudo darwin-rebuild switch --flake .` |
+| `bb: command not found` | `bb` not on PATH | `bb` is installed via Nix on this host; rebuild: `just build && just switch` |
 | `jq: command not found` | `jq` not on PATH | Already in `home.packages`; same rebuild fix |
 | `create`/`update` **hangs** for ~minutes when reviewers are involved | You called **raw `bb pr create --reviewer` / `bb pr update --add-reviewer`** — bb enumerates the entire workspace member list client-side (hangs + HTTP 429 on huge workspaces like `check24`), for names AND uuids | Use this skill's `bitbucket_pr.sh create/update` (routes reviewers through the REST helper, never bb's flag). See [§12](#12-reviewers-rest-bypass). |
 | `Reviewer '…' is not an account_id or uuid` | Passed a display name/nickname as a reviewer | Reviewers must be an account_id (`557058:…` or 24-hex legacy) or uuid (`{…}`). Find them: `bitbucket_pr.sh get <id>` (reviewers/participants) or `bb user me`. |

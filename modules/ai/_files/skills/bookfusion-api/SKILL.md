@@ -169,7 +169,7 @@ setup, not an error — judge success by the **exit code**, not by stderr volume
 ## Editing this skill
 The installed files under `~/.claude/skills/bookfusion-api/` are **read-only symlinks into the Nix store**
 (home-manager). Do not edit them in place. Make changes in the source at
-`~/.config/nix-darwin/modules/ai/_files/skills/bookfusion-api/`, then re-activate with `darwin-rebuild switch`.
+`~/.config/nix-darwin/modules/ai/_files/skills/bookfusion-api/`, then re-activate with `just switch`.
 
 ## Tests
 `bash ${CLAUDE_SKILL_DIR}/tests/integration_test.sh` runs the client against a local stdlib mock

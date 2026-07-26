@@ -1,5 +1,7 @@
-# darwin-rebuild build --flake ~/.config/nix-darwin
-# sudo darwin-rebuild switch --flake ~/.config/nix-darwin
+# just build   # build without applying
+# just switch  # apply — selects the flake attr by hardware serial, so a drifted
+#              # LocalHostName (macOS's "-2" suffix) can't break attr selection
+#              # the way a bare `darwin-rebuild switch --flake .` does
 # sudo determinate-nixd upgrade
 # determinate-nixd version # Shows features, see https://dtr.mn/features
 {

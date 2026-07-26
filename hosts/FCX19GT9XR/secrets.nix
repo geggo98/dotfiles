@@ -11,7 +11,7 @@
   # these to ~/.config/sops-nix/secrets/bookfusion_{username,password}, which
   # the skill reads directly. Their values must be encrypted into
   # ./secrets.enc.yaml (see repo CLAUDE.md / .sops.yaml FCX rule) before
-  # `darwin-rebuild switch`.
+  # `just switch`.
   bookfusion_username = { };
   bookfusion_password = { };
 }
