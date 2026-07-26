@@ -196,15 +196,15 @@ trigger is set carefully.
    - A second `pulumi up` is a no-op (no diff against itself)
    - The same test repeated against `secrets/secrets.enc.yaml` also works,
      and the corresponding sops-nix declaration in `modules/secrets.nix`
-     is honoured by `darwin-rebuild build`
+     is honoured by `just build`
 
 3. **Document the round-trip.** Add a "Generated secret round-trip"
    section to `infra/README.md` showing the pattern *and* the file-routing
    decision tree.
 
 **Exit criterion:** Generating a secret from Pulumi and consuming it on a
-nix-darwin host requires only `pulumi up` followed by `darwin-rebuild
-switch` — no manual `sops edit` step in between. Same for infra-routed
+nix-darwin host requires only `pulumi up` followed by `just switch` — no
+manual `sops edit` step in between. Same for infra-routed
 secrets: a regenerated colmena `deploy_key` is usable by the next
 `colmena apply` without manual handling.
 

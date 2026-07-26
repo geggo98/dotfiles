@@ -63,7 +63,7 @@ sops-nix decrypts each declared secret to an individual **plaintext file** under
 sops.secrets.bookfusion_username = { };
 sops.secrets.bookfusion_password = { };
 ```
-After `darwin-rebuild switch`, they appear at `~/.config/sops-nix/secrets/bookfusion_username` and
+After `just switch`, they appear at `~/.config/sops-nix/secrets/bookfusion_username` and
 `…/bookfusion_password`, and the client picks them up automatically (step 4 above). Until then, use
 `BOOKFUSION_USERNAME` / `BOOKFUSION_PASSWORD` or `--username-file` / `--password-file`.
 

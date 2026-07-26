@@ -160,7 +160,7 @@
           set -euo pipefail
           if [[ ! -r "${clusterUrlFile}" ]]; then
             echo "Boundary cluster URL secret not readable at ${clusterUrlFile}" >&2
-            echo "Ensure sops-nix has decrypted boundary_cluster_url (re-run darwin-rebuild switch)." >&2
+            echo "Ensure sops-nix has decrypted boundary_cluster_url (re-run: just switch)." >&2
             exit 1
           fi
           url=$(< "${clusterUrlFile}")

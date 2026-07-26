@@ -238,4 +238,4 @@ bootstrap host:
       '.#darwinConfigurations.{{ host }}.system'
     echo
     echo "R2 delta is in the local store. Now apply it:"
-    echo "  sudo darwin-rebuild switch --flake ."
+    echo "  just switch-host {{ host }}"

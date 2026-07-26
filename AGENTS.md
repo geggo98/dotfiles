@@ -14,7 +14,7 @@ The repository follows the **Dendritic Pattern** for Nix flake structure — use
 
 ## Build, Test, and Development Commands
 
-A `justfile` provides safe, pre-approved commands that agents can run without user approval. Raw `nix` and `darwin-rebuild` commands require user approval. The **only** exceptions in the justfile are `just switch` / `just switch-host`, which apply the system config with `sudo` — these are for the user to run interactively, not agents.
+A `justfile` provides safe, pre-approved commands that agents can run without user approval. Raw `nix` and `darwin-rebuild` commands require user approval. The **only** exceptions in the justfile are `just switch` / `just switch-host`, which apply the system config with `sudo` — these are for the user to run interactively, not agents. `just switch` is also the *only* supported way to apply the config: it selects the flake attribute by hardware serial, which a bare `darwin-rebuild switch --flake .` cannot do reliably (see "Applying the configuration").
 
 ### Safe commands (via justfile, no approval needed)
 
@@ -61,11 +61,11 @@ load) — check `git status` first. Untracked files are the most common cause.
 These cannot run inside the agent sandbox or need explicit confirmation:
 
 ```bash
-# Apply configuration (requires sudo)
-sudo darwin-rebuild switch --flake .
+# Apply configuration (requires sudo) — see "Applying the configuration" below
+just switch
 
-# Dry-run switch (requires sudo)
-sudo darwin-rebuild switch --flake . --dry-run
+# Dry-run switch (extra args are forwarded to darwin-rebuild)
+just switch --dry-run
 
 # Build for a specific host directly
 nix build .#darwinConfigurations.DKL6GDJ7X1.system
@@ -78,6 +78,30 @@ nix store diff-closures /run/current-system result
 # automatically every week via modules/nix-gc.nix; this is the manual one-off.
 sudo nix-collect-garbage --delete-older-than 7d
 ```
+
+### Applying the configuration
+
+Always apply via **`just switch`**, never a bare `sudo darwin-rebuild switch
+--flake .`. A bare `--flake .` lets darwin-rebuild pick the flake attribute from
+the current hostname, and macOS transiently renames the host — it appends a `-2`
+Bonjour suffix on a name collision — at which point attribute selection breaks
+with a confusing "no such attribute" error mid-switch. `just switch` reads the
+hardware serial (`IOPlatformSerialNumber`) instead and passes `.#<serial>`
+explicitly, which is exactly how host attributes are named. Extra arguments are
+forwarded, so `just switch --dry-run` works.
+
+```bash
+just switch                       # this host, by serial (drift-safe)
+just switch --dry-run             # same, without applying
+just switch-host DKL6GDJ7X1       # a specific host, by name
+```
+
+Outside the repo directory, the fish function `+darwin-rebuild-switch`
+(`modules/shells.nix`) does the same serial lookup against
+`~/.config/nix-darwin`.
+
+Agents must not run these — they need `sudo` and are interactive. Print the
+command for the user instead.
 
 ## Architecture
 
