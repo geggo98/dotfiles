@@ -2,7 +2,7 @@
 
 # Required parameters:
 # @raycast.schemaVersion 1
-# @raycast.title Login Test
+# @raycast.title Login Staging
 # @raycast.mode compact
 
 # Optional parameters:
@@ -12,7 +12,7 @@
 # Documentation:
 # @raycast.author stefan.schwetschke
 # @raycast.authorURL https://github.com/geggo98
-# @raycast.description Login to the test Vault with Hashi Vault CLI, opens a web browser.
+# @raycast.description Login to the staging Vault with Hashi Vault CLI, opens a web browser.
 
 export PATH="/run/current-system/sw/bin:/etc/profiles/per-user/${USER}/bin:${HOME}/.nix-profile/bin:${PATH}:/opt/homebrew/bin/:/usr/local/bin:/home/linuxbrew/.linuxbrew/bin"
 exec "/etc/profiles/per-user/${USER}/bin/+vault-login-staging"
