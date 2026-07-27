@@ -212,7 +212,7 @@ pulumi-install:
 # --- Nix binary cache (Cloudflare R2) ---
 
 # Endpoint of the S3 push target (public pull URL is the custom domain).
-R2_S3_URL := "s3://nix-cache?endpoint=81e63dbf073ca45ebf67c430beac09a4.r2.cloudflarestorage.com&region=auto"
+R2_S3_URL := "s3://nix-cache?endpoint=81e63dbf073ca45ebf67c430beac09a4.r2.cloudflarestorage.com&region=auto&compression=zstd"
 
 # Seed R2 with the current system's delta (paths not already on cache.nixos.org)
 cache-seed:

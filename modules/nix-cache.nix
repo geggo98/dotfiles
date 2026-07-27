@@ -17,7 +17,11 @@
       secretsDir = "${homeDir}/.config/sops-nix/secrets";
 
       # S3 API endpoint (push target). Public pull URL is the custom domain below.
-      s3Url = "s3://nix-cache?endpoint=81e63dbf073ca45ebf67c430beac09a4.r2.cloudflarestorage.com&region=auto";
+      # compression=zstd: the default (xz) compresses large NARs so slowly that
+      # the push blows the post-build-hook timeout below (observed 27.07.2026:
+      # every path >~200 MB was silently dropped). Compression is recorded
+      # per-path in each narinfo, so zstd coexists with the existing xz content.
+      s3Url = "s3://nix-cache?endpoint=81e63dbf073ca45ebf67c430beac09a4.r2.cloudflarestorage.com&region=auto&compression=zstd";
       publicUrl = "https://nix-cache.pub.schwetschke.dev";
       publicKey = "nix-cache.pub.schwetschke.dev-1:R3UAHtpY90nzsAtEm3LDaWsEAHYQK6YG+i8mYxTgL10=";
 
@@ -27,9 +31,12 @@
 
       # post-build-hook — runs as root (nix-daemon) after every local build.
       # Best-effort: `timeout` + `|| true` means a slow/unreachable R2 never
-      # fails or hangs a build. $OUT_PATHS are freshly built (= the delta), so
-      # no cache.nixos.org filtering is needed here. PATH is set explicitly
-      # because the daemon invokes hooks with a minimal environment.
+      # fails or hangs a build. 600 s (not less): `nix copy` pushes the CLOSURE
+      # of $OUT_PATHS, and compress+upload of ~1 GB outputs (pulumi-bin,
+      # codex-vendor) must fit or they are silently lost. $OUT_PATHS are freshly
+      # built (= the delta), so no cache.nixos.org filtering is needed here.
+      # PATH is set explicitly because the daemon invokes hooks with a minimal
+      # environment.
       #
       # SECRETS AVAILABILITY: NIX_CACHE_SECRETS_DIR resolves through the user's
       # sops-nix directory, which on darwin is a symlink into a per-user temp
@@ -41,7 +48,7 @@
         export PATH="/nix/var/nix/profiles/default/bin:/run/current-system/sw/bin:/usr/bin:/bin"
         export NIX_CACHE_S3_URL='${s3Url}'
         export NIX_CACHE_SECRETS_DIR='${secretsDir}'
-        ${pkgs.coreutils}/bin/timeout 120 ${pushScript}/bin/nix-cache-push $OUT_PATHS || true
+        ${pkgs.coreutils}/bin/timeout 600 ${pushScript}/bin/nix-cache-push $OUT_PATHS || true
       '';
     in
     {
