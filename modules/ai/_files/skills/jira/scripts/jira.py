@@ -30,7 +30,7 @@ Two local SQLite stores back the extra capabilities:
                 data snapshots the prior value first, so `undo` can restore it.
 
 Credentials (env wins; else read from $SOPS_SECRETS_DIR files):
-  JIRA_URL        | jira_url            (default https://c24-kfz.atlassian.net)
+  JIRA_URL        | jira_url            (required; no built-in default)
   JIRA_USERNAME   | jira_username
   JIRA_API_TOKEN  <- ATLASSIAN_API_TOKEN | jira_api_token -> atlassian_c24_bitbucket_api_token
 Auth is HTTP Basic ("$JIRA_USERNAME:$JIRA_API_TOKEN") against the Jira site. httpx
@@ -566,14 +566,16 @@ class Ctx:
     @property
     def client(self) -> JiraClient:
         if self._client is None:
-            url = _resolve(["JIRA_URL"], ["jira_url"], "https://c24-kfz.atlassian.net")
+            url = _resolve(["JIRA_URL"], ["jira_url"])
             user = _resolve(["JIRA_USERNAME"], ["jira_username"])
             token = _resolve(
                 ["JIRA_API_TOKEN", "ATLASSIAN_API_TOKEN"],
                 ["jira_api_token", "atlassian_c24_bitbucket_api_token"],
             )
-            if not user or not token:
+            if not url or not user or not token:
                 missing = []
+                if not url:
+                    missing.append("JIRA_URL (or file jira_url)")
                 if not user:
                     missing.append("JIRA_USERNAME (or file jira_username)")
                 if not token:
@@ -587,7 +589,7 @@ class Ctx:
                     + f"\nSet them in the environment, or place sops-nix files in: {_secrets_dir()}",
                     2,
                 )
-            url = (url or "https://c24-kfz.atlassian.net").rstrip("/")
+            url = url.rstrip("/")
             if not (url.startswith("http://") or url.startswith("https://")):
                 url = "https://" + url
             self._client = JiraClient(url, user, token)
