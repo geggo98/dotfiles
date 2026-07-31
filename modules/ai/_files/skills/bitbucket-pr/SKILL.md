@@ -384,10 +384,26 @@ ${CLAUDE_SKILL_DIR}/scripts/bitbucket_jira.sh whoami
 ```
 
 `prs` JSON shape: `{ issue: {id, key}, repositories: [{name, url, slug}], pullRequests:
-[{id, status, title, source, destination, author, lastUpdate, url, repo}] }`. With a
-single linked repo, each PR's `repo` is the `<workspace>/<slug>` and `url` is rewritten
-to `https://bitbucket.org/<slug>/pull-requests/<id>`. `--format tsv` emits one PR per
-row. Output spills to a tempfile past `BB_OUTPUT_MAX_BYTES`, same as the `bb` wrappers.
+[{id, status, title, source, destination, author, lastUpdate, url, repo, reviewers}] }`.
+With a single linked repo, each PR's `repo` is the `<workspace>/<slug>`, and `url` is
+rewritten to `https://bitbucket.org/<slug>/pull-requests/<id>` whenever dev-status
+returned a UUID-shaped one. `--format tsv` emits one PR per row (columns unchanged: id,
+status, source, dest, repo, url, title — `reviewers` is JSON-only). Output spills to a
+tempfile past `BB_OUTPUT_MAX_BYTES`, same as the `bb` wrappers.
+
+**`reviewers` is the only reliable approval source.** Each entry is `{name, approved}`,
+covering both assigned reviewers and anyone who approved without being one. Prefer it
+over `bb pr get`, which returns `participants: null` and lists only *assigned* reviewers —
+a PR approved by a non-reviewer looks unapproved there. `bitbucket_pr.sh activities` adds
+timestamps when you need to know *when* an approval happened (e.g. whether it predates
+the last push).
+
+> **Slug and URL caveat.** dev-status does not reliably return human-readable repository
+> URLs: for some workspaces the path is `…/{workspace-uuid}/{repo-uuid}` and the
+> workspace component comes back empty, yielding `{}/{uuid}`. Such values are rejected,
+> and the `<workspace>/<slug>` is taken from the repository *name* instead. The raw
+> `repositories[].url` is passed through unchanged and may still be UUID-shaped — use
+> `slug`, not `url`, when feeding `--repo`.
 
 ### End-to-end: from a JIRA key to that PR's review surface
 
