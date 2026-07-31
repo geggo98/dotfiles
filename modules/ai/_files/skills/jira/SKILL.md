@@ -157,7 +157,7 @@ not journaled.
 
 Same chain as the `bitbucket-pr` skill (env wins; else `$SOPS_SECRETS_DIR` files):
 
-- `JIRA_URL` | `jira_url` (default `https://example.atlassian.net`)
+- `JIRA_URL` | `jira_url` (required — no built-in default)
 - `JIRA_USERNAME` | `jira_username`
 - `JIRA_API_TOKEN` ← `ATLASSIAN_API_TOKEN` | `jira_api_token` → `atlassian_c24_bitbucket_api_token`
 
