@@ -172,8 +172,20 @@ resolve_issue_id() {
 
 validate_format() { case "$1" in json|tsv) ;; *) log_error "Invalid --format '$1' (expected json|tsv)"; exit 1 ;; esac }
 
-# strip scheme+host from a Bitbucket repo URL → "<workspace>/<slug>"
-slug_filter='if . == null or . == "" then null else (sub("^https?://[^/]+/"; "") | sub("/$"; "")) end'
+# strip scheme+host from a Bitbucket repo URL → "<workspace>/<slug>", or null.
+# dev-status does not always return a human-readable URL: for some workspaces it yields
+# UUID-shaped paths whose workspace component is empty, e.g. .../%7B%7D/%7B<uuid>%7D →
+# "{}/{<uuid>}". That is not a usable slug, and callers used to paste it straight into
+# repo fields and pull-request URLs. Anything that is not a plain two-segment slug is
+# rejected here, so callers can fall back to the repository name instead.
+slug_filter='if . == null or . == "" then null
+             else (sub("^https?://[^/]+/"; "") | sub("/$"; "")
+                   | if test("^[^/{}%]+/[^/{}%]+$") then . else null end)
+             end'
+
+# a repository name is already "<workspace>/<slug>" in dev-status responses — accept it
+# only if it really has that shape, so it is a safe fallback for slug_filter.
+name_slug_filter='if . != null and (. | test("^[^/{}%]+/[^/{}%]+$")) then . else null end'
 
 # --- commands -------------------------------------------------------------
 
@@ -228,7 +240,8 @@ cmd_prs() {
         author: (.author.name // .author.displayName // null),
         lastUpdate: .lastUpdate,
         url: .url,
-        repo: (.repositoryName // null)
+        repo: (.repositoryName // null),
+        reviewers: [ .reviewers[]? | { name: .name, approved: .approved } ]
       } ]' <<< "$JIRA_BODY")"
 
   if [[ -n "$state" ]]; then
@@ -242,15 +255,22 @@ cmd_prs() {
       [ .detail[]?.repositories[]? | {
           name: .name,
           url: .url,
-          slug: (.url | ${slug_filter})
+          slug: ((.url | ${slug_filter}) // (.name | ${name_slug_filter}))
         } ]" <<< "$JIRA_BODY")"
     if [[ "$("$JQ_PATH" 'length' <<< "$repos_json")" == "1" ]]; then
       single_slug="$("$JQ_PATH" -r '.[0].slug // empty' <<< "$repos_json")"
     fi
     if [[ -n "$single_slug" ]]; then
+      # .repositoryName is authoritative when present, so the repo-level slug only fills
+      # gaps. The per-PR .url, on the other hand, is frequently UUID-shaped
+      # (…/{workspace-uuid}/{repo-uuid}/pull-requests/N) and unusable in a browser — it
+      # gets rebuilt from the slug, but only when it is not already a clean URL.
       prs_json="$("$JQ_PATH" --arg slug "$single_slug" '
-        map(.repo = $slug
-            | .url = "https://bitbucket.org/" + $slug + "/pull-requests/" + (.id | tostring))' <<< "$prs_json")"
+        map(.repo //= $slug
+            | .url = (if ((.url // "") | test("^https?://[^/]+/[^/{}%]+/[^/{}%]+/"))
+                      then .url
+                      else "https://bitbucket.org/" + $slug + "/pull-requests/" + (.id | tostring)
+                      end))' <<< "$prs_json")"
     fi
   fi
 
@@ -290,7 +310,7 @@ cmd_branches() {
     [ .detail[]?.branches[]? | {
         name: .name,
         repository: (.repository.name // null),
-        slug: (.repository.url | ${slug_filter}),
+        slug: ((.repository.url | ${slug_filter}) // (.repository.name | ${name_slug_filter})),
         url: .url,
         lastCommit: (.lastCommit.displayId // .lastCommit.id // null),
         lastCommitDate: (.lastCommit.authorTimestamp // null)
@@ -323,7 +343,7 @@ cmd_repos() {
   out="$("$JQ_PATH" "
     [ .detail[]?.repositories[]? | {
         name: .name,
-        slug: (.url | ${slug_filter}),
+        slug: ((.url | ${slug_filter}) // (.name | ${name_slug_filter})),
         url: .url,
         commitCount: ((.commits // []) | length),
         lastCommit: (.commits[0].displayId // .commits[0].id // null),
