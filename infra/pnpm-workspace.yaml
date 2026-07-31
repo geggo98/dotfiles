@@ -5,9 +5,31 @@ allowBuilds:
   '@pulumi/command': true
   protobufjs: true
 
-# Supply-chain hardening: a newly published version must be >= 24h (1440 min)
-# old before pnpm will resolve it, blunting a same-day malicious-publish window
-# on lockfile refreshes (pnpm update / re-resolve). The committed, integrity-
-# pinned pnpm-lock.yaml stays authoritative; this only gates which NEW versions
-# are eligible. pnpm 11 reads this from pnpm-workspace.yaml (NOT .npmrc).
-minimumReleaseAge: 1440
+# Supply-chain hardening: a newly published version must be >= 3 days (4320 min)
+# old before pnpm will resolve it, keeping lockfile refreshes (pnpm update /
+# re-resolve) outside the window in which a compromised release is typically
+# still live. The committed, integrity-pinned pnpm-lock.yaml stays
+# authoritative; this only gates which NEW versions are eligible. pnpm 11 reads
+# this from pnpm-workspace.yaml (NOT .npmrc).
+#
+# Why 3 days and not 24h (= pnpm 11's own default) or 14 days (the global floor
+# in modules/supply-chain-hardening.nix):
+#   * Observed exposure windows of real npm/PyPI compromises cluster far below
+#     24h (axios ~2h, Nx 4-5h, LiteLLM ~3h, durabletask 35min) -- but 8 of 10
+#     analysed incidents ran under a week, so the tail extends past one day.
+#     3 days is the industry consensus default (Renovate config:best-practices,
+#     cooldowns.dev) and cuts exposure by ~80-90%.
+#   * Measured 31.07.2026: at 1440 pnpm resolved brace-expansion 5.0.9, then
+#     33h old; at 4320 it picks 5.0.8, which closes the same advisory
+#     (GHSA-mh99-v99m-4gvg) with 8.3 days of soak. Same fix, 6x the age.
+#   * 14 days would be counterproductive here: every patched version of that
+#     CVE pair (tar 7.5.21/7.5.22, brace-expansion 5.0.8/5.0.9) was younger
+#     than 14 days, so a 14-day floor would have pinned us to the vulnerable
+#     releases.
+#
+# To undercut this for a genuine emergency, exempt the single package/version
+# rather than lowering the floor (same pattern as the uv overrides in
+# modules/ai/_files/skills/browser-use/scripts/browser-use.py):
+#   minimumReleaseAgeExclude:
+#     - 'tar@7.5.21'
+minimumReleaseAge: 4320
