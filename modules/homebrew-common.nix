@@ -66,6 +66,7 @@
           "font-maple-mono-nf" # OSS Operator Mono alternative — cursive italic + ligatures + NF
           "google-chrome"
           "gpg-suite-no-mail"
+          "gram" # Zed fork without AI/telemetry; theme in modules/gram.nix
           "hammerspoon"
           "homerow"
           "http-toolkit"
@@ -109,7 +110,9 @@
           "visual-studio-code"
           "wireshark-app"
           "yubico-yubikey-manager"
-          "zed"
+          # "zed" # replaced by the `gram` cask above (Zed fork, no AI/telemetry).
+          #       # nixpkgs also ships `gram`, but its darwin build pulls a
+          #       # 1.8 GiB closure — rationale in modules/gram.nix
           "betterdisplay"
           "tabtab"
           { name = "typewhisper/tap/typewhisper"; }
