@@ -9,8 +9,8 @@
       "style": {
         "background": "#012341ff",
         "background.appearance": "opaque",
-        "surface.background": "#011e33ff",
-        "elevated_surface.background": "#011e33ff",
+        "surface.background": "#012341ff",
+        "elevated_surface.background": "#012341ff",
 
         "border": "#30404fff",
         "border.variant": "#30404fff",
@@ -64,7 +64,7 @@
         "tab.inactive_background": "#011e33ff",
         "tab_bar.background": "#011e33ff",
         "title_bar.background": "#01192bff",
-        "title_bar.inactive_background": "#011429ff",
+        "title_bar.inactive_background": "#01192bff",
         "status_bar.background": "#01192bff",
         "toolbar.background": "#012341ff",
         "panel.background": "#011e33ff",
