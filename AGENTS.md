@@ -239,6 +239,19 @@ Use the `/nix-dendritic-pattern` skill for guidance. In short:
   `AGENT_BROWSER_SKILLS_DIR` at `$out/skill-data` copied from the same tag — keep those
   two in sync or `agent-browser skills get` breaks.
 
+- **Gram editor — cask, deliberately not nixpkgs.** Gram (Zed fork, replaced the `zed`
+  cask) comes from the `gram` homebrew cask. nixpkgs *does* ship a working
+  aarch64-darwin `gram`, and it is cached — but its darwin build symlinks a full `git`
+  into the app bundle, which drags `python3 → clang → llvm → apple-sdk` and yields a
+  **1.8 GiB closure** for a ~130 MiB app. `gram.override { git = gitMinimal; }` would
+  cut ~1.3 GiB of that, but changes the store path and so forces a source build of a
+  Zed-sized Rust tree (hours). Re-check this trade-off before moving Gram to nixpkgs.
+  The theme in `modules/_files/gram/turbo-vision.json` *is* Nix-managed
+  (`modules/gram.nix`) — a port of the VS Code theme
+  (`modules/_files/vscode/turbo-vision-color-theme.json`); Gram consumes Zed's
+  `zed.dev/schema/themes/v0.2.0.json` format verbatim. Gram's `settings.jsonc` is
+  intentionally left unmanaged — Gram writes UI settings back to it.
+
 ### uv-based skill scripts (lockfiles + the read-only Nix store)
 
 Some skill helpers under `modules/ai/_files/skills/*/scripts/` are self-contained
