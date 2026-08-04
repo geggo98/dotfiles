@@ -227,6 +227,13 @@ Then re-run `bun add -D playwright-chromium`. A local `bunfig.toml` with
 neither does `bun install --trust`. Keep the opt-out project-local; do not lift it
 globally.
 
+A deck that gets its browsers from Nix needs **no** opt-out: with
+`PLAYWRIGHT_BROWSERS_PATH` set (and `PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1`), the install
+script has nothing left to do — see
+[Nix-pinned browsers](references/testing-playwright.md#nix-pinned-browsers-optional-reproducible).
+There the version coupling is what breaks exports instead: the npm `playwright*`
+packages must be pinned to the exact version `playwright-driver` ships.
+
 ### Editor & Tools
 
 | Feature | Usage | Reference |
