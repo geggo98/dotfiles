@@ -19,13 +19,19 @@ allowBuilds:
 #     analysed incidents ran under a week, so the tail extends past one day.
 #     3 days is the industry consensus default (Renovate config:best-practices,
 #     cooldowns.dev) and cuts exposure by ~80-90%.
-#   * Measured 31.07.2026: at 1440 pnpm resolved brace-expansion 5.0.9, then
-#     33h old; at 4320 it picks 5.0.8, which closes the same advisory
-#     (GHSA-mh99-v99m-4gvg) with 8.3 days of soak. Same fix, 6x the age.
-#   * 14 days would be counterproductive here: every patched version of that
-#     CVE pair (tar 7.5.21/7.5.22, brace-expansion 5.0.8/5.0.9) was younger
-#     than 14 days, so a 14-day floor would have pinned us to the vulnerable
-#     releases.
+#   * The cooldown does cost the occasional patch level, and on 31.07.2026 it
+#     did: at 1440 pnpm resolved brace-expansion 5.0.9, then 33h old; at 4320
+#     it picked 5.0.8. Both closed GHSA-mh99-v99m-4gvg, so 5.0.8 looked like
+#     the same fix with 6x the soak -- but on 03.08.2026 GHSA-rgw5-rvv9-x895
+#     showed 5.0.8's mitigation is bypassable and 5.0.9 is the real fix. Read
+#     this as the honest price of the cooldown, not as a reason to drop it:
+#     the exposure was a known-DoS transitive dep for three days, against a
+#     window in which an unvetted release can run arbitrary code.
+#   * 14 days would be worse, and the same incident proves it: every version
+#     that closes the current advisory set (ip-address 10.3.1/10.4.0,
+#     brace-expansion 5.0.9, undici 6.28.0) was younger than 14 days when
+#     needed, so a 14-day floor would have pinned us to the vulnerable
+#     releases outright -- the earlier tar 7.5.21/7.5.22 pair likewise.
 #
 # To undercut this for a genuine emergency, exempt the single package/version
 # rather than lowering the floor (same pattern as the uv overrides in

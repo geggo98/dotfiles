@@ -209,6 +209,10 @@ pulumi-stack: (pulumi "stack")
 pulumi-install:
     cd infra && time pnpm install | ts
 
+# Audit infra/pnpm-lock.yaml against OSV + npm publish dates (exits 1 on findings)
+pulumi-audit *args:
+    python3 infra/scripts/osv-audit.py "$@"
+
 # --- Nix binary cache (Cloudflare R2) ---
 
 # Endpoint of the S3 push target (public pull URL is the custom domain).
