@@ -34,7 +34,20 @@ STATE = {
             "description": "ORIG DESC",
             "attachment": [],
             "issuelinks": [],
-        }
+        },
+        # ~60 KB description: proves `get --format json` stays parseable (it must not be
+        # routed through the spill guard) and that `description` does spill.
+        "VUKFZIF-99": {
+            "summary": "Huge description",
+            "status": "To Do",
+            "issuetype": "Task",
+            "assignee": None,
+            "labels": [],
+            "updated": "2026-07-20T10:00:00.000+0000",
+            "description": "BIG " * 15000,
+            "attachment": [],
+            "issuelinks": [],
+        },
     },
     "comments": {
         "VUKFZIF-1": [
@@ -48,6 +61,7 @@ STATE = {
         ]
     },
     "next_comment_id": 2000,
+    "next_issue_id": 500,
     "user_429_served": False,
 }
 
@@ -70,9 +84,14 @@ USERS = [
 ]
 
 
-def _issue_fields(key):
+def _issue_fields(key, fields=None):
+    """Honour the `fields=` query param like real Jira does.
+
+    Returning everything unconditionally would make any "is field X requested?" test pass
+    for the wrong reason — which is exactly the blind spot that let `get` ship without
+    ever asking for `description`."""
     it = STATE["issue"][key]
-    return {
+    all_fields = {
         "summary": it["summary"],
         "status": {"name": it["status"]},
         "issuetype": {"name": it["issuetype"]},
@@ -83,6 +102,10 @@ def _issue_fields(key):
         "attachment": it["attachment"],
         "issuelinks": it["issuelinks"],
     }
+    if not fields:
+        return all_fields
+    wanted = [f for part in fields for f in part.split(",") if f]
+    return {k: v for k, v in all_fields.items() if k in wanted}
 
 
 class Handler(BaseHTTPRequestHandler):
@@ -171,24 +194,44 @@ class Handler(BaseHTTPRequestHandler):
 
         if path == "/rest/api/2/search/jql":
             issues = [
-                {"key": k, "fields": _issue_fields(k)} for k in STATE["issue"]
+                {"key": k, "fields": _issue_fields(k, q.get("fields"))} for k in STATE["issue"]
             ]
             return self._send(200, {"issues": issues, "isLast": True, "nextPageToken": None})
+
+        # Bare POST /issue — create. Must come before the /issue/<KEY> regex below, which
+        # does not match this path (which is why `create` was untestable until now).
+        if path == "/rest/api/2/issue" and method == "POST":
+            fields = (body or {}).get("fields") or {}
+            with LOCK:
+                STATE["next_issue_id"] += 1
+                key = f"VUKFZIF-{STATE['next_issue_id']}"
+            STATE["issue"][key] = {
+                "summary": fields.get("summary", ""),
+                "status": "To Do",
+                "issuetype": (fields.get("issuetype") or {}).get("name", "Task"),
+                "assignee": None,
+                "labels": fields.get("labels") or [],
+                "updated": "2026-07-20T12:00:00.000+0000",
+                "description": fields.get("description"),
+                "attachment": [],
+                "issuelinks": [],
+            }
+            return self._send(201, {"id": str(STATE["next_issue_id"]), "key": key})
 
         m = re.match(r"^/rest/api/2/issue/([A-Z]+-[0-9]+)(/.*)?$", path)
         if m:
             key, sub = m.group(1), (m.group(2) or "")
             if key not in STATE["issue"]:
                 return self._send(404, {"errorMessages": ["issue not found"]})
-            return self._issue(method, key, sub, body)
+            return self._issue(method, key, sub, body, q)
 
         return self._send(404, {"errorMessages": [f"unmapped {method} {path}"]})
 
-    def _issue(self, method, key, sub, body):
+    def _issue(self, method, key, sub, body, q):
         # /issue/<KEY>
         if sub == "":
             if method == "GET":
-                return self._send(200, {"key": key, "fields": _issue_fields(key)})
+                return self._send(200, {"key": key, "fields": _issue_fields(key, q.get("fields"))})
             if method == "PUT":
                 fields = (body or {}).get("fields") or {}
                 if "description" in fields:

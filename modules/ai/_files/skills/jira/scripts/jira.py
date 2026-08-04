@@ -116,6 +116,30 @@ def validate_format(fmt: str, *allowed: str) -> None:
         raise SkillError(f"Invalid --format '{fmt}' (expected: {', '.join(allowed)})", 1)
 
 
+def _flag_value(args: list[str], i: int, flag: str, known: set[str]) -> str:
+    """The value of `--flag VALUE` at args[i] == flag.
+
+    A missing value, or one that is itself a flag of this command, is an error: otherwise
+    the flag silently eats the next token and the mistake only ever surfaces as wrong
+    ticket data. Only *exact* flag names are rejected, so a value that merely starts with
+    a dash (`--summary '--frozen fails on uv 0.9'`) still goes through."""
+    if i + 1 >= len(args):
+        raise SkillError(f"{flag} requires a value", 1)
+    v = args[i + 1]
+    if v in known:
+        raise SkillError(f"{flag} requires a value, but got the flag '{v}'", 1)
+    if v.startswith("--"):
+        log_info(f"{flag}: treating '{v}' as a literal value, not a flag.")
+    return v
+
+
+def _set_once(current: str | None, value: str, flag: str) -> str:
+    """Reject a repeated single-valued flag instead of silently keeping the last one."""
+    if current is not None:
+        raise SkillError(f"{flag} given more than once ('{current}', then '{value}')", 1)
+    return value
+
+
 def _read_stdin() -> str:
     if sys.stdin.isatty():
         raise SkillError(
@@ -159,6 +183,40 @@ def buffer_output(text: str, label: str, ext: str) -> None:
     print(f"preview (first {preview} lines):")
     sys.stdout.write("\n".join(data.split("\n")[:preview]) + "\n")
     print("--- end preview ---")
+
+
+def emit(text: str, *, out: str | None, label: str, ext: str, spill: bool = True) -> None:
+    """The single exit path for a command's payload.
+
+      out is None  stdout; spill-guarded when `spill` (keeps big results out of context)
+      out == "-"   stdout, verbatim and unguarded — the pipe idiom
+      out == PATH  PATH gets the payload verbatim; stdout gets only "PATH<TAB><bytes>"
+
+    Both --output forms are byte-exact (no trailing newline is added), so a payload can be
+    written out, edited with sed/perl, and fed back in unchanged. Note that a plain pipe
+    without --output still goes through the spill guard, whose truncation header would
+    corrupt the stream — that is why '-' has to be spelled out."""
+    if out is not None:
+        raw = text.encode()
+        if out == "-":
+            sys.stdout.buffer.write(raw)
+            sys.stdout.buffer.flush()
+            return
+        p = Path(out)
+        if p.is_dir():
+            raise SkillError(f"--output is a directory: {out}", 1)
+        try:
+            p.write_bytes(raw)
+        except OSError as e:
+            raise SkillError(f"--output not writable: {out} ({e})", 1) from e
+        print(f"{p}\t{len(raw)}")
+        log_success(f"wrote {label} → {p} ({human_bytes(len(raw))}).")
+        return
+    data = text if (not text or text.endswith("\n")) else text + "\n"
+    if spill:
+        buffer_output(data, label, ext)
+    else:
+        sys.stdout.write(data)
 
 
 def wiki_ref_for(path: str) -> str:
@@ -601,17 +659,44 @@ class Ctx:
 # --------------------------------------------------------------------------
 
 
+def _second_text_error(cmd: str, extra: str) -> str:
+    """A second inline body used to replace the first one silently — for `describe` that
+    quietly overwrote the whole description with a fragment."""
+    return (
+        f"{cmd} takes at most one inline text argument (got a second: '{extra}'). "
+        f"Quote the whole body, or use --file PATH, --file - or a bare '-' for multi-line text."
+    )
+
+
 def _resolve_body(
-    file: str | None, text: str | None, have_text: bool, use_stdin: bool, implicit_pipe: bool, what: str
+    file: str | None,
+    *,
+    text: str | None,
+    have_text: bool,
+    use_stdin: bool,
+    implicit_pipe: bool,
+    what: str,
+    file_flag: str = "--file",
+    text_flag: str = "inline text",
 ) -> str:
-    if use_stdin and (have_text or file):
-        raise SkillError("'-' (stdin) cannot be combined with inline text or --file.", 1)
-    if have_text and file:
-        raise SkillError("Provide either inline text or --file, not both.", 1)
-    if file:
+    """Turn (file | inline text | stdin) into one body, or fail loudly.
+
+    Everything after `file` is keyword-only: four adjacent strings and booleans are far
+    too easy to transpose positionally. `file_flag`/`text_flag` only shape the messages,
+    so `create` can name --description-file / --description instead of --file."""
+    # '-' is the usual stdin filename, so accept it wherever a path is taken: --file - and
+    # --description-file - then mean exactly what a bare '-' means.
+    if file == "-":
+        file, use_stdin = None, True
+    if use_stdin and (have_text or file is not None):
+        raise SkillError(f"'-' (stdin) cannot be combined with {text_flag} or {file_flag}.", 1)
+    if have_text and file is not None:
+        raise SkillError(f"Provide either {text_flag} or {file_flag}, not both.", 1)
+    # `is not None`, not truthiness: an empty path is a mistake, not "no file given".
+    if file is not None:
         p = Path(file)
         if not p.is_file() or not os.access(p, os.R_OK):
-            raise SkillError(f"{what} --file not readable: {file}", 1)
+            raise SkillError(f"{what} {file_flag} not readable: {file}", 1)
         return p.read_text()
     if have_text:
         return text or ""
@@ -666,29 +751,27 @@ def _current_status(client: JiraClient, key: str) -> str:
     return client.get(f"/issue/{key}?fields=status")["fields"]["status"]["name"]
 
 
-def _print_users(users: list[dict], fmt: str) -> None:
+def _print_users(users: list[dict], fmt: str, out: str | None = None) -> None:
     if fmt == "tsv":
-        out = "\n".join(
+        text = "\n".join(
             f"{u.get('accountId')}\t{u.get('emailAddress') or '-'}\t{u.get('displayName')}\t{str(bool(u.get('active'))).lower()}"
             for u in users
         )
-        print(out)
     else:
-        print(
-            json.dumps(
-                [
-                    {
-                        "accountId": u.get("accountId"),
-                        "emailAddress": u.get("emailAddress"),
-                        "displayName": u.get("displayName"),
-                        "active": bool(u.get("active")),
-                    }
-                    for u in users
-                ],
-                indent=2,
-                ensure_ascii=False,
-            )
+        text = json.dumps(
+            [
+                {
+                    "accountId": u.get("accountId"),
+                    "emailAddress": u.get("emailAddress"),
+                    "displayName": u.get("displayName"),
+                    "active": bool(u.get("active")),
+                }
+                for u in users
+            ],
+            indent=2,
+            ensure_ascii=False,
         )
+    emit(text, out=out, label="users", ext=("json" if fmt == "json" else "txt"))
 
 
 # --------------------------------------------------------------------------
@@ -696,9 +779,10 @@ def _print_users(users: list[dict], fmt: str) -> None:
 # --------------------------------------------------------------------------
 
 
-def _parse_format_key(args: list[str], cmd: str, *allowed: str) -> tuple[str, str | None]:
+def _parse_format_key(args: list[str], cmd: str, *allowed: str) -> tuple[str, str | None, str | None]:
     fmt = allowed[0]
     key = None
+    out = None
     i = 0
     while i < len(args):
         a = args[i]
@@ -707,39 +791,77 @@ def _parse_format_key(args: list[str], cmd: str, *allowed: str) -> tuple[str, st
                 raise SkillError(f"--format requires {'|'.join(allowed)}", 1)
             fmt = args[i + 1]
             i += 2
+        elif a == "--output":
+            out = _set_once(out, _flag_value(args, i, a, {"--format", "--output"}), a)
+            i += 2
         elif a.startswith("--"):
             raise SkillError(f"Unknown {cmd} flag: '{a}'", 1)
         else:
+            # A second key used to replace the first silently, so `get A B` reported on B
+            # while looking like it answered for A — the worst possible failure in the
+            # command you reach for to verify something.
+            if key is not None:
+                raise SkillError(f"{cmd} takes one issue key (got a second: '{a}')", 1)
             key = a
             i += 1
-    return fmt, key
+    return fmt, key, out
+
+
+def _parse_positional_output(args: list[str], cmd: str, *names: str) -> tuple:
+    """Parse `<name>... [--output PATH|-]` for the read commands that take no --format."""
+    out = None
+    pos: list[str | None] = []
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a == "--output":
+            out = _set_once(out, _flag_value(args, i, a, {"--output"}), a)
+            i += 2
+        elif a.startswith("--"):
+            raise SkillError(f"Unknown {cmd} flag: '{a}'", 1)
+        else:
+            if len(pos) >= len(names):
+                raise SkillError(
+                    f"{cmd} takes {len(names)} positional argument(s) "
+                    f"({', '.join(names)}); unexpected: '{a}'",
+                    1,
+                )
+            pos.append(a)
+            i += 1
+    pos += [None] * (len(names) - len(pos))
+    return (*pos, out)
 
 
 def cmd_whoami(ctx: Ctx, args: list[str]) -> None:
-    fmt, extra = _parse_format_key(args, "whoami", "json", "tsv")
+    fmt, extra, out = _parse_format_key(args, "whoami", "json", "tsv")
     if extra:
         raise SkillError(f"whoami takes no positional arguments (got '{extra}')", 1)
     validate_format(fmt, "json", "tsv")
     me = ctx.client.get("/myself")
     if fmt == "tsv":
-        print(f"{me.get('accountId')}\t{me.get('emailAddress')}\t{me.get('displayName')}")
+        text = f"{me.get('accountId')}\t{me.get('emailAddress')}\t{me.get('displayName')}"
     else:
-        print(
-            json.dumps(
-                {k: me.get(k) for k in ("accountId", "emailAddress", "displayName", "active")},
-                indent=2,
-                ensure_ascii=False,
-            )
+        text = json.dumps(
+            {k: me.get(k) for k in ("accountId", "emailAddress", "displayName", "active")},
+            indent=2,
+            ensure_ascii=False,
         )
+    emit(text, out=out, label="whoami", ext=fmt, spill=False)
 
 
 def cmd_get(ctx: Ctx, args: list[str]) -> None:
-    fmt, key = _parse_format_key(args, "get", "json", "tsv")
+    fmt, key, out = _parse_format_key(args, "get", "json", "tsv")
     key = require_key(key, "get")
     validate_format(fmt, "json", "tsv")
-    d = ctx.client.get(f"/issue/{key}?fields=summary,status,assignee,issuetype,labels,updated")
+    d = ctx.client.get(
+        f"/issue/{key}?fields=summary,status,assignee,issuetype,labels,updated,description"
+    )
     f = d["fields"]
-    out = {
+    # The description text itself stays out of `get`: it is unbounded, it would have to be
+    # dropped from tsv anyway, and inlining it would cost context on every single call.
+    # The length is what makes a lost or bogus body visible — `1` reads very differently
+    # from `1183`, while a missing field is indistinguishable from an empty one.
+    rec = {
         "key": d.get("key"),
         "summary": f.get("summary"),
         "status": (f.get("status") or {}).get("name"),
@@ -747,35 +869,62 @@ def cmd_get(ctx: Ctx, args: list[str]) -> None:
         "assignee": (f.get("assignee") or {}).get("displayName"),
         "labels": f.get("labels") or [],
         "updated": f.get("updated"),
+        "description_chars": len(f.get("description") or ""),
     }
     if fmt == "tsv":
-        print(f"{out['key']}\t{out['status']}\t{out['type']}\t{out['assignee'] or '-'}\t{out['summary']}")
+        text = f"{rec['key']}\t{rec['status']}\t{rec['type']}\t{rec['assignee'] or '-'}\t{rec['summary']}"
     else:
-        print(json.dumps(out, indent=2, ensure_ascii=False))
+        text = json.dumps(rec, indent=2, ensure_ascii=False)
+    # spill=False: this record is bounded, and buffer_output's truncation header would
+    # turn `get --format json` into something jq cannot parse.
+    emit(text, out=out, label=f"get-{key}", ext=fmt, spill=False)
+
+
+def cmd_description(ctx: Ctx, args: list[str]) -> None:
+    """Read side of `describe`: the raw wiki body, ready to pipe through sed/perl."""
+    key, out = _parse_positional_output(args, "description", "KEY")
+    key = require_key(key, "description")
+    body = ctx.client.get(f"/issue/{key}?fields=description")["fields"].get("description")
+    if body is None:
+        log_info(f"{key}: (no description)")
+        body = ""
+    emit(body, out=out, label=f"description-{key}", ext="txt")
+
+
+def cmd_comment_get(ctx: Ctx, args: list[str]) -> None:
+    """Read side of `comment-edit`: one comment's raw body, unescaped."""
+    key, cid, out = _parse_positional_output(args, "comment-get", "KEY", "COMMENT-ID")
+    key = require_key(key, "comment-get")
+    if not cid or not cid.isdigit():
+        raise SkillError("comment-get requires a numeric comment id", 1)
+    body = ctx.client.get(f"/issue/{key}/comment/{cid}").get("body") or ""
+    emit(body, out=out, label=f"comment-{key}-{cid}", ext="txt")
 
 
 def cmd_status(ctx: Ctx, args: list[str]) -> None:
-    key = args[0] if args else None
+    key, out = _parse_positional_output(args, "status", "KEY")
     key = require_key(key, "status")
-    print(_current_status(ctx.client, key))
+    emit(_current_status(ctx.client, key), out=out, label=f"status-{key}", ext="txt", spill=False)
 
 
 def cmd_transitions(ctx: Ctx, args: list[str]) -> None:
-    fmt, key = _parse_format_key(args, "transitions", "json", "tsv")
+    fmt, key, out = _parse_format_key(args, "transitions", "json", "tsv")
     key = require_key(key, "transitions")
     validate_format(fmt, "json", "tsv")
     tb = ctx.client.get(f"/issue/{key}/transitions")
     rows = [{"id": t["id"], "name": t["name"], "to": t["to"]["name"], "toId": t["to"]["id"]} for t in tb.get("transitions", [])]
     if fmt == "tsv":
-        print("\n".join(f"{r['id']}\t{r['to']}\t{r['name']}" for r in rows))
+        text = "\n".join(f"{r['id']}\t{r['to']}\t{r['name']}" for r in rows)
     else:
-        print(json.dumps(rows, indent=2, ensure_ascii=False))
+        text = json.dumps(rows, indent=2, ensure_ascii=False)
+    emit(text, out=out, label=f"transitions-{key}", ext=fmt, spill=False)
 
 
 def cmd_comments(ctx: Ctx, args: list[str]) -> None:
     fmt = "text"
     maxr = 50
     key = None
+    out = None
     i = 0
     while i < len(args):
         a = args[i]
@@ -785,9 +934,14 @@ def cmd_comments(ctx: Ctx, args: list[str]) -> None:
         elif a == "--max":
             maxr = int(args[i + 1])
             i += 2
+        elif a == "--output":
+            out = _set_once(out, _flag_value(args, i, a, {"--format", "--max", "--output"}), a)
+            i += 2
         elif a.startswith("--"):
             raise SkillError(f"Unknown comments flag: '{a}'", 1)
         else:
+            if key is not None:
+                raise SkillError(f"comments takes one issue key (got a second: '{a}')", 1)
             key = a
             i += 1
     key = require_key(key, "comments")
@@ -795,7 +949,7 @@ def cmd_comments(ctx: Ctx, args: list[str]) -> None:
     data = ctx.client.get(f"/issue/{key}/comment", params={"orderBy": "-created", "maxResults": maxr})
     comments = data.get("comments", [])
     if fmt == "json":
-        out = json.dumps(
+        text = json.dumps(
             [
                 {
                     "id": c.get("id"),
@@ -809,13 +963,12 @@ def cmd_comments(ctx: Ctx, args: list[str]) -> None:
             indent=2,
             ensure_ascii=False,
         )
-        buffer_output(out + "\n", f"comments-{key}", "json")
     else:
-        parts = [
+        text = "\n".join(
             f"── comment {c.get('id')} — {(c.get('author') or {}).get('displayName')} @ {c.get('created')} ──\n{c.get('body')}\n"
             for c in comments
-        ]
-        buffer_output(("\n".join(parts) + "\n") if parts else "", f"comments-{key}", "txt")
+        )
+    emit(text, out=out, label=f"comments-{key}", ext=("json" if fmt == "json" else "txt"))
     total = data.get("total", len(comments))
     if isinstance(total, int) and total > len(comments):
         log_info(
@@ -828,6 +981,7 @@ def cmd_user(ctx: Ctx, args: list[str]) -> None:
     fmt = "json"
     refresh = False
     query = None
+    out = None
     i = 0
     while i < len(args):
         a = args[i]
@@ -837,6 +991,9 @@ def cmd_user(ctx: Ctx, args: list[str]) -> None:
         elif a == "--refresh":
             refresh = True
             i += 1
+        elif a == "--output":
+            out = _set_once(out, _flag_value(args, i, a, {"--format", "--output"}), a)
+            i += 2
         elif a.startswith("--"):
             raise SkillError(f"Unknown user flag: '{a}'", 1)
         else:
@@ -845,7 +1002,7 @@ def cmd_user(ctx: Ctx, args: list[str]) -> None:
     if not query:
         raise SkillError("user requires a search query (email / name)", 1)
     validate_format(fmt, "json", "tsv")
-    _print_users(UserDirectory(ctx.client).search(query, refresh=refresh), fmt)
+    _print_users(UserDirectory(ctx.client).search(query, refresh=refresh), fmt, out)
 
 
 def cmd_users(ctx: Ctx, args: list[str]) -> None:
@@ -854,6 +1011,7 @@ def cmd_users(ctx: Ctx, args: list[str]) -> None:
     project = None
     issue = None
     query = ""
+    out = None
     i = 0
     while i < len(args):
         a = args[i]
@@ -869,6 +1027,9 @@ def cmd_users(ctx: Ctx, args: list[str]) -> None:
         elif a == "--issue":
             issue = args[i + 1]
             i += 2
+        elif a == "--output":
+            out = _set_once(out, _flag_value(args, i, a, {"--format", "--project", "--issue", "--output"}), a)
+            i += 2
         elif a.startswith("--"):
             raise SkillError(f"Unknown users flag: '{a}'", 1)
         else:
@@ -880,6 +1041,7 @@ def cmd_users(ctx: Ctx, args: list[str]) -> None:
     _print_users(
         UserDirectory(ctx.client).search_assignable(query, project=project, issue=issue, refresh=refresh),
         fmt,
+        out,
     )
 
 
@@ -887,6 +1049,7 @@ def cmd_search(ctx: Ctx, args: list[str]) -> None:
     fmt = "tsv"
     maxr = 50
     jql_parts = []
+    out = None
     i = 0
     while i < len(args):
         a = args[i]
@@ -895,6 +1058,9 @@ def cmd_search(ctx: Ctx, args: list[str]) -> None:
             i += 2
         elif a == "--max":
             maxr = int(args[i + 1])
+            i += 2
+        elif a == "--output":
+            out = _set_once(out, _flag_value(args, i, a, {"--format", "--max", "--output"}), a)
             i += 2
         elif a.startswith("--"):
             raise SkillError(f"Unknown search flag: '{a}'", 1)
@@ -925,7 +1091,7 @@ def cmd_search(ctx: Ctx, args: list[str]) -> None:
             break
     issues = issues[:maxr]
     if fmt == "json":
-        out = json.dumps(
+        text = json.dumps(
             [
                 {
                     "key": it.get("key"),
@@ -939,17 +1105,16 @@ def cmd_search(ctx: Ctx, args: list[str]) -> None:
             indent=2,
             ensure_ascii=False,
         )
-        buffer_output(out + "\n", "search", "json")
     else:
-        lines = [
+        text = "\n".join(
             f"{it.get('key')}\t{(it['fields'].get('status') or {}).get('name')}\t{(it['fields'].get('assignee') or {}).get('displayName') or '-'}\t{it['fields'].get('summary')}"
             for it in issues
-        ]
-        buffer_output(("\n".join(lines) + "\n") if lines else "", "search", "txt")
+        )
+    emit(text, out=out, label="search", ext=("json" if fmt == "json" else "txt"))
 
 
 def cmd_links(ctx: Ctx, args: list[str]) -> None:
-    fmt, key = _parse_format_key(args, "links", "tsv", "json")
+    fmt, key, out = _parse_format_key(args, "links", "tsv", "json")
     key = require_key(key, "links")
     validate_format(fmt, "tsv", "json")
     data = ctx.client.get(f"/issue/{key}?fields=issuelinks")
@@ -970,18 +1135,21 @@ def cmd_links(ctx: Ctx, args: list[str]) -> None:
             }
         )
     if fmt == "json":
-        buffer_output(json.dumps(rows, indent=2, ensure_ascii=False) + "\n", f"links-{key}", "json")
+        text = json.dumps(rows, indent=2, ensure_ascii=False)
     else:
-        lines = [f"{r['relation']}\t{r['key']}\t{r['status'] or '-'}\t{r['summary'] or ''}" for r in rows]
-        buffer_output(("\n".join(lines) + "\n") if lines else "", f"links-{key}", "txt")
+        text = "\n".join(f"{r['relation']}\t{r['key']}\t{r['status'] or '-'}\t{r['summary'] or ''}" for r in rows)
+    emit(text, out=out, label=f"links-{key}", ext=("json" if fmt == "json" else "txt"))
 
 
 def cmd_attachments(ctx: Ctx, args: list[str]) -> None:
-    key = args[0] if args else None
+    key, out = _parse_positional_output(args, "attachments", "KEY")
     key = require_key(key, "attachments")
     data = ctx.client.get(f"/issue/{key}?fields=attachment")
-    for a in (data["fields"].get("attachment") or []):
-        print(f"{a.get('id')}\t{a.get('filename')}\t{a.get('size')}\t{a.get('mimeType')}\t{a.get('content')}")
+    text = "\n".join(
+        f"{a.get('id')}\t{a.get('filename')}\t{a.get('size')}\t{a.get('mimeType')}\t{a.get('content')}"
+        for a in (data["fields"].get("attachment") or [])
+    )
+    emit(text, out=out, label=f"attachments-{key}", ext="txt")
 
 
 def cmd_download(ctx: Ctx, args: list[str]) -> None:
@@ -992,7 +1160,7 @@ def cmd_download(ctx: Ctx, args: list[str]) -> None:
     while i < len(args):
         a = args[i]
         if a == "--output":
-            out = args[i + 1]
+            out = _set_once(out, _flag_value(args, i, a, {"--output"}), a)
             i += 2
         elif a.startswith("--"):
             raise SkillError(f"Unknown download flag: '{a}'", 1)
@@ -1007,7 +1175,15 @@ def cmd_download(ctx: Ctx, args: list[str]) -> None:
         raise SkillError("download requires <KEY> <attachment-id|filename>", 1)
     att = _find_attachment(ctx.client, key, ref)
     data = ctx.client.get(att["content"], raw=True)
+    if out == "-":
+        # '-' is stdout, not a file called "-" (which is what this used to create).
+        sys.stdout.buffer.write(data)
+        sys.stdout.buffer.flush()
+        log_success(f"{key}: downloaded attachment {att['id']} → stdout ({len(data)} bytes).")
+        return
     dest = Path(out) if out else Path(att.get("filename", "attachment"))
+    if dest.is_dir():
+        raise SkillError(f"--output is a directory: {dest}", 1)
     dest.write_bytes(data)
     print(f"{dest}\t{len(data)}")
     log_success(f"{key}: downloaded attachment {att['id']} → {dest} ({len(data)} bytes).")
@@ -1067,6 +1243,9 @@ def cmd_transition(ctx: Ctx, args: list[str]) -> None:
     _transition_core(ctx.client, key, target, journal=True)
 
 
+BODY_FLAGS = {"--file", "--attach", "--embed"}
+
+
 def cmd_comment(ctx: Ctx, args: list[str]) -> None:
     key = None
     file = None
@@ -1079,13 +1258,13 @@ def cmd_comment(ctx: Ctx, args: list[str]) -> None:
     while i < len(args):
         a = args[i]
         if a == "--file":
-            file = args[i + 1]
+            file = _set_once(file, _flag_value(args, i, a, BODY_FLAGS), a)
             i += 2
         elif a == "--attach":
-            attach.append(args[i + 1])
+            attach.append(_flag_value(args, i, a, BODY_FLAGS))
             i += 2
         elif a == "--embed":
-            embed.append(args[i + 1])
+            embed.append(_flag_value(args, i, a, BODY_FLAGS))
             i += 2
         elif a == "-":
             use_stdin = True
@@ -1095,11 +1274,15 @@ def cmd_comment(ctx: Ctx, args: list[str]) -> None:
         else:
             if key is None:
                 key = a
-            else:
+            elif not have_text:
                 text, have_text = a, True
+            else:
+                raise SkillError(_second_text_error("comment", a), 1)
             i += 1
     key = require_key(key, "comment")
-    body = _resolve_body(file, text, have_text, use_stdin, implicit_pipe=True, what="comment")
+    body = _resolve_body(
+        file, text=text, have_text=have_text, use_stdin=use_stdin, implicit_pipe=True, what="comment"
+    )
     if not body and not embed:
         raise SkillError(
             "Refusing to post an empty comment. Provide text / --file / stdin, or at least "
@@ -1111,7 +1294,7 @@ def cmd_comment(ctx: Ctx, args: list[str]) -> None:
     body = _append_embed(body, embed)
     resp = client.post(f"/issue/{key}/comment", {"body": body})
     cid = resp.get("id")
-    log_success(f"{key}: comment {cid} posted.")
+    log_success(f"{key}: comment {cid} posted — {len(body)} chars.")
     print(cid)
 
 
@@ -1126,7 +1309,7 @@ def cmd_comment_edit(ctx: Ctx, args: list[str]) -> None:
     while i < len(args):
         a = args[i]
         if a == "--file":
-            file = args[i + 1]
+            file = _set_once(file, _flag_value(args, i, a, BODY_FLAGS), a)
             i += 2
         elif a == "-":
             use_stdin = True
@@ -1138,13 +1321,17 @@ def cmd_comment_edit(ctx: Ctx, args: list[str]) -> None:
                 key = a
             elif cid is None:
                 cid = a
-            else:
+            elif not have_text:
                 text, have_text = a, True
+            else:
+                raise SkillError(_second_text_error("comment-edit", a), 1)
             i += 1
     key = require_key(key, "comment-edit")
     if not cid or not cid.isdigit():
         raise SkillError("comment-edit requires a numeric comment id", 1)
-    body = _resolve_body(file, text, have_text, use_stdin, implicit_pipe=False, what="comment-edit")
+    body = _resolve_body(
+        file, text=text, have_text=have_text, use_stdin=use_stdin, implicit_pipe=False, what="comment-edit"
+    )
     if not body:
         raise SkillError("comment-edit requires a new body (text / --file / stdin).", 1)
     client = ctx.client
@@ -1189,49 +1376,70 @@ def cmd_assign(ctx: Ctx, args: list[str]) -> None:
     log_success(f"{key}: assigned to {who or acc} ({acc}) (undo available).")
 
 
+CREATE_FLAGS = {"--type", "--summary", "--project", "--label", "--description", "--description-file"}
+
+
 def cmd_create(ctx: Ctx, args: list[str]) -> None:
-    typ = "Task"
+    typ = None
     summary = None
-    project = os.environ.get("JIRA_PROJECT_KEY", "VUKFZIF")
+    project = None
     desc = None
     desc_file = None
     desc_stdin = False
+    have_desc = False
     labels: list[str] = []
     i = 0
     while i < len(args):
         a = args[i]
-        if a == "--type":
-            typ = args[i + 1]
-            i += 2
-        elif a == "--summary":
-            summary = args[i + 1]
-            i += 2
-        elif a == "--project":
-            project = args[i + 1]
-            i += 2
-        elif a == "--label":
-            labels.append(args[i + 1])
-            i += 2
-        elif a == "--description":
-            desc = args[i + 1]
-            i += 2
-        elif a == "--description-file":
-            desc_file = args[i + 1]
-            i += 2
-        elif a == "-":
+        if a == "-":
             desc_stdin = True
             i += 1
-        else:
+            continue
+        if a not in CREATE_FLAGS:
             raise SkillError(f"Unknown/unexpected create argument: '{a}'", 1)
+        v = _flag_value(args, i, a, CREATE_FLAGS)
+        if a == "--type":
+            typ = _set_once(typ, v, a)
+        elif a == "--summary":
+            summary = _set_once(summary, v, a)
+        elif a == "--project":
+            project = _set_once(project, v, a)
+        elif a == "--label":
+            labels.append(v)
+        elif a == "--description-file":
+            desc_file = _set_once(desc_file, v, a)
+        elif a == "--description":
+            if v == "-":
+                # '-' is a *filename* convention and --description takes text, so this
+                # spelling mixes the two. Honour the obvious intent, but say so: taking
+                # the '-' literally is what produced tickets described as exactly "-".
+                log_info(
+                    "'--description -' reads stdin ('-' is a filename). Canonical: "
+                    "'--description-file -', or a bare '-'. For a description that is "
+                    'literally "-", use --description-file PATH.'
+                )
+                desc_stdin = True
+            else:
+                desc = _set_once(desc, v, a)
+                have_desc = True
+        i += 2
     if not summary:
         raise SkillError("create requires --summary", 1)
-    if desc_file:
-        p = Path(desc_file)
-        if not p.is_file() or not os.access(p, os.R_OK):
-            raise SkillError(f"--description-file not readable: {desc_file}", 1)
-        desc = p.read_text()
-    elif desc_stdin:
-        desc = _read_stdin()
+    # implicit_pipe=False is load-bearing: stdin is never a tty under an agent harness or
+    # in CI, so reading it unasked would either swallow unrelated data or block on an idle
+    # pipe until gtimeout kills the process — with no ticket and no diagnostic.
+    desc = _resolve_body(
+        desc_file,
+        text=desc,
+        have_text=have_desc,
+        use_stdin=desc_stdin,
+        implicit_pipe=False,
+        what="create",
+        file_flag="--description-file",
+        text_flag="--description",
+    )
+    typ = typ or "Task"
+    project = project or os.environ.get("JIRA_PROJECT_KEY", "VUKFZIF")
     fields: dict[str, Any] = {"project": {"key": project}, "issuetype": {"name": typ}, "summary": summary}
     if desc:
         fields["description"] = desc
@@ -1239,7 +1447,12 @@ def cmd_create(ctx: Ctx, args: list[str]) -> None:
         fields["labels"] = labels
     resp = ctx.client.post("/issue", {"fields": fields})
     key = resp.get("key")
-    log_success(f"Created {key} ({typ}) in {project}.")
+    # Report what was actually sent: a create that silently lost its body still exits 0 and
+    # still prints a key, so the sizes are the only thing that gives it away.
+    log_success(
+        f"Created {key} ({typ}) in {project}; "
+        f"summary: {len(summary)} chars, description: {len(desc)} chars."
+    )
     print(key)
 
 
@@ -1276,13 +1489,13 @@ def cmd_describe(ctx: Ctx, args: list[str]) -> None:
     while i < len(args):
         a = args[i]
         if a == "--file":
-            file = args[i + 1]
+            file = _set_once(file, _flag_value(args, i, a, BODY_FLAGS), a)
             i += 2
         elif a == "--attach":
-            attach.append(args[i + 1])
+            attach.append(_flag_value(args, i, a, BODY_FLAGS))
             i += 2
         elif a == "--embed":
-            embed.append(args[i + 1])
+            embed.append(_flag_value(args, i, a, BODY_FLAGS))
             i += 2
         elif a == "-":
             use_stdin = True
@@ -1292,11 +1505,15 @@ def cmd_describe(ctx: Ctx, args: list[str]) -> None:
         else:
             if key is None:
                 key = a
-            else:
+            elif not have_text:
                 text, have_text = a, True
+            else:
+                raise SkillError(_second_text_error("describe", a), 1)
             i += 1
     key = require_key(key, "describe")
-    body = _resolve_body(file, text, have_text, use_stdin, implicit_pipe=False, what="describe")
+    body = _resolve_body(
+        file, text=text, have_text=have_text, use_stdin=use_stdin, implicit_pipe=False, what="describe"
+    )
     if not body and not embed:
         raise SkillError(
             "Refusing to set an empty description. Provide text / --file / stdin, or at least "
@@ -1310,7 +1527,10 @@ def cmd_describe(ctx: Ctx, args: list[str]) -> None:
     _do_attach_embed(client, key, attach, embed)
     body = _append_embed(body, embed)
     client.put(f"/issue/{key}", {"fields": {"description": body}})
-    log_success(f"{key}: description updated (undo available).")
+    log_success(f"{key}: description updated — {len(body)} chars (undo available).")
+
+
+LABEL_FLAGS = {"--add", "--remove"}
 
 
 def cmd_label(ctx: Ctx, args: list[str]) -> None:
@@ -1321,10 +1541,10 @@ def cmd_label(ctx: Ctx, args: list[str]) -> None:
     while i < len(args):
         a = args[i]
         if a == "--add":
-            add.append(args[i + 1])
+            add.append(_flag_value(args, i, a, LABEL_FLAGS))
             i += 2
         elif a == "--remove":
-            rem.append(args[i + 1])
+            rem.append(_flag_value(args, i, a, LABEL_FLAGS))
             i += 2
         elif a.startswith("--"):
             raise SkillError(f"Unknown label flag: '{a}'", 1)
@@ -1458,10 +1678,14 @@ def _apply_undo(client: JiraClient, row: tuple) -> str:
     raise SkillError(f"Don't know how to undo op '{op}'.", 1)
 
 
+UNDO_FLAGS = {"--list", "--issue", "--id", "--output"}
+
+
 def cmd_undo(ctx: Ctx, args: list[str]) -> None:
     do_list = False
     issue = None
     entry_id = None
+    out = None
     i = 0
     while i < len(args):
         a = args[i]
@@ -1469,10 +1693,13 @@ def cmd_undo(ctx: Ctx, args: list[str]) -> None:
             do_list = True
             i += 1
         elif a == "--issue":
-            issue = args[i + 1]
+            issue = _set_once(issue, _flag_value(args, i, a, UNDO_FLAGS), a)
             i += 2
         elif a == "--id":
-            entry_id = int(args[i + 1])
+            entry_id = int(_flag_value(args, i, a, UNDO_FLAGS))
+            i += 2
+        elif a == "--output":
+            out = _set_once(out, _flag_value(args, i, a, UNDO_FLAGS), a)
             i += 2
         else:
             raise SkillError(f"Unknown undo flag: '{a}'", 1)
@@ -1480,11 +1707,15 @@ def cmd_undo(ctx: Ctx, args: list[str]) -> None:
     if do_list:
         rows = j.list(issue)
         if not rows:
-            print("(no undo entries)")
+            log_info("(no undo entries)")
+            emit("", out=out, label="undo-list", ext="txt")
             return
-        for (eid, ts, key, op, ref, undone) in rows:
-            when = time.strftime("%Y-%m-%d %H:%M", time.localtime(ts))
-            print(f"{eid}\t{when}\t{key}\t{op}\t{ref or '-'}\t{'undone' if undone else 'active'}")
+        text = "\n".join(
+            f"{eid}\t{time.strftime('%Y-%m-%d %H:%M', time.localtime(ts))}\t{key}\t{op}"
+            f"\t{ref or '-'}\t{'undone' if undone else 'active'}"
+            for (eid, ts, key, op, ref, undone) in rows
+        )
+        emit(text, out=out, label="undo-list", ext="txt")
         return
     # Applying an undo mutates the ticket → it is a WRITE and needs --write.
     if not ctx.want_write:
@@ -1505,9 +1736,11 @@ COMMANDS: dict[str, tuple[Any, str]] = {
     # read
     "whoami": (cmd_whoami, READ),
     "get": (cmd_get, READ),
+    "description": (cmd_description, READ),
     "status": (cmd_status, READ),
     "transitions": (cmd_transitions, READ),
     "comments": (cmd_comments, READ),
+    "comment-get": (cmd_comment_get, READ),
     "user": (cmd_user, READ),
     "users": (cmd_users, READ),
     "search": (cmd_search, READ),
@@ -1537,33 +1770,49 @@ JIRA Cloud ticket control via REST API v2 — read / write / dangerous tiers.
 
 USAGE: jira.sh [--write] [--dangerous] <command> [args...]
 
-GATING (global flags, accepted anywhere; '--' marks the rest literal):
+GATING (global flags, accepted anywhere):
   read commands need no flag. write commands require --write. dangerous
   (destructive) commands require --dangerous, which implies --write.
+  '--' ends GLOBAL flag parsing only; per-command flags after it are still
+  interpreted. For a body that starts with a dash use --file / stdin.
 
-READ:
+INPUT ('-' is the stdin filename, everywhere):
+  a bare '-', '--file -' and '--description-file -' all read the body from stdin.
+  Inline text, a file and stdin are mutually exclusive — combining them is an error,
+  never a silent winner. 'create' reads stdin ONLY when '-' is given.
+
+OUTPUT (every READ command takes --output):
+  (omitted)      stdout, spill-guarded above $JIRA_OUTPUT_MAX_BYTES (saves context)
+  --output PATH  PATH gets the payload verbatim; stdout gets only "PATH<TAB>bytes"
+  --output -     stdout, verbatim and unguarded — use this when piping into sed/perl,
+                 the spill guard's header would otherwise corrupt the stream.
+
+READ (all accept [--output PATH|-]):
   whoami            [--format json|tsv]        Account behind the token (verify auth).
-  get      <KEY>    [--format json|tsv]        Summary, status, type, assignee, labels.
+  get      <KEY>    [--format json|tsv]        Status, type, assignee, labels, description_chars.
+  description <KEY>                            The raw description body (read side of 'describe').
   status   <KEY>                               Print the current status name only.
   transitions <KEY> [--format json|tsv]        Available transitions (id, target, name).
   comments <KEY>    [--format text|json] [--max n]   Recent comments (newest first).
+  comment-get <KEY> <id>                       One comment's raw body (read side of 'comment-edit').
   user     <query>  [--format json|tsv] [--refresh]  Resolve accountId (cache-backed).
   users    <query>  --project KEY | --issue KEY [--format json|tsv] [--refresh]
                                                Assignable-user search (paged + cached).
   search   <JQL>    [--format tsv|json] [--max n]    JQL issue search.
   links    <KEY>    [--format tsv|json]        List issue links.
   attachments <KEY>                            List attachments (id/name/size/mime/url).
-  download <KEY> <att-id|filename> [--output P]   Download an attachment.
+  download <KEY> <att-id|filename> [--output P|-]   Download an attachment.
   undo     --list [--issue KEY]                List undoable journal entries.
 
 WRITE (need --write):
   transition <KEY> <status-name|id>            Move to ANY status (name match, idempotent).
-  comment    <KEY> [text | --file P | -] [--attach F]... [--embed F]...   Add a comment.
-  comment-edit <KEY> <id> [text | --file P | -]   Replace a comment body.
+  comment    <KEY> [text | --file P | --file - | -] [--attach F]... [--embed F]...  Add a comment.
+  comment-edit <KEY> <id> [text | --file P | --file - | -]   Replace a comment body.
   assign     <KEY> <email|accountId|@me|alias|--unassign>   Set/clear the assignee.
-  create     --summary S [--type T] [--project K] [--label L]... [--description X | -]
+  create     --summary S [--type T] [--project K] [--label L]...
+             [--description TEXT | --description-file P | --description-file - | -]
   attach     <KEY> <file>...                   Upload attachment(s).
-  describe   <KEY> [text | --file P | -] [--attach F]... [--embed F]...   Set/replace description.
+  describe   <KEY> [text | --file P | --file - | -] [--attach F]... [--embed F]...  Set/replace description.
   label      <KEY> [--add L]... [--remove L]...   Add/remove labels.
   link       <KEY> <type> <other-KEY>          Link two issues (e.g. "Blocks").
   watch / unwatch <KEY> [accountId|@me]        Add/remove a watcher.

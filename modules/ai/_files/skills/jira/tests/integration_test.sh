@@ -78,9 +78,9 @@ n2="$(count '/rest/api/2/user/search')"
 [[ "$n1" == "$n2" ]] && ok "second lookup served from SQLite cache (no new API request)" || no "cache miss: $n1 -> $n2"
 
 echo "== test 5: undo round-trip (describe) =="
-# `get` intentionally omits the full description, so assert on the PUT bodies the mock
-# logged: describe must overwrite with NEW, and undo must restore the ORIGINAL — which
-# only works if the prior value was snapshotted before the overwrite.
+# `get` reports only description_chars, so assert on the PUT bodies the mock logged:
+# describe must overwrite with NEW, and undo must restore the ORIGINAL — which only works
+# if the prior value was snapshotted before the overwrite.
 run --write describe VUKFZIF-1 "NEW DESC" >/dev/null 2>&1
 grep -q '"description": "NEW DESC"' "$BODYLOG" \
   && ok "describe overwrote the description (PUT NEW DESC)" || no "describe PUT missing"
@@ -92,6 +92,109 @@ err="$(run undo --issue VUKFZIF-1 2>&1)"; rc=$?
 run --write undo --issue VUKFZIF-1 >/dev/null 2>&1 && ok "undo apply succeeds with --write" || no "undo apply failed"
 grep -q '"description": "ORIG DESC"' "$BODYLOG" \
   && ok "undo restored the original description (PUT ORIG DESC)" || no "undo did not restore the description"
+
+echo "== test 6: create — where the description comes from =="
+c_before="$(count 'POST /rest/api/2/issue$')"
+
+# THE REGRESSION: '--description -' used to store the literal string "-" and drop stdin.
+k="$(printf 'BODY-FROM-STDIN' | run --write create --summary S1 --description - 2>"$TMP/e6a")"
+[[ "$k" =~ ^[A-Z]+-[0-9]+$ ]] && ok "create --description - returns a key ($k)" || no "create key='$k'"
+d="$(run description "$k" 2>/dev/null)"
+[[ "$d" == "BODY-FROM-STDIN" ]] && ok "--description - read stdin" || no "expected stdin body, got '$d'"
+[[ "$d" != "-" ]] && ok "description is not the literal '-'" || no "REGRESSION: literal '-' stored"
+grep -q -- "--description-file -" "$TMP/e6a" \
+  && ok "--description - points at the canonical spelling on stderr" || no "no canonical-form hint"
+grep -q "description: 15 chars" "$TMP/e6a" \
+  && ok "create reports the description size it sent" || no "no size in the success line"
+
+# canonical spelling: same result, and no hint
+k="$(printf 'BODY-VIA-FILE-DASH' | run --write create --summary S2 --description-file - 2>"$TMP/e6b")"
+[[ "$(run description "$k" 2>/dev/null)" == "BODY-VIA-FILE-DASH" ]] \
+  && ok "--description-file - reads stdin" || no "--description-file - broke"
+grep -q -- "--description-file -" "$TMP/e6b" \
+  && no "canonical form should not warn" || ok "canonical form warns about nothing"
+
+# bare '-' (the form SKILL.md documents) still works
+k="$(printf 'BODY-BARE-DASH' | run --write create --summary S3 - 2>/dev/null)"
+[[ "$(run description "$k" 2>/dev/null)" == "BODY-BARE-DASH" ]] && ok "bare - still reads stdin" || no "bare - broke"
+
+k="$(run --write create --summary S4 --description 'inline text' 2>/dev/null)"
+[[ "$(run description "$k" 2>/dev/null)" == "inline text" ]] && ok "--description TEXT" || no "inline desc broke"
+
+printf 'FROM-FILE' >"$TMP/desc.wiki"
+k="$(run --write create --summary S5 --description-file "$TMP/desc.wiki" 2>/dev/null)"
+[[ "$(run description "$k" 2>/dev/null)" == "FROM-FILE" ]] && ok "--description-file PATH" || no "desc-file broke"
+
+run --write create --summary S6 >/dev/null 2>&1 && ok "create without a description" || no "description became mandatory"
+
+# stdin is a pipe but no '-' was asked for -> it must be ignored, never read
+k="$(printf 'MUST-NOT-APPEAR' | run --write create --summary S7 2>/dev/null)"
+[[ -z "$(run description "$k" 2>/dev/null)" ]] && ok "create ignores an unrequested pipe" || no "create read stdin unasked"
+
+echo "== test 7: conflicting / malformed create arguments =="
+b="$(count 'POST /rest/api/2/issue$')"
+err="$(printf 'x' | run --write create --summary S8 --description X - 2>&1 >/dev/null)"; rc=$?
+{ [[ $rc -eq 1 ]] && grep -q -- '--description' <<<"$err" && [[ "$b" == "$(count 'POST /rest/api/2/issue$')" ]]; } \
+  && ok "--description X + - is an error, nothing POSTed" || no "conflict not rejected (rc=$rc)"
+err="$(run --write create --summary S9 --description X --description-file "$TMP/desc.wiki" 2>&1 >/dev/null)"; rc=$?
+[[ $rc -eq 1 ]] && ok "--description + --description-file is an error" || no "file/inline conflict not rejected"
+b="$(count 'POST /rest/api/2/issue$')"
+run --write create --summary --type >/dev/null 2>&1; rc=$?
+{ [[ $rc -eq 1 ]] && [[ "$b" == "$(count 'POST /rest/api/2/issue$')" ]]; } \
+  && ok "--summary --type is an error, no ticket titled '--type'" || no "created a ticket titled '--type'"
+run --write create --summary A --summary B >/dev/null 2>&1; rc=$?
+[[ $rc -eq 1 ]] && ok "a repeated --summary is an error" || no "duplicate --summary silently took the last"
+run --write create --summary '--frozen fails on uv 0.9' >/dev/null 2>&1 \
+  && ok "a legitimate dash-leading summary is accepted" || no "dash-leading summary rejected"
+
+echo "== test 8: '-' as a filename, and --output =="
+printf 'VIA-FILE-DASH' | run --write describe VUKFZIF-1 --file - >/dev/null 2>&1
+grep -q '"description": "VIA-FILE-DASH"' "$BODYLOG" && ok "describe --file - reads stdin" || no "describe --file - broke"
+cid="$(printf 'COMMENT-VIA-FILE-DASH' | run --write comment VUKFZIF-1 --file - 2>/dev/null)"
+[[ "$(run comment-get VUKFZIF-1 "$cid" 2>/dev/null)" == "COMMENT-VIA-FILE-DASH" ]] \
+  && ok "comment --file - reads stdin; comment-get reads it back" || no "comment --file - / comment-get broke"
+
+run description VUKFZIF-1 --output "$TMP/out.txt" >"$TMP/out.stdout" 2>/dev/null
+{ [[ "$(cat "$TMP/out.txt")" == "VIA-FILE-DASH" ]] && grep -q "$TMP/out.txt" "$TMP/out.stdout"; } \
+  && ok "--output PATH writes the payload, stdout gets only the path" || no "--output PATH broke"
+[[ "$(wc -c <"$TMP/out.stdout")" -lt 100 ]] && ok "--output PATH keeps stdout tiny" || no "--output PATH flooded stdout"
+
+JIRA_OUTPUT_MAX_BYTES=10 run description VUKFZIF-1 --output - 2>/dev/null | grep -q '^VIA-FILE-DASH$' \
+  && ok "--output - bypasses the spill guard (pipe-safe)" || no "--output - was truncated"
+JIRA_OUTPUT_MAX_BYTES=10 run description VUKFZIF-1 2>/dev/null | grep -q 'truncated' \
+  && ok "without --output the spill guard still protects context" || no "spill guard stopped working"
+
+# the round-trip the whole --output/'-' contract exists for
+run description VUKFZIF-1 --output - 2>/dev/null | sed 's/VIA-FILE-DASH/ROUNDTRIPPED/' \
+  | run --write describe VUKFZIF-1 --file - >/dev/null 2>&1
+[[ "$(run description VUKFZIF-1 2>/dev/null)" == "ROUNDTRIPPED" ]] \
+  && ok "read -> sed -> write round-trip" || no "round-trip broke"
+
+echo "== test 9: get is verifiable and stays machine-readable =="
+run get VUKFZIF-1 --format json 2>/dev/null | python3 -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null \
+  && ok "get --format json is valid JSON" || no "get json unparseable"
+n="$(run get VUKFZIF-1 --format json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["description_chars"])' 2>/dev/null)"
+[[ "$n" == "12" ]] && ok "get reports description_chars=12 (ROUNDTRIPPED)" || no "description_chars=$n, expected 12"
+run get VUKFZIF-99 --format json 2>/dev/null | python3 -c 'import json,sys; json.load(sys.stdin)' 2>/dev/null \
+  && ok "get json stays parseable on a 60KB description" || no "get json spilled and broke jq/json"
+JIRA_OUTPUT_MAX_BYTES=10000 run description VUKFZIF-99 2>/dev/null | grep -q 'truncated' \
+  && ok "description spills a 60KB body instead of flooding context" || no "description did not spill"
+
+echo "== test 10: input that used to be dropped silently =="
+run --write describe VUKFZIF-1 "part one" "part two" >/dev/null 2>&1; rc=$?
+[[ $rc -eq 1 ]] && ok "describe rejects a second inline text" || no "describe silently dropped 'part one'"
+run --write comment VUKFZIF-1 "a" "b" >/dev/null 2>&1; rc=$?
+[[ $rc -eq 1 ]] && ok "comment rejects a second inline text" || no "comment silently dropped 'a'"
+run get VUKFZIF-1 VUKFZIF-99 >/dev/null 2>&1; rc=$?
+[[ $rc -eq 1 ]] && ok "get rejects a second issue key" || no "get silently read the wrong issue"
+run --write comment VUKFZIF-1 --file "" >/dev/null 2>&1; rc=$?
+[[ $rc -eq 1 ]] && ok "an empty --file path is an error" || no "empty --file silently ignored"
+b="$(count 'PUT /rest/api/2/issue/VUKFZIF-1$')"
+run --write label VUKFZIF-1 --add --remove >/dev/null 2>&1; rc=$?
+{ [[ $rc -eq 1 ]] && [[ "$b" == "$(count 'PUT /rest/api/2/issue/VUKFZIF-1$')" ]]; } \
+  && ok "label --add --remove is an error, no label named '--remove'" || no "added a label called '--remove'"
+run --write comment VUKFZIF-1 --file a --file b >/dev/null 2>&1; rc=$?
+[[ $rc -eq 1 ]] && ok "a repeated --file is an error" || no "duplicate --file silently took the last"
 
 echo
 echo "== results: $pass passed, $fail failed =="
