@@ -8,9 +8,11 @@ description: >
   gets mangled to wiki-markup; attachment upload can't see the host filesystem).
   Operations are split into read (no flag), write (--write), and dangerous/destructive
   (--dangerous) tiers, and every overwriting or deleting op is journaled locally so it
-  can be undone. Use for: change ticket status / transition, comment, assign, create
-  issue, edit description, upload/embed/delete attachment, add/remove labels, link
-  issues, search JQL, resolve an assignee, or undo a prior change.
+  can be undone. Long fields (description, comment bodies) can be read out to a file or a
+  pipe and written back, so they can be edited with sed/perl without loading them into
+  context. Use for: change ticket status / transition, comment, assign, create issue, read
+  or edit a description or comment body, upload/embed/delete attachment, add/remove labels,
+  link issues, search JQL, resolve an assignee, or undo a prior change.
 argument-hint: "[--write|--dangerous] <command> [args...] | help"
 allowed-tools: Read(references/*) Bash(./scripts/jira.sh *) Bash(zsh *) Read
 dependencies: "uv, gtimeout"
@@ -38,8 +40,9 @@ zsh ${CLAUDE_SKILL_DIR}/scripts/jira.sh $ARGUMENTS
 ## Operation tiers (read / write / dangerous)
 
 Every command belongs to one tier, gated by global flags accepted **anywhere** in the
-argument list (use `--` to mark the rest as literal, e.g. a comment body that starts
-with a dash):
+argument list. `--` ends **global** flag parsing only — per-command flags after it are
+still interpreted, so it is *not* a way to pass a body that starts with a dash; use
+`--file` or stdin for that:
 
 | Tier | Flag | What it covers |
 |---|---|---|
@@ -55,12 +58,14 @@ does nothing — no partial mutation. This makes read-only inspection safe by de
 ```bash
 J=${CLAUDE_SKILL_DIR}/scripts/jira.sh
 
-# --- read (no flag) ---
+# --- read (no flag; every read command also takes --output PATH|-) ---
 $J whoami                                  # account behind the token (verify auth)
-$J get JIRA-3052                         # key/summary/status/type/assignee/labels/updated
+$J get JIRA-3052                         # status/type/assignee/labels/updated/description_chars
+$J description JIRA-3052                 # the raw description body (read side of describe)
 $J status JIRA-3052                      # current status name only
 $J transitions JIRA-3052                 # available transitions (id, target, name)
 $J comments JIRA-3052 --max 50           # newest comments first (idempotency pre-check)
+$J comment-get JIRA-3052 121771          # one comment's raw body (read side of comment-edit)
 $J search 'project = VUKFZIF AND status = "In QA"' --max 20   # JQL search
 $J links JIRA-3052                       # issue links
 $J attachments JIRA-3052                 # id/filename/size/mime/content-url per attachment
@@ -81,6 +86,7 @@ $J --write link JIRA-3052 "Blocks" JIRA-3060
 $J --write watch JIRA-3052                          # add self as watcher (or unwatch)
 printf '%s' "<description>" | \
   $J --write create --type Task --label security --summary "[ServiceA] High CVEs (netty)" -
+$J --write create --summary "…" --description-file finding.wiki    # or from a file
 
 # --- attachments (write) ---
 $J --write attach JIRA-3052 screenshot.png crawllog.zip     # upload only
@@ -106,9 +112,54 @@ $J --write undo --id 42                                 # revert a specific jour
 - **`comments`** shows the newest `--max` (default 50) and warns on stderr when the ticket
   has more (`Showing newest N of M …`) — raise `--max` before trusting a negative
   idempotency check on a long-history ticket.
-- **`create`** defaults to project `$JIRA_PROJECT_KEY` (default `VUKFZIF`) and prints the new key.
+- **`create`** defaults to project `$JIRA_PROJECT_KEY` (default `VUKFZIF`) and prints the new
+  key on stdout; the sizes it actually sent go to stderr (`summary: 37 chars, description:
+  1183 chars`). Check that line — a description of `1 char` after a long heredoc means the
+  body never arrived. Its description comes from exactly one of `--description TEXT`,
+  `--description-file PATH`, `--description-file -` or a bare `-`; combining them is an
+  error. `--description -` is honoured too but warns, because `-` is a *filename*
+  convention and this used to be read as the literal text `-`.
 - **`describe`** **replaces** the description (no merge). The prior text is journaled, so
   `undo` restores it.
+
+## Long fields: read, edit, write back
+
+`-` is the stdin filename **everywhere** — a bare `-`, `--file -` and `--description-file -`
+all mean the same thing. Inline text, a file and stdin are mutually exclusive; combining
+them is an error rather than a silent winner.
+
+Every read command takes `--output`:
+
+| `--output` | Where the payload goes | Use it for |
+|---|---|---|
+| *(omitted)* | stdout, truncated above `$JIRA_OUTPUT_MAX_BYTES` (32 KiB) | the default — keeps big results out of context |
+| `--output PATH` | `PATH`, byte-exact; stdout gets only `PATH<TAB>bytes` | editing a long body without ever loading it |
+| `--output -` | stdout, byte-exact and untruncated | piping into `sed`/`perl` |
+
+```bash
+# via a file — the long body never enters the conversation
+$J description JIRA-3052 --output /tmp/d.wiki
+perl -pi -e 's/netty 4\.1\.\d+/netty 4.1.118/g' /tmp/d.wiki
+$J --write describe JIRA-3052 --file /tmp/d.wiki
+
+# or as a straight pipe
+$J description JIRA-3052 --output - | sed 's/^h2\./h3./' \
+  | $J --write describe JIRA-3052 --file -
+
+# same for a single comment
+$J comment-get JIRA-3052 121771 --output - | sed 's/typo/fixed/' \
+  | $J --write comment-edit JIRA-3052 121771 --file -
+```
+
+> In a pipe you **must** spell out `--output -`. Without it the spill guard is active, and
+> above 32 KiB it injects a truncation header into the stream. There is deliberately no
+> `isatty()` auto-detection: under an agent harness stdout is always a pipe, which would
+> disable the context protection entirely.
+
+`get` reports `description_chars` rather than the description itself, so a body can be
+size-checked in one call without paying for it: `$J get KEY --format json | jq
+.description_chars`. Note that JQL `description IS EMPTY` will not find a ticket whose
+description is a stray `-` — it is not empty.
 
 ## Attachments & embedding
 
