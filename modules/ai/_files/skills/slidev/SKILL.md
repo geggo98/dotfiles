@@ -211,6 +211,22 @@ Presenter notes go here
 
 **Export prerequisite**: `bun add -D playwright-chromium` is required for PDF/PPTX/PNG export. If export fails with a browser error, install this dependency first.
 
+Lifecycle scripts are disabled machine-wide (`~/.npmrc`, `~/.bunfig.toml` — see
+`modules/supply-chain-hardening.nix`), and `playwright-chromium` downloads its browser
+from an `install` script. So `bun add` reports success while no browser is fetched, and
+the failure only surfaces at export time. Opt out for this project with a local
+`.npmrc` — bun reads it and it outranks the global settings:
+
+```
+# .npmrc in the project root
+ignore-scripts=false
+```
+
+Then re-run `bun add -D playwright-chromium`. A local `bunfig.toml` with
+`ignoreScripts = false` does **not** work here (the global `~/.npmrc` still wins), and
+neither does `bun install --trust`. Keep the opt-out project-local; do not lift it
+globally.
+
 ### Editor & Tools
 
 | Feature | Usage | Reference |
