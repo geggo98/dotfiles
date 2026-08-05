@@ -1,6 +1,6 @@
 ---
 name: writing-clearly-and-concisely
-description: "Use when writing documentation, commit messages, error text, explanations, reports, or summaries. Applies Strunk's principles for clear, vigorous prose. Triggers: writing human-readable content, verbose text, unclear explanations."
+description: "Use when writing documentation, commit messages, error text, explanations, reports, or summaries. Applies especially to Jira tickets, pull request descriptions, and review comments: always start these with a TL;DR summary. Combines Strunk, ASD-STE100 (Simplified Technical English), and ISO 24495-1 (plain language), for English and German text. Triggers: writing human-readable content, verbose text, unclear explanations, Jira tickets, pull requests, review comments."
 allowed-tools: Read(references/*) Bash(zsh *) Read
 ---
 
@@ -10,6 +10,30 @@ Vigorous writing is concise.
 A sentence should contain no unnecessary words,
 a paragraph no unnecessary sentences,
 for the same reason that a drawing should have no unnecessary lines and a machine no unnecessary parts.
+
+# Jira Tickets, Pull Requests, Review Comments
+
+This skill applies especially to Jira tickets,
+pull request descriptions,
+and review comments.
+
+Always start these with a TL;DR:
+one to three sentences,
+outcome or request first.
+Label it `TL;DR:` where the medium allows;
+otherwise the first paragraph is the summary.
+This applies ISO 24495-1's first findability rule:
+place the most important message at the beginning.
+
+Jira ticket:
+TL;DR, then context, then steps or acceptance criteria.
+
+Pull request description:
+TL;DR (what changed and why), then details, then how to test.
+
+Review comment:
+main point first, then reasoning, then a concrete suggestion.
+Critique the code, not the author.
 
 # Core Principles
 
@@ -116,6 +140,26 @@ When writing:
 Every word must justify its presence.
 
 # References
+
+See [Simplified Technical English](references/simplified-technical-english.en.md)
+for word, sentence, and procedure rules --
+ASD-STE100 Issue 9 adapted to IT writing
+(terminology, noun clusters, verbs, sentence limits,
+runbook steps, warnings).
+
+See [plain language](references/plain-language.en.md)
+for structure and audience --
+ISO 24495-1's four principles
+(relevant, findable, understandable, usable)
+adapted to Jira tickets, pull requests, and review comments,
+with per-format checklists.
+
+For German text, load the German adaptations instead:
+[Technisches Deutsch](references/simplified-technical-english.de.md)
+and [Klare Sprache](references/plain-language.de.md).
+They adapt the rules to German
+(compound nouns, nominal style, Imperativ vs. Infinitiv)
+rather than translating them.
 
 See [anti-tropes-instruction](references/anti-tropes-instruction.md)
 for specific writing patterns to avoid --
