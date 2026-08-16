@@ -48,6 +48,15 @@
 # launchd coalesces missed StartCalendarInterval events and fires them on wake —
 # launchd.plist(5). Only a powered-off machine misses a slot outright.)
 #
+# XDG_CACHE_HOME is a trap here. Nix locates this cache via getCacheDir(), i.e.
+# $XDG_CACHE_HOME or ~/.cache — but a launchd agent inherits only PATH,
+# SSH_AUTH_SOCK and the XPC keys, never what your shell exports. Export that
+# variable from fish/zsh alone and Nix writes to one directory while this agent
+# repacks another, reporting "nothing to do" and exit 0 every single day while the
+# real cache degenerates. Two guards below: the agent is handed XDG_CACHE_HOME
+# whenever home-manager itself would export it, and a missing cache is a loud
+# warning that names the variable rather than a bland no-op line.
+#
 # Companion to modules/nix-gc.nix, which sweeps the store itself.
 { ... }:
 {
@@ -57,6 +66,8 @@
         name = "nix-tarball-cache-repack";
         runtimeInputs = [ pkgs.git pkgs.coreutils pkgs.findutils ];
         text = ''
+          # Same resolution Nix's getCacheDir() uses — see the XDG_CACHE_HOME note
+          # in the module header before changing this.
           cache="''${XDG_CACHE_HOME:-$HOME/.cache}/nix/tarball-cache-v2"
           threshold="''${1:-250}"
 
@@ -65,7 +76,15 @@
           }
 
           if [[ ! -d "$cache/objects/pack" ]]; then
-            echo "$(date -Iseconds) no tarball cache at $cache — nothing to do"
+            {
+              echo "$(date -Iseconds) WARNING: no tarball cache at $cache"
+              echo "  Either Nix has not fetched a flake input yet, or XDG_CACHE_HOME"
+              echo "  differs between your shell and this job. A launchd agent inherits"
+              echo "  only PATH, SSH_AUTH_SOCK and the XPC keys, so exporting it from"
+              echo "  fish/zsh alone leaves Nix writing one directory while this job"
+              echo "  repacks another — silently, every day, forever."
+              echo "  Compare:  launchctl getenv XDG_CACHE_HOME   vs   printenv XDG_CACHE_HOME"
+            } >&2
             exit 0
           fi
 
@@ -94,6 +113,17 @@
         enable = true;
         config = {
           ProgramArguments = [ "${nix-tarball-cache-repack}/bin/nix-tarball-cache-repack" ];
+          # Hand the agent the same XDG_CACHE_HOME the session gets, since it
+          # inherits no shell environment of its own. Gated on `xdg.enable`
+          # because that is exactly the condition under which home-manager
+          # exports the variable at all (its modules/misc/xdg.nix uses
+          # `mkIf cfg.enable`). Forwarding it unconditionally would invent a
+          # mismatch on a config that sets xdg.cacheHome while leaving
+          # xdg.enable off — there the session still resolves ~/.cache.
+          EnvironmentVariables =
+            if config.xdg.enable
+            then { XDG_CACHE_HOME = config.xdg.cacheHome; }
+            else null;
           RunAtLoad = false;
           # Every day at 13:30 — Weekday omitted is a launchd wildcard. Mid-day so
           # a laptop is actually awake; the threshold makes the usual run a no-op.
