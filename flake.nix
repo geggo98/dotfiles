@@ -49,8 +49,34 @@
     # Pinned Homebrew source. Overrides nix-homebrew's bundled default so we
     # control the exact brew version; bump the tag to upgrade (then `just build`).
     # https://github.com/Homebrew/brew/releases
+    #
+    # KNOWN FAILURE MODE — this pin cannot be left to rot. Homebrew 6 no longer
+    # taps homebrew/core and homebrew/cask; it reads them from Homebrew's JSON
+    # API, which is a rolling service and therefore NOT pinnable. When upstream
+    # adds a new cask DSL artifact, the API starts serving it to everyone while
+    # this pinned brew still lacks the Ruby class for it, and `brew bundle` dies
+    # mid-activation:
+    #
+    #   Error: Cask 'firefox' definition is invalid:
+    #          undefined method 'command_wrapper' for Cask 'firefox'
+    #
+    # That aborts `darwin-rebuild switch` *after* /etc is written but *before*
+    # home-manager activates, so the system is left half-applied.
+    #
+    # Seen 2026-08-16: pinned 6.0.9 (2026-07-07) vs. the `command_wrapper`
+    # artifact added upstream 2026-07-21..26 (Homebrew/brew#23183, #23296,
+    # #23308). First brew tag carrying
+    # Library/Homebrew/cask/artifact/command_wrapper.rb is 6.0.13 (2026-07-27);
+    # homebrew-cask migrated firefox, keka, betterdisplay and vlc to the new
+    # stanza on 2026-07-29 (Homebrew/homebrew-cask#275991). This host only
+    # tripped over it on 2026-08-11, when its local cask.jws.json cache refreshed.
+    #
+    # Mind that margin: the brew release able to parse the new stanza preceded the
+    # API serving it by TWO DAYS. This pin must not lag more than a release or two.
+    #
+    # Fix, and the routine cure whenever this recurs: `just brew-bump`.
     brew-src = {
-      url = "github:Homebrew/brew/6.0.9";
+      url = "github:Homebrew/brew/6.0.17";
       flake = false;
     };
 
