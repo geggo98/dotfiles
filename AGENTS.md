@@ -327,3 +327,73 @@ Some skill helpers under `modules/ai/_files/skills/*/scripts/` are self-containe
 
 Reference example: `modules/ai/_files/skills/grafana/scripts/grafana.py` (+`.lock`),
 also `bitbucket-pr/scripts/bitbucket_pr_reviewers.py`.
+
+### Closing a dependency advisory in `infra/`
+
+`infra/` is the only npm tree in this repo (Pulumi, pnpm 11). GitHub Dependabot
+watches `infra/pnpm-lock.yaml`; `just pulumi-audit` asks the same question
+independently against OSV and additionally flags anything published inside the
+cooldown window. Its script (`infra/scripts/osv-audit.py`) is stdlib-only on
+purpose — an auditing tool that installs dependencies to run has a supply chain of
+its own. Exit codes: `0` clean, `1` advisories found, `2` tool/network error.
+
+**Work the ladder top-down and stop at the first rung that applies.**
+
+1. **The fixed version fits the parent's declared semver range → lockfile only.**
+   `cd infra && pnpm update <pkg> --depth Infinity`. `package.json` and
+   `pnpm-workspace.yaml` stay untouched; `git diff --stat infra/` must show
+   `pnpm-lock.yaml` alone. Check the range against the registry *before* editing —
+   `curl -fsSL https://registry.npmjs.org/<parent>/<version>` and read
+   `.dependencies`. This is the common case: `1c3d7cd` (tar, brace-expansion),
+   `7dd7121` (seven advisories at once).
+2. **It does not fit → bump the direct dependency** in `infra/package.json` so the
+   floor is encoded where a human will see it (`^3.0.0` → `^3.252.0`). Example:
+   `7902ef9`.
+3. **`pnpm.overrides` / `resolutions`: no.** Never used here, and rejected once on
+   evidence — pinning a transitive Pulumi dependency broke the SDK at load, because
+   the 1.x OTel siblings import symbols removed in core 2.x. Bump the coordinated
+   parent instead.
+4. **The fix is younger than the cooldown** (`minimumReleaseAge: 4320`, three days,
+   `infra/pnpm-workspace.yaml`) → exempt that one `package@version` via
+   `minimumReleaseAgeExclude`. Never lower the floor itself, which would exempt
+   everything. **This rung has a hard precondition — see below.**
+
+#### Undercutting a cooldown: research first, fetch second
+
+Not negotiable, and not a matter of taste. The cooldown *is* the control that
+catches a compromised release, so exempting a package removes exactly that control
+for exactly that package. "Just bump it and see if anything breaks" is not
+available: `pnpm update` downloads and unpacks the tarball, and `tsc`/Pulumi then
+import it. By the time a test could fail, the code has already run on a machine
+holding this repo's SOPS secrets and its Cloudflare and AWS credentials. Research
+that starts after the install starts too late.
+
+1. **Research while fetching nothing.** Establish that this specific
+   `package@version` is not part of a live supply-chain incident: read the upstream
+   fix commit and the advisory; inspect the maintainer set, publish provenance and
+   signatures through registry *metadata* only (`npm view <pkg>@<ver> --json`, or
+   `curl -fsSL https://registry.npmjs.org/<pkg>`); check GitHub Security Advisories,
+   the project's issue tracker, and current incident reporting (Socket,
+   StepSecurity, Snyk, OpenSSF) for the **package and its maintainers** — a
+   maintainer-account compromise shows up there before it shows up in the package.
+   If anything looks off, diff the published tarball against the tagged source.
+2. Only then add the `minimumReleaseAgeExclude` entry, run the update, and verify.
+3. If the research cannot conclude cleanly, **wait out the cooldown** and mitigate
+   another way: route around the vulnerable code path, disable the feature, or
+   accept the risk explicitly and say so in the commit. Waiting is by far the
+   cheaper failure mode.
+
+The same rule governs every other cooldown here — the uv `exclude-newer-package`
+overrides in `modules/ai/_files/skills/browser-use/scripts/browser-use.py` and the
+global `exclude-newer` / `min-release-age` floors in
+`modules/supply-chain-hardening.nix`. Any cooldown, same precondition.
+
+#### Verifying and recording
+
+Before committing: `just pulumi-audit` clean, `cd infra && pnpm audit` clean,
+`pnpm exec tsc --noEmit` green.
+
+Commit bodies here double as the runbook, so write them accordingly: the advisory
+(severity, GHSA, CVSS vector), the dependency path that pulls the package in, which
+rung you used and why the ones above it did not apply, and the publish age of the
+version you moved to.
