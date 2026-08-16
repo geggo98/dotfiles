@@ -25,6 +25,7 @@ in
       hm.voxscriber
       hm.yt-dlp
       hm.worktrunk
+      hm.nix-tarball-cache-repack
     ];
   };
 }
