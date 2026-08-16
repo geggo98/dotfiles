@@ -82,7 +82,7 @@ update:
 
 # Update a single flake input
 update-input input:
-    nix flake lock --update-input {{ input }}
+    nix flake update {{ input }}
 
 # Bump the pinned Homebrew source (brew-src in flake.nix) to the latest upstream
 # release and relock. Homebrew 6 serves casks from a rolling JSON API that cannot
