@@ -33,10 +33,18 @@ shell:
 
 # Build the current host configuration (without applying)
 build: _check-untracked
+    #!/usr/bin/env bash
+    # pipefail is load-bearing: just's default shell is `sh -cu`, so a bare
+    # `darwin-rebuild build … | ts` reports the exit status of *ts*, and a failing
+    # build comes out green. Observed for real — a shellcheck error inside a
+    # writeShellApplication failed the build while `just build` returned 0.
+    set -euo pipefail
     time darwin-rebuild build --flake . --keep-going --keep-failed -L | ts
 
 # Build a specific host configuration
 build-host host: _check-untracked
+    #!/usr/bin/env bash
+    set -euo pipefail   # see the note on `build` — without it `| ts` eats failures
     time nix build '.#darwinConfigurations.{{ host }}.system' --keep-going --keep-failed | ts
 
 # --- Apply configuration (needs sudo; interactive — NOT agent-safe) ---
@@ -256,6 +264,8 @@ pulumi-stack: (pulumi "stack")
 
 # Install infra dependencies
 pulumi-install:
+    #!/usr/bin/env bash
+    set -euo pipefail   # see the note on `build` — without it `| ts` eats failures
     cd infra && time pnpm install | ts
 
 # Audit infra/pnpm-lock.yaml against OSV + npm publish dates (exits 1 on findings)
