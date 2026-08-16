@@ -164,6 +164,64 @@ Host-specific secrets declarations live in **`hosts/<serial>/secrets.nix`**.
 - **Format before committing:** `just fmt` or `nix run nixpkgs#nixpkgs-fmt -- <files>`
 - **Module pattern:** Each module file exports `flake.modules.<class>.<name>` — see `/nix-dendritic-pattern` skill
 
+### Script style (shell, Python, regex)
+
+macOS ships a BSD userland. GNU tools exist only inside the devenv shell or under
+`g`-prefixed names, and are on `PATH` only if someone installed them. Anything that
+runs outside a Nix wrapper must not assume either flavour.
+
+- **Short scripts → zsh** (`#!/bin/zsh`), not bash. zsh is the macOS default login
+  shell and a current release; `/bin/bash` is frozen at 3.2 (2007), so no associative
+  arrays, `${var@Q}`, `readarray`, or `wait -n`. zsh also does not word-split
+  unquoted parameters, which removes a whole class of quoting bugs.
+- **Longer scripts → `python3` with a PEP-723 `uv` header**, stdlib-preferred. Once a
+  script grows argument parsing, JSON handling, or more than a couple of branches, the
+  shell version stops being readable or testable. See "uv-based skill scripts" below
+  for the `--frozen` and lockfile rules.
+- **Prefer a `perl` one-liner to `sed` / `awk` / `grep` / `cut` / `tr`** wherever
+  performance allows. Perl is in the macOS base system, implements `-i`, `-n`, `-p`
+  and PCRE itself, and behaves identically on macOS and Linux. The alternatives all
+  diverge between BSD and GNU. Reach for the GNU tool only when data volume makes
+  Perl's throughput or startup the bottleneck.
+
+  | Instead of | Write |
+  |---|---|
+  | `grep -o` / `sed -n 's/…/\1/p'` | `perl -ne 'print $+{x} if /(?<x>…)/'` |
+  | `sed -i'' -e 's/a/b/'` | `perl -i -pe 's/a/b/'` |
+  | `awk -F'\t' '{print $4}'` | `perl -F'\t' -lane 'print $F[3]'` |
+  | `grep -c` | `perl -ne '$n++ if /…/; END { print $n // 0 }'` |
+
+  The `sed` row is not hypothetical: BSD `sed` reads `-i'' -e` as "backup extension
+  `-e`" and silently leaves a stale `file-e` beside the real one. Perl implements
+  `-i` itself, so the divergence is gone at the root rather than worked around. See
+  the comment on the `brew-bump` recipe in the `justfile`.
+
+- **Regex: named capture groups** wherever the syntax supports them — `(?<name>…)`
+  with `$+{name}` in Perl, `(?P<name>…)` with `m["name"]` in Python. The name is free
+  documentation, and the pattern keeps working when someone inserts a group ahead of
+  it. Fall back to positional `$1`/`\1` only where there is no named form (POSIX
+  BRE/ERE, `sed`, bash's `BASH_REMATCH`).
+- **Regex: complex patterns go multi-line and commented** — `/x` in Perl,
+  `re.VERBOSE` in Python — once a pattern carries more than one capture, a
+  lookaround, or an alternation that no longer fits on one readable line.
+- **Regex: always show a concrete example** of a line the pattern must match, in a
+  comment directly above it. It lets the next reader check the pattern without
+  running it, and it is the first thing to update when the input format drifts.
+
+  ```perl
+  # matches:     url = "github:Homebrew/brew/6.0.17";   ->  $+{tag} eq "6.0.17"
+  m{^ \s* url \s* = \s* "github:Homebrew/brew/(?<tag>[^"]+)"; \s* $}x
+  ```
+
+- **Carve-out — scripts built by Nix.** Inside `pkgs.writeShellApplication` with an
+  explicit `runtimeInputs`, the BSD/GNU question is settled at build time and bash is
+  the right choice: `shellcheck` runs over it, `set -euo pipefail` is injected, and
+  every tool resolves to a pinned nixpkgs path. Reference:
+  `modules/nix-tarball-cache-repack.nix`.
+- **Carve-out — `justfile` recipes** keep `#!/usr/bin/env bash` + `set -euo pipefail`
+  to match the existing recipes, but follow the perl and regex rules above for their
+  text processing.
+
 ## Commit & Pull Request Guidelines
 
 Use Conventional Commits: `type(scope): subject` (imperative present tense, ≤72 chars)
