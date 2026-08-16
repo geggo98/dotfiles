@@ -76,6 +76,47 @@ update:
 update-input input:
     nix flake lock --update-input {{ input }}
 
+# Bump the pinned Homebrew source (brew-src in flake.nix) to the latest upstream
+# release and relock. Homebrew 6 serves casks from a rolling JSON API that cannot
+# be pinned, so a stale brew eventually meets a cask DSL artifact it doesn't know
+# and `brew bundle` aborts activation — see the brew-src comment in flake.nix.
+# This is the cure for that. Optional argument pins a specific tag instead.
+brew-bump tag="":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    tag="{{ tag }}"
+    if [ -z "$tag" ]; then
+        tag=$(curl -fsSL https://api.github.com/repos/Homebrew/brew/releases/latest | jq -r .tag_name)
+    fi
+    [ -n "$tag" ] && [ "$tag" != "null" ] || { echo "could not determine a brew tag" >&2; exit 1; }
+    # matches:     url = "github:Homebrew/brew/6.0.17";   ->  $+{tag} eq "6.0.17"
+    current=$(perl -ne '
+        if (m{^ \s* url \s* = \s* "github:Homebrew/brew/(?<tag>[^"]+)"; \s* $}x) {
+            print $+{tag};
+            last;
+        }
+    ' flake.nix)
+    [ -n "$current" ] || { echo "no brew-src url line found in flake.nix" >&2; exit 1; }
+    if [ "$tag" = "$current" ]; then
+        echo "brew-src already at $tag"
+        exit 0
+    fi
+    echo "brew-src: $current -> $tag"
+    # perl -i, not sed -i: Perl implements in-place editing itself, so it behaves
+    # identically everywhere. `sed -i` does not — macOS puts BSD sed on PATH when
+    # just runs without a loaded direnv, and BSD sed reads `-i'' -e` as "backup
+    # extension -e", silently leaving a stale flake.nix-e beside the real file.
+    # The END block makes a non-matching pattern a hard error instead of a no-op.
+    # \Q…\E quotes the interpolated tag, so a dot in it stays a literal dot.
+    # matches:     url = "github:Homebrew/brew/6.0.9";   (with CUR=6.0.9)
+    CUR="$current" NEW="$tag" perl -i -pe '
+        BEGIN { $n = 0 }
+        $n += s|\Qurl = "github:Homebrew/brew/$ENV{CUR}";\E|url = "github:Homebrew/brew/$ENV{NEW}";|;
+        END { die "substitution matched nothing — pattern drift in flake.nix?\n" unless $n }
+    ' flake.nix
+    nix flake update brew-src
+    echo "Now run: just build && just switch   (switch selects the flake attr by hardware serial)"
+
 # Recompute the agent-browser release-binary hashes for modules/agent-browser.nix
 # after bumping the agent-browser-src tag in flake.nix. Prints the ready-to-paste
 # `assets` attrset. Example: `just agent-browser-hashes 0.34.0`
