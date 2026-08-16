@@ -19,8 +19,16 @@
         command = "/nix/var/nix/profiles/default/bin/nix-collect-garbage --delete-older-than 7d";
         serviceConfig = {
           RunAtLoad = false;
-          # Sundays at 03:00 local time.
-          StartCalendarInterval = [{ Weekday = 0; Hour = 3; Minute = 0; }];
+          # Sundays at 03:00 local time, with a 15:00 fallback for a Mac that was
+          # powered off at 03:00. A *sleeping* Mac needs no fallback — launchd
+          # coalesces missed StartCalendarInterval events and fires them on wake
+          # (launchd.plist(5)); only a powered-off machine misses a slot outright.
+          # A second run the same day is a no-op: --delete-older-than 7d finds
+          # nothing new to sweep.
+          StartCalendarInterval = [
+            { Weekday = 0; Hour = 3; Minute = 0; }
+            { Weekday = 0; Hour = 15; Minute = 0; }
+          ];
           StandardOutPath = "/var/log/nix-gc.log";
           StandardErrorPath = "/var/log/nix-gc.log";
         };
