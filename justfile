@@ -14,12 +14,13 @@ default:
 
 # Warn if there are untracked files under modules/ or hosts/ — Nix flakes
 # only see git-tracked files, so untracked changes are silently ignored
-
 # by build/eval/check. Run `git add -N <paths>` to make them visible.
 _check-untracked:
     #!/usr/bin/env bash
     set -euo pipefail
-    untracked=$(git status --porcelain | grep -E '^\?\? (modules|hosts)/' || true)
+    # matches: ?? modules/foo.nix   and   ?? hosts/FCX19GT9XR/secrets.nix
+    # perl exits 0 on no match, so this needs no `|| true` under `set -e`.
+    untracked=$(git status --porcelain | perl -ne 'print if m{^\?\? (?:modules|hosts)/}')
     if [ -n "$untracked" ]; then
         echo "WARNING: untracked files under modules/ or hosts/ — the flake will NOT see them." >&2
         echo "Stage them first:  git add -N <paths>" >&2
@@ -47,7 +48,14 @@ build-host host: _check-untracked
 switch *args:
     #!/usr/bin/env bash
     set -euo pipefail
-    serial=$(ioreg -c IOPlatformExpertDevice -d 2 | awk -F'"' '/IOPlatformSerialNumber/{print $4}')
+    # matches:       "IOPlatformSerialNumber" = "FCX19GT9XR"   ->  $+{serial}
+    # Anchored on the key name and the quoted value, not on a '"'-field index.
+    serial=$(ioreg -c IOPlatformExpertDevice -d 2 | perl -ne '
+        if (/"IOPlatformSerialNumber" \s* = \s* "(?<serial>[^"]+)"/x) {
+            print $+{serial};
+            last;
+        }
+    ')
     [ -n "$serial" ] || { echo "could not determine hardware serial" >&2; exit 1; }
     echo "→ sudo darwin-rebuild switch --flake .#${serial} $*" >&2
     sudo darwin-rebuild switch --flake ".#${serial}" "$@"
