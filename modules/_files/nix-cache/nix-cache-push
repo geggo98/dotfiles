@@ -129,15 +129,20 @@ if [[ "${#paths[@]}" -eq 0 ]]; then
   exit 0
 fi
 
-# Drop large fixed-output derivations. R2 storage costs money, and a FOD is by
-# definition obtainable elsewhere: it records the URL it came from and the hash
-# to verify it with, so caching one duplicates something already fetchable.
-# Small ones are kept deliberately — they cost almost nothing and preserve the
-# one case where caching a FOD does pay off, an upstream that disappears while
-# the hash stays valid. Set NIX_CACHE_MAX_FOD_BYTES=0 to keep all of them.
+# Drop large fixed-output derivations from the starting set. R2 storage costs
+# money and a FOD is obtainable elsewhere by construction: it records the URL it
+# came from and the hash to verify it with. Small ones are kept deliberately —
+# they cost almost nothing and preserve the one case where caching a FOD pays
+# off, an upstream that vanishes while the hash stays valid. Set
+# NIX_CACHE_MAX_FOD_BYTES=0 to keep all of them.
 #
-# Measured on the ionos-vps closure: two nix-index databases account for ~97 MB
-# of a 252 MB delta, i.e. ~40%, and that share grows with every flake input.
+# Scope, honestly: this only removes FODs that nothing else in the set points
+# at. Because `nix copy` uploads closures (see the note at the bottom of this
+# file for why it must), a FOD that some surviving path references is uploaded
+# anyway as part of that closure — no dangling reference, but no saving either.
+# It works for the case it was written for: on the ionos-vps closure the 97 MB
+# index-x86_64-linux is referenced by nothing, while its small sibling is the
+# one nix-index-database actually points at.
 max_fod="${NIX_CACHE_MAX_FOD_BYTES:-10485760}" # 10 MiB
 if [[ "$max_fod" -gt 0 ]]; then
   store_args=()
@@ -178,9 +183,27 @@ if dropped:
 fi
 
 echo "nix-cache-push: uploading ${#paths[@]} path(s) to R2 ..." >&2
+
+# Closures, NOT --no-recursive. This is worth stating because --no-recursive
+# looks like the obvious saving and is a dead end: a binary cache has to be
+# referentially complete. Every narinfo lists the path's references, so Nix
+# refuses to write one whose references are absent at the destination:
+#
+#   error: cannot add '/nix/store/…-etc' to the binary cache because the
+#          reference '/nix/store/…-chfn.pam' is not valid
+#
+# chfn.pam is on cache.nixos.org, so the filter above had dropped it — exactly
+# the paths the filter removes are the ones the survivors still point at. The
+# filters therefore choose the STARTING SET only; `nix copy` expands each to its
+# closure and uploads whatever R2 lacks. R2 consequently ends up mirroring the
+# subset of the public cache that these systems use, and that is the price of a
+# valid cache rather than an oversight. At $0.015/GB-month with 10 GB free, the
+# bucket at ~19 GB costs about $0.14/month.
+#
 # --from is passed through so the NARs are read from the remote store; signing
 # still happens locally, with the key that never leaves this machine.
 if [[ -n "$from_store" ]]; then
-  exec nix copy --from "$from_store" --to "${s3_url}&secret-key=${signing_key}" "${paths[@]}"
+  exec nix copy --from "$from_store" \
+    --to "${s3_url}&secret-key=${signing_key}" "${paths[@]}"
 fi
 exec nix copy --to "${s3_url}&secret-key=${signing_key}" "${paths[@]}"
