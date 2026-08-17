@@ -10,6 +10,9 @@ in
   flake.modules.homeManager.base = {
     imports = [
       hm.shell
+      # Split from `shell` so that aspect can be imported by hosts without
+      # sops-nix (the NixOS VPS). Kept here so the workstations are unchanged.
+      hm.shell-secrets
       hm.git
       hm.gpg
       hm.gradle

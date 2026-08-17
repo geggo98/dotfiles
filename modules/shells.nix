@@ -1,5 +1,66 @@
 { inputs, ... }:
 {
+  # Split out of `shell` so that aspect stays evaluable on hosts without
+  # sops-nix. Every line below dereferences `config.sops.secrets.<name>.path`,
+  # which is an eval-time error — not a runtime one — if the secret is not
+  # declared, so a server that has no business holding these API keys could not
+  # import `shell` at all while they lived in it.
+  #
+  # mkAfter is load-bearing: `export_nix_sops_secret_*` are fish functions
+  # defined in _files/shell/promptInit.fish, which `shell` prepends. Plain
+  # `types.lines` merging gives no order guarantee between two modules, so
+  # without this the exports could be emitted before the functions exist.
+  flake.modules.homeManager.shell-secrets = { config, lib, ... }: {
+    programs.fish.interactiveShellInit = lib.mkAfter ''
+      export_nix_sops_secret_path OPENAI_API_KEY_PATH "${config.sops.secrets.openai_api_key.path}"
+      export_nix_sops_secret_value OPENAI_API_KEY "${config.sops.secrets.openai_api_key.path}"
+
+      export_nix_sops_secret_path OPENROUTER_API_KEY_PATH "${config.sops.secrets.openrouter_api_key.path}"
+      export_nix_sops_secret_value OPENROUTER_API_KEY "${config.sops.secrets.openrouter_api_key.path}"
+      # llm-openrouter expects the key in the environment variables LLM_OPENROUTER_KEY and OPENROUTER_KEY.
+      export_nix_sops_secret_value LLM_OPENROUTER_KEY "${config.sops.secrets.openrouter_api_key.path}"
+      export_nix_sops_secret_value OPENROUTER_KEY "${config.sops.secrets.openrouter_api_key.path}"
+
+      export_nix_sops_secret_path GROQ_API_KEY_PATH "${config.sops.secrets.groq_api_key.path}"
+      export_nix_sops_secret_value GROQ_API_KEY "${config.sops.secrets.groq_api_key.path}"
+
+      # llm-openrouter expects the key in the environment variables LLM_GEMINI_KEY
+      export_nix_sops_secret_value LLM_GEMINI_KEY "${config.sops.secrets.gemini_api_key.path}"
+      export_nix_sops_secret_value GEMINI_API_KEY "${config.sops.secrets.gemini_api_key.path}"
+      export_nix_sops_secret_path GEMINI_API_KEY_PATH "${config.sops.secrets.gemini_api_key.path}"
+
+      export_nix_sops_secret_path CONTEXT7_API_KEY_PATH "${config.sops.secrets.context7_api_key.path}"
+      export_nix_sops_secret_value CONTEXT7_API_KEY "${config.sops.secrets.context7_api_key.path}"
+
+      export_nix_sops_secret_path OLLAMA_API_KEY_PATH "${config.sops.secrets.ollama_api_key.path}"
+      export_nix_sops_secret_value OLLAMA_API_KEY "${config.sops.secrets.ollama_api_key.path}"
+
+      export_nix_sops_secret_path TRAVILY_API_KEY_PATH "${config.sops.secrets.travily_api_key.path}"
+      export_nix_sops_secret_value TRAVILY_API_KEY "${config.sops.secrets.travily_api_key.path}"
+
+      export_nix_sops_secret_path Z_AI_API_KEY_PATH "${config.sops.secrets.z_ai_api_key.path}"
+      export_nix_sops_secret_value Z_AI_API_KEY "${config.sops.secrets.z_ai_api_key.path}"
+
+      export_nix_sops_secret_path HF_TOKEN_PATH "${config.sops.secrets.huggingface_ro_token.path}"
+      export_nix_sops_secret_value HF_TOKEN "${config.sops.secrets.huggingface_ro_token.path}"
+      # huggingface_hub / transformers / datasets also honor the legacy alias
+      export_nix_sops_secret_value HUGGING_FACE_HUB_TOKEN "${config.sops.secrets.huggingface_ro_token.path}"
+      # LangChain reads HUGGINGFACEHUB_API_TOKEN
+      export_nix_sops_secret_value HUGGINGFACEHUB_API_TOKEN "${config.sops.secrets.huggingface_ro_token.path}"
+
+      export_nix_sops_secret_path ABSENCE_IO_API_ID_PATH "${config.sops.secrets.absence_io_api_id.path}"
+      export_nix_sops_secret_value ABSENCE_IO_API_ID "${config.sops.secrets.absence_io_api_id.path}"
+
+      export_nix_sops_secret_path ABSENCE_IO_API_KEY_PATH "${config.sops.secrets.absence_io_api_key.path}"
+      export_nix_sops_secret_value ABSENCE_IO_API_KEY "${config.sops.secrets.absence_io_api_key.path}"
+
+      export_nix_sops_secret_value SLACK_C24_API_KEY "${config.sops.secrets.slack_c24_api_key.path}"
+
+      export_nix_sops_secret_value ATLASSIAN_C24_BITBUCKET_API_TOKEN "${config.sops.secrets.atlassian_c24_bitbucket_api_token.path}"
+      export_nix_sops_secret_value ATLASSIAN_API_TOKEN "${config.sops.secrets.atlassian_c24_bitbucket_api_token.path}"
+    '';
+  };
+
   flake.modules.homeManager.shell = { config, pkgs, lib, ... }: {
     imports = [ inputs.nix-index-database.homeModules.nix-index ];
 
@@ -26,53 +87,6 @@
       enable = true;
       interactiveShellInit = (builtins.readFile ./_files/shell/promptInit.fish)
         + ''
-        export_nix_sops_secret_path OPENAI_API_KEY_PATH "${config.sops.secrets.openai_api_key.path}"
-        export_nix_sops_secret_value OPENAI_API_KEY "${config.sops.secrets.openai_api_key.path}"
-
-        export_nix_sops_secret_path OPENROUTER_API_KEY_PATH "${config.sops.secrets.openrouter_api_key.path}"
-        export_nix_sops_secret_value OPENROUTER_API_KEY "${config.sops.secrets.openrouter_api_key.path}"
-        # llm-openrouter expects the key in the environment variables LLM_OPENROUTER_KEY and OPENROUTER_KEY.
-        export_nix_sops_secret_value LLM_OPENROUTER_KEY "${config.sops.secrets.openrouter_api_key.path}"
-        export_nix_sops_secret_value OPENROUTER_KEY "${config.sops.secrets.openrouter_api_key.path}"
-
-        export_nix_sops_secret_path GROQ_API_KEY_PATH "${config.sops.secrets.groq_api_key.path}"
-        export_nix_sops_secret_value GROQ_API_KEY "${config.sops.secrets.groq_api_key.path}"
-
-        # llm-openrouter expects the key in the environment variables LLM_GEMINI_KEY
-        export_nix_sops_secret_value LLM_GEMINI_KEY "${config.sops.secrets.gemini_api_key.path}"
-        export_nix_sops_secret_value GEMINI_API_KEY "${config.sops.secrets.gemini_api_key.path}"
-        export_nix_sops_secret_path GEMINI_API_KEY_PATH "${config.sops.secrets.gemini_api_key.path}"
-
-        export_nix_sops_secret_path CONTEXT7_API_KEY_PATH "${config.sops.secrets.context7_api_key.path}"
-        export_nix_sops_secret_value CONTEXT7_API_KEY "${config.sops.secrets.context7_api_key.path}"
-
-        export_nix_sops_secret_path OLLAMA_API_KEY_PATH "${config.sops.secrets.ollama_api_key.path}"
-        export_nix_sops_secret_value OLLAMA_API_KEY "${config.sops.secrets.ollama_api_key.path}"
-
-        export_nix_sops_secret_path TRAVILY_API_KEY_PATH "${config.sops.secrets.travily_api_key.path}"
-        export_nix_sops_secret_value TRAVILY_API_KEY "${config.sops.secrets.travily_api_key.path}"
-
-        export_nix_sops_secret_path Z_AI_API_KEY_PATH "${config.sops.secrets.z_ai_api_key.path}"
-        export_nix_sops_secret_value Z_AI_API_KEY "${config.sops.secrets.z_ai_api_key.path}"
-
-        export_nix_sops_secret_path HF_TOKEN_PATH "${config.sops.secrets.huggingface_ro_token.path}"
-        export_nix_sops_secret_value HF_TOKEN "${config.sops.secrets.huggingface_ro_token.path}"
-        # huggingface_hub / transformers / datasets also honor the legacy alias
-        export_nix_sops_secret_value HUGGING_FACE_HUB_TOKEN "${config.sops.secrets.huggingface_ro_token.path}"
-        # LangChain reads HUGGINGFACEHUB_API_TOKEN
-        export_nix_sops_secret_value HUGGINGFACEHUB_API_TOKEN "${config.sops.secrets.huggingface_ro_token.path}"
-
-        export_nix_sops_secret_path ABSENCE_IO_API_ID_PATH "${config.sops.secrets.absence_io_api_id.path}"
-        export_nix_sops_secret_value ABSENCE_IO_API_ID "${config.sops.secrets.absence_io_api_id.path}"
-
-        export_nix_sops_secret_path ABSENCE_IO_API_KEY_PATH "${config.sops.secrets.absence_io_api_key.path}"
-        export_nix_sops_secret_value ABSENCE_IO_API_KEY "${config.sops.secrets.absence_io_api_key.path}"
-
-        export_nix_sops_secret_value SLACK_C24_API_KEY "${config.sops.secrets.slack_c24_api_key.path}"
-
-        export_nix_sops_secret_value ATLASSIAN_C24_BITBUCKET_API_TOKEN "${config.sops.secrets.atlassian_c24_bitbucket_api_token.path}"
-        export_nix_sops_secret_value ATLASSIAN_API_TOKEN "${config.sops.secrets.atlassian_c24_bitbucket_api_token.path}"
-
         # set theme for current session https://fishshell.com/docs/current/cmds/fish_config.html
         fish_config theme choose "Dracula" # --color-theme=dark
       '';
