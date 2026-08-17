@@ -334,6 +334,56 @@ pulumi-audit *args:
 infra-verify *args:
     python3 infra/scripts/infra-verify.py "$@"
 
+# Fills the inventory and decides how deeply Nix can manage a host: system-manager
+# on the existing distro, or a full NixOS conversion via nixos-anywhere. Changes
+# nothing on the target; prints to stdout, so redirect to keep the result —
+#   just infra-recon root@87.106.149.208 > /tmp/ionos-recon.txt
+#
+# Read-only SSH survey of an unprovisioned host (hardware, disks, network, services)
+infra-recon target:
+    #!/usr/bin/env bash
+    set -euo pipefail
+    echo "# recon of $1 — read-only, no changes made"
+    # BatchMode: fail fast instead of prompting, so a missing key is an error
+    # rather than a hung recipe. accept-new (not `no`) because the point of this
+    # run is often to learn the host key in the first place; `just infra-verify`
+    # is what pins it afterwards.
+    ssh -o BatchMode=yes -o ConnectTimeout=10 -o StrictHostKeyChecking=accept-new \
+        "$1" 'bash -s' <<'REMOTE'
+    # Survey only. Every entry is a read; nothing here writes, installs or
+    # restarts. A missing tool prints "(exit N)" rather than aborting the run —
+    # for a survey "not present" is a real answer, not a swallowed failure.
+    run() { printf '\n### %s\n' "$1"; sh -c "$2" 2>&1 || printf '(exit %d)\n' "$?"; }
+
+    run 'identity'        'hostnamectl; uname -a'
+    run 'uptime / boot'   'uptime; who -b'
+    run 'cpu + memory'    'nproc; free -m'
+    run 'block devices'   'lsblk -o NAME,SIZE,TYPE,FSTYPE,MOUNTPOINT,MODEL'
+    run 'partitions'      'sudo -n parted -l 2>/dev/null || parted -l 2>/dev/null || echo "(needs root)"'
+    run 'filesystems'     'df -hT -x tmpfs -x devtmpfs'
+    run 'fstab'           'cat /etc/fstab'
+    # Interface name and both gateways decide the static network config a NixOS
+    # install must carry: IONOS hands out a static IPv6 with a link-local gateway,
+    # and a DHCP-only config comes back up without it.
+    run 'addresses'       'ip -brief addr'
+    run 'routes v4'       'ip route'
+    run 'routes v6'       'ip -6 route'
+    run 'netplan'         'cat /etc/netplan/*.yaml 2>/dev/null || echo "(no netplan)"'
+    run 'dns'             'resolvectl status 2>/dev/null | head -30 || cat /etc/resolv.conf'
+    run 'kexec support'   'test -e /sys/kernel/kexec_loaded && echo "kexec_loaded present" || echo "no /sys/kernel/kexec_loaded"; dpkg -l kexec-tools 2>/dev/null | tail -1'
+    run 'running units'   'systemctl list-units --type=service --state=running --no-pager --no-legend'
+    run 'listening ports' 'ss -tulpn 2>/dev/null || ss -tuln'
+    run 'enabled at boot' 'systemctl list-unit-files --state=enabled --no-pager --no-legend'
+    run 'containers'      'docker ps -a 2>/dev/null || echo "(no docker)"; podman ps -a 2>/dev/null || true'
+    # What a NixOS conversion would destroy. Sizes only — no file contents.
+    run 'data footprint'  'sudo -n du -shx /home /srv /opt /var/www /var/lib /root 2>/dev/null || du -shx /home /srv /opt /var/www 2>/dev/null || echo "(needs root)"'
+    run 'human users'     'getent passwd | awk -F: "\$3 >= 1000 && \$3 < 65534"'
+    run 'authorized_keys' 'wc -l /root/.ssh/authorized_keys ~/.ssh/authorized_keys 2>/dev/null || echo "(none readable)"'
+    run 'cron / timers'   'ls -1 /etc/cron.d 2>/dev/null; systemctl list-timers --no-pager --no-legend 2>/dev/null | head -20'
+    run 'nix present?'    'test -d /nix && echo "/nix exists" || echo "no /nix"'
+    run 'package count'   'dpkg -l | grep -c "^ii" || true'
+    REMOTE
+
 # --- Nix binary cache (Cloudflare R2) ---
 
 # Endpoint of the S3 push target (public pull URL is the custom domain).
