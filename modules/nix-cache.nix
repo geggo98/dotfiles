@@ -29,8 +29,24 @@
       # daemon runs as root, so the file lands 644 and is readable without sudo.
       logFile = "/var/log/nix-cache-push.log";
 
+      # zsh, per AGENTS.md, and `writeShellScriptBin` hardcodes bash — hence
+      # writeTextFile with an explicit shebang. It is `${pkgs.zsh}` rather than
+      # /bin/zsh so the interpreter is pinned like every other tool these scripts
+      # call; the source file carries its own /bin/zsh line for direct invocation
+      # from `just`, which Nix's prepended shebang then shadows. zsh is free here
+      # — zsh-5.9.1 is already in the system closure.
+      mkZshScript = name: text: pkgs.writeTextFile {
+        inherit name;
+        destination = "/bin/${name}";
+        executable = true;
+        text = ''
+          #!${pkgs.zsh}/bin/zsh
+          ${text}
+        '';
+      };
+
       # Shared push logic; also invoked by `just cache-seed`/`cache-push`.
-      pushScript = pkgs.writeShellScriptBin "nix-cache-push"
+      pushScript = mkZshScript "nix-cache-push"
         (builtins.readFile ./_files/nix-cache/nix-cache-push);
 
       # post-build-hook — runs as root (nix-daemon) after every local build.
@@ -57,7 +73,7 @@
       # included: logging only failures would make an empty file mean either
       # "all good" or "the hook never ran", which is the ambiguity this exists to
       # remove.
-      hookScript = pkgs.writeShellScriptBin "nix-cache-post-build-hook" ''
+      hookScript = mkZshScript "nix-cache-post-build-hook" ''
         export PATH="/nix/var/nix/profiles/default/bin:/run/current-system/sw/bin:/usr/bin:/bin"
         export NIX_CACHE_S3_URL='${s3Url}'
         export NIX_CACHE_SECRETS_DIR='${secretsDir}'
@@ -71,7 +87,13 @@
         [ -n "$out" ] || out=/dev/null
         start=$(${pkgs.coreutils}/bin/date +%s)
 
-        ${pkgs.coreutils}/bin/timeout 600 ${pushScript}/bin/nix-cache-push $OUT_PATHS >"$out" 2>&1
+        # ''${=VAR}, not $VAR. zsh does NOT word-split unquoted parameters — the
+        # very property AGENTS.md praises it for — and $OUT_PATHS is a
+        # space-separated list that must arrive as separate arguments. Plain
+        # $OUT_PATHS here would hand nix-cache-push one bogus argument and every
+        # push would fail. Measured: `V="x y z"; set -- $V` gives argc=1 under
+        # zsh, 3 under bash.
+        ${pkgs.coreutils}/bin/timeout 600 ${pushScript}/bin/nix-cache-push ''${=OUT_PATHS} >"$out" 2>&1
         rc=$?
 
         # ONE RECORD = ONE printf. This is why the push output is captured to a
@@ -83,8 +105,8 @@
         # guarantee holds below one write().
         now=$(${pkgs.coreutils}/bin/date +%Y-%m-%dT%H:%M:%S%z)
         dur=$(( $(${pkgs.coreutils}/bin/date +%s) - start ))
-        n=$(printf '%s\n' $OUT_PATHS | ${pkgs.coreutils}/bin/wc -l | ${pkgs.coreutils}/bin/tr -d ' ')
-        first=$(printf '%s\n' $OUT_PATHS | ${pkgs.coreutils}/bin/head -1)
+        n=$(printf '%s\n' ''${=OUT_PATHS} | ${pkgs.coreutils}/bin/wc -l | ${pkgs.coreutils}/bin/tr -d ' ')
+        first=$(printf '%s\n' ''${=OUT_PATHS} | ${pkgs.coreutils}/bin/head -1)
         first=''${first##*/}
 
         if [ "$rc" -eq 0 ]; then
