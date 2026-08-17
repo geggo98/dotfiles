@@ -3,6 +3,11 @@ let
   inherit (config.flake.modules) nixos homeManager;
 in
 {
+  # Where `just nixos-deploy ionos-vps` activates. The IPv4 literal rather than
+  # a hostname: this box's own DNS is not what we want to depend on when the
+  # reason for deploying might be that something on it is broken.
+  configurations.nixos.ionos-vps.deployTarget = "root@87.106.149.208";
+
   configurations.nixos.ionos-vps.module = {
     imports = [
       inputs.disko.nixosModules.disko
