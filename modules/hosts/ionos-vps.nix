@@ -1,13 +1,58 @@
 { config, inputs, ... }:
 let
-  inherit (config.flake.modules) nixos;
+  inherit (config.flake.modules) nixos homeManager;
 in
 {
   configurations.nixos.ionos-vps.module = {
     imports = [
       inputs.disko.nixosModules.disko
+      inputs.home-manager.nixosModules.home-manager
       nixos.base
     ];
+
+    # --- Interactive environment ---------------------------------------------
+    # The same shell as the workstations: fish with the shared promptInit,
+    # starship, atuin, fzf, bat, the plugin set and the abbreviations.
+    #
+    # `homeManager.shell` and not `homeManager.base`: base pulls in the whole
+    # workstation aspect set (vscode, gram, homebrew-adjacent tooling, the AI
+    # stack) plus `shell-secrets`, which dereferences sops secrets this host
+    # neither has nor should have. Two aspects is the whole ask — fish and nvim.
+    #
+    # Applied to root because root is the only account here. A dedicated user is
+    # the better long-term shape, but adding one now would change how you log in,
+    # which is not a thing to bundle into an unrelated change.
+    programs.fish.enable = true;
+    users.users.root.shell = inputs.nixpkgs.legacyPackages."x86_64-linux".fish;
+
+    home-manager = {
+      useGlobalPkgs = true;
+      useUserPackages = true;
+      users.root = { pkgs, ... }: {
+        imports = [
+          homeManager.shell
+          homeManager.neovim
+        ];
+
+        # The binaries `shell` and `neovim` assume are on PATH. Without them the
+        # config loads but misbehaves quietly: nvim prints "gitsigns: git not in
+        # path. Aborting setup" and every +l/+ll/+lt abbreviation expands to a
+        # command that does not exist.
+        #
+        # Deliberately NOT `homeManager.packages` (~144 entries — the whole AI
+        # toolchain on a 4 GB server), and deliberately not `homeManager.git`:
+        # that aspect sets credentialStore = "keychain", which is macOS-only. Git
+        # is wanted here as a binary, not as this user's workstation identity.
+        home.packages = with pkgs; [
+          git # gitsigns, and the +git-* forgit abbreviations
+          lsd # +l / +ll / +lla / +llt / +lt
+          ugrep # +grep / +grep-tui  (the `ug` binary)
+          ripgrep # telescope/live-grep inside nvim
+          fd
+        ];
+        home.stateVersion = "26.05";
+      };
+    };
 
     nixpkgs.hostPlatform = "x86_64-linux";
 
