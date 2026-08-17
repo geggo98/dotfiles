@@ -134,12 +134,45 @@ authentication is off — so an assertion fails the *build* if the list is ever
 emptied, rather than letting the outage happen at reboot. A serial getty on
 `ttyS0` is enabled as a second, network-independent route.
 
-**No workstation here can build this host.** These Macs are `aarch64-darwin`
-with `extra-platforms = x86_64-darwin` and no remote builders, so `nix build` of
-an `x86_64-linux` system is impossible locally. Installs and deploys must build
-on the target (`nixos-anywhere --build-on remote`, `colmena --build-on-target`).
-`nix flake check` is unaffected: it reports x86_64-linux as an "incompatible
-system" and skips it, so `just check` still passes on a Mac.
+**No workstation here can build this host, and that is not fixable in-tree.**
+
+The distinction that causes confusion: these Macs can *substitute* any
+x86_64-linux path that exists in a cache, so `nix build
+nixpkgs#legacyPackages.x86_64-linux.ponysay` succeeds and looks like a build. It
+is not one — check the output, every line is `copying path … from`. Force an
+actual build and the truth appears:
+
+```console
+$ nix build --rebuild nixpkgs#legacyPackages.x86_64-linux.ponysay
+error: Cannot build '…-ponysay-….drv'.
+       Reason: platform mismatch
+       Required system: 'x86_64-linux'
+       Current system: 'aarch64-darwin'
+```
+
+Both obvious remedies are closed:
+
+- **nix-darwin's `nix.linux-builder`** requires `nix.enable`, which this repo
+  sets to `false` because Determinate manages Nix
+  ([nix-darwin#1505](https://github.com/nix-darwin/nix-darwin/issues/1505)).
+- **Determinate's own Linux builder** exists (macOS Virtualization framework,
+  targets both Linux arches) but is gated: their docs describe a staged rollout
+  and say to request access.
+
+So installs and deploys build on the target (`nixos-anywhere --build-on remote`,
+`nixos-rebuild --build-host`), and `just cache-seed-remote root@<host>` is how
+x86_64-linux paths reach the R2 cache — the workstation reads them out of the
+server's store, signs them locally and uploads, so the R2 *write* key never
+leaves the Mac and the server keeps the cache as a read-only substituter.
+
+A third option not taken: registering the VPS itself as a remote builder in
+`determinateNix.customSettings.builders`. That would let the Mac delegate
+x86_64-linux builds to it and push the results through the normal
+post-build-hook. Reasonable, but it makes a production host into build
+infrastructure — decide deliberately rather than by drift.
+
+`nix flake check` is unaffected by any of this: it reports x86_64-linux as an
+"incompatible system" and skips it, so `just check` still passes on a Mac.
 
 Initial install (destroys the disk). Done on 2026-08-17; kept because it is also
 the recovery procedure:
