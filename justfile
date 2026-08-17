@@ -421,8 +421,18 @@ cache-push *paths:
 # the server has the cache as a read-only substituter and never holds a push key.
 #   just cache-seed-remote root@87.106.149.208
 cache-seed-remote host target="/run/current-system":
+    #!/usr/bin/env bash
+    set -euo pipefail
+    # max-connections=1 is not tuning, it is correctness. `nix copy` otherwise
+    # opens several SSH channels at once; sshd refuses the ones past its
+    # MaxSessions limit, and the refused channel hands nix a few bytes of
+    # multiplexer noise instead of a protocol greeting:
+    #     error: cannot open connection to remote store 'ssh-ng://…':
+    #            protocol mismatch, got 'started …'
+    # The whole copy then aborts having transferred nothing. Serial is slower
+    # and finishes.
     NIX_CACHE_S3_URL='{{ R2_S3_URL }}' bash modules/_files/nix-cache/nix-cache-push \
-      --from "ssh-ng://{{ host }}" --seed "{{ target }}"
+      --from "ssh-ng://{{ host }}?max-connections=1" --seed "{{ target }}"
 
 # Bootstrap a fresh machine: pre-fetch the R2-cached delta (the paths NOT on
 # cache.nixos.org) into the store BEFORE the first switch, so that first —
