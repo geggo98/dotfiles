@@ -25,6 +25,10 @@
       publicUrl = "https://nix-cache.pub.schwetschke.dev";
       publicKey = "nix-cache.pub.schwetschke.dev-1:R3UAHtpY90nzsAtEm3LDaWsEAHYQK6YG+i8mYxTgL10=";
 
+      # Beside /var/log/nix-gc.log. /var/log is root:wheel drwxr-xr-x and the
+      # daemon runs as root, so the file lands 644 and is readable without sudo.
+      logFile = "/var/log/nix-cache-push.log";
+
       # Shared push logic; also invoked by `just cache-seed`/`cache-push`.
       pushScript = pkgs.writeShellScriptBin "nix-cache-push"
         (builtins.readFile ./_files/nix-cache/nix-cache-push);
@@ -44,11 +48,62 @@
       # decrypted secrets are not yet present (a build before first login, or
       # after macOS reaps the temp dir), the push script exits early and the
       # `|| true` swallows it — no upload, but the build never fails.
+      #
+      # LOGGING: `|| true` is right, but it used to also mean *silent*. A failed
+      # push (R2 rate limit, secrets not yet decrypted, an upload past the 600 s
+      # timeout) dropped the path with no trace anywhere — the daemon log holds
+      # zero hook output — and surfaced weeks later as a cache miss on the other
+      # Mac. Every invocation now leaves one line in ${logFile}, successes
+      # included: logging only failures would make an empty file mean either
+      # "all good" or "the hook never ran", which is the ambiguity this exists to
+      # remove.
       hookScript = pkgs.writeShellScriptBin "nix-cache-post-build-hook" ''
         export PATH="/nix/var/nix/profiles/default/bin:/run/current-system/sw/bin:/usr/bin:/bin"
         export NIX_CACHE_S3_URL='${s3Url}'
         export NIX_CACHE_SECRETS_DIR='${secretsDir}'
-        ${pkgs.coreutils}/bin/timeout 600 ${pushScript}/bin/nix-cache-push $OUT_PATHS || true
+
+        # The XXXXXX are required, not decoration: GNU coreutils rejects a
+        # template with fewer than three X's ("too few X's in template"), and the
+        # `|| true` then falls through to /dev/null — which discards exactly the
+        # error text the FAIL branch exists to report. Caught in testing, where
+        # the success path looked perfect and every failure logged err="".
+        out=$(${pkgs.coreutils}/bin/mktemp -t nix-cache-push.XXXXXX 2>/dev/null || true)
+        [ -n "$out" ] || out=/dev/null
+        start=$(${pkgs.coreutils}/bin/date +%s)
+
+        ${pkgs.coreutils}/bin/timeout 600 ${pushScript}/bin/nix-cache-push $OUT_PATHS >"$out" 2>&1
+        rc=$?
+
+        # ONE RECORD = ONE printf. This is why the push output is captured to a
+        # file and folded, rather than simply redirected: the hook runs once per
+        # derivation, so with max-jobs > 1 several instances append concurrently.
+        # A single printf under O_APPEND is atomic (measured: 40 writers x 50
+        # records, 2000 intact lines, zero torn); `command >> log` is not, because
+        # it writes many times. Records stay short for the same reason — the
+        # guarantee holds below one write().
+        now=$(${pkgs.coreutils}/bin/date +%Y-%m-%dT%H:%M:%S%z)
+        dur=$(( $(${pkgs.coreutils}/bin/date +%s) - start ))
+        n=$(printf '%s\n' $OUT_PATHS | ${pkgs.coreutils}/bin/wc -l | ${pkgs.coreutils}/bin/tr -d ' ')
+        first=$(printf '%s\n' $OUT_PATHS | ${pkgs.coreutils}/bin/head -1)
+        first=''${first##*/}
+
+        if [ "$rc" -eq 0 ]; then
+          printf '%s pid=%d status=ok   exit=0 paths=%s dur=%ss first=%s\n' \
+            "$now" "$$" "$n" "$dur" "$first" >>'${logFile}' 2>/dev/null || true
+        else
+          # Fold to one line, keep the TAIL: the diagnosis is at the end of the
+          # output, and the record must stay inside the atomic-write bound.
+          err=$(${pkgs.coreutils}/bin/tr '\n\r\t' '   ' <"$out" \
+                | ${pkgs.coreutils}/bin/tr -s ' ' \
+                | ${pkgs.coreutils}/bin/tail -c 240)
+          printf '%s pid=%d status=FAIL exit=%d paths=%s dur=%ss first=%s err="%s"\n' \
+            "$now" "$$" "$rc" "$n" "$dur" "$first" "$err" >>'${logFile}' 2>/dev/null || true
+        fi
+
+        # An unwritable /var/log must not fail a build either, hence the
+        # `|| true` on both printfs and the unconditional exit.
+        [ "$out" = /dev/null ] || ${pkgs.coreutils}/bin/rm -f "$out"
+        exit 0
       '';
     in
     {
