@@ -119,6 +119,8 @@ Running `pulumi` directly in `infra/` requires a prior `pnpm run build`:
 | `just pulumi-preview` | Preview infrastructure changes |
 | `just pulumi-up` | Apply infrastructure changes |
 | `just pulumi-stack` | Show current stack state |
+| `just infra-verify` | Check `src/inventory.ts` against the real machines (reachability + SSH host key) |
+| `just infra-recon <target>` | Read-only survey of an unprovisioned host over SSH |
 | `just cache-seed` | Seed the R2 binary cache with the current system's delta |
 | `just cache-push <paths>` | Push specific store paths to the R2 cache (repair/ad hoc) |
 
@@ -211,6 +213,41 @@ Secrets:
 | `r2_access_key_id` | `secrets.enc.yaml` | `nix copy` push (S3 access key id) |
 | `r2_secret_access_key` — a Cloudflare API token (`cfat_…`); the push script derives its SHA-256 as the S3 secret. A ready-made 64-hex R2 secret is also accepted verbatim. | `secrets.enc.yaml` | `nix copy` push |
 | `nix_cache_signing_key` | `secrets.enc.yaml` | NAR signing on push |
+
+## Hosts Pulumi cannot manage (`src/inventory.ts`)
+
+Not every machine can be a resource. The IONOS VPS `p-ion-ber-xs56r6` lives in the
+IONOS **Cloud Panel**, a different product family from IONOS Cloud / DCD, with a
+different API — and this tariff cannot issue an API key for it at all. There is no
+provider and no endpoint, so `pulumi import` is not an option. The full evidence is
+in [`Architecture.md` §11](./Architecture.md#11-the-ionos-vps-is-out-of-pulumis-reach--and-why);
+read it before adding an IONOS provider in the hope of adopting this server.
+
+It is recorded anyway, as hand-maintained constants in `src/inventory.ts` exported as
+a stack output, so the host appears in the inventory that `Architecture.md` §6 defines
+as the Pulumi→Nix contract rather than living only in a browser tab.
+
+Because Pulumi reconciles nothing here, the drift check is separate and must be run
+deliberately:
+
+```bash
+just infra-verify          # both addresses reachable, Ed25519 host key as recorded
+```
+
+It fails on a key mismatch (reinstall, renumbering, interception) **and** on an
+unreachable host — silence is never treated as success. The recorded key doubles as
+`known_hosts` material for pinning host keys instead of `accept-new`.
+
+To decide how deeply Nix can manage such a host — `system-manager` on the existing
+distro versus a full NixOS conversion via `nixos-anywhere` — survey it first:
+
+```bash
+just infra-recon root@87.106.149.208 > /tmp/ionos-recon.txt
+```
+
+That changes nothing on the target. A NixOS conversion, if chosen, needs both
+recovery paths confirmed beforehand: the Cloud Panel's KVM remote console with
+bootable rescue media, and a server Image taken before the install.
 
 ## Adding a new cloud host
 
