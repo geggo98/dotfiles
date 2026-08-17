@@ -163,11 +163,57 @@ Requires the `sops` CLI and a valid Age key at `~/.ssh/id_ed25519_sops_nopw`.
 
 `src/index.ts` manages a Cloudflare R2 bucket (`nix-cache`) that both Darwin
 hosts use as a shared Nix binary cache — build once on one Mac, substitute on
-the other. `just cache-seed` filters the current system's closure against
-`cache.nixos.org` and hands the delta to `nix copy`; because `nix copy` uploads
-the full *closure* of those paths, the seed lands ~4.5 GiB in R2 (still well
-under R2's 10 GiB free tier). Steady-state growth is just the real per-build
-delta — `nix copy` skips paths already present in R2.
+the other.
+
+### What ends up in the bucket, and why it is more than you expect
+
+`nix-cache-push --seed` filters the closure against `cache.nixos.org` and hands
+only the survivors to `nix copy` — on `ionos-vps` that is 203 paths out of 1140.
+**The bucket still ends up holding most of the closure**, and that is correct
+rather than a bug in the filter:
+
+> a binary cache must be referentially complete. Every narinfo lists the path's
+> references, and Nix refuses to write one whose references are absent at the
+> destination:
+>
+> ```
+> error: cannot add '/nix/store/…-etc' to the binary cache because the
+>        reference '/nix/store/…-chfn.pam' is not valid
+> ```
+>
+> `chfn.pam` is on `cache.nixos.org`, so the filter had dropped it — the paths
+> the filter removes are exactly the ones the survivors point at.
+
+So `--no-recursive` is a dead end (it produces that error), the filters choose
+the *starting set* only, and `nix copy` uploads each survivor's closure minus
+whatever R2 already has. Fixed-output paths above `NIX_CACHE_MAX_FOD_BYTES`
+(default 10 MiB) are dropped too, which helps only for FODs nothing else
+references — the 97 MB `index-x86_64-linux` is one.
+
+Cost, so nobody re-litigates this from first principles: R2 is $0.015/GB-month
+with 10 GB free, egress free, and operations far inside their free tiers. Both
+host closures together are ~8 GB, i.e. **$0**. Growth is monotonic — nothing
+here deletes — and a nixpkgs bump rewrites most store hashes, so the bucket does
+creep. See "Garbage collection" below.
+
+Clients must have `cache.nixos.org` configured *alongside* this one, which every
+host here does, and `just bootstrap` too (`--extra-substituters` adds to the
+defaults rather than replacing them).
+
+### Garbage collection
+
+There is no automatic GC. On 2026-08-17 the bucket had grown to 22.34 GB /
+16089 objects, of which 5073 paths belonged to no current host closure; deleting
+them and their nars freed 14.31 GB and brought it back under the free tier
+(8.19 GB). Runtime was about four minutes end to end: ~10 s to list, ~2 min to
+resolve each narinfo to its nar, ~2 min to delete in batches of 1000.
+
+If you repeat it, the rule that makes it safe is: **delete only what is in no
+current closure**, and enumerate every host first. Paths that are also on
+`cache.nixos.org` are risk-free to drop (any host refetches them publicly);
+paths unique to us mean an old generation can no longer be substituted and would
+have to be rebuilt — acceptable for a cache, which is not a backup, but decide
+it rather than discover it.
 
 - **Bucket:** created by hand, **adopted** by Pulumi (not created):
   ```bash
