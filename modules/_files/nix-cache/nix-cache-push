@@ -8,6 +8,15 @@
 #   nix-cache-push PATH...           push exactly these paths (the post-build
 #                                    hook passes $OUT_PATHS, which are freshly
 #                                    built and therefore already the delta)
+#   nix-cache-push --from STORE ...  read the paths from another Nix store
+#                                    instead of the local one, e.g.
+#                                    --from ssh-ng://root@host
+#
+# Why --from exists: the x86_64-linux host is built on itself (no Darwin
+# workstation can build for it, and none has a Linux builder), so its store is
+# the only place those paths ever exist. Copying them out from here keeps the
+# R2 *write* credentials on the workstation — the server gets the cache as a
+# read-only substituter and never holds a key that can publish to it.
 #
 # Environment:
 #   NIX_CACHE_S3_URL       required, e.g.
@@ -58,6 +67,15 @@ else
 fi
 export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
 
+# --from must be parsed before the mode flags, since it changes which store the
+# closure is read from as well as where `nix copy` pulls from.
+from_store=""
+if [[ "${1:-}" == "--from" ]]; then
+  shift
+  from_store="${1:?--from requires a store URI, e.g. ssh-ng://root@host}"
+  shift
+fi
+
 paths=()
 if [[ "${1:-}" == "--seed" ]]; then
   shift
@@ -67,7 +85,27 @@ if [[ "${1:-}" == "--seed" ]]; then
   # does NOT propagate its failure under `set -e` (the loop would just read zero
   # lines and falsely report success). An assignment does, so an invalid target
   # or an unreachable daemon aborts instead of silently pushing nothing.
-  requisites="$(nix-store --query --requisites "$target")"
+  if [[ -n "$from_store" ]]; then
+    # A symlink like /run/current-system must be resolved ON THE REMOTE HOST.
+    # `nix path-info --store ssh-ng://host /run/current-system` does NOT do that:
+    # it resolves the symlink against the LOCAL filesystem first and then asks
+    # the remote store about the result. From a Darwin workstation that means
+    # asking the Linux server about this Mac's darwin-system path, which fails
+    # with "path ... is not valid" — and a `nix-store --query` here would be
+    # worse, silently walking the workstation's own closure and pushing that
+    # while reporting the server's name.
+    #
+    # matches:  ssh-ng://root@87.106.149.208?compress=true  ->  root@87.106.149.208
+    ssh_host="${from_store#*://}"
+    ssh_host="${ssh_host%%\?*}"
+    if [[ "$target" != /nix/store/* ]]; then
+      target="$(ssh -o BatchMode=yes "$ssh_host" readlink -f "$target")"
+      echo "nix-cache-push: $ssh_host resolved the target to $target" >&2
+    fi
+    requisites="$(nix path-info --store "$from_store" --recursive "$target")"
+  else
+    requisites="$(nix-store --query --requisites "$target")"
+  fi
   while IFS= read -r p; do
     [[ -n "$p" ]] || continue
     h="${p##*/}"
@@ -87,4 +125,9 @@ if [[ "${#paths[@]}" -eq 0 ]]; then
 fi
 
 echo "nix-cache-push: uploading ${#paths[@]} path(s) to R2 ..." >&2
+# --from is passed through so the NARs are read from the remote store; signing
+# still happens locally, with the key that never leaves this machine.
+if [[ -n "$from_store" ]]; then
+  exec nix copy --from "$from_store" --to "${s3_url}&secret-key=${signing_key}" "${paths[@]}"
+fi
 exec nix copy --to "${s3_url}&secret-key=${signing_key}" "${paths[@]}"
