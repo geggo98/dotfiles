@@ -37,7 +37,21 @@ set -eu
 STATE=/nix/var/linux-builder
 PROFILE="$STATE/profile"
 
-mkdir -p "$STATE" /etc/nix /root/.ssh
+# Nix's caches go in the VOLUME, not the container layer. `linux-builder up`
+# replaces the container on every start (its env and mounts would otherwise go
+# stale), so $HOME/.cache would be discarded each time — and that directory
+# holds binary-cache-v8.sqlite (every narinfo lookup we have already paid for),
+# eval-cache-v6, and tarball-cache-v2 (the fetched flake inputs, i.e. nixpkgs).
+# Measured at 73 MB after a single closure; throwing it away meant re-querying
+# thousands of narinfos and re-fetching nixpkgs on every recreation.
+#
+# The trade-off: this now counts against the volume's 25 GiB cap, and
+# `nix store gc` does not prune it — only `linux-builder destroy` does. That is
+# the right way round, because the cap check measures /nix as a whole and will
+# therefore see it grow.
+export XDG_CACHE_HOME="$STATE/cache"
+
+mkdir -p "$STATE" "$XDG_CACHE_HOME" /etc/nix /root/.ssh
 
 # /etc/nix/nix.conf ships as a SYMLINK into the image's own store path:
 #   /etc/nix/nix.conf -> /nix/store/kscc46…-base-system/etc/nix/nix.conf
@@ -223,7 +237,7 @@ UsePAM no
 PrintMotd no
 MaxSessions 32
 PidFile $STATE/sshd.pid
-SetEnv PATH=$PROFILE/bin:/nix/var/nix/profiles/default/bin:/usr/bin:/bin
+SetEnv PATH=$PROFILE/bin:/nix/var/nix/profiles/default/bin:/usr/bin:/bin XDG_CACHE_HOME=$XDG_CACHE_HOME
 EOF
 
 echo "linux-builder: $(nix eval --impure --raw --expr builtins.currentSystem), $(nix --version)" >&2
