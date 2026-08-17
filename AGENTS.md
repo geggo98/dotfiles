@@ -35,8 +35,27 @@ A `justfile` provides safe, pre-approved commands that agents can run without us
 | `just deps` | Show flake dependency tree |
 | `just eval` | Evaluate flake outputs (fast syntax check) |
 | `just show-derivation` | Show derivation of current host build |
-| `just gc` | Collect user-level garbage, keeping the last 7 days of generations |
+| `just gc` | Collect user-level garbage (7 days) and sweep any running Linux builder |
 | `just optimise` | Deduplicate the store (hard-link identical files) |
+| `just linux-builder-up [arch]` | Start the Docker Linux builder (`x86_64` default, or `aarch64`) |
+| `just linux-builder-status [arch]` | Builder state, reported system, store size against its cap |
+| `just linux-builder-gc [arch] [gb]` | Sweep the builder's store back under its cap |
+| `just linux-builder-down [arch]` | Remove the container, keep the store volume |
+| `just linux-build <attr> [arch] false` | Build a flake attribute for Linux — the trailing `false` skips the R2 push |
+
+Four Linux-builder recipes are deliberately **absent** from that list, and the
+reason is not that they need sudo:
+
+- `just linux-build` / `nixos-build` **without** `push="false"`, and
+  `just linux-push`, read the SOPS R2 write credentials and publish **signed**
+  artifacts into the cache both Macs and the VPS substitute from. Combined with
+  the fact that an emulated build lands at the same store path as a native one
+  (see below), an agent should not push there unsupervised. Build with
+  `push="false"` and let a human do the push.
+- `just linux-builder-destroy` deletes a Docker volume and the keypair, and
+  leaves a stale entry that needs a root `ssh-keygen -R` to clear.
+- `just nixos-deploy <host>` activates a production system over ssh. Print it for
+  the user instead, like `just switch`.
 
 ### New files: stage them before building
 
@@ -134,13 +153,16 @@ authentication is off — so an assertion fails the *build* if the list is ever
 emptied, rather than letting the outage happen at reboot. A serial getty on
 `ttyS0` is enabled as a second, network-independent route.
 
-**No workstation here can build this host, and that is not fixable in-tree.**
+**A bare Mac cannot build this host. A Mac with the Docker Linux builder can** —
+see "The Linux builder (Docker)" below. `just nixos-build ionos-vps` and
+`just nixos-deploy ionos-vps` are the everyday commands; the rest of this section
+is why they are needed at all.
 
 The distinction that causes confusion: these Macs can *substitute* any
 x86_64-linux path that exists in a cache, so `nix build
 nixpkgs#legacyPackages.x86_64-linux.ponysay` succeeds and looks like a build. It
 is not one — check the output, every line is `copying path … from`. Force an
-actual build and the truth appears:
+actual build and, with no builder configured, the truth appears:
 
 ```console
 $ nix build --rebuild nixpkgs#legacyPackages.x86_64-linux.ponysay
@@ -150,26 +172,42 @@ error: Cannot build '…-ponysay-….drv'.
        Current system: 'aarch64-darwin'
 ```
 
-Both obvious remedies are closed:
+The two obvious remedies are still closed:
 
 - **nix-darwin's `nix.linux-builder`** requires `nix.enable`, which this repo
   sets to `false` because Determinate manages Nix
   ([nix-darwin#1505](https://github.com/nix-darwin/nix-darwin/issues/1505)).
-- **Determinate's own Linux builder** exists (macOS Virtualization framework,
-  targets both Linux arches) but is gated: their docs describe a staged rollout
-  and say to request access.
+  Under `nix.enable = false`, reading a `nix.*` **default** throws, and — worse —
+  an explicitly *set* `nix.buildMachines` does not throw at all: nix-darwin's
+  whole `managedConfig` block, `environment.etc."nix/machines"` included, sits
+  under `mkIf cfg.enable`, so the setting is **silently dropped**. That is also
+  why `nix-rosetta-builder` cannot be used unmodified — it would appear to work.
+- **Determinate's own Linux builder** is declared in `modules/determinate.nix`
+  but inert. Measured on FCX19GT9XR: `determinate-nixd version` lists only
+  `lazy-trees` as enabled, while the binary's feature list is `lazy-trees
+  parallel-evaluation provenance native-linux-builder`, and it carries the
+  refusal in plain text — *"The Native Linux Builder is not currently available.
+  Contact support@determinate.systems"*. `determinate-nixd status` says
+  `Authentication: logged-out` and `/nix/var/determinate/netrc` is 1 byte.
+  `builder.state = "enabled"` in `/etc/determinate/config.json` is the request,
+  not the grant.
 
-So installs and deploys build on the target (`nixos-anywhere --build-on remote`,
-`nixos-rebuild --build-host`), and `just cache-seed-remote root@<host>` is how
-x86_64-linux paths reach the R2 cache — the workstation reads them out of the
+What is *open* is the third door: **`determinateNix.buildMachines`**. Determinate's
+nix-darwin module defines it as a full submodule and writes `/etc/nix/machines`,
+and Nix's `builders` default is already `@/etc/nix/machines`. That is the hook
+`modules/linux-builder.nix` hangs on. Note `determinateNix.distributedBuilds`
+must also be `true` — its default is `false`, and then the module only warns
+("build machines aren't configured") while delegating nothing.
+
+Fallbacks remain and are not deprecated: installs still use `nixos-anywhere
+--build-on remote`, and `just cache-seed-remote root@<host>` still adopts
+whatever a host built on its own — the workstation reads the paths out of the
 server's store, signs them locally and uploads, so the R2 *write* key never
-leaves the Mac and the server keeps the cache as a read-only substituter.
+leaves the Mac.
 
-A third option not taken: registering the VPS itself as a remote builder in
-`determinateNix.customSettings.builders`. That would let the Mac delegate
-x86_64-linux builds to it and push the results through the normal
-post-build-hook. Reasonable, but it makes a production host into build
-infrastructure — decide deliberately rather than by drift.
+An option still not taken: registering the VPS itself as a remote builder. That
+would work, but it makes a production host into build infrastructure — decide
+deliberately rather than by drift.
 
 `nix flake check` is unaffected by any of this: it reports x86_64-linux as an
 "incompatible system" and skips it, so `just check` still passes on a Mac.
@@ -228,6 +266,267 @@ Third route if both fail: *Aktionen* → *Image neu installieren*, or booting on
 of the ISO rescue systems (Grml, Gparted, Clonezilla) to inspect the disk
 without wiping it.
 
+### The Linux builder (Docker)
+
+`x86_64-linux` and `aarch64-linux` derivations are built locally, in an OrbStack
+container per architecture. x86_64 runs under Rosetta; aarch64 runs natively.
+Mechanism: `modules/_files/linux-builder/linux-builder` (control script) and
+`entrypoint.sh` (what runs inside). System wiring: `modules/linux-builder.nix`.
+
+```bash
+just linux-builder-up               # start (x86_64 by default; `aarch64` as arg)
+just linux-builder-status           # state, reported system, store size vs cap
+just nixos-build ionos-vps          # build a host's closure, push it to R2
+just linux-build 'nixpkgs#hello'    # any flake attribute
+just nixos-deploy ionos-vps         # build, push, activate over ssh (NOT agent-safe)
+just linux-builder-gc               # sweep the store back under its cap
+just linux-builder-destroy          # container + volume + keypair
+```
+
+**Everything built is pushed to R2, minus what cache.nixos.org already has.**
+`nix-cache-push --seed` HEADs the public cache for every path in the closure and
+uploads only the remainder, so R2 never pays to store a second copy of something
+`cache.nixos.org` already serves. The push runs on the *workstation*, reading the
+builder over `ssh-ng` — the R2 write key never enters the container. Pass
+`push="false"` to keep a throwaway build out of the cache.
+
+**State is one Docker volume per architecture, and it is capped.** Default 25 GiB
+(`nix profile wipe-history` on the builder's own profile, then
+`nix store gc --max <excess>`). The cap is soft on purpose: Docker's local driver
+has no ext4 quota without project quotas, and a fixed-size loopback image would
+turn "store full" into ENOSPC in the middle of an unrelated build.
+
+Be precise about *when* it is enforced: **before every build that goes through
+`just`** — `linux-build`, `nixos-build`, `nixos-deploy`. A build delegated
+transparently by the nix-daemon through `determinateNix.buildMachines` does
+**not** pass through that code and is bounded only by the container's
+`min-free`/`max-free`, which govern the OrbStack VM disk rather than this volume.
+If you use the transparent route, run `just linux-builder-gc` yourself.
+
+`just gc` sweeps any *running* builder too — a launchd job could not, because the
+OrbStack socket belongs to the login session and a 03:00 daemon would fail exactly
+when nobody is watching. Stopped builders are skipped, and it says so rather than
+exiting quietly.
+
+**Do not copy the Macs' `nix.conf` wholesale into the container.** The two are
+not the same machine and three of the tempting settings are wrong here:
+
+- **`download-buffer-size` — leave it alone.** The Macs set 1 GiB
+  (`modules/determinate.nix`); the container's 1 MiB is *the current upstream
+  default*, and since the pause-based backpressure landed in Nix 2.33 the release
+  notes say raising it is no longer recommended. The Mac's value is the stale one.
+  It is also not the cause of the slow substitution described below — that is
+  per-path latency, not buffer starvation.
+- **`auto-optimise-store` — no.** Measured +48 % wall clock on the store-write
+  path for ~0.34 GiB saved, and with `sandbox = false` the `.links` inode sharing
+  would turn one damaged path into store-wide damage — in the store whose output
+  gets signed.
+- **`sandbox = true` / `filter-syscalls = true` — impossible, not merely unwise.**
+  Both fail outright here; see the seccomp and `pivot_root` notes below.
+
+Six things that are load-bearing and were each measured on this machine:
+
+- **`build-users-group` must be `nixbld`, not empty.** Leaving it empty overrides
+  the image's own value, `useBuildUsers()` returns false, and every build runs as
+  **root** — no uid isolation between concurrent builds, and the uid half of the
+  output-ownership check never runs. Tolerable for a scratch container; not for
+  one that signs into the cache serving `ionos-vps`. Verified after fixing:
+  a probe derivation reports `uid=30001 gid=30000 user=nixbld1`.
+- **`build-dir` must be set, and not under `/var/tmp`.** Since Nix 2.30 it no
+  longer follows `$TMPDIR`; it defaults to `stateDir/builds` =
+  `/nix/var/nix/builds` — *inside the size-capped volume*, where `nix store gc`
+  never looks, so a killed build leaks its scratch tree permanently and the cap
+  cannot see it. `/var/tmp/nix-build` is the obvious fix and Nix rejects it:
+  `Path "/var/tmp" is world-writable or a symlink`. Use `/build`, directly under
+  `/` (0755), on the container layer so it dies with the container.
+- **`/etc/nix/nix.conf` in the image is a SYMLINK into `/nix/store`**
+  (`…-base-system/etc/nix/nix.conf`). Writing to it with `cat >` follows the link
+  and mutates a store path. `rm -f` it first, then write a real file.
+
+- **`filter-syscalls = false` is mandatory, not tuning.** Nix wraps every build in
+  a seccomp BPF filter and the kernel rejects it under Rosetta: `error: unable to
+  load seccomp BPF program: Invalid argument`. Every build fails until it is off,
+  and `sandbox = false` alone does not avoid it. The cost is real — that filter is
+  what prevents setuid/setgid bits in build outputs.
+- **`sandbox = false`, and `sandbox-fallback = false` beside it.** Nix's Linux
+  sandbox needs `pivot_root(2)`, which does not appear in Docker's default seccomp
+  profile at all — it is denied by the profile's `SCMP_ACT_ERRNO` default, and
+  `--cap-add SYS_ADMIN` does *not* re-enable it. A real sandbox would need
+  `--security-opt seccomp=unconfined --security-opt systempaths=unconfined
+  --cap-add SYS_ADMIN`, or `--privileged`. `sandbox-fallback = false` is the
+  important half: the default (`true`) disables the sandbox *silently*.
+- **Never run `nix-collect-garbage -d` inside the builder.** It unroots
+  `/nix/var/nix/profiles/default`, which is what holds the image's nix and
+  coreutils; doing it once left the container unable to run `ls`, and the failure
+  surfaced two steps later as `du: command not found`. The builder therefore
+  installs its own openssh *and coreutils* into a profile it controls, and gc only
+  ever wipes that profile's history.
+- **The image ships `root:!` in `/etc/shadow`.** OpenSSH treats a leading `!` as a
+  locked account and refuses the login before it ever reads `authorized_keys`
+  (`User root not allowed because account is locked`). The entrypoint rewrites it
+  to `*`, which blocks password login without meaning "locked".
+
+Two more traps, neither specific to Docker:
+
+- **`path=$(…)` in a zsh recipe destroys `PATH`.** `path` is zsh's array bound to
+  `PATH`. The symptom appears lines later as `command not found: zsh` and points
+  nowhere near the assignment. The justfile recipes use `outpath`.
+- **A published Docker port is not a readiness signal.** Docker's forwarder answers
+  for as long as the container runs, so `nc -z` reported the builder "up" 0.5 s
+  after start, while it was still installing openssh. `up` waits for a real SSH
+  handshake instead, which also proves the keypair is accepted.
+
+**Rosetta executes AVX2 but does not advertise it.** Both halves were measured in
+this container, and the pair is the whole point:
+
+```
+CPUID leaf1.ecx=0x6ed8320f  ->  avx=0  fma=1 osxsave=1 sse4_2=1
+CPUID leaf7.ebx=0x00000108  ->  avx2=0 bmi1=1 bmi2=1 avx512f=0
+/proc/cpuinfo flags          ->  no avx, no avx2   (agrees with CPUID)
+
+a binary compiled -mavx2, containing  vpaddd / vpmulld / vpsllvd  on %ymm,
+run with values from argv so nothing could be constant-folded:
+    ((7+5)*7)<<1  ->  168 168 168 168 168 168 168 168      ✓ correct
+```
+
+`vpsllvd` exists only in AVX2, so this is genuine AVX2 execution, and it computes
+the right answer. That matches Apple's documentation — Rosetta has translated
+AVX/AVX2 since macOS 15 (Sequoia); AVX-512 remains unsupported.
+
+The safety property is the *CPUID* half, not the instruction half. The worst
+documented Rosetta defect is a **silent** AVX2 miscompile in `chacha20poly1305`
+([golang/go#79205](https://github.com/golang/go/issues/79205), closed as not-Go),
+and Go — like OpenSSL and glibc's ifunc resolvers — selects that path by querying
+CPUID. CPUID here says no AVX2, so the path is never selected. Reasoning from
+`/proc/cpuinfo` instead would reach the same conclusion by luck; reason from CPUID.
+
+What is *not* covered: a package that hardcodes `-mavx2` at build time rather than
+dispatching at runtime will execute AVX2 here, and carries whatever correctness
+risk Rosetta's AVX2 translation has. nixpkgs targets baseline x86-64, so this is
+rare; the known exceptions are `tiledb` and `arrow`/`parquet`.
+
+Nix nonetheless auto-detects `extra-platforms = i686-linux x86_64-v1-linux
+x86_64-v2-linux x86_64-v3-linux`, and **both ends of that are false**:
+
+- `i686-linux` is added unconditionally for any x86_64-linux host. Rosetta 2
+  translates x86-64 only — there is no 32-bit support.
+- `x86_64-v3-linux` *requires* AVX2, which CPUID here denies. Not a Nix bug: Nix
+  delegates to libcpuid, whose `decode_architecture_version_x86()` computes
+  `has_all_features` and then never reads it, so the level is decided by the
+  **last** element of the feature array — which for v3 is `OSXSAVE`, and Rosetta
+  does set that (`leaf1.ecx` bit 27). v4 escapes only because its last element is
+  `AVX512VL`.
+
+Blast radius today is small (`x86_64-v3-linux` is not a nixpkgs system double),
+but a flake requesting it would be accepted, built, **signed and pushed to R2**,
+and then SIGILL on any consumer without AVX2. So the entrypoint pins
+`extra-platforms` to the builder's own system. Note it is an assignment, so it
+*replaces* the detected list; `extra-extra-platforms` would append.
+
+All of this is a measurement of today's OrbStack and macOS, not a guarantee.
+Re-run the probe after upgrading either.
+
+The residual risk is not zero. An emulated build lands at the **same** store path
+as a native one and is signed with the same key, so a miscompile would enter the
+shared cache indistinguishably. To audit a closure, `nix build --rebuild <path>`
+on the target: Nix reports differing output for identical input. There are also
+open reports of compile-heavy derivations hanging under Rosetta with no known
+workaround ([nix-rosetta-builder#28](https://github.com/cpick/nix-rosetta-builder/issues/28));
+`nixos-anywhere --build-on remote` and `just cache-seed-remote` remain the way out.
+
+### Why a cold closure substitutes slowly: latency per PATH, not bandwidth
+
+The symptom looks like a bandwidth problem and is not one. Measured
+concurrently, same machine, same minute:
+
+| | throughput |
+|---|---|
+| `curl` inside the container | 10.7 MB/s (85 Mbit/s) |
+| `curl` on the host | 10.6 MB/s (85 Mbit/s) |
+| `dd` to the `/nix` volume | 961 MB/s |
+| `dd` to the container layer | 1.3 GB/s |
+| container CPU while substituting | 1.7 % |
+| **Nix substitution** | **0.23 MB/s (1.9 Mbit/s)** |
+
+Network, disk and CPU are all idle, so it is none of them — and it is not the
+host's WiFi or cache.nixos.org either, since host and container `curl` agree.
+
+**The 0.23 MB/s figure is a byte-rate sampled during a narinfo-heavy phase, not
+a transfer ceiling.** Two measurements settle it:
+
+```
+nix copy of ONE 48 MB NAR from cache.nixos.org   6.7 s   ≈ curl's 5.2 s
+cold substitution of nixpkgs#git                21 s for 84 paths / 356 MB
+                                                = ~250 ms PER PATH
+```
+
+Bulk transfer runs at curl speed. What costs is the *per-path* round trip, and a
+closure is thousands of paths. Narinfo latency, measured from the container:
+
+| substituter | narinfo 200 | narinfo 404 |
+|---|---|---|
+| `cache.nixos.org` | 117–196 ms | 235 ms |
+| `nix-cache.pub.schwetschke.dev` (R2) | 757 ms | **737–2122 ms** |
+
+R2 is 4–9× slower, and its 404s are as slow as its hits — nothing caches the
+negative result at the edge. During a cold substitution nearly every path is a
+*miss* in R2 (it holds our deltas, not nixpkgs), so each one pays that. Measured
+end to end, cold cache, both orders: adding R2 to `substituters` costs ~17 %
+(21.5 s → 25.2 s on the `git` closure).
+
+Warm-vs-cold on the same closure isolates the narinfo phase exactly: 12.2 s warm
+against 22.6 s cold, i.e. ~10 s for 84 paths ≈ 120 ms/path — which is
+`cache.nixos.org`'s measured RTT. The model is self-consistent.
+
+So the fix for "the builder is slow" is **fewer paths**, not more bandwidth. The
+`neovim-server` split (modules/neovim.nix) took `ionos-vps` from ~9000 paths to
+941 for exactly this reason, and that is why it now builds in minutes where the
+old closure ran 1 h 37 m without finishing.
+
+Ruled out by measurement or by source, so do not re-propose them:
+`download-buffer-size` (1 MiB is the current default and raising it is
+explicitly discouraged post-2.33); `http-connections` and
+`max-substitution-jobs` (identical on both machines — with one HTTP/2
+substituter and `CURLOPT_PIPEWAIT` set unconditionally, all 16 jobs share one
+connection anyway); `stalled-download-timeout` (threshold is 1 byte/s and paused
+transfers are exempt); retuning `min-free`/`max-free` (auto-GC never fires —
+`/nix` has 262 GB available, and it would be deafening at default verbosity).
+
+Worth doing on the infrastructure side, not in this repo: find out why the R2
+custom domain answers a narinfo in ~1 s when cache.nixos.org answers in ~0.15 s,
+and whether Cloudflare can cache the 404s. That is the one remaining lever.
+
+In practice the volume absorbs the rest: the cost is paid once per closure, and a
+second `nixos-build` of the same host is nearly instant.
+
+**Bumping the image version needs `just linux-builder-destroy` first.** Docker
+seeds a named volume from the image only while the volume is empty, so a new
+`IMAGE_VERSION` otherwise has no effect at all. `linux-builder-status` compares the
+running Nix version against the expected tag and warns rather than staying quiet.
+
+`modules/linux-builder.nix` additionally installs the keypair to
+`/etc/nix/linux-builder-ed25519` (root-owned — `ssh` run by the root nix-daemon
+rejects a key owned by anyone else) and registers both builders via
+`determinateNix.buildMachines`. Like the R2 post-build-hook, that only takes
+effect after one daemon restart:
+
+```bash
+sudo launchctl kickstart -k system/systems.determinate.nix-daemon
+```
+
+After that, a plain `nix build .#nixosConfigurations.<host>.config.system.build.toplevel`
+works on the Mac — **provided the container is running**. This module starts
+nothing; genuine on-demand start would need a launchd-socket-activated proxy and
+was deliberately left out.
+
+One thing is deliberately *not* claimed: whether the R2 `post-build-hook` fires
+for paths produced by a **delegated** build (the transparent `nix build` route)
+is untested — it has only been verified for local builds. The `just linux-build` /
+`just nixos-build` route does not depend on it, because it pushes explicitly. If
+you use the transparent route and want the result cached, run
+`just linux-push <store-path>` after it, or check `just cache-log` to see whether
+the hook ran.
+
 ## Architecture
 
 ### Dendritic Pattern with flake-parts
@@ -248,10 +547,11 @@ Each module defines a single aspect across all relevant configuration classes (d
 | `macos.nix` | macOS-specific defaults (dock, finder, trackpad, system preferences) via `flake.modules.darwin.macos` |
 | `determinate.nix` | Determinate Nix module settings (`nix.enable = false`) via `flake.modules.darwin.determinate` |
 | `nix-cache.nix` | Shared Cloudflare R2 Nix binary cache — substituter + signed `post-build-hook` push — via `flake.modules.darwin.nix-cache`. Bucket/domain provisioned in `infra/`; details in `infra/README.md` |
+| `linux-builder.nix` | Registers the Docker Linux builders with the daemon via `determinateNix.buildMachines` + an `ssh_config` alias, and installs the root-owned builder key. See "The Linux builder (Docker)" |
 | `homebrew-common.nix` | Shared Homebrew configuration via `flake.modules.darwin.homebrew` |
 | `shells.nix` | Shell configuration (Fish, Zsh, Bash) via `flake.modules.homeManager.shell` |
 | `git.nix` | Git configuration via `flake.modules.homeManager.git` |
-| `neovim.nix` | Neovim (nvf) configuration via `flake.modules.homeManager.neovim` |
+| `neovim.nix` | Neovim (nvf) in two variants: `homeManager.neovim` (workstation, every `languages.*` enabled) and `homeManager.neovim-server` (same editor, no language toolchains). See "Neovim: why there are two variants" |
 | `packages.nix` | Common packages via `flake.modules.homeManager.packages` |
 | `mcp-servers.nix` | Claude Code MCP server wrappers via `flake.modules.homeManager.mcp-servers` |
 | `secrets.nix` | SOPS secret declarations and per-host secret merging |
@@ -417,6 +717,16 @@ Use the `/nix-dendritic-pattern` skill for guidance. In short:
 2. Ensure secret loading logic uses `$XDG_CONFIG_HOME/sops-nix/secrets`
 
 ### Updating flake inputs
+
+- **nvf variants:** `modules/neovim.nix` exports `neovim` *and* `neovim-server`,
+  built from a shared `common` plus a `workstation` overlay. When adding a
+  plugin, decide which of the two it belongs in — anything with a language
+  toolchain, a second editor, or a desktop assumption behind it goes in
+  `workstation`. `common` must never gain anything of its own, or both hosts
+  change at once. The header comment in that file gives the two commands that
+  verify the workstation is unaffected (compare *content*, not the system
+  `drvPath` — splitting the module shifts one entry in `home.packages` and moves
+  the hash without changing what is installed).
 
 - **nvf (Neovim):** Before bumping the `nvf` input (`modules/neovim.nix`), **check
   the nvf release notes** for breaking option renames/removals:
