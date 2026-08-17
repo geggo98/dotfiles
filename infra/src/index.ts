@@ -81,6 +81,11 @@ new cloudflare.R2CustomDomain("nix-cache-domain", {
 // only have ONE. If the zone already has a cache ruleset created by hand, this
 // will collide and must be imported instead of created — check `just
 // pulumi-preview` before applying.
+//
+// The token needs **Zone -> Cache Rules -> Edit**, which is NOT implied by the
+// "R2 admin + DNS edit" scope the rest of this file runs on. Preview succeeds
+// either way, because it only reads; the apply fails with a 403 whose message
+// is the actively misleading "Authentication error". See infra/README.md.
 new cloudflare.Ruleset("nix-cache-caching", {
   zoneId: schwetschkeZone.zoneId,
   kind: "zone",

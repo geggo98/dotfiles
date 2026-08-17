@@ -163,7 +163,25 @@ Requires the `sops` CLI and a valid Age key at `~/.ssh/id_ed25519_sops_nopw`.
 
 `src/index.ts` manages a Cloudflare R2 bucket (`nix-cache`) that both Darwin
 hosts use as a shared Nix binary cache — build once on one Mac, substitute on
-the other.
+the other. It also manages the Cache Rule that makes the CDN in front of it
+actually cache — see "Edge caching" below.
+
+### The API token needs Cache Rules edit, and the failure is unhelpful
+
+`cloudflare_api_token` was originally scoped "R2 admin + DNS edit". That is
+enough to read the zone and manage the bucket and its custom domain, so
+`pulumi preview` is perfectly happy — the write only fails at apply:
+
+```
+POST "https://api.cloudflare.com/client/v4/zones/<id>/rulesets": 403 Forbidden
+{"success":false,"errors":[{"code":10000,"message":"Authentication error"}]}
+```
+
+"Authentication error" on a token that plainly authenticates for everything
+else. Cache Rules live in the Rulesets API (`http_request_cache_settings`
+phase) and need their own permission group: add **Zone → Cache Rules → Edit**
+for `schwetschke.dev` to the token in the Cloudflare dashboard, then re-run
+`just pulumi up`. Nothing in the repo needs changing.
 
 ### What ends up in the bucket, and why it is more than you expect
 
@@ -324,7 +342,7 @@ Secrets:
 
 | Secret | File | Used by |
 |---|---|---|
-| `cloudflare_api_token` (R2 admin + `schwetschke.dev` DNS edit) | `infra.enc.yaml` | Pulumi provider |
+| `cloudflare_api_token` (R2 admin + `schwetschke.dev` **DNS edit** + **Cache Rules edit**) | `infra.enc.yaml` | Pulumi provider |
 | `aws_access_key_id` / `aws_secret_access_key` (IAM user `pulumi-deploy`) | `infra.enc.yaml` | Pulumi AWS provider — **not** the work profile in `secrets.enc.yaml` |
 | `r2_access_key_id` | `secrets.enc.yaml` | `nix copy` push (S3 access key id) |
 | `r2_secret_access_key` — a Cloudflare API token (`cfat_…`); the push script derives its SHA-256 as the S3 secret. A ready-made 64-hex R2 secret is also accepted verbatim. | `secrets.enc.yaml` | `nix copy` push |
