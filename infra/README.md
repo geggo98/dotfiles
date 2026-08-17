@@ -206,8 +206,8 @@ defaults rather than replacing them).
 included — read it with `just cache-log`, or `just cache-log FAIL`:
 
 ```
-…+0200 pid=91207 status=ok   exit=0 paths=3 dur=0s first=hook-probe-…
-…+0200 pid=96315 status=FAIL exit=1 paths=1 dur=0s first=bitbucket-cli-0.18.2 err="… protocol mismatch …"
+…+0200 pid=91207 status=ok   exit=0 paths=3 dur=0s first=1ll6w1hah…-logprobe-…
+…+0200 pid=96315 status=FAIL exit=1 paths=1 dur=0s first=a3ggbdma…-bitbucket-cli-0.18.2 err="… protocol mismatch …"
 ```
 
 Successes are logged on purpose: an empty file then means *the hook is not

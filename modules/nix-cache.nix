@@ -97,12 +97,19 @@
         rc=$?
 
         # ONE RECORD = ONE printf. This is why the push output is captured to a
-        # file and folded, rather than simply redirected: the hook runs once per
-        # derivation, so with max-jobs > 1 several instances append concurrently.
-        # A single printf under O_APPEND is atomic (measured: 40 writers x 50
-        # records, 2000 intact lines, zero torn); `command >> log` is not, because
-        # it writes many times. Records stay short for the same reason — the
-        # guarantee holds below one write().
+        # file and folded, rather than simply redirected: a single printf under
+        # O_APPEND is atomic (measured: 40 writers x 50 records, 2000 intact
+        # lines, zero torn), while `command >> log` writes many times and can
+        # interleave. Records stay short for the same reason — the guarantee
+        # holds below one write().
+        #
+        # Honest caveat: this concurrency never actually happens today. Nix runs
+        # the post-build-hook synchronously, blocking its build loop, so the
+        # hooks serialise even at --max-jobs 8 — measured, six 3-second builds
+        # produced six records exactly one second apart with consecutive pids.
+        # The 40-way test above was synthetic. The design is kept because it
+        # costs nothing and that serialisation is an implementation detail Nix
+        # does not promise.
         now=$(${pkgs.coreutils}/bin/date +%Y-%m-%dT%H:%M:%S%z)
         dur=$(( $(${pkgs.coreutils}/bin/date +%s) - start ))
         n=$(printf '%s\n' ''${=OUT_PATHS} | ${pkgs.coreutils}/bin/wc -l | ${pkgs.coreutils}/bin/tr -d ' ')
