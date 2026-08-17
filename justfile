@@ -436,11 +436,24 @@ cache-log filter="":
         echo "  sudo launchctl kickstart -k system/systems.determinate.nix-daemon" >&2
         exit 1
     fi
-    if [ -n "{{ filter }}" ]; then
-        grep -- "{{ filter }}" "$log" | tail -50
-    else
+    if [ -z "{{ filter }}" ]; then
         tail -50 "$log"
+        exit 0
     fi
+    # grep's exit codes are load-bearing here: 1 means "no match", which for
+    # `cache-log FAIL` is the *good* outcome and must not be reported as a
+    # failure. Piping straight into tail under `set -o pipefail` did exactly
+    # that — an empty failure list came out as "recipe failed with exit code 1".
+    # 2-and-up stays an error, so a genuinely unreadable log is not swallowed.
+    set +e
+    matches=$(grep -- "{{ filter }}" "$log")
+    rc=$?
+    set -e
+    case $rc in
+        0) printf '%s\n' "$matches" | tail -50 ;;
+        1) echo "no records matching '{{ filter }}'" >&2 ;;
+        *) echo "grep failed on $log (exit $rc)" >&2; exit $rc ;;
+    esac
 
 # Seed R2 with a REMOTE host's closure delta, e.g. the x86_64-linux VPS. Needed
 # because no Darwin workstation can build x86_64-linux (nix-darwin's
