@@ -36,7 +36,13 @@ in
       users.root = { pkgs, ... }: {
         imports = [
           homeManager.shell
-          homeManager.neovim
+          # `neovim-server`, not `neovim`: the workstation variant enables every
+          # nvf `languages.*` module, and each of those pulls its language's LSP
+          # and formatter into the closure — llvm, go, openjdk, metals, tinymist,
+          # basedpyright, nodejs, harper. That is the same mistake the comment
+          # below refuses for `homeManager.packages`, arriving through a
+          # different door. See modules/neovim.nix for the measured sizes.
+          homeManager.neovim-server
         ];
 
         # The binaries `shell` and `neovim` assume are on PATH. Without them the

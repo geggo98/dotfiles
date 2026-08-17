@@ -1,16 +1,72 @@
+# Neovim (nvf), in two variants.
+#
+#   homeManager.neovim         workstation: every language toolchain enabled
+#   homeManager.neovim-server  servers: the same editor, none of the toolchains
+#
+# WHY THE SPLIT. `languages.<lang>.enable` in nvf does not just add a treesitter
+# grammar — it puts that language's LSP, formatter and linter into the closure,
+# and those drag whole SDKs. Measured in the ionos-vps closure before this split:
+#
+#     llvm-21.1.8-lib          261 MiB   languages.clang
+#     go-1.26.5                244 MiB   languages.go
+#     helix-grammars           185 MiB   programs.helix
+#     tinymist                 174 MiB   languages.typst
+#     metals-deps              120 MiB   languages.scala
+#     basedpyright-npm-deps    114 MiB   languages.python
+#     harper                   112 MiB   lsp.presets.harper
+#     openjdk-headless          55 MiB   languages.java
+#     … plus nodejs, biome, mypy, cmake, rust-lib-src, python3 x2
+#
+# modules/hosts/ionos-vps.nix already refuses `homeManager.packages` with the
+# note "~144 entries — the whole AI toolchain on a 4 GB server". This is the same
+# mistake arriving through a different door: a 4 GB / 120 GB VPS was being handed
+# a full multi-language IDE so that root could edit a config file.
+#
+# RESULT, measured with `nix path-info -S` on the built toplevel:
+#
+#     before   never finished — 1 h 37 m of substitution, killed while still
+#              fetching rustc and clang-lib; 6570 derivations, 286 tree-sitter
+#              grammars
+#     after    1.88 GiB across 941 paths; 5693 derivations, 24 grammars
+#
+# The remaining 84 MiB of nodejs is `bash.enable` -> bash-language-server, kept
+# on purpose: shell highlighting is the one thing a server editor is actually
+# for. The largest single path left (196 MiB) is not nvf at all — it is the
+# nixpkgs source tree, pinned into /etc/nix/registry.json by
+# `nixpkgs.flake.setFlakeRegistry`/`setNixPath`, both of which default to true.
+#
+# THE INVARIANT: `neovim` = `common` + `workstation`, and that union is exactly
+# what this file configured before the split. Consequently `common` may only ever
+# LOSE things to `workstation` — never gain anything of its own, or both hosts
+# change at once. Server-only additions go in the `server` attrset, which no
+# workstation imports.
+#
+# How to check that after editing here — and note WHICH check, because the
+# obvious one gives a false alarm:
+#
+#   nix eval --raw .#darwinConfigurations.FCX19GT9XR.system.drvPath
+#
+# is too strict. Splitting one module into two shifted exactly one element
+# (`worktrunk`) in home-manager's `home.packages` list, which changes the system
+# derivation hash while installing the identical set. Compare CONTENT instead:
+#
+#   # the editor itself — must be byte-identical
+#   nix eval --raw .#darwinConfigurations.FCX19GT9XR.config.home-manager\
+#     .users.stefan.programs.nvf.finalPackage.drvPath
+#
+#   # the package set — sort first, order is not meaningful
+#   nix eval --raw .#darwinConfigurations.FCX19GT9XR.config.home-manager\
+#     .users.stefan.home.packages \
+#     --apply 'ps: builtins.concatStringsSep "\n" (builtins.sort (a: b: a < b) (map (p: p.outPath) ps))'
+#
+# Both were verified equal across this split: 163 identical store paths, and
+# nvf-with-helpers at the same drv path before and after.
 { inputs, ... }:
-{
-  flake.modules.homeManager.neovim = { pkgs, ... }: {
+let
+  # Editor, UI, git, motions and the LSP framework itself. Nothing here pulls a
+  # language toolchain, so it is safe on a small server.
+  common = { pkgs, ... }: {
     imports = [ inputs.nvf.homeManagerModules.default ];
-
-    programs.helix = {
-      enable = true;
-      settings = {
-        editor = {
-          bufferline = "multiple";
-        };
-      };
-    };
 
     programs.nvf = {
       enable = true;
@@ -49,28 +105,12 @@
             enableFormat = true;
             enableTreesitter = true;
             enableExtraDiagnostics = true;
+            # Only the two that cost nothing measurable. Everything else —
+            # including `lua` and `json`, which do not look expensive but are —
+            # lives in `workstation` below. Measured in the server closure:
+            #   lua  -> luacheck -> luarocks_bootstrap -> cmake        61 MiB
+            #   json -> vscode-langservers-extracted -> nodejs-slim    84 MiB
             bash.enable = true;
-            clang.enable = true;
-            css.enable = true;
-            html.enable = true;
-            json.enable = true;
-            sql.enable = true;
-            java.enable = true;
-            kotlin.enable = true;
-            # nvf 0.9 renamed `languages.ts` → `languages.typescript` and split
-            # JSX/TSX out into the separate `languages.tsx` module.
-            typescript.enable = true;
-            tsx.enable = true;
-            go.enable = true;
-            lua.enable = true;
-            zig.enable = true;
-            python.enable = true;
-            typst.enable = true;
-            rust = {
-              enable = true;
-              extensions.crates-nvim.enable = true;
-            };
-            scala.enable = true;
             just.enable = true;
           };
 
@@ -84,8 +124,6 @@
             lspSignature.enable = false;
             otter-nvim.enable = true;
             nvim-docs-view.enable = true;
-            # nvf 0.9 moved `lsp.harper-ls` → `lsp.presets.harper`.
-            presets.harper.enable = true;
           };
 
           autocomplete = {
@@ -134,6 +172,13 @@
             # codewindow.nvim requires the legacy `nvim-treesitter.ts_utils`,
             # removed in nvim-treesitter's main-branch rewrite that nvf now
             # bundles. Use minimap-vim (code-minimap based, treesitter-free).
+            #
+            # Kept in `common` although it is not strictly needed on a server:
+            # code-minimap is a couple of MB, and its keymap lives in the shared
+            # `keymaps` list below. Splitting the plugin from its binding would
+            # mean splitting that list, and a list defined in two modules merges
+            # in an order the module system does not promise — which would move
+            # the workstation derivation and break the invariant above.
             minimap-vim.enable = true;
             codewindow.enable = false;
           };
@@ -159,7 +204,6 @@
             qmk-nvim.enable = false;
             icon-picker.enable = true;
             surround.enable = true;
-            leetcode-nvim.enable = true;
             multicursors.enable = true;
             smart-splits.enable = true;
             undotree.enable = true;
@@ -171,23 +215,10 @@
             };
             images = {
               image-nvim.enable = false;
-              img-clip.enable = true;
             };
           };
 
           notes = {
-            obsidian = {
-              enable = true;
-              # obsidian.nvim (obsidian-nvim/obsidian.nvim fork) runs each
-              # workspace path through vim.fs.normalize, which expands ~ and
-              # env vars — so this stays portable across both Macs.
-              setupOpts.workspaces = [
-                {
-                  name = "work_notes";
-                  path = "~/Documents/Obsidian/work_notes";
-                }
-              ];
-            };
             neorg.enable = false;
             orgmode.enable = false;
             # mind.nvim was removed in nvf 0.9 (upstream repo deleted).
@@ -201,7 +232,6 @@
               cmp.enable = true;
             };
             codecompanion-nvim.enable = false;
-            avante-nvim.enable = true;
           };
 
           startPlugins = [
@@ -234,4 +264,93 @@
       };
     };
   };
+
+  # Everything with an SDK, a second editor, or a desktop assumption behind it.
+  # This is the part a server does not get.
+  workstation = { ... }: {
+    programs.helix = {
+      enable = true;
+      settings = {
+        editor = {
+          bufferline = "multiple";
+        };
+      };
+    };
+
+    programs.nvf.settings.vim = {
+      languages = {
+        clang.enable = true;
+        css.enable = true;
+        html.enable = true;
+        sql.enable = true;
+        # Moved out of `common` on measurement, not on principle: `lua` drags
+        # luacheck -> luarocks -> cmake (61 MiB) and `json` drags
+        # vscode-langservers-extracted -> nodejs-slim (84 MiB). The union with
+        # `common` is unchanged, so the workstation is unaffected.
+        lua.enable = true;
+        json.enable = true;
+        java.enable = true;
+        kotlin.enable = true;
+        # nvf 0.9 renamed `languages.ts` → `languages.typescript` and split
+        # JSX/TSX out into the separate `languages.tsx` module.
+        typescript.enable = true;
+        tsx.enable = true;
+        go.enable = true;
+        zig.enable = true;
+        python.enable = true;
+        typst.enable = true;
+        rust = {
+          enable = true;
+          extensions.crates-nvim.enable = true;
+        };
+        scala.enable = true;
+      };
+
+      # nvf 0.9 moved `lsp.harper-ls` → `lsp.presets.harper`. ~112 MiB of
+      # grammar model, which is not what a server is for.
+      lsp.presets.harper.enable = true;
+
+      utility = {
+        leetcode-nvim.enable = true;
+        images.img-clip.enable = true;
+      };
+
+      notes.obsidian = {
+        enable = true;
+        # obsidian.nvim (obsidian-nvim/obsidian.nvim fork) runs each
+        # workspace path through vim.fs.normalize, which expands ~ and
+        # env vars — so this stays portable across both Macs.
+        setupOpts.workspaces = [
+          {
+            name = "work_notes";
+            path = "~/Documents/Obsidian/work_notes";
+          }
+        ];
+      };
+
+      assistant.avante-nvim.enable = true;
+    };
+  };
+
+  # Server-only additions. Nothing here reaches a workstation, so this attrset
+  # is the safe place to add things the servers want and the Macs do not.
+  server = { ... }: {
+    programs.nvf.settings.vim.languages = {
+      # Editing a NixOS configuration in place is the one language job a server
+      # genuinely has, and nixd is small.
+      nix.enable = true;
+
+      # Deliberately NOT markdown, and this one is counter-intuitive enough to
+      # write down: nvf's markdown module pulls `marksman` (an LSP written in
+      # .NET, so it drags dotnet-runtime, 76 MiB) and formats with `deno`
+      # (136 MiB). 212 MiB so that root can edit a README on a 4 GB VPS.
+      #
+      # Also not yaml: yaml-language-server is an npm package, so it would put
+      # nodejs back after `json` was moved out of `common` to remove it.
+    };
+  };
+in
+{
+  flake.modules.homeManager.neovim = { imports = [ common workstation ]; };
+  flake.modules.homeManager.neovim-server = { imports = [ common server ]; };
 }
