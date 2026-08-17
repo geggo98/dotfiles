@@ -153,5 +153,14 @@
       # `nix-cache-push` (interactive/ad-hoc) + the hook on PATH so the stable
       # /run/current-system/sw/bin/nix-cache-post-build-hook path above resolves.
       environment.systemPackages = [ pushScript hookScript ];
+
+      # Rotation, because the hook writes one line per built derivation and a
+      # nixpkgs bump builds thousands in one switch. macOS runs newsyslog itself
+      # and reads this directory — no launchd job of ours needed.
+      #   fields: file  mode count size(KB) when flags   (J = bzip2 the rotations)
+      # 5 x 1 MB caps this at ~5 MB, which is far more history than the log is
+      # ever consulted for.
+      environment.etc."newsyslog.d/nix-cache-push.conf".text =
+        "${logFile}    644  5  1024  *  J\n";
     };
 }

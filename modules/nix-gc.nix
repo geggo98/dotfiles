@@ -33,5 +33,11 @@
           StandardErrorPath = "/var/log/nix-gc.log";
         };
       };
+
+      # This log was unrotated and had reached 1.7 MB; launchd appends to it
+      # forever. macOS runs newsyslog itself and reads this directory.
+      #   fields: file  mode count size(KB) when flags   (J = bzip2 the rotations)
+      environment.etc."newsyslog.d/nix-gc.conf".text =
+        "/var/log/nix-gc.log    644  5  1024  *  J\n";
     };
 }
