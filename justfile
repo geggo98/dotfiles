@@ -389,7 +389,11 @@ infra-recon target:
     run 'enabled at boot' 'systemctl list-unit-files --state=enabled --no-pager --no-legend'
     run 'containers'      'docker ps -a 2>/dev/null || echo "(no docker)"; podman ps -a 2>/dev/null || true'
     # What a NixOS conversion would destroy. Sizes only — no file contents.
-    run 'data footprint'  'sudo -n du -shx /home /srv /opt /var/www /var/lib /root 2>/dev/null || du -shx /home /srv /opt /var/www 2>/dev/null || echo "(needs root)"'
+    # Each path is tested before measuring: `du` exits non-zero if *any* argument
+    # is missing, and an || fallback chain would then re-run and append a bogus
+    # "(needs root)" after a perfectly complete listing. An absent directory is
+    # reported as absent rather than silently dropped.
+    run 'data footprint'  'for d in /home /srv /opt /var/www /var/lib /root /usr/local; do if [ -e "$d" ]; then du -shx "$d"; else printf -- "-\t%s (does not exist)\n" "$d"; fi; done'
     run 'human users'     'getent passwd | awk -F: "\$3 >= 1000 && \$3 < 65534"'
     run 'authorized_keys' 'wc -l /root/.ssh/authorized_keys ~/.ssh/authorized_keys 2>/dev/null || echo "(none readable)"'
     run 'cron / timers'   'ls -1 /etc/cron.d 2>/dev/null; systemctl list-timers --no-pager --no-legend 2>/dev/null | head -20'
