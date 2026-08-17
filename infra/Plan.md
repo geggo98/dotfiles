@@ -114,7 +114,9 @@ the static profile; CI will use OIDC instead (Phase 5).
 
 4. **Initialise the stack.**
    ```bash
-   just pulumi login           # writes ~/.pulumi/credentials.json (cache only)
+   # No `pulumi login`: the backend is pinned in Pulumi.yaml and the token comes
+   # from SOPS via the `just pulumi` wrapper. Only init a stack that does not
+   # already exist — check with `just pulumi stack ls` first.
    just pulumi stack init prod
    just pulumi config set aws:region eu-central-1
    ```
