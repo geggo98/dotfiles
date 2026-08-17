@@ -170,7 +170,7 @@
 
         # NB: $HOME, not {$HOME} — fish does not strip braces around a single element,
         # so "{$HOME}/.ssh/x" expands to the literal "{/Users/stefan}/.ssh/x".
-        "+ssh-add-yubikey" = "env SSH_AUTH_SOCK=$HOME/.ssh/agent ssh-add $HOME/.ssh/id_es255519_sk";
+        "+ssh-add-yubikey" = "env SSH_AUTH_SOCK=$HOME/.ssh/agent ssh-add $HOME/.ssh/id_ed25519_sk";
 
         "+grep" = "ug";
         "+grep-tui" = "ug -Q";
