@@ -12,3 +12,19 @@ creation_rules:
     age: ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIItmRvgucsqvH3CkT74Iz0/Qurs8QGopIyThHJqRmE94", "age1vygfenpy584kvfdge57ep2vwqqe33zd4auanwu7frmf0tht5jq0q5ugmgd", "age1ae3vaq0cwzd8y0eatczdz7dz26m3mpxfnelwfxle9mqdachftd7q96fvaz"]
   - path_regex: ^hosts/DKL6GDJ7X1/secrets\.enc\.yaml$
     age: ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKFr5M5JvZRT4GHj57xF9jng6f/w+pflOLLh6pc6c+EP", "age1vygfenpy584kvfdge57ep2vwqqe33zd4auanwu7frmf0tht5jq0q5ugmgd", "age1ae3vaq0cwzd8y0eatczdz7dz26m3mpxfnelwfxle9mqdachftd7q96fvaz"]
+  # Default for any path not matched above — same recipients as the Pulumi rule:
+  # both workstations (in ssh-ed25519 form, which is what an SSH identity can
+  # actually open) plus the age1 conversions and the PGP recovery key.
+  #
+  # MUST STAY LAST. sops takes the FIRST matching creation rule, not the most
+  # specific one, so a catch-all placed higher would shadow every rule above it —
+  # verified: with `path_regex: ""` first, a file matching ^test\.yaml$ was
+  # encrypted to the catch-all's recipients and the specific rule never applied.
+  #
+  # Trade-off this accepts: `sops -e <new file>` now always succeeds instead of
+  # failing with "no matching creation rules found". That loud failure was a
+  # useful prompt to think about recipients, but every rule here shares the same
+  # key set anyway, so the default cannot produce a file nobody can open.
+  - path_regex: .*
+    pgp: ["B6CA7BD9B0973FBF981C3B1E7C8C077F1B72E98B"]
+    age: ["ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIItmRvgucsqvH3CkT74Iz0/Qurs8QGopIyThHJqRmE94", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKFr5M5JvZRT4GHj57xF9jng6f/w+pflOLLh6pc6c+EP", "age1vygfenpy584kvfdge57ep2vwqqe33zd4auanwu7frmf0tht5jq0q5ugmgd", "age1ae3vaq0cwzd8y0eatczdz7dz26m3mpxfnelwfxle9mqdachftd7q96fvaz"]
