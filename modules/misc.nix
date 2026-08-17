@@ -52,9 +52,17 @@
     };
 
     # Session variables
+    #
+    # Deliberately NO SOPS_AGE_RECIPIENTS here. Exported globally it overrides the
+    # creation_rules in .sops.yaml for every `sops -e` and every `sops edit` of a new
+    # file, so the file is encrypted to whatever that variable lists and to nothing
+    # else. That is how secrets/infra.enc.yaml came to hold only the two age1
+    # recipients while .sops.yaml declares two ssh-ed25519 ones as well — and since an
+    # age SSH identity can only open ssh-ed25519 recipient blocks, the file could not
+    # be decrypted by the very key that is supposed to own it. .sops.yaml already
+    # covers every path in this repo; for an ad-hoc encrypt outside it, pass the
+    # recipients per invocation: `sops -e --age "age1...,age1..." file.yaml`.
     home.sessionVariables = {
-      SOPS_AGE_RECIPIENTS = "age1vygfenpy584kvfdge57ep2vwqqe33zd4auanwu7frmf0tht5jq0q5ugmgd,"
-        + "age1ae3vaq0cwzd8y0eatczdz7dz26m3mpxfnelwfxle9mqdachftd7q96fvaz";
       EDITOR = "${pkgs.neovim}/bin/nvim";
       VISUAL = "${pkgs.neovim}/bin/nvim";
     };
