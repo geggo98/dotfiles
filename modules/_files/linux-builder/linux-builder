@@ -81,6 +81,12 @@ readonly STATE=/nix/var/linux-builder
 readonly PROFILE="$STATE/profile"
 readonly IN_PATH="$PROFILE/bin:/nix/var/nix/profiles/default/bin:/usr/bin:/bin"
 
+# Nix's caches live in the volume, not the container layer — see the comment in
+# entrypoint.sh. `docker exec` inherits only the image's Env, so every exec has
+# to be told, or half the invocations would silently use a different (empty,
+# throwaway) cache than the sshd sessions do.
+readonly IN_CACHE="$STATE/cache"
+
 die() { print -ru2 -- "linux-builder: $*"; exit 1 }
 note() { print -ru2 -- "linux-builder: $*" }
 
@@ -156,7 +162,7 @@ container_state() {
 # Run a command inside the builder. PATH is set explicitly because `docker exec`
 # inherits only the image's Env, which knows nothing about our openssh profile.
 in_container() {
-  docker exec -i -e "PATH=$IN_PATH" "$NAME" /bin/sh -c "$1"
+  docker exec -i -e "PATH=$IN_PATH" -e "XDG_CACHE_HOME=$IN_CACHE" "$NAME" /bin/sh -c "$1"
 }
 
 ensure_running() {
@@ -453,14 +459,14 @@ cmd_push_env() {
 cmd_shell() {
   require_docker
   ensure_running
-  docker exec -it -e "PATH=$IN_PATH" "$NAME" /bin/sh
+  docker exec -it -e "PATH=$IN_PATH" -e "XDG_CACHE_HOME=$IN_CACHE" "$NAME" /bin/sh
 }
 
 cmd_exec() {
   (( ${#args} )) || die "exec needs a command, e.g. linux-builder exec -- nix --version"
   require_docker
   ensure_running
-  docker exec -i -e "PATH=$IN_PATH" "$NAME" "${args[@]}"
+  docker exec -i -e "PATH=$IN_PATH" -e "XDG_CACHE_HOME=$IN_CACHE" "$NAME" "${args[@]}"
 }
 
 cmd_build() {
