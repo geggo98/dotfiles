@@ -65,7 +65,14 @@ This gives you: `pulumi`, `node`, `pnpm`, `sops`.
 You also need a [Pulumi Cloud](https://app.pulumi.com/) account for state
 management. Auth is token-based: `pulumi_access_token` lives in
 `secrets/infra.enc.yaml` and the `just pulumi` wrapper exports it — no
-interactive `pulumi login`.
+interactive `pulumi login`. The backend itself is pinned declaratively in
+`Pulumi.yaml` (`backend.url`), which takes precedence over whatever
+`~/.pulumi/credentials.json` has selected, so no per-machine login step exists.
+
+Accepted trade-off worth knowing: on a successful cloud login the CLI still
+caches that token into `~/.pulumi/credentials.json` in cleartext (mode 0600) —
+`pulumi` writes the token unconditionally and only skips repointing `current`.
+That copy is outside SOPS' control. Rotate via Pulumi Cloud if the file leaks.
 
 No per-machine key setup is needed. `sops` decrypts with the SSH identity from
 `SOPS_AGE_SSH_PRIVATE_KEY_FILE` (`modules/shells.nix` → `~/.ssh/id_ed25519_sops_nopw`),
@@ -84,8 +91,9 @@ call, so the program is never stale:
 # 1. Install dependencies (once)
 just pulumi-install
 
-# 2. Initialize a stack
-just pulumi stack init prod
+# 2. Check which stack you are pointed at (the stack already exists in Pulumi Cloud —
+#    do NOT run `stack init`, that creates a second, empty one)
+just pulumi stack ls
 
 # 3. Preview changes
 just pulumi preview

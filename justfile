@@ -276,6 +276,19 @@ pulumi *args: (_sops-preflight "secrets/infra.enc.yaml")
     # The default cloudflare provider (and CLI `pulumi import`) reads this env var.
     CLOUDFLARE_API_TOKEN="$(sops -d --extract '["cloudflare_api_token"]' secrets/infra.enc.yaml)"
     export CLOUDFLARE_API_TOKEN
+    # Which stack to operate on. Unlike the backend (pinned in infra/Pulumi.yaml),
+    # this cannot be declared in the project file — Pulumi's ProjectBackend carries
+    # only `url`, and there is no default-stack key. Stack selection is otherwise
+    # per-machine state in ~/.pulumi/workspaces/, which a fresh checkout lacks, so
+    # every command dies with "no stack selected". PULUMI_STACK supplies it and
+    # persists nothing. Non-clobbering, and an explicit `-s/--stack` still wins.
+    #
+    # Beware the misleading error: a stack name that does not exist reports
+    # "no stack selected" rather than "no stack named 'x' found". If you see that
+    # after this is set, the NAME is wrong, not the backend — run
+    # `just pulumi stack ls` to see the real names, and use <org>/<stack> if the
+    # stack lives under an organisation rather than your personal account.
+    export PULUMI_STACK="${PULUMI_STACK:-prod}"
     cd infra
     # pulumi runs the compiled dist/index.js (see Pulumi.yaml `main`), so rebuild
     # it first — tsc is fast/incremental and keeps the program in sync. pulumi +

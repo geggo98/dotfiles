@@ -8,3 +8,17 @@ runtime:
 # entrypoint found". The `just pulumi` wrapper runs `pnpm build` first.
 main: dist/index.js
 description: Cloud infrastructure for nix-darwin managed hosts
+
+# State lives in Pulumi Cloud. Pinning the backend here rather than relying on
+# `pulumi login` keeps it declarative and repo-local: a fresh checkout works with no
+# per-machine setup step, and it also fixes a bare `pulumi` run inside `nix develop`,
+# which an env var set only in the justfile would not.
+#
+# Precedence (pulumi 3.253, pkg/workspace/creds.go GetCurrentCloudURL):
+#   PULUMI_BACKEND_URL  >  this key  >  ~/.pulumi/credentials.json "current"
+# so this overrides a stale `current: "file://~"` left behind by an unrelated
+# `pulumi login`, which is exactly the state this machine was in — every command
+# failed with "no stack selected" while the real stack sat in Pulumi Cloud.
+# Note a stray PULUMI_BACKEND_URL in the environment still beats this key.
+backend:
+  url: https://api.pulumi.com
