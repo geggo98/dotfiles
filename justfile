@@ -276,6 +276,19 @@ pulumi *args: (_sops-preflight "secrets/infra.enc.yaml")
     # The default cloudflare provider (and CLI `pulumi import`) reads this env var.
     CLOUDFLARE_API_TOKEN="$(sops -d --extract '["cloudflare_api_token"]' secrets/infra.enc.yaml)"
     export CLOUDFLARE_API_TOKEN
+    # AWS goes through the environment rather than ~/.aws/credentials, per
+    # Architecture.md §2: infra secrets live in the pulumi process and nowhere
+    # else. That is not just tidiness here — sops-nix writes the *C24 work*
+    # profile to ~/.aws/credentials on this machine, so a file-based setup would
+    # put two unrelated identities in one place and pick between them by
+    # convention. Static env credentials outrank the shared file in the SDK
+    # chain, but an AWS_PROFILE inherited from the caller would still redirect
+    # the provider at that work profile. Unset it so the identity Pulumi uses is
+    # decided here and nowhere else.
+    AWS_ACCESS_KEY_ID="$(sops -d --extract '["aws_access_key_id"]' secrets/infra.enc.yaml)"
+    AWS_SECRET_ACCESS_KEY="$(sops -d --extract '["aws_secret_access_key"]' secrets/infra.enc.yaml)"
+    export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+    unset AWS_PROFILE AWS_DEFAULT_PROFILE
     # Which stack to operate on. Unlike the backend (pinned in infra/Pulumi.yaml),
     # this cannot be declared in the project file — Pulumi's ProjectBackend carries
     # only `url`, and there is no default-stack key. Stack selection is otherwise
