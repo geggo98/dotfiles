@@ -46,6 +46,73 @@ new cloudflare.R2CustomDomain("nix-cache-domain", {
   minTls: "1.2",
 });
 
+// Make the cache actually cache. Measured before this rule, from a client in
+// Germany (every request served by the LHR PoP):
+//
+//   GET <hash>.narinfo   cf-cache-status: DYNAMIC   200 in 180-750 ms
+//                                                   404 in 500-2100 ms
+//   GET nar/<hash>.nar.zst  cf-cache-status: MISS -> HIT
+//
+// The payload was already being cached and the metadata never was, because
+// Cloudflare decides default cache eligibility by file extension / content
+// type: `.zst` qualifies, `.narinfo` (content-type text/x-nix-narinfo) does
+// not, so every single narinfo lookup went to the R2 origin. Against
+// cache.nixos.org's 117-196 ms that is 4-9x, and a cold closure is thousands
+// of narinfo lookups — see "Why a cold closure substitutes slowly" in AGENTS.md.
+//
+// THE 404s ARE DELIBERATELY NOT CACHED, and that is the whole design
+// constraint. We push to this bucket continuously; if an edge-cached 404
+// outlived a push, every other host would keep being told the path is absent
+// and would rebuild it — which would make the cache worse than useless.
+// `value: 0` is Cloudflare's "no-cache", so a miss is always revalidated
+// against R2. We give up nothing real for that: within one substitution run
+// Nix asks for each path exactly once, so negative caching would not have
+// helped that run anyway.
+//
+// 200s get 30 days, matching Nix's own narinfo-cache-positive-ttl. Safe
+// because store paths are content-addressed — a narinfo for a given hash never
+// changes. The one thing that would break it is deleting objects from R2 while
+// a client still holds a cached narinfo pointing at the NAR; nothing in this
+// repo does that today, but that is the reason not to push this to a year.
+//
+// Scoped by http.host, so nothing else in schwetschke.dev is affected.
+//
+// NOTE: `http_request_cache_settings` is a phase entrypoint, and a zone can
+// only have ONE. If the zone already has a cache ruleset created by hand, this
+// will collide and must be imported instead of created — check `just
+// pulumi-preview` before applying.
+new cloudflare.Ruleset("nix-cache-caching", {
+  zoneId: schwetschkeZone.zoneId,
+  kind: "zone",
+  phase: "http_request_cache_settings",
+  name: "nix-cache edge caching",
+  description: "Cache narinfo/nar for the Nix binary cache; never cache misses",
+  rules: [
+    {
+      action: "set_cache_settings",
+      description: "nix-cache: cache hits hard, always revalidate misses",
+      enabled: true,
+      expression: `(http.host eq "${cacheDomain}")`,
+      actionParameters: {
+        cache: true,
+        edgeTtl: {
+          mode: "override_origin",
+          default: 2592000, // 30 days — immutable, content-addressed objects
+          statusCodeTtls: [
+            // 0 = no-cache. See the note above: a stale miss would defeat the
+            // entire cache, so misses always go back to R2.
+            { statusCode: 404, value: 0 },
+            { statusCode: 403, value: 0 },
+          ],
+        },
+        // Nothing here is fetched by a browser; leave the header to the origin
+        // rather than let Cloudflare's 4 h default masquerade as our policy.
+        browserTtl: { mode: "respect_origin" },
+      },
+    },
+  ],
+});
+
 export const nixCacheUrl = `https://${cacheDomain}`;
 export const nixCacheS3Endpoint = `https://${cfAccountId}.r2.cloudflarestorage.com`;
 
