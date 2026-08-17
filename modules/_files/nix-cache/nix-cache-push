@@ -21,6 +21,11 @@
 # Environment:
 #   NIX_CACHE_S3_URL       required, e.g.
 #     s3://nix-cache?endpoint=<acct>.r2.cloudflarestorage.com&region=auto
+#   NIX_CACHE_MAX_FOD_BYTES  fixed-output paths larger than this are NOT pushed
+#                          (default 10485760 = 10 MiB; 0 disables the filter).
+#                          R2 costs money and a FOD is fetchable from its
+#                          recorded URL, so caching a big one pays for storage
+#                          twice. See the filter below for the trade-off.
 #   NIX_CACHE_SECRETS_DIR  directory holding r2_access_key_id,
 #                          r2_secret_access_key and nix_cache_signing_key
 #                          (default: ${XDG_CONFIG_HOME:-$HOME/.config}/sops-nix/secrets)
@@ -122,6 +127,54 @@ fi
 if [[ "${#paths[@]}" -eq 0 ]]; then
   echo "nix-cache-push: nothing to push" >&2
   exit 0
+fi
+
+# Drop large fixed-output derivations. R2 storage costs money, and a FOD is by
+# definition obtainable elsewhere: it records the URL it came from and the hash
+# to verify it with, so caching one duplicates something already fetchable.
+# Small ones are kept deliberately — they cost almost nothing and preserve the
+# one case where caching a FOD does pay off, an upstream that disappears while
+# the hash stays valid. Set NIX_CACHE_MAX_FOD_BYTES=0 to keep all of them.
+#
+# Measured on the ionos-vps closure: two nix-index databases account for ~97 MB
+# of a 252 MB delta, i.e. ~40%, and that share grows with every flake input.
+max_fod="${NIX_CACHE_MAX_FOD_BYTES:-10485760}" # 10 MiB
+if [[ "$max_fod" -gt 0 ]]; then
+  store_args=()
+  [[ -n "$from_store" ]] && store_args=(--store "$from_store")
+  # Assigned, not piped into a `while read`: a process substitution's failure
+  # does not propagate under `set -e`, and silently pushing an unfiltered list
+  # is exactly the outcome this block exists to prevent.
+  info="$(nix path-info --json ${store_args[@]+"${store_args[@]}"} "${paths[@]}")"
+  kept="$(printf '%s' "$info" | MAX_FOD="$max_fod" python3 -c '
+import json, os, sys
+
+limit = int(os.environ["MAX_FOD"])
+info = json.load(sys.stdin)
+kept, dropped, saved = [], 0, 0
+for path, meta in info.items():
+    ca = (meta or {}).get("ca") or ""
+    size = (meta or {}).get("narSize") or 0
+    if ca.startswith("fixed:") and size > limit:
+        dropped += 1
+        saved += size
+        print(f"  skipping fixed-output {size/1e6:7.1f} MB  {path.split(chr(45), 1)[-1]}",
+              file=sys.stderr)
+        continue
+    kept.append(path)
+print("\n".join(sorted(kept)))
+if dropped:
+    print(f"nix-cache-push: skipped {dropped} large fixed-output path(s), "
+          f"{saved/1e6:.0f} MB not uploaded", file=sys.stderr)
+')"
+  paths=()
+  while IFS= read -r p; do
+    [[ -n "$p" ]] && paths+=("$p")
+  done <<< "$kept"
+  if [[ "${#paths[@]}" -eq 0 ]]; then
+    echo "nix-cache-push: nothing left to push after filtering" >&2
+    exit 0
+  fi
 fi
 
 echo "nix-cache-push: uploading ${#paths[@]} path(s) to R2 ..." >&2
