@@ -65,7 +65,14 @@ This gives you: `pulumi`, `node`, `pnpm`, `sops`.
 You also need a [Pulumi Cloud](https://app.pulumi.com/) account for state
 management. Auth is token-based: `pulumi_access_token` lives in
 `secrets/infra.enc.yaml` and the `just pulumi` wrapper exports it — no
-interactive `pulumi login`. Run `just sops-age-setup` once so `sops` can decrypt.
+interactive `pulumi login`.
+
+No per-machine key setup is needed. `sops` decrypts with the SSH identity from
+`SOPS_AGE_SSH_PRIVATE_KEY_FILE` (`modules/shells.nix` → `~/.ssh/id_ed25519_sops_nopw`),
+so nothing is written to disk. That works only for files carrying an `ssh-ed25519`
+recipient block — an age SSH identity cannot open `age1` blocks, not even the
+`ssh-to-age` conversion of the very same key. `just pulumi` preflights this and, if a
+file is missing its declared recipients, tells you to run `sops updatekeys <file>`.
 
 ## Quick start
 

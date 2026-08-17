@@ -215,24 +215,60 @@ devshell:
 
 # --- Pulumi (infra/) ---
 
-# One-time per machine: install the sops age identity so the CLI decrypts secrets automatically
-sops-age-setup:
+# Assert a secrets file can actually be opened by this machine's key, before sops runs.
+#
+# We decrypt with an SSH identity: SOPS_AGE_SSH_PRIVATE_KEY_FILE (exported from
+# modules/shells.nix) points at ~/.ssh/id_ed25519_sops_nopw. In age, an SSH identity
+# can ONLY open `ssh-ed25519` recipient blocks — never `age1` ones, even when the age1
+# recipient is the ssh-to-age conversion of that very key. So a file carrying only
+# age1 recipients is undecryptable here, and sops' own error does not say why: once
+# SOPS_AGE_SSH_PRIVATE_KEY_FILE is set it drops out of the "did not find keys in
+# locations" list, which reads as if it were never consulted at all.
+_sops-preflight file:
     #!/usr/bin/env bash
     set -euo pipefail
-    # Derived from the workstation SSH key (non-default name, so sops can't find
-    # it; ~/.ssh/id_ed25519 is a different key). Written to sops' per-OS default
-    # key location (macOS: Application Support; else XDG) so no env is needed.
-    case "$(uname)" in
-      Darwin) dir="$HOME/Library/Application Support/sops/age" ;;
-      *)      dir="${XDG_CONFIG_HOME:-$HOME/.config}/sops/age" ;;
-    esac
-    mkdir -p "$dir"
-    nix run nixpkgs#ssh-to-age -- -i "$HOME/.ssh/id_ed25519_sops_nopw" -private-key > "$dir/keys.txt"
-    chmod 600 "$dir/keys.txt"
-    echo "Wrote $dir/keys.txt — sops can now decrypt without extra env."
+    f="{{ file }}"
+    [ -r "$f" ] || { echo "sops preflight: cannot read $f" >&2; exit 1; }
+    # matches:   recipient: ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAA...   -> ssh
+    #            recipient: age1vygfenpy584kvfdge57ep2...             -> age
+    #            fp: B6CA7BD9B0973FBF981C3B1E7C8C077F1B72E98B         -> pgp
+    read -r n_ssh n_age n_pgp <<<"$(perl -ne '
+        $ssh++ if /^\s*-?\s*recipient:\s*ssh-ed25519\s/;
+        $age++ if /^\s*-?\s*recipient:\s*age1[a-z0-9]/;
+        $pgp++ if /^\s*-?\s*fp:\s*\S/;
+        END { printf "%d %d %d", $ssh // 0, $age // 0, $pgp // 0 }
+    ' "$f")"
+    if [ "$n_ssh" -gt 0 ]; then exit 0; fi
+    {
+        echo "sops preflight FAILED: $f has no ssh-ed25519 recipient."
+        echo "  in the file:  $n_ssh ssh-ed25519, $n_age age1, $n_pgp pgp"
+        echo "  We decrypt with an SSH identity (SOPS_AGE_SSH_PRIVATE_KEY_FILE, set in"
+        echo "  modules/shells.nix). In age an SSH identity can only open ssh-ed25519"
+        echo "  blocks — never age1 ones, not even the ssh-to-age conversion of the same"
+        echo "  key — so this file cannot be decrypted here."
+        echo
+        echo "  declared for this path in .sops.yaml:"
+        # Filename travels through the environment, not shell interpolation, so a path
+        # holding regex metacharacters cannot break the pattern (same idiom as the
+        # brew-bump recipe below). Backslashes are stripped per line because .sops.yaml
+        # stores the path as an escaped regex.
+        # matches:   - path_regex: ^secrets/infra\.enc\.yaml$   (against secrets/infra.enc.yaml)
+        SOPS_FILE="$f" perl -ne '
+            (my $line = $_) =~ s/\\//g;
+            $on = 1 if $line =~ /\Q$ENV{SOPS_FILE}\E/;
+            if ($on) { print "    $_"; $on = 0 if /age:.*\]/ }
+        ' .sops.yaml | perl -pe 's/", "/",\n        "/g' || true
+        echo
+        echo "  Fix — re-key the file to every recipient .sops.yaml declares:"
+        echo "      sops updatekeys $f"
+        echo "  (this also restores any missing pgp recovery key, not just the ssh ones)"
+        echo
+        echo "  sops version: $(sops --version 2>&1 | head -1)"
+    } >&2
+    exit 1
 
-# Run any pulumi command in infra/ with the Pulumi Cloud + Cloudflare tokens from SOPS (needs sops-age-setup once)
-pulumi *args:
+# Run any pulumi command in infra/ with the Pulumi Cloud + Cloudflare tokens from SOPS
+pulumi *args: (_sops-preflight "secrets/infra.enc.yaml")
     #!/usr/bin/env bash
     set -euo pipefail
     PULUMI_ACCESS_TOKEN="$(sops -d --extract '["pulumi_access_token"]' secrets/infra.enc.yaml)"
