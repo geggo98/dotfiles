@@ -73,6 +73,12 @@ in
         "cache.nixos.org-1:6NCHdD59X431o0gWypbMrAURkbJ16ZPMQFGspcDShjY="
         "nix-cache.pub.schwetschke.dev-1:R3UAHtpY90nzsAtEm3LDaWsEAHYQK6YG+i8mYxTgL10="
       ];
+
+      # Same reasoning as modules/nix-cache.nix, and it matters most here: this
+      # host never builds anything itself, it only consumes what a workstation
+      # pushed. Nix's 3600 s default would let it remember a 404 from before the
+      # push and fall back to building — on the smallest machine we own.
+      narinfo-cache-negative-ttl = 60;
     };
     nix.gc = {
       automatic = true;

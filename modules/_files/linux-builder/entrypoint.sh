@@ -114,6 +114,12 @@ chmod 0755 /build
 # is enforced by `linux-builder gc` before every build; these are only the
 # backstop that stops one runaway build filling the whole VM.
 #
+# narinfo-cache-negative-ttl mirrors modules/nix-cache.nix: 60 s instead of Nix's
+# 3600 s default, so that a host which asked for a path before another host
+# pushed it re-checks a minute later rather than an hour later and rebuilding it
+# for nothing. This builder is usually the one doing the pushing, but it is also
+# a consumer of whatever the other Mac published.
+#
 # NOTE ON download-buffer-size: do NOT raise it here, even though the Macs set
 # 1 GiB. 1 MiB is the current upstream default, and since the pause-based
 # backpressure landed in Nix 2.33 the release notes say raising it is no longer
@@ -132,6 +138,7 @@ extra-substituters = $BUILDER_SUBSTITUTERS
 extra-trusted-public-keys = $BUILDER_TRUSTED_KEYS
 min-free = $BUILDER_MIN_FREE
 max-free = $BUILDER_MAX_FREE
+narinfo-cache-negative-ttl = 60
 EOF
 
 # The builder's own toolchain, fetched once into a profile inside the volume:
