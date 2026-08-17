@@ -108,6 +108,16 @@ in
       efiSupport = false;
     };
 
+    # NixOS defaults to 5 s, which is too short here for the one situation the
+    # menu exists for. Root's password is locked and PasswordAuthentication is
+    # off, so when SSH is broken the *only* way in is picking an older
+    # generation — or `e`, append init=/bin/sh — in this menu, driven through
+    # the Cloud Panel's KVM console. Measured: 5 s does not survive the console's
+    # round-trip latency; the keypresses land at the login prompt of an
+    # already-booted system (visible as a row of ^[[B). 30 s costs half a minute
+    # on a machine that reboots roughly never and buys a usable rescue path.
+    boot.loader.timeout = 30;
+
     # virtio, because the host is QEMU/KVM: the root filesystem is on a
     # virtio_blk device (/dev/vda). If these are missing from the initrd the
     # machine cannot find its own root and drops to an emergency shell that only

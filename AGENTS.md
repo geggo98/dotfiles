@@ -206,11 +206,23 @@ Rolling back via the GRUB generation list is the quicker fix for a bad config
 and needs no shell at all. `init=/bin/sh` is for the cases where the filesystem
 or the bootloader itself is the problem.
 
-**Untested as of 2026-08-17.** The console *connects* (verified against the
-running Ubuntu before the install), but the GRUB-edit path has not been
-exercised, and the IONOS console UI is not confidence-inspiring. Worth a
-deliberate dry run at a moment when losing the machine would not matter —
-booting a previous generation and switching back is a harmless way to do it.
+**Tested end to end on 2026-08-17**: booted generation 1 from the submenu via
+the KVM console and confirmed it (root's shell was `bash`, fish and nvim
+absent), then a plain reboot returned to the default. Selecting an entry is a
+one-shot boot — `/nix/var/nix/profiles/system` is not repointed — so the dry run
+is harmless and worth repeating after any change to the bootloader.
+
+Two things that dry run established, both non-obvious:
+
+- **The console does deliver arrow keys.** Worth knowing, because the first
+  attempts looked like it did not: the keys arrived *after* boot and showed up
+  as a row of `^[[B` at the login prompt.
+- **`boot.loader.timeout` had to be raised to 30 s** (`modules/hosts/ionos-vps.nix`).
+  NixOS' 5 s default does not survive the console's round-trip latency — by the
+  time a screenshot comes back and a keypress goes out, the menu is gone. Send
+  keypresses *blind* on a timer rather than reacting to what you see: any
+  arrow key stops the countdown, and once stopped the menu waits indefinitely,
+  so navigate deliberately only after that.
 
 Third route if both fail: *Aktionen* → *Image neu installieren*, or booting one
 of the ISO rescue systems (Grml, Gparted, Clonezilla) to inspect the disk
