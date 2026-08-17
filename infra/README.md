@@ -243,6 +243,19 @@ So the rules for any repeat:
    (`bitbucket-cli`, …) exist in **no** public cache — if R2 is their only copy,
    deleting it means a rebuild, and a rebuild can fail for unrelated reasons
    (GitHub answered 429 while this was being cleaned up).
+5. **Invalidate Nix's narinfo lookup cache before re-uploading anything.** Nix
+   remembers which paths a binary cache holds, in
+   `~/.cache/nix/binary-cache-*.sqlite`, with a 30-day positive TTL
+   (`narinfo-cache-positive-ttl`). Objects deleted through the S3 API are
+   invisible to that memory, so `nix copy` skips them as "already present" and
+   the repair does nothing while reporting success — the first re-seed here
+   uploaded 5 paths where 291 were missing. Run the push with:
+
+   ```bash
+   NIX_CONFIG="narinfo-cache-positive-ttl = 0" just cache-seed
+   ```
+
+   Only for the repair run; the TTL is a worthwhile optimisation otherwise.
 
 - **Bucket:** created by hand, **adopted** by Pulumi (not created):
   ```bash
