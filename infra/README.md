@@ -200,20 +200,49 @@ Clients must have `cache.nixos.org` configured *alongside* this one, which every
 host here does, and `just bootstrap` too (`--extra-substituters` adds to the
 defaults rather than replacing them).
 
-### Garbage collection
+### Garbage collection — and the trap in it
 
 There is no automatic GC. On 2026-08-17 the bucket had grown to 22.34 GB /
-16089 objects, of which 5073 paths belonged to no current host closure; deleting
-them and their nars freed 14.31 GB and brought it back under the free tier
-(8.19 GB). Runtime was about four minutes end to end: ~10 s to list, ~2 min to
-resolve each narinfo to its nar, ~2 min to delete in batches of 1000.
+16089 objects, of which 5073 paths belonged to no current host closure. Deleting
+them freed 14.31 GB and brought it back under the free tier. Runtime was about
+four minutes: ~10 s to list, ~2 min to resolve each narinfo to its nar, ~2 min to
+delete in batches of 1000.
 
-If you repeat it, the rule that makes it safe is: **delete only what is in no
-current closure**, and enumerate every host first. Paths that are also on
-`cache.nixos.org` are risk-free to drop (any host refetches them publicly);
-paths unique to us mean an old generation can no longer be substituted and would
-have to be rebuilt — acceptable for a cache, which is not a backup, but decide
-it rather than discover it.
+**It also broke 317 live paths, and the mechanism is worth knowing before anyone
+tries this again.**
+
+> A narinfo is named after the *store path* hash, but the nar it points at is
+> named after the *content* hash — `nar/<content>.nar.zst`. Two store paths with
+> identical contents therefore **share one nar file**, and that is common
+> (wrappers, `.keep` files, generated completions).
+>
+> The GC deleted each stale narinfo together with "its" nar. For 317 of them the
+> nar was also referenced by a *live* narinfo, which was left pointing at a file
+> that no longer existed. Nix trusts the narinfo, fetches the nar, gets a 404 —
+>
+> ```
+> warning: file 'nar/0qnimmcq….nar.zst' does not exist in binary cache
+> ```
+>
+> — and falls back to building from source. A lying narinfo is strictly worse
+> than a missing one: a missing path is a cache miss, a dangling one is a failure
+> at the far end of a download.
+
+So the rules for any repeat:
+
+1. **Delete only what is in no current closure**, and enumerate *every* host
+   first — a host you cannot reach is a host whose paths you are about to drop.
+2. **Never delete a nar without checking that no surviving narinfo points at
+   it.** Build the set of nars referenced by the narinfos you are keeping, and
+   subtract it from the deletion set.
+3. Afterwards, verify the invariant directly: every narinfo's `URL:` must exist
+   as an object. The repair for a violation is to delete the *narinfo* — that
+   restores honesty; the path is then simply absent and gets rebuilt or refetched.
+4. Do not assume `cache.nixos.org` has a path because a `curl -sI` succeeded.
+   Without `-f`, curl exits 0 on a 404. Packages built from this repo's overlays
+   (`bitbucket-cli`, …) exist in **no** public cache — if R2 is their only copy,
+   deleting it means a rebuild, and a rebuild can fail for unrelated reasons
+   (GitHub answered 429 while this was being cleaned up).
 
 - **Bucket:** created by hand, **adopted** by Pulumi (not created):
   ```bash
