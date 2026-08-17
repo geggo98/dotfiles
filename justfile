@@ -192,11 +192,37 @@ show-derivation:
 optimise:
     nix store optimise
 
-# Collect user-level garbage, keeping generations from the last 7 days. The
-# system profile is pruned automatically every week (see modules/nix-gc.nix);
+# The system profile is pruned automatically every week (see modules/nix-gc.nix);
 # a one-off full sweep is `sudo nix-collect-garbage --delete-older-than 7d`.
+#
+# This also sweeps any RUNNING Linux builder back under its cap. Those stores
+# live in Docker volumes that modules/nix-gc.nix's root daemon cannot reach —
+# the OrbStack socket belongs to the login session, so a 03:00 daemon would fail
+# exactly when nobody is watching. Stopped builders are skipped, not started.
+#
+# Collect user-level garbage (last 7 days) and sweep running Linux builders
 gc:
+    #!/bin/zsh
+    set -euo pipefail
     nix-collect-garbage --delete-older-than 7d
+    # Say why the builder sweep is being skipped. Exiting 0 in silence would make
+    # "no builder running" and "never even looked" indistinguishable.
+    if ! command -v docker >/dev/null 2>&1; then
+        echo "docker not on PATH — skipping the Linux builder sweep" >&2
+        exit 0
+    fi
+    if ! docker info >/dev/null 2>&1; then
+        echo "docker daemon unreachable (OrbStack not running?) — skipping the Linux builder sweep" >&2
+        exit 0
+    fi
+    for arch in x86_64 aarch64; do
+        # No `docker inspect -f` here on purpose: its Go template braces are
+        # also just's interpolation syntax, and just expands them inside recipe
+        # bodies AND inside comments. --filter needs no template at all.
+        if [ -n "$(docker ps --quiet --filter "name=^nix-linux-builder-$arch\$" --filter status=running)" ]; then
+            zsh modules/_files/linux-builder/linux-builder gc --arch "$arch"
+        fi
+    done
 
 # Decrypt and view the Boundary reference doc (hosts/DKL6GDJ7X1/BOUNDARY.md.gpg)
 view-boundary-doc:
@@ -455,12 +481,18 @@ cache-log filter="":
         *) echo "grep failed on $log (exit $rc)" >&2; exit $rc ;;
     esac
 
-# Seed R2 with a REMOTE host's closure delta, e.g. the x86_64-linux VPS. Needed
-# because no Darwin workstation can build x86_64-linux (nix-darwin's
-# nix.linux-builder requires nix.enable, which Determinate sets to false), so
-# those paths only ever exist on the server. The R2 write credentials stay here;
-# the server has the cache as a read-only substituter and never holds a push key.
+# Seed R2 with a REMOTE host's closure delta, e.g. the x86_64-linux VPS. The R2
+# write credentials stay here; the server has the cache as a read-only
+# substituter and never holds a push key.
 #   just cache-seed-remote root@87.106.149.208
+#
+# This was once the ONLY way x86_64-linux paths reached the cache, because those
+# paths existed nowhere but the server. `just nixos-build` now produces them
+# locally in Docker and pushes them, and this recipe is the fallback: adopting
+# whatever a host built on its own — a `--build-on remote` install, or a
+# derivation Rosetta could not handle.
+#
+# Seed R2 from a REMOTE host's store over ssh-ng
 cache-seed-remote host target="/run/current-system":
     #!/bin/zsh
     set -euo pipefail
@@ -492,3 +524,198 @@ bootstrap host:
     echo
     echo "R2 delta is in the local store. Now apply it:"
     echo "  just switch-host {{ host }}"
+
+# --- Linux builder (Docker/OrbStack) ---
+#
+# One container per target architecture, each keeping its Nix store in a Docker
+# volume. x86_64 runs under Rosetta; aarch64 runs natively. See
+# modules/_files/linux-builder/linux-builder for the mechanism and
+# modules/linux-builder.nix for the system wiring that lets a plain `nix build`
+# use these without going through these recipes.
+#
+# The store volume is capped (default 25 GiB) and swept before every build, so
+# these are safe to run repeatedly. `linux-builder-destroy` is the reset button.
+#
+# These recipes never call `just` recursively. A nested `just` inside a shebang
+# recipe was observed failing with "command not found: just" even though `just`
+# was plainly on PATH in the same shell, so the shared steps are spelled out
+# instead of factored into a recipe that others invoke.
+
+LINUX_BUILDER := "zsh modules/_files/linux-builder/linux-builder"
+NIX_CACHE_PUSH := "zsh modules/_files/nix-cache/nix-cache-push"
+
+# A clean first start seeds the volume from the image and fetches the builder's
+# own openssh and coreutils — measured at 28 s. Later starts are a second or two.
+# A stopped container is replaced rather than restarted, so its mounts and
+# environment can never go stale; the store volume is what survives.
+#
+# Start the Linux builder for ARCH (x86_64 | aarch64), creating it on first use
+linux-builder-up arch="x86_64":
+    {{ LINUX_BUILDER }} up --arch {{ arch }}
+
+# Remove the container. The store volume survives, so the next `up` is fast.
+linux-builder-down arch="x86_64":
+    {{ LINUX_BUILDER }} down --arch {{ arch }}
+
+# Nothing is lost that cannot be rebuilt or re-substituted. Also the only way to
+# pick up a new IMAGE_VERSION, since Docker seeds a volume only while it is empty.
+#
+# Remove the builder's container, store volume and keypair
+linux-builder-destroy arch="x86_64":
+    {{ LINUX_BUILDER }} destroy --arch {{ arch }}
+
+# Container state, reported system, Nix version, and store size against the cap
+linux-builder-status arch="x86_64":
+    {{ LINUX_BUILDER }} status --arch {{ arch }}
+
+# Runs automatically before every build; this is the manual form, and the place
+# to try a smaller cap, e.g. `just linux-builder-gc x86_64 10`.
+#
+# Sweep the builder's store back under its size cap
+linux-builder-gc arch="x86_64" max_gb="25":
+    {{ LINUX_BUILDER }} gc --arch {{ arch }} --max-gb {{ max_gb }}
+
+# Interactive shell inside the builder
+linux-builder-shell arch="x86_64":
+    {{ LINUX_BUILDER }} shell --arch {{ arch }}
+
+# Runs on THIS machine and reads the builder over ssh-ng, so the R2 write key
+# never enters the container — the same reasoning as cache-seed-remote above.
+# `--seed` is what keeps it cheap: it HEADs cache.nixos.org for every path in
+# the closure and uploads only what is missing there, so R2 never pays to store
+# a second copy of something the public cache already serves.
+#
+# An explicit /nix/store path is required, and the recipe enforces it. Given a
+# symlink instead, nix-cache-push takes its remote-`readlink` branch — and that
+# branch runs a bare `ssh <host> readlink`, which does NOT read NIX_SSHOPTS and
+# so never learns the builder's port. It would resolve the path against THIS
+# Mac's own sshd on port 22: the wrong machine, failing one step later for a
+# reason that has nothing to do with the real mistake.
+#
+# Push the delta of a builder-produced closure to R2, signed
+linux-push storepath arch="x86_64":
+    #!/bin/zsh
+    set -euo pipefail
+    case '{{ storepath }}' in
+        (/nix/store/*) ;;
+        (*) echo "linux-push needs an explicit /nix/store path, got '{{ storepath }}'" >&2; exit 1 ;;
+    esac
+    # Store URI + NIX_SSHOPTS come from the builder script, so this works before
+    # `just switch` has installed the ssh_config alias. See `push-env` there.
+    eval "$({{ LINUX_BUILDER }} push-env --arch '{{ arch }}')"
+    export NIX_SSHOPTS
+    NIX_CACHE_S3_URL='{{ R2_S3_URL }}' {{ NIX_CACHE_PUSH }} \
+      --from "$LINUX_BUILDER_STORE" --seed '{{ storepath }}'
+
+# A bare or `.#`-prefixed attribute resolves against this checkout (mounted at
+# /work); anything carrying its own flake reference is passed through.
+#   just linux-build 'nixpkgs#ponysay'
+#   just linux-build '.#nixosConfigurations.ionos-vps.config.system.build.toplevel'
+#
+# The result is pushed to R2 straight away, minus whatever cache.nixos.org
+# already has. That is the point: a path built here otherwise exists in exactly
+# one store in the world, inside a container meant to be disposable. Pass
+# push="false" to keep a throwaway build out of the cache.
+#
+# Build any flake attribute on the Linux builder, push it to R2, print its path
+linux-build attr arch="x86_64" push="true": _check-untracked
+    #!/bin/zsh
+    set -euo pipefail
+    # NEVER name this `path`. In zsh `path` is the array bound to PATH, so
+    # `path=$(…)` silently replaces the whole search path with the store path
+    # just built — and the next command dies with "command not found: zsh"
+    # several lines later, pointing nowhere near the assignment that caused it.
+    # (Same trap as $cdpath/$fpath/$manpath.)
+    #
+    # An ARRAY, because `nix build --print-out-paths` prints one line PER OUTPUT.
+    # Treating it as one string sends a multi-line blob to nix-cache-push --seed,
+    # where `nix path-info --recursive` rejects it. Anything with several
+    # outputsToInstall — `nixpkgs#openssl`, say — hits this.
+    outpaths=("${(@f)$({{ LINUX_BUILDER }} build '{{ attr }}' --arch '{{ arch }}')}")
+    if [ '{{ push }}' = true ]; then
+        eval "$({{ LINUX_BUILDER }} push-env --arch '{{ arch }}')"
+        export NIX_SSHOPTS
+        for p in "${outpaths[@]}"; do
+            NIX_CACHE_S3_URL='{{ R2_S3_URL }}' {{ NIX_CACHE_PUSH }} \
+              --from "$LINUX_BUILDER_STORE" --seed "$p" >&2
+        done
+    fi
+    # The store paths are the ONLY thing on stdout; the push logs to stderr.
+    print -rl -- "${outpaths[@]}"
+
+# The builder architecture comes from the host's own hostPlatform, so a future
+# aarch64-linux server needs no change here. Pushes to R2 like linux-build.
+#
+# Build a NixOS host's system closure, push it to R2, print the toplevel path
+nixos-build host push="true": _check-untracked
+    #!/bin/zsh
+    set -euo pipefail
+    system=$(nix eval --raw '.#nixosConfigurations.{{ host }}.config.nixpkgs.hostPlatform.system')
+    arch="${system%%-*}"
+    # `outpath`, not `path` — see the note in linux-build: zsh's $path IS $PATH.
+    # A system.build.toplevel has exactly one output, so no array needed here.
+    outpath=$({{ LINUX_BUILDER }} build \
+      '.#nixosConfigurations.{{ host }}.config.system.build.toplevel' --arch "$arch")
+    if [ '{{ push }}' = true ]; then
+        eval "$({{ LINUX_BUILDER }} push-env --arch "$arch")"
+        export NIX_SSHOPTS
+        NIX_CACHE_S3_URL='{{ R2_S3_URL }}' {{ NIX_CACHE_PUSH }} \
+          --from "$LINUX_BUILDER_STORE" --seed "$outpath" >&2
+    fi
+    print -r -- "$outpath"
+
+# Build in the container, push the closure to R2, then have the target realise
+# it FROM R2 and switch. The closure never crosses this machine's uplink twice.
+#
+# NOT agent-safe and not unattended: it activates a production system over ssh.
+# The target comes from the host's own `deployTarget` (modules/nixos-wiring.nix).
+#
+# Build a NixOS host in Docker, publish to R2, activate it over ssh
+nixos-deploy host: _check-untracked
+    #!/bin/zsh
+    set -euo pipefail
+    system=$(nix eval --raw '.#nixosConfigurations.{{ host }}.config.nixpkgs.hostPlatform.system')
+    arch="${system%%-*}"
+    # Distinguish "no deployTarget" from "the flake does not evaluate" and from
+    # "that host does not exist". A blanket `2>/dev/null || true` collapses all
+    # three into one misleading message and hides a broken flake behind it.
+    set +e
+    target=$(nix eval --raw '.#deployTargets.{{ host }}' 2>/tmp/nixos-deploy-eval.$$)
+    rc=$?
+    set -e
+    if [ $rc -ne 0 ]; then
+        if grep -q "attribute '{{ host }}' missing" /tmp/nixos-deploy-eval.$$; then
+            echo "{{ host }} has no deployTarget; set it in modules/hosts/{{ host }}.nix" >&2
+        else
+            cat /tmp/nixos-deploy-eval.$$ >&2
+        fi
+        rm -f /tmp/nixos-deploy-eval.$$
+        exit 1
+    fi
+    rm -f /tmp/nixos-deploy-eval.$$
+
+    toplevel=$({{ LINUX_BUILDER }} build \
+      '.#nixosConfigurations.{{ host }}.config.system.build.toplevel' --arch "$arch")
+    echo "built: $toplevel" >&2
+
+    # Pushing is what makes the activation below cheap: the target realises the
+    # closure from R2 instead of having it copied over this machine's uplink.
+    eval "$({{ LINUX_BUILDER }} push-env --arch "$arch")"
+    export NIX_SSHOPTS
+    NIX_CACHE_S3_URL='{{ R2_S3_URL }}' {{ NIX_CACHE_PUSH }} \
+      --from "$LINUX_BUILDER_STORE" --seed "$toplevel" >&2
+
+    if [ "$arch" = x86_64 ]; then
+        # Say it out loud. Rosetta has at least one demonstrated silent
+        # miscompile (golang/go#79205, AVX2 chacha20poly1305), and an emulated
+        # build lands at the SAME store path as a native one and is signed with
+        # the same key. To audit: `nix build --rebuild <path>` on the target,
+        # which reports differing output for identical input.
+        echo "NOTE: built under Rosetta emulation, not natively." >&2
+    fi
+
+    echo "activating on $target ..." >&2
+    ssh -o BatchMode=yes "$target" \
+      "nix-store --realise '$toplevel' >/dev/null \
+       && nix-env -p /nix/var/nix/profiles/system --set '$toplevel' \
+       && '$toplevel/bin/switch-to-configuration' switch"

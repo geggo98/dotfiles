@@ -1,0 +1,501 @@
+#!/bin/zsh
+# Manage a Dockerised Linux Nix builder, one container per target architecture.
+#
+# Why this exists: no Darwin workstation can realise x86_64-linux derivations,
+# so `modules/hosts/ionos-vps.nix` (and every Linux host after it) used to be
+# built on the production server itself. A `--platform linux/amd64` container on
+# OrbStack runs a genuine x86_64 Nix under Rosetta and takes that job back.
+#
+# Usage:
+#   linux-builder up|down|destroy|status|gc|shell [--arch ARCH]
+#   linux-builder build FLAKE-ATTR             [--arch ARCH]
+#   linux-builder exec -- CMD...               [--arch ARCH]
+#   linux-builder push-env                     [--arch ARCH]
+#
+#   ARCH is x86_64 (default) or aarch64.
+#
+# `build` prints the resulting store path on stdout and nothing else; every
+# diagnostic goes to stderr, so `p=$(linux-builder build …)` is safe.
+#
+# STATE. The only persistent state is one Docker volume per architecture,
+# holding the builder's /nix, plus one SSH keypair under ~/.local/state. The
+# volume is a cache: `destroy` throws it away and nothing is lost. Its growth is
+# bounded — see `gc` below, which runs automatically before every build.
+#
+# KEYS. The container never receives a private key. It gets the *public* half of
+# a workstation-local keypair through the environment; the private half stays in
+# ~/.local/state, and modules/linux-builder.nix copies it to a root-owned
+# /etc/nix/linux-builder-ed25519 so the root nix-daemon can use it too (ssh run
+# as root rejects a key owned by someone else). R2 credentials are never mounted
+# here at all: pushes run on the workstation via `nix copy --from ssh-ng://…`,
+# which is why the container runs sshd.
+#
+# Environment:
+#   LINUX_BUILDER_REPO      flake checkout to mount at /work
+#                           (default: `git rev-parse --show-toplevel`)
+#   LINUX_BUILDER_MAX_GB    store cap per builder (default 25)
+#   LINUX_BUILDER_TIMEOUT   seconds to wait for sshd on `up` (default 900).
+#                           A clean first start — seeding the volume from the
+#                           image plus fetching openssh and coreutils — measured
+#                           28 s here. The default is that generous because the
+#                           two fetches are network-bound and this must not
+#                           fail on a slow link.
+set -euo pipefail
+
+readonly IMAGE_VERSION="2.35.2"
+readonly DEFAULT_MAX_GB=25
+
+# Resolved HERE, at file scope, and never inside a function: zsh's
+# FUNCTION_ARGZERO (on by default) rebinds $0 to the *function name* while a
+# function runs, so `${0:A:h}` in a helper resolved to the parent directory of a
+# file named after the function. That silently bind-mounted the repository root
+# as /opt/linux-builder and the container died with
+#   /bin/sh: /opt/linux-builder/entrypoint.sh: No such file or directory
+readonly SCRIPT_DIR="${0:A:h}"
+
+# Same values as modules/nix-cache.nix. Duplicated rather than imported because
+# this script must also run straight from a git checkout, before any of this
+# repo's Nix modules have been built.
+readonly SUBSTITUTERS="https://nix-cache.pub.schwetschke.dev"
+readonly TRUSTED_KEYS="nix-cache.pub.schwetschke.dev-1:R3UAHtpY90nzsAtEm3LDaWsEAHYQK6YG+i8mYxTgL10="
+
+readonly MIN_FREE=$(( 5 * 1024 ** 3 ))
+readonly MAX_FREE=$(( 20 * 1024 ** 3 ))
+
+# Ports deliberately avoid 31022 (nix-darwin's and Determinate's VM builder) and
+# 31122 (nix-rosetta-builder), so either could run alongside this one.
+typeset -A ARCH_PLATFORM=( x86_64 linux/amd64   aarch64 linux/arm64  )
+typeset -A ARCH_TAG=(      x86_64 amd64         aarch64 arm64        )
+typeset -A ARCH_PORT=(     x86_64 31222         aarch64 31223        )
+typeset -A ARCH_SYSTEM=(   x86_64 x86_64-linux  aarch64 aarch64-linux )
+
+# Hardcoded, not ${XDG_STATE_HOME:-…}: modules/linux-builder.nix's activation
+# script has to find the very same file from a Nix module, where the user's
+# shell environment does not exist. Two ways of resolving one path is exactly
+# how they drift apart.
+readonly KEY_DIR="$HOME/.local/state/nix-linux-builder"
+readonly KEY_FILE="$KEY_DIR/id_ed25519"
+
+# State inside the volume; must match entrypoint.sh.
+readonly STATE=/nix/var/linux-builder
+readonly PROFILE="$STATE/profile"
+readonly IN_PATH="$PROFILE/bin:/nix/var/nix/profiles/default/bin:/usr/bin:/bin"
+
+die() { print -ru2 -- "linux-builder: $*"; exit 1 }
+note() { print -ru2 -- "linux-builder: $*" }
+
+# --- argument parsing -------------------------------------------------------
+
+arch=x86_64
+max_gb="${LINUX_BUILDER_MAX_GB:-$DEFAULT_MAX_GB}"
+cmd=""
+args=()
+
+while (( $# )); do
+  case "$1" in
+    --arch)    shift; arch="${1:?--arch needs a value}"; shift ;;
+    --arch=*)  arch="${1#--arch=}"; shift ;;
+    --max-gb)  shift; max_gb="${1:?--max-gb needs a value}"; shift ;;
+    --max-gb=*) max_gb="${1#--max-gb=}"; shift ;;
+    --)        shift; args+=("$@"); break ;;
+    -*)        die "unknown option $1" ;;
+    *)         if [[ -z "$cmd" ]]; then cmd="$1"; else args+=("$1"); fi; shift ;;
+  esac
+done
+
+[[ -n "$cmd" ]] || die "no subcommand given; try: up down destroy status gc push-env shell build exec"
+(( ${+ARCH_PLATFORM[$arch]} )) || die "unknown arch '$arch' (expected x86_64 or aarch64)"
+# <1->, not <->: the latter accepts 0, which passes validation and then divides
+# by zero in the percentage arithmetic of cmd_status.
+[[ "$max_gb" == <1-> ]] || die "--max-gb must be a positive whole number of GiB, got '$max_gb'"
+
+readonly ARCH="$arch"
+readonly PLATFORM="${ARCH_PLATFORM[$ARCH]}"
+readonly IMAGE="nixos/nix:${IMAGE_VERSION}-${ARCH_TAG[$ARCH]}"
+readonly PORT="${ARCH_PORT[$ARCH]}"
+readonly SYSTEM="${ARCH_SYSTEM[$ARCH]}"
+readonly NAME="nix-linux-builder-${ARCH}"
+readonly VOLUME="nix-linux-builder-${ARCH}"
+readonly SSH_ALIAS="nix-linux-builder-${ARCH}"
+
+# --- helpers ----------------------------------------------------------------
+
+repo_root() {
+  if [[ -n "${LINUX_BUILDER_REPO:-}" ]]; then
+    print -r -- "$LINUX_BUILDER_REPO"
+  else
+    git rev-parse --show-toplevel 2>/dev/null \
+      || die "not inside a git checkout; set LINUX_BUILDER_REPO"
+  fi
+}
+
+require_docker() {
+  command -v docker >/dev/null 2>&1 || die "docker not found on PATH"
+  docker info >/dev/null 2>&1 \
+    || die "the Docker daemon is not reachable — is OrbStack running?"
+}
+
+# "running", "exited", "created", … or "absent".
+#
+# The whitespace strip is load-bearing. For a container that does not exist,
+# `docker inspect -f` writes an empty LINE to stdout and *then* exits 1 — so the
+# naive `docker inspect … || print absent` yields "\nabsent", which compares
+# equal to nothing and sent `up` down the "start the existing container" branch
+# for a container that was never created.
+container_state() {
+  local s
+  s="$(docker inspect -f '{{.State.Status}}' "$NAME" 2>/dev/null || true)"
+  s="${s//[[:space:]]/}"
+  if [[ -n "$s" ]]; then
+    print -r -- "$s"
+  else
+    print -r -- absent
+  fi
+}
+
+# Run a command inside the builder. PATH is set explicitly because `docker exec`
+# inherits only the image's Env, which knows nothing about our openssh profile.
+in_container() {
+  docker exec -i -e "PATH=$IN_PATH" "$NAME" /bin/sh -c "$1"
+}
+
+ensure_running() {
+  [[ "$(container_state)" == running ]] || cmd_up
+}
+
+# The nixpkgs revision this repo is already locked to, so the builder's openssh
+# is substituted rather than built. Reading flake.lock directly keeps this
+# working without evaluating the flake (which needs a builder — chicken, egg).
+nixpkgs_rev() {
+  python3 - "$(repo_root)/flake.lock" <<'PY'
+import json, sys
+with open(sys.argv[1]) as fh:
+    lock = json.load(fh)
+print(lock["nodes"]["nixpkgs"]["locked"]["rev"])
+PY
+}
+
+ensure_key() {
+  [[ -f "$KEY_FILE" ]] && return 0
+  note "generating builder keypair at $KEY_FILE"
+  mkdir -p "$KEY_DIR"
+  chmod 700 "$KEY_DIR"
+  ssh-keygen -q -t ed25519 -N '' -C 'nix-linux-builder' -f "$KEY_FILE"
+  note "run \`just switch\` to install it as /etc/nix/linux-builder-ed25519 for the root daemon"
+}
+
+# KiB used by the volume. /nix, not /nix/store: the volume holds both, and it is
+# the volume we are capping.
+volume_kib() { in_container "du -sk /nix | cut -f1" }
+
+human_kib() {
+  local kib="$1"
+  printf '%.1f GiB' "$(( kib / 1024.0 / 1024.0 ))"
+}
+
+# --- subcommands ------------------------------------------------------------
+
+cmd_up() {
+  require_docker
+  ensure_key
+
+  local state
+  state="$(container_state)"
+
+  if [[ "$state" == running ]]; then
+    note "$NAME is already running"
+    return 0
+  fi
+
+  # A stopped container is REPLACED, never restarted. `docker start` would reuse
+  # the environment and mounts frozen in at creation — the authorized key from
+  # before a `destroy`, a /work pointing at a different checkout, an older image
+  # tag — and every one of those surfaces later as an unexplained auth failure or
+  # a build of the wrong tree. Recreating costs about a second and cannot drift,
+  # because everything worth keeping lives in the volume, not in the container.
+  if [[ "$state" != absent ]]; then
+    note "replacing stale container $NAME (volume $VOLUME is kept)"
+    docker rm -f "$NAME" >/dev/null
+  fi
+
+  local repo rev
+  repo="$(repo_root)"
+  rev="$(nixpkgs_rev)"
+  note "creating $NAME from $IMAGE ($PLATFORM), nixpkgs $rev"
+  if ! docker volume inspect "$VOLUME" >/dev/null 2>&1; then
+    note "first start seeds volume $VOLUME from the image and fetches openssh — about half a minute"
+  fi
+  docker run -d \
+    --name "$NAME" \
+    --platform "$PLATFORM" \
+    --volume "$VOLUME:/nix" \
+    --volume "$repo:/work:ro" \
+    --volume "$SCRIPT_DIR:/opt/linux-builder:ro" \
+    --publish "127.0.0.1:${PORT}:22" \
+    --env "BUILDER_AUTHORIZED_KEY=$(<"${KEY_FILE}.pub")" \
+    --env "BUILDER_NIXPKGS_REV=$rev" \
+    --env "BUILDER_SUBSTITUTERS=$SUBSTITUTERS" \
+    --env "BUILDER_TRUSTED_KEYS=$TRUSTED_KEYS" \
+    --env "BUILDER_MIN_FREE=$MIN_FREE" \
+    --env "BUILDER_MAX_FREE=$MAX_FREE" \
+    --env "BUILDER_SYSTEM=$SYSTEM" \
+    --entrypoint /bin/sh \
+    "$IMAGE" /opt/linux-builder/entrypoint.sh >/dev/null
+
+  local timeout="${LINUX_BUILDER_TIMEOUT:-900}"
+  local deadline=$(( SECONDS + timeout ))
+  local next_tick=$(( SECONDS + 30 ))
+  note "waiting for sshd on 127.0.0.1:$PORT (first start also fetches openssh) ..."
+  while (( SECONDS < deadline )); do
+    # A crashed container must fail fast instead of burning the whole timeout.
+    if [[ "$(container_state)" != running ]]; then
+      docker logs --tail 40 "$NAME" >&2 || true
+      die "$NAME stopped while starting (log above)"
+    fi
+    if ssh_probe; then
+      note "$NAME is up on 127.0.0.1:$PORT"
+      verify_system
+      return 0
+    fi
+    if (( SECONDS >= next_tick )); then
+      note "still waiting ($(( deadline - SECONDS ))s left) — last log line:"
+      docker logs --tail 1 "$NAME" >&2 || true
+      next_tick=$(( SECONDS + 30 ))
+    fi
+    sleep 2
+  done
+
+  docker logs --tail 40 "$NAME" >&2 || true
+  die "$NAME did not accept SSH within ${timeout}s (log above)"
+}
+
+# A real handshake, not a TCP probe. Checking the published port with `nc -z` is
+# useless here: Docker's forwarder listens for as long as the container runs, so
+# it answers happily while the container is still installing openssh and nothing
+# is bound to port 22 inside. Measured — `up` reported success in 0.5 s against a
+# container whose sshd did not exist yet.
+#
+# This also proves the keypair is accepted, which is the other half of "ready".
+# Host-key checking is off because the target is 127.0.0.1 on a container this
+# script just created, and because the real known_hosts flow (accept-new against
+# /etc/nix/linux-builder-known_hosts) belongs to the system config, not to a
+# readiness probe that must not write to it.
+ssh_probe() {
+  ssh -q -o BatchMode=yes \
+      -o StrictHostKeyChecking=no \
+      -o UserKnownHostsFile=/dev/null \
+      -o LogLevel=ERROR \
+      -o ConnectTimeout=5 \
+      -i "$KEY_FILE" -p "$PORT" root@127.0.0.1 true 2>/dev/null
+}
+
+# A garbage collection that eats the builder's own tools leaves a container that
+# looks healthy and fails on the next command with a bare "command not found".
+# Check for it where it would happen rather than letting it surface elsewhere.
+assert_toolchain() {
+  in_container 'command -v nix >/dev/null && command -v du >/dev/null' \
+    || die "$NAME lost its own toolchain to garbage collection; run: just linux-builder-destroy $ARCH"
+}
+
+# Assume nothing about what --platform actually produced: ask Nix.
+verify_system() {
+  local got
+  got="$(in_container 'nix eval --impure --raw --expr builtins.currentSystem')"
+  [[ "$got" == "$SYSTEM" ]] \
+    || die "$NAME reports system '$got', expected '$SYSTEM' — is Rosetta enabled in OrbStack?"
+}
+
+cmd_down() {
+  require_docker
+  local state
+  state="$(container_state)"
+  if [[ "$state" == absent ]]; then
+    note "$NAME does not exist"
+    return 0
+  fi
+  note "removing container $NAME (volume $VOLUME is kept)"
+  docker rm -f "$NAME" >/dev/null
+}
+
+cmd_destroy() {
+  require_docker
+  cmd_down
+  if docker volume inspect "$VOLUME" >/dev/null 2>&1; then
+    note "removing volume $VOLUME"
+    docker volume rm "$VOLUME" >/dev/null
+  fi
+  if [[ -f "$KEY_FILE" ]]; then
+    note "removing keypair $KEY_FILE"
+    rm -f "$KEY_FILE" "${KEY_FILE}.pub"
+  fi
+  # The next `up` generates a fresh host key, which ssh will refuse against the
+  # recorded one. Print the fix rather than running it: it needs sudo, and this
+  # script never escalates.
+  print -ru2 -- ""
+  print -ru2 -- "The builder's SSH host key is gone with the volume. If you have already"
+  print -ru2 -- "switched the system config, drop the stale entry before the next \`up\`:"
+  print -ru2 -- "  sudo ssh-keygen -R $SSH_ALIAS -f /etc/nix/linux-builder-known_hosts"
+}
+
+cmd_status() {
+  require_docker
+  local state
+  state="$(container_state)"
+  print -r -- "arch:      $ARCH ($SYSTEM)"
+  print -r -- "container: $NAME [$state]"
+  print -r -- "image:     $IMAGE ($PLATFORM)"
+  print -r -- "ssh:       127.0.0.1:$PORT  alias $SSH_ALIAS"
+  print -r -- "key:       $KEY_FILE $([[ -f $KEY_FILE ]] && print -r -- '(present)' || print -r -- '(MISSING)')"
+
+  if ! docker volume inspect "$VOLUME" >/dev/null 2>&1; then
+    print -r -- "volume:    $VOLUME (absent)"
+    return 0
+  fi
+
+  if [[ "$state" != running ]]; then
+    print -r -- "volume:    $VOLUME (present; start the builder for size and version)"
+    return 0
+  fi
+
+  local got version kib cap_kib pct
+  got="$(in_container 'nix eval --impure --raw --expr builtins.currentSystem')"
+  version="$(in_container 'nix --version')"
+  print -r -- "reports:   $got, $version"
+  if [[ "$version" != *"$IMAGE_VERSION"* ]]; then
+    print -ru2 -- ""
+    print -ru2 -- "WARNING: the builder runs a different Nix than $IMAGE promises."
+    print -ru2 -- "Docker only seeds a volume from the image while the volume is EMPTY, so"
+    print -ru2 -- "bumping IMAGE_VERSION has no effect until you run:"
+    print -ru2 -- "  just linux-builder-destroy $ARCH"
+  fi
+
+  kib="$(volume_kib)"
+  cap_kib=$(( max_gb * 1024 * 1024 ))
+  pct=$(( 100 * kib / cap_kib ))
+  print -r -- "volume:    $VOLUME  $(human_kib $kib) of ${max_gb} GiB cap (${pct}%)"
+  if (( pct >= 80 )); then
+    print -ru2 -- ""
+    print -ru2 -- "WARNING: the builder store is at ${pct}% of its cap. It is swept before"
+    print -ru2 -- "every build; to sweep now: just linux-builder-gc $ARCH"
+  fi
+}
+
+# Bound the volume. Deliberately a soft cap: Docker's local driver has no size
+# quota on ext4 without project quotas, and a fixed-size loopback image would
+# turn "store is full" into ENOSPC in the middle of an unrelated build — a worse
+# failure than the one it prevents.
+#
+# ALWAYS run this BEFORE a build, never after: a freshly built closure has no GC
+# root, so a post-build sweep would delete exactly the paths we are about to
+# push to R2.
+cmd_gc() {
+  require_docker
+  ensure_running
+
+  local before after cap_kib excess_bytes
+  cap_kib=$(( max_gb * 1024 * 1024 ))
+  before="$(volume_kib)"
+
+  # Drop old generations of OUR profile only. Emphatically not
+  # `nix-collect-garbage -d`, which does this for every profile including the
+  # image's /nix/var/nix/profiles/default — the root that holds nix and
+  # coreutils. Running it once left the container unable to execute `ls`, and
+  # the failure surfaced two steps later as "du: command not found" from this
+  # very function.
+  #
+  # Not `2>&1 || true`. Swallowing this would leave cap enforcement quietly
+  # degraded to "only nix store gc runs" with nothing anywhere saying so — the
+  # silent-fallback pattern AGENTS.md forbids. stderr stays visible and a
+  # failure is announced; it is still non-fatal, because the sweep below is what
+  # actually reclaims space.
+  in_container "nix profile wipe-history --profile '$PROFILE' >/dev/null" \
+    || note "WARNING: could not wipe profile history; old generations still root their closures"
+
+  after="$(volume_kib)"
+  if (( after <= cap_kib )); then
+    note "store $(human_kib $after) is within the ${max_gb} GiB cap (was $(human_kib $before))"
+    return 0
+  fi
+
+  excess_bytes=$(( (after - cap_kib) * 1024 ))
+  note "store $(human_kib $after) exceeds the ${max_gb} GiB cap; freeing $(human_kib $(( excess_bytes / 1024 )))"
+  in_container "nix store gc --max $excess_bytes >/dev/null"
+
+  after="$(volume_kib)"
+  note "store is now $(human_kib $after) (was $(human_kib $before), cap ${max_gb} GiB)"
+  assert_toolchain
+  if (( after > cap_kib )); then
+    print -ru2 -- ""
+    print -ru2 -- "WARNING: still over the cap. What remains is reachable from a GC root"
+    print -ru2 -- "(the openssh profile and its closure). Raise --max-gb, or start over:"
+    print -ru2 -- "  just linux-builder-destroy $ARCH"
+  fi
+}
+
+# Emit the two shell variables a `nix copy --from` against this builder needs.
+# Meant to be eval'd:  eval "$(linux-builder push-env --arch x86_64)"
+#
+# Why not just use the `nix-linux-builder-<arch>` ssh_config alias: that alias is
+# installed by modules/linux-builder.nix, so it only exists after a `just switch`
+# — and pushing to R2 is supposed to work from a fresh checkout, before any
+# system change. The explicit host plus NIX_SSHOPTS works in both states, and
+# leaves the alias to its real job, which is the root nix-daemon's build
+# delegation.
+#
+# Host-key checking is off for the same reason as in ssh_probe: the target is
+# 127.0.0.1 on a container this script created, and the alternative would be to
+# write into the root-owned known_hosts file that the system config manages.
+cmd_push_env() {
+  print -r -- "LINUX_BUILDER_STORE='ssh-ng://root@127.0.0.1?max-connections=1'"
+  print -r -- "NIX_SSHOPTS='-p $PORT -i $KEY_FILE -o IdentitiesOnly=yes -o BatchMode=yes -o StrictHostKeyChecking=no -o UserKnownHostsFile=/dev/null -o LogLevel=ERROR'"
+}
+
+cmd_shell() {
+  require_docker
+  ensure_running
+  docker exec -it -e "PATH=$IN_PATH" "$NAME" /bin/sh
+}
+
+cmd_exec() {
+  (( ${#args} )) || die "exec needs a command, e.g. linux-builder exec -- nix --version"
+  require_docker
+  ensure_running
+  docker exec -i -e "PATH=$IN_PATH" "$NAME" "${args[@]}"
+}
+
+cmd_build() {
+  (( ${#args} == 1 )) || die "build takes exactly one flake attribute"
+  require_docker
+  ensure_running
+  cmd_gc
+
+  # The checkout is mounted at /work, so a repo-relative reference has to be
+  # rewritten. Anything already carrying its own flake reference (nixpkgs#hello)
+  # is passed through untouched.
+  local attr="${args[1]}" ref
+  case "$attr" in
+    ('#'*)   ref="/work$attr" ;;
+    ('.#'*)  ref="/work${attr#.}" ;;
+    (*'#'*)  ref="$attr" ;;
+    (*)      ref="/work#$attr" ;;
+  esac
+
+  note "building $ref on $NAME"
+  # --no-link is not a detail: a `result` symlink inside the container would be
+  # a GC root, and the cap in cmd_gc could then never reclaim anything.
+  # --print-out-paths is the only thing that reaches stdout.
+  in_container "nix build --no-link --print-out-paths -L ${(q)ref}"
+}
+
+case "$cmd" in
+  (up)      cmd_up ;;
+  (down)    cmd_down ;;
+  (destroy) cmd_destroy ;;
+  (status)  cmd_status ;;
+  (gc)      cmd_gc ;;
+  (push-env) cmd_push_env ;;
+  (shell)   cmd_shell ;;
+  (exec)    cmd_exec ;;
+  (build)   cmd_build ;;
+  (*)       die "unknown subcommand '$cmd'" ;;
+esac

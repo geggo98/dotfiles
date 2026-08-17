@@ -11,6 +11,7 @@ in
       darwin.determinate
       darwin.nix-cache
       darwin.nix-gc
+      darwin.linux-builder
       darwin.homebrew
       darwin.overlays
       darwin.pmset-hibernatemode
