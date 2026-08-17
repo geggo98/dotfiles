@@ -168,7 +168,9 @@
         "+pmset-standby-ram" = "sudo pmset-hibernatemode standby-ram";
         "+pmset-hibernate-disk" = "sudo pmset-hibernatemode disk";
 
-        "+ssh-add-yubikey" = "env SSH_AUTH_SOCK={$HOME}.ssh/agent ssh-add {$HOME}/.ssh/id_es255519_sk";
+        # NB: $HOME, not {$HOME} — fish does not strip braces around a single element,
+        # so "{$HOME}/.ssh/x" expands to the literal "{/Users/stefan}/.ssh/x".
+        "+ssh-add-yubikey" = "env SSH_AUTH_SOCK=$HOME/.ssh/agent ssh-add $HOME/.ssh/id_es255519_sk";
 
         "+grep" = "ug";
         "+grep-tui" = "ug -Q";
@@ -179,8 +181,12 @@
         "+tar-zstd" = "tar \"-Izstd -10 -T0\"";
         "+tar-zstd-max" = "tar \"-Izstd -19 -T0\"";
 
-        "+sops-edit-keys" = "env SOPS_AGE_SSH_PRIVATE_KEY_FILE={$HOME}/.ssh/id_ed25519_sops_nopw sops edit -s";
-        "+sops-edit-secrets" = "env SOPS_AGE_SSH_PRIVATE_KEY_FILE={$HOME}/.ssh/id_ed25519_sops_nopw sops edit";
+        # No env prefix needed: SOPS_AGE_SSH_PRIVATE_KEY_FILE is already exported from
+        # home.sessionVariables at the top of this file. The prefix these used to carry
+        # was doubly broken anyway — it passed the literal "{/Users/stefan}/.ssh/..."
+        # (see the $HOME note above), so sops fell back to whatever it could find.
+        "+sops-edit-keys" = "sops edit -s";
+        "+sops-edit-secrets" = "sops edit";
       };
     };
 
