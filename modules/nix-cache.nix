@@ -141,6 +141,26 @@
         "extra-substituters" = [ publicUrl ];
         "extra-trusted-public-keys" = [ publicKey ];
 
+        # Nix's default is 3600. That number is tuned for a public cache that
+        # rarely gains a path you are waiting for; it is wrong for a cache we
+        # push to ourselves, because of this sequence:
+        #
+        #   host 1 asks for X   -> 404
+        #   host 2 asks for X   -> 404, and remembers it for an hour
+        #   host 1 builds X and uploads it
+        #   host 2 needs X      -> still believes the 404, rebuilds it for nothing
+        #
+        # The rebuild is the expensive part, so the TTL has to be shorter than
+        # the window between one host publishing and another looking again.
+        # 60 s means host 2 re-checks a minute after host 1's push instead of an
+        # hour. Staleness on the host that did the building is irrelevant — it
+        # already has the path locally.
+        #
+        # The cost is re-querying genuine misses more often. It is bounded: a
+        # single closure asks for each path once regardless, so this only shows
+        # up across repeated runs, and a cache.nixos.org miss answers in ~235 ms.
+        "narinfo-cache-negative-ttl" = "60";
+
         # Point at the STABLE /run/current-system path, not the hook's raw store
         # path. The Determinate nix-daemon caches the post-build-hook *string* at
         # startup (darwin-rebuild does not restart it — nix.enable = false), and
