@@ -414,6 +414,16 @@ cache-seed:
 cache-push *paths:
     NIX_CACHE_S3_URL='{{ R2_S3_URL }}' bash modules/_files/nix-cache/nix-cache-push "$@"
 
+# Seed R2 with a REMOTE host's closure delta, e.g. the x86_64-linux VPS. Needed
+# because no Darwin workstation can build x86_64-linux (nix-darwin's
+# nix.linux-builder requires nix.enable, which Determinate sets to false), so
+# those paths only ever exist on the server. The R2 write credentials stay here;
+# the server has the cache as a read-only substituter and never holds a push key.
+#   just cache-seed-remote root@87.106.149.208
+cache-seed-remote host target="/run/current-system":
+    NIX_CACHE_S3_URL='{{ R2_S3_URL }}' bash modules/_files/nix-cache/nix-cache-push \
+      --from "ssh-ng://{{ host }}" --seed "{{ target }}"
+
 # Bootstrap a fresh machine: pre-fetch the R2-cached delta (the paths NOT on
 # cache.nixos.org) into the store BEFORE the first switch, so that first —
 # otherwise most expensive — build downloads them instead of compiling from
