@@ -166,7 +166,7 @@ hosts use as a shared Nix binary cache — build once on one Mac, substitute on
 the other. It also manages the Cache Rule that makes the CDN in front of it
 actually cache — see "Edge caching" below.
 
-### The API token needs Cache Rules edit, and the failure is unhelpful
+### The API token needs "Cache Settings" edit, and nothing about that is obvious
 
 `cloudflare_api_token` was originally scoped "R2 admin + DNS edit". That is
 enough to read the zone and manage the bucket and its custom domain, so
@@ -178,10 +178,23 @@ POST "https://api.cloudflare.com/client/v4/zones/<id>/rulesets": 403 Forbidden
 ```
 
 "Authentication error" on a token that plainly authenticates for everything
-else. Cache Rules live in the Rulesets API (`http_request_cache_settings`
-phase) and need their own permission group: add **Zone → Cache Rules → Edit**
-for `schwetschke.dev` to the token in the Cloudflare dashboard, then re-run
-`just pulumi up`. Nothing in the repo needs changing.
+else, and it already had **Zone Settings Write**, which is the permission you
+would reach for first. Cache Rules live in the Rulesets API and need their own
+group.
+
+**Do not search the token editor for "Cache Rules" — it returns "No permission
+groups found".** The group is:
+
+> **Cache & Performance → Cache Settings → Edit**
+
+and you can confirm you have the right one because ticking Edit flips its
+description from "Grants *read* access to cache settings phase" to "Grants
+*write* access to cache settings phase". "cache settings phase" is
+`http_request_cache_settings`, which is exactly the ruleset being created.
+
+Add it for `schwetschke.dev`, then re-run `just pulumi up`. Editing a token's
+permissions does not change its value, so the sops secret stays valid — only
+"Roll" would rotate it. Nothing in the repo needs changing.
 
 ### What ends up in the bucket, and why it is more than you expect
 
@@ -342,7 +355,7 @@ Secrets:
 
 | Secret | File | Used by |
 |---|---|---|
-| `cloudflare_api_token` (R2 admin + `schwetschke.dev` **DNS edit** + **Cache Rules edit**) | `infra.enc.yaml` | Pulumi provider |
+| `cloudflare_api_token` (R2 admin + `schwetschke.dev` **DNS edit** + **Cache Settings edit**) | `infra.enc.yaml` | Pulumi provider |
 | `aws_access_key_id` / `aws_secret_access_key` (IAM user `pulumi-deploy`) | `infra.enc.yaml` | Pulumi AWS provider — **not** the work profile in `secrets.enc.yaml` |
 | `r2_access_key_id` | `secrets.enc.yaml` | `nix copy` push (S3 access key id) |
 | `r2_secret_access_key` — a Cloudflare API token (`cfat_…`); the push script derives its SHA-256 as the S3 secret. A ready-made 64-hex R2 secret is also accepted verbatim. | `secrets.enc.yaml` | `nix copy` push |
