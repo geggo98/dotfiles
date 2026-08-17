@@ -299,3 +299,58 @@ The takeaway: the reference is a useful blueprint for the *NixOS-host* and
 *GHA-runner* phases we have not yet entered. The deliberate inversion is the
 secret-store choice, and that inversion is the right call given the existing
 sops-nix integration.
+
+## 11. The IONOS VPS is out of Pulumi's reach — and why
+
+Recorded in full because the conclusion is counter-intuitive (IONOS *does* publish
+a Pulumi provider) and re-deriving it costs an afternoon.
+
+**IONOS runs two unrelated product families with two unrelated APIs.**
+
+| | Cloud Panel — *ours* | IONOS Cloud / DCD |
+|---|---|---|
+| Console | `cloudpanel.ionos.de/panel/corevps/servers` | `dcd.ionos.com` |
+| API | `cloudpanel-api.ionos.com/v1`, `X-TOKEN` header | `api.ionos.com/cloudapi/v6` |
+| Terraform / Pulumi provider | **none** | `@ionos-cloud/sdk-pulumi` |
+
+`p-ion-ber-xs56r6` (VPS 4-4-120, Ubuntu 24.04, Berlin) lives in the Cloud Panel. Two
+independent walls, either one sufficient on its own:
+
+1. **No provider covers the Cloud Panel.** `@ionos-cloud/sdk-pulumi` bridges
+   `terraform-provider-ionoscloud`, which targets only `api.ionos.com/cloudapi/v6`.
+   Upstream issue [#273](https://github.com/ionos-cloud/terraform-provider-ionoscloud/issues/273)
+   ("Terraform integration with cloudpanel") asks exactly this and was closed without a
+   feature. The Pulumi registry page states the provider targets "IONOS Cloud … virtual
+   data centers, not the VPS hosting portfolio", and IONOS' own API overview lists ~35
+   APIs, all under `api.ionos.com`, with `cloudpanel-api.ionos.com` absent from it.
+2. **No API key is issuable for this tariff.** The Cloud Panel API key is created under
+   *Management → User → API*. This contract's Cloud Panel has no *User* entry at all —
+   Management contains only *Logs*. Consistent with that API's public changelog ending at
+   release 1.11 (November 2019) and with IONOS scoping its documentation to "Cloud Servers
+   and Dedicated Servers", never naming VPS or Core VPS.
+
+**Consequences that shape the code:**
+
+- Nothing about this host is machine-readable from outside. `infra/src/inventory.ts`
+  therefore holds hand-maintained constants, exported as a stack output so the host still
+  appears in the inventory that §6 defines as the Pulumi→Nix contract.
+- `pulumi preview` reconciles none of it. `just infra-verify` supplies the missing check:
+  it compares the recorded Ed25519 host key against what both addresses actually present,
+  and fails on mismatch *and* on unreachability. Without it the entry is documentation
+  wearing an inventory's clothes.
+- The Cloud Panel firewall (currently TCP 22, 80, 443, 8443, 8447) is a second
+  configuration surface that no tool here can reconcile. It is recorded alongside the host
+  for comparison. Note 8443+8447 is the Plesk pair from IONOS' default template and
+  nothing listens on it — along with 80/443, a candidate for deletion.
+- Configuration management is therefore the *only* lever Nix has on this machine, via
+  either `system-manager` (keeping Ubuntu) or a full NixOS conversion with
+  `nixos-anywhere`. `just infra-recon <target>` performs the read-only survey that decides
+  between them. A conversion is recoverable in two independent ways — the Cloud Panel's
+  KVM remote console with bootable rescue media, and a pre-conversion server Image — and
+  should not be attempted without confirming both.
+
+**Do not** add `@ionos-cloud/sdk-pulumi` to `infra/package.json` hoping to import this
+server. It would install cleanly, download a plugin outside Nix's control (its npm
+metadata points at `github://api.github.com/ionos-cloud/pulumi-ionoscloud`, so the binary
+comes from GitHub releases into `~/.pulumi/plugins`, not from `pulumi-bin`), and then
+authenticate against an account that does not contain this machine.
