@@ -200,6 +200,33 @@ Clients must have `cache.nixos.org` configured *alongside* this one, which every
 host here does, and `just bootstrap` too (`--extra-substituters` adds to the
 defaults rather than replacing them).
 
+### Is the hook actually pushing?
+
+`/var/log/nix-cache-push.log` gets one line per hook invocation, successes
+included — read it with `just cache-log`, or `just cache-log FAIL`:
+
+```
+…+0200 pid=91207 status=ok   exit=0 paths=3 dur=0s first=hook-probe-…
+…+0200 pid=96315 status=FAIL exit=1 paths=1 dur=0s first=bitbucket-cli-0.18.2 err="… protocol mismatch …"
+```
+
+Successes are logged on purpose: an empty file then means *the hook is not
+running*, rather than being indistinguishable from "everything worked". Before
+this existed, a failed push left no trace anywhere and only surfaced weeks later
+as a cache miss on the other Mac.
+
+**An empty log right after a switch is expected**, and is not a failure: the
+Determinate daemon reads the `post-build-hook` setting at startup and
+`darwin-rebuild switch` does not restart it, so the new hook is inert until
+
+```bash
+sudo launchctl kickstart -k system/systems.determinate.nix-daemon
+```
+
+Rotation is handled by macOS' own `newsyslog` via `/etc/newsyslog.d/`, capped at
+5 × 1 MB. Validate a rule change with `sudo newsyslog -n -v -f <file>` — the dry
+run needs root even to parse.
+
 ### Garbage collection — and the trap in it
 
 There is no automatic GC. On 2026-08-17 the bucket had grown to 22.34 GB /

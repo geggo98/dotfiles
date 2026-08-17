@@ -423,6 +423,25 @@ cache-seed:
 cache-push *paths:
     NIX_CACHE_S3_URL='{{ R2_S3_URL }}' zsh modules/_files/nix-cache/nix-cache-push "$@"
 
+# Read the post-build-hook's push log. Every hook invocation leaves one line,
+# successes included — so an empty log means the hook is not running, not that
+# everything is fine. Optional argument filters, e.g. `just cache-log FAIL`.
+cache-log filter="":
+    #!/bin/zsh
+    set -euo pipefail
+    log=/var/log/nix-cache-push.log
+    if [ ! -f "$log" ]; then
+        echo "$log does not exist yet." >&2
+        echo "The hook only starts writing after a switch AND a daemon restart:" >&2
+        echo "  sudo launchctl kickstart -k system/systems.determinate.nix-daemon" >&2
+        exit 1
+    fi
+    if [ -n "{{ filter }}" ]; then
+        grep -- "{{ filter }}" "$log" | tail -50
+    else
+        tail -50 "$log"
+    fi
+
 # Seed R2 with a REMOTE host's closure delta, e.g. the x86_64-linux VPS. Needed
 # because no Darwin workstation can build x86_64-linux (nix-darwin's
 # nix.linux-builder requires nix.enable, which Determinate sets to false), so
