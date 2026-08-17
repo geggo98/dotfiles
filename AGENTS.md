@@ -11,6 +11,9 @@ The repository follows the **Dendritic Pattern** for Nix flake structure — use
 **Current Hosts:**
 - `FCX19GT9XR` - Personal Mac (user: `stefan`)
 - `DKL6GDJ7X1` - Work Mac (user: `stefan.schwetschke`)
+- `ionos-vps` - IONOS Core VPS, `x86_64-linux` (NixOS). Not a darwin host: it is
+  selected by name rather than hardware serial and is **not** applied with
+  `just switch`. See "The IONOS VPS (NixOS)" below.
 
 ## Build, Test, and Development Commands
 
@@ -102,6 +105,49 @@ Outside the repo directory, the fish function `+darwin-rebuild-switch`
 
 Agents must not run these — they need `sudo` and are interactive. Print the
 command for the user instead.
+
+### The IONOS VPS (NixOS)
+
+`ionos-vps` (`87.106.149.208` / `2a01:239:485:8d00::1`, 4 vCore / 4 GB / 120 GB)
+is the first non-darwin host. Four facts about it are load-bearing and were each
+measured on the machine, not assumed — get any of them wrong and the box comes
+back unreachable, with the Cloud Panel KVM console as the only way in.
+
+- **It boots legacy BIOS, not UEFI.** An ESP exists and Ubuntu mounted it at
+  `/boot/efi`, which reads like UEFI — but `/sys/firmware/efi` is absent. The
+  disko layout therefore uses a `bios_grub` (EF02) partition and GRUB, and
+  **systemd-boot would install cleanly and then never boot**.
+- **Do not set `boot.loader.grub.devices`.** disko derives it from the EF02
+  partition; setting it too produces `[ "/dev/vda" "/dev/vda" ]` and the grub
+  module fails with "You cannot have duplicated devices in mirroredBoots".
+- **Networking is DHCP for both families, deliberately.** IPv4 arrives as a
+  `/32` with an on-link route to the gateway and IPv6 comes from router
+  advertisements. Hand-writing that static layout is the likeliest way to lock
+  yourself out, and gains nothing — IONOS assigns the addresses either way.
+- **`virtio_*` must be in `boot.initrd.availableKernelModules`.** Root is on
+  `/dev/vda` (virtio_blk) on QEMU/KVM; without them the initrd cannot find its
+  own root filesystem.
+
+`modules/nixos-base.nix` holds `root`'s authorized SSH keys, copied verbatim
+from the Ubuntu install. They are the machine's only remote door — password
+authentication is off — so an assertion fails the *build* if the list is ever
+emptied, rather than letting the outage happen at reboot. A serial getty on
+`ttyS0` is enabled as a second, network-independent route.
+
+**No workstation here can build this host.** These Macs are `aarch64-darwin`
+with `extra-platforms = x86_64-darwin` and no remote builders, so `nix build` of
+an `x86_64-linux` system is impossible locally. Installs and deploys must build
+on the target (`nixos-anywhere --build-on remote`, `colmena --build-on-target`).
+`nix flake check` is unaffected: it reports x86_64-linux as an "incompatible
+system" and skips it, so `just check` still passes on a Mac.
+
+Initial install (destroys the disk — take a Cloud Panel Image first and confirm
+the KVM console works *before* starting, not during the incident):
+
+```bash
+nix run github:nix-community/nixos-anywhere -- \
+  --flake .#ionos-vps --build-on remote --target-host root@87.106.149.208
+```
 
 ## Architecture
 
