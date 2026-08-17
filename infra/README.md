@@ -210,9 +210,70 @@ Secrets:
 | Secret | File | Used by |
 |---|---|---|
 | `cloudflare_api_token` (R2 admin + `schwetschke.dev` DNS edit) | `infra.enc.yaml` | Pulumi provider |
+| `aws_access_key_id` / `aws_secret_access_key` (IAM user `pulumi-deploy`) | `infra.enc.yaml` | Pulumi AWS provider — **not** the work profile in `secrets.enc.yaml` |
 | `r2_access_key_id` | `secrets.enc.yaml` | `nix copy` push (S3 access key id) |
 | `r2_secret_access_key` — a Cloudflare API token (`cfat_…`); the push script derives its SHA-256 as the S3 secret. A ready-made 64-hex R2 secret is also accepted verbatim. | `secrets.enc.yaml` | `nix copy` push |
 | `nix_cache_signing_key` | `secrets.enc.yaml` | NAR signing on push |
+
+## AWS
+
+Auth is a dedicated IAM user `pulumi-deploy` (account `155895292230`) with an
+access key. Like the Pulumi and Cloudflare tokens, it lives in
+`secrets/infra.enc.yaml` and the `just pulumi` wrapper exports it as
+`AWS_ACCESS_KEY_ID` / `AWS_SECRET_ACCESS_KEY` for a single command — it is never
+written to `~/.aws/credentials`. That matters here beyond tidiness: sops-nix
+already writes an unrelated **work** profile to that file, so the wrapper also
+unsets `AWS_PROFILE` / `AWS_DEFAULT_PROFILE` rather than trusting the SDK's
+precedence rules to pick the right identity.
+
+Region is stack config (`aws:region: eu-central-1` in `Pulumi.prod.yaml`), not an
+environment variable.
+
+Permissions: `AmazonS3FullAccess`, `AmazonVPCFullAccess`, `AWSLambda_FullAccess`,
+`AmazonEC2ContainerRegistryFullAccess`, `CloudWatchLogsFullAccess`, plus one
+customer-managed policy for the IAM subset Lambda needs. That last one is the
+interesting one:
+
+- role management (`iam:CreateRole` and friends) is scoped to
+  `arn:aws:iam::155895292230:role/pulumi/*`, so **every `aws.iam.Role` this
+  program declares must set `path: "/pulumi/"`** or `CreateRole` is denied;
+- `iam:AttachRolePolicy` is conditioned on an allow-list of two Lambda execution
+  policies, and `iam:PassRole` on `iam:PassedToService`;
+- `iam:PutRolePolicy` is **deliberately absent**. An inline role policy can grant
+  anything, so allowing it would make this user account-admin by a short detour:
+  create a role, attach `AdministratorAccess`, pass it to Lambda. Use
+  `RolePolicyAttachment` with the vetted managed policies instead. If arbitrary
+  inline policies ever become necessary, add a **permissions boundary** required
+  via a condition on `iam:CreateRole` — do not simply grant `PutRolePolicy`.
+
+Known gap: `ec2:DescribeRegions` is not granted (`AmazonVPCFullAccess` does not
+include it). The provider starts and imports without it; add it if a future
+resource needs it.
+
+### Adopted buckets
+
+| Bucket | Access |
+|---|---|
+| `ufute8ee-public` | world-readable by design — inline bucket policy **and** a legacy `AllUsers` READ ACL, with no public-access-block to stop either |
+| `uipecod1` | private — all four public-access-block settings on, `BucketOwnerEnforced` |
+
+Both were adopted with `pulumi import` and carry `protect: true`. The code in
+`src/index.ts` is verbatim generator output so `preview` stays at zero changes —
+that zero-diff is the only evidence the adoption was faithful, so do not
+hand-tidy properties there without checking the diff.
+
+Neither bucket has versioning, and `ufute8ee-public` has no public-access-block.
+Both are deliberate omissions, not oversights: hardening is a separate change
+with its own blast radius, and folding it into the adoption would have destroyed
+the zero-diff check.
+
+### Not managed here
+
+The account also contains `zombiestack` — a CloudFormation stack from
+2016-10-31 with 13 `nodejs4.3` Lambda functions, left over from the AWS "Zombie
+Apocalypse Workshop". It is not imported and not in scope; noted so the next
+person who runs an account inventory does not mistake it for something this repo
+provisions. Deleting it is a reasonable cleanup, independently of Pulumi.
 
 ## Hosts Pulumi cannot manage (`src/inventory.ts`)
 
