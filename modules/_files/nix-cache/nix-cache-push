@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/zsh
 # Push Nix store paths to the Cloudflare R2 binary cache, signed.
 #
 # Usage:

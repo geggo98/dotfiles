@@ -16,7 +16,7 @@ default:
 # only see git-tracked files, so untracked changes are silently ignored
 # by build/eval/check. Run `git add -N <paths>` to make them visible.
 _check-untracked:
-    #!/usr/bin/env bash
+    #!/bin/zsh
     set -euo pipefail
     # matches: ?? modules/foo.nix   and   ?? hosts/FCX19GT9XR/secrets.nix
     # perl exits 0 on no match, so this needs no `|| true` under `set -e`.
@@ -33,7 +33,7 @@ shell:
 
 # Build the current host configuration (without applying)
 build: _check-untracked
-    #!/usr/bin/env bash
+    #!/bin/zsh
     # pipefail is load-bearing: just's default shell is `sh -cu`, so a bare
     # `darwin-rebuild build … | ts` reports the exit status of *ts*, and a failing
     # build comes out green. Observed for real — a shellcheck error inside a
@@ -43,7 +43,7 @@ build: _check-untracked
 
 # Build a specific host configuration
 build-host host: _check-untracked
-    #!/usr/bin/env bash
+    #!/bin/zsh
     set -euo pipefail   # see the note on `build` — without it `| ts` eats failures
     time nix build '.#darwinConfigurations.{{ host }}.system' --keep-going --keep-failed | ts
 
@@ -54,7 +54,7 @@ build-host host: _check-untracked
 # "-2" Bonjour suffix on a name collision — can't break attr selection the way
 # a bare `--flake .` does. Extra args are forwarded, e.g. `just switch --dry-run`.
 switch *args:
-    #!/usr/bin/env bash
+    #!/bin/zsh
     set -euo pipefail
     # matches:       "IOPlatformSerialNumber" = "FCX19GT9XR"   ->  $+{serial}
     # Anchored on the key name and the quoted value, not on a '"'-field index.
@@ -98,7 +98,7 @@ update-input input:
 # and `brew bundle` aborts activation — see the brew-src comment in flake.nix.
 # This is the cure for that. Optional argument pins a specific tag instead.
 brew-bump tag="":
-    #!/usr/bin/env bash
+    #!/bin/zsh
     set -euo pipefail
     tag="{{ tag }}"
     if [ -z "$tag" ]; then
@@ -137,7 +137,7 @@ brew-bump tag="":
 # after bumping the agent-browser-src tag in flake.nix. Prints the ready-to-paste
 # `assets` attrset. Example: `just agent-browser-hashes 0.34.0`
 agent-browser-hashes version:
-    #!/usr/bin/env bash
+    #!/bin/zsh
     set -euo pipefail
     base="https://github.com/vercel-labs/agent-browser/releases/download/v{{ version }}"
     for pair in aarch64-darwin:darwin-arm64 x86_64-darwin:darwin-x64 \
@@ -152,9 +152,18 @@ agent-browser-hashes version:
 diff: build
     nix store diff-closures /run/current-system ./result
 
-# Build and verify no package delta (useful after refactoring)
+# Build and verify no package DELTA — which is weaker than it sounds, and the
+# gap has bitten: `nix store diff-closures` compares package names and versions,
+# so a same-name package whose *contents* changed is invisible to it. Measured
+# on the shells.nix split (c0a3eb1): the darwin-system derivation changed
+# (7hkbppnc… -> msfspksx…) while this recipe reported "No differences". The
+# generated config.fish had the same 155 lines in a different order.
+#
+# So: green here means "no package was added, removed or version-bumped". To
+# prove content equality, compare the derivations instead:
+#   nix eval --raw "git+file://$PWD?rev=$(git rev-parse HEAD~1)#darwinConfigurations.<host>.system.drvPath"
 verify-no-diff: build
-    #!/usr/bin/env bash
+    #!/bin/zsh
     set -euo pipefail
     diff_output=$(nix store diff-closures /run/current-system ./result 2>&1)
     if [ -n "$diff_output" ]; then
@@ -195,7 +204,7 @@ view-boundary-doc:
 
 # Edit the Boundary reference doc: decrypt -> $EDITOR -> re-encrypt to all three recipients
 edit-boundary-doc:
-    #!/usr/bin/env bash
+    #!/bin/zsh
     set -euo pipefail
     tmp="$(mktemp -t BOUNDARY.md.XXXXXX)"
     trap 'rm -f "$tmp"' EXIT
@@ -225,7 +234,7 @@ devshell:
 # SOPS_AGE_SSH_PRIVATE_KEY_FILE is set it drops out of the "did not find keys in
 # locations" list, which reads as if it were never consulted at all.
 _sops-preflight file:
-    #!/usr/bin/env bash
+    #!/bin/zsh
     set -euo pipefail
     f="{{ file }}"
     [ -r "$f" ] || { echo "sops preflight: cannot read $f" >&2; exit 1; }
@@ -269,7 +278,7 @@ _sops-preflight file:
 
 # Run any pulumi command in infra/ with the Pulumi Cloud + Cloudflare tokens from SOPS
 pulumi *args: (_sops-preflight "secrets/infra.enc.yaml")
-    #!/usr/bin/env bash
+    #!/bin/zsh
     set -euo pipefail
     PULUMI_ACCESS_TOKEN="$(sops -d --extract '["pulumi_access_token"]' secrets/infra.enc.yaml)"
     export PULUMI_ACCESS_TOKEN
@@ -326,7 +335,7 @@ pulumi-stack: (pulumi "stack")
 
 # Install infra dependencies
 pulumi-install:
-    #!/usr/bin/env bash
+    #!/bin/zsh
     set -euo pipefail   # see the note on `build` — without it `| ts` eats failures
     cd infra && time pnpm install | ts
 
@@ -354,7 +363,7 @@ infra-verify *args:
 #
 # Read-only SSH survey of an unprovisioned host (hardware, disks, network, services)
 infra-recon target:
-    #!/usr/bin/env bash
+    #!/bin/zsh
     set -euo pipefail
     echo "# recon of $1 — read-only, no changes made"
     # BatchMode: fail fast instead of prompting, so a missing key is an error
@@ -408,11 +417,11 @@ R2_S3_URL := "s3://nix-cache?endpoint=81e63dbf073ca45ebf67c430beac09a4.r2.cloudf
 
 # Seed R2 with the current system's delta (paths not already on cache.nixos.org)
 cache-seed:
-    NIX_CACHE_S3_URL='{{ R2_S3_URL }}' bash modules/_files/nix-cache/nix-cache-push --seed
+    NIX_CACHE_S3_URL='{{ R2_S3_URL }}' zsh modules/_files/nix-cache/nix-cache-push --seed
 
 # Push specific paths (repair/ad hoc), e.g. `just cache-push /run/current-system`
 cache-push *paths:
-    NIX_CACHE_S3_URL='{{ R2_S3_URL }}' bash modules/_files/nix-cache/nix-cache-push "$@"
+    NIX_CACHE_S3_URL='{{ R2_S3_URL }}' zsh modules/_files/nix-cache/nix-cache-push "$@"
 
 # Seed R2 with a REMOTE host's closure delta, e.g. the x86_64-linux VPS. Needed
 # because no Darwin workstation can build x86_64-linux (nix-darwin's
@@ -421,7 +430,7 @@ cache-push *paths:
 # the server has the cache as a read-only substituter and never holds a push key.
 #   just cache-seed-remote root@87.106.149.208
 cache-seed-remote host target="/run/current-system":
-    #!/usr/bin/env bash
+    #!/bin/zsh
     set -euo pipefail
     # max-connections=1 is not tuning, it is correctness. `nix copy` otherwise
     # opens several SSH channels at once; sshd refuses the ones past its
@@ -431,7 +440,7 @@ cache-seed-remote host target="/run/current-system":
     #            protocol mismatch, got 'started …'
     # The whole copy then aborts having transferred nothing. Serial is slower
     # and finishes.
-    NIX_CACHE_S3_URL='{{ R2_S3_URL }}' bash modules/_files/nix-cache/nix-cache-push \
+    NIX_CACHE_S3_URL='{{ R2_S3_URL }}' zsh modules/_files/nix-cache/nix-cache-push \
       --from "ssh-ng://{{ host }}?max-connections=1" --seed "{{ target }}"
 
 # Bootstrap a fresh machine: pre-fetch the R2-cached delta (the paths NOT on
@@ -442,7 +451,7 @@ cache-seed-remote host target="/run/current-system":
 # so only a root (always-trusted) invocation with explicit flags makes the
 # daemon honor R2. Then apply the printed switch. Example: `just bootstrap DKL6GDJ7X1`
 bootstrap host:
-    #!/usr/bin/env bash
+    #!/bin/zsh
     set -euo pipefail
     sudo nix build --no-link \
       --extra-substituters 'https://nix-cache.pub.schwetschke.dev' \
