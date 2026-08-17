@@ -287,6 +287,26 @@ Use the `/nix-dendritic-pattern` skill for guidance. In short:
   Cross-reference `programs.nvf.settings` in `modules/neovim.nix` against the
   notes before building.
 
+- **Pulumi provider SDKs (`infra/package.json`):** pinned in **two** places, and npm is
+  not the authority. Nix's `pulumi-bin` ships a fixed set of provider *plugins* in its
+  `bin/` directory, and those are what actually talk to the cloud API — the npm
+  `@pulumi/<provider>` package is only the typed client. Taking npm `latest` therefore
+  desynchronises them and Pulumi warns: `resource plugin cloudflare is expected to have
+  version >=6.19.0, but has 6.17.0`. Pin each provider SDK with `~` to the plugin
+  version Nix provides, so patches are allowed but the minor cannot drift:
+
+  ```bash
+  # the authority — read the versions Nix actually ships, then match package.json
+  for f in "$(dirname "$(readlink -f "$(command -v pulumi)")")"/pulumi-resource-*; do
+    printf '%-34s %s\n' "$(basename "$f")" "$("$f" --version 2>/dev/null | head -1)"
+  done
+  ```
+
+  To move a provider forward, bump `nixpkgs-unstable` (which carries `pulumi-bin`)
+  first, re-read the plugin versions, then raise `infra/package.json` to match. Note
+  `@pulumi/pulumi` itself is the core SDK, not a plugin, and is not part of this
+  coupling.
+
 - **agent-browser:** pinned in **two** places. Bump the `agent-browser-src` tag in
   `flake.nix` (that tag is also where the version comes from — it is read out of the
   input's `package.json`), then run `just agent-browser-hashes <version>` and paste the
