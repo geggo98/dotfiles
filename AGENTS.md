@@ -141,13 +141,47 @@ on the target (`nixos-anywhere --build-on remote`, `colmena --build-on-target`).
 `nix flake check` is unaffected: it reports x86_64-linux as an "incompatible
 system" and skips it, so `just check` still passes on a Mac.
 
-Initial install (destroys the disk — take a Cloud Panel Image first and confirm
-the KVM console works *before* starting, not during the incident):
+Initial install (destroys the disk). Done on 2026-08-17; kept because it is also
+the recovery procedure:
 
 ```bash
 nix run github:nix-community/nixos-anywhere -- \
   --flake .#ionos-vps --build-on remote --target-host root@87.106.149.208
 ```
+
+Deliberately *not* preceded by a Cloud Panel Image: image storage on this tariff
+costs more than the server, and "Image neu installieren" restores a stock distro
+for free — which is all a snapshot of this machine would have preserved anyway.
+
+#### Getting back in when SSH is gone
+
+`root`'s password is **locked** (`passwd -S root` → `L`) and
+`PasswordAuthentication` is off. That is deliberate, and it means **the KVM
+console cannot be logged into**: it will show a login prompt that no password
+satisfies. The console is still the way back, but only through GRUB:
+
+1. Cloud Panel → server → *Aktionen* → *Remotekonsole öffnen*.
+2. Reboot the machine (*Aktionen* → *Neu starten*) and catch the GRUB menu.
+3. Press `e` on the NixOS entry, append `init=/bin/sh` to the `linux` line,
+   `Ctrl-X` to boot. That yields a root shell with no authentication.
+4. `mount -o remount,rw /` then repair — usually
+   `/nix/var/nix/profiles/system-<N>-link/bin/switch-to-configuration switch`
+   to roll back to a previous generation, which GRUB also offers directly under
+   "NixOS - All configurations".
+
+Rolling back via the GRUB generation list is the quicker fix for a bad config
+and needs no shell at all. `init=/bin/sh` is for the cases where the filesystem
+or the bootloader itself is the problem.
+
+**Untested as of 2026-08-17.** The console *connects* (verified against the
+running Ubuntu before the install), but the GRUB-edit path has not been
+exercised, and the IONOS console UI is not confidence-inspiring. Worth a
+deliberate dry run at a moment when losing the machine would not matter —
+booting a previous generation and switching back is a harmless way to do it.
+
+Third route if both fail: *Aktionen* → *Image neu installieren*, or booting one
+of the ISO rescue systems (Grml, Gparted, Clonezilla) to inspect the disk
+without wiping it.
 
 ## Architecture
 
