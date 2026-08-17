@@ -466,13 +466,20 @@ closure is thousands of paths. Narinfo latency, measured from the container:
 | substituter | narinfo 200 | narinfo 404 |
 |---|---|---|
 | `cache.nixos.org` | 117–196 ms | 235 ms |
-| `nix-cache.pub.schwetschke.dev` (R2) | 757 ms | **737–2122 ms** |
+| R2, **before** the cache rule | 757 ms, `DYNAMIC` | **737–2122 ms** |
+| R2, **after** | 115–185 ms, `HIT` | 231 ms mean, never `HIT` |
 
-R2 is 4–9× slower, and its 404s are as slow as its hits — nothing caches the
-negative result at the edge. During a cold substitution nearly every path is a
-*miss* in R2 (it holds our deltas, not nixpkgs), so each one pays that. Measured
-end to end, cold cache, both orders: adding R2 to `substituters` costs ~17 %
-(21.5 s → 25.2 s on the `git` closure).
+R2 *was* 4–9× slower because Cloudflare cached nothing for it: `.nar.zst` is a
+cacheable extension, `.narinfo` (content-type `text/x-nix-narinfo`) is not, so
+every metadata lookup went to the origin. The Cache Rule in `infra/src/index.ts`
+fixes that, and R2 is now level with cache.nixos.org.
+
+Two things about that rule are deliberate. **404s are never cached** — we push
+to this bucket continuously, and a stale miss would tell every other host to
+rebuild a path that already exists. And the ~17 % cost that adding R2 to
+`substituters` used to carry (21.5 s → 25.2 s on the `git` closure, cold cache,
+measured in both orders) was the origin round trip; it should now be gone,
+though that has not been re-measured end to end.
 
 Warm-vs-cold on the same closure isolates the narinfo phase exactly: 12.2 s warm
 against 22.6 s cold, i.e. ~10 s for 84 paths ≈ 120 ms/path — which is
@@ -492,9 +499,11 @@ connection anyway); `stalled-download-timeout` (threshold is 1 byte/s and paused
 transfers are exempt); retuning `min-free`/`max-free` (auto-GC never fires —
 `/nix` has 262 GB available, and it would be deafening at default verbosity).
 
-Worth doing on the infrastructure side, not in this repo: find out why the R2
-custom domain answers a narinfo in ~1 s when cache.nixos.org answers in ~0.15 s,
-and whether Cloudflare can cache the 404s. That is the one remaining lever.
+The R2 side of this has been dealt with (see the table above and
+`infra/src/index.ts`). What remains, and is NOT explained, is the ~250 ms per
+path against `cache.nixos.org` itself — which is simply a CDN round trip from
+here and is not something this repo can shorten. Fewer paths is the only lever
+left, which is what the `neovim-server` split was.
 
 In practice the volume absorbs the rest: the cost is paid once per closure, and a
 second `nixos-build` of the same host is nearly instant.

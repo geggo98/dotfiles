@@ -82,10 +82,20 @@ new cloudflare.R2CustomDomain("nix-cache-domain", {
 // will collide and must be imported instead of created — check `just
 // pulumi-preview` before applying.
 //
-// The token needs **Zone -> Cache Rules -> Edit**, which is NOT implied by the
-// "R2 admin + DNS edit" scope the rest of this file runs on. Preview succeeds
-// either way, because it only reads; the apply fails with a 403 whose message
-// is the actively misleading "Authentication error". See infra/README.md.
+// The token needs **Cache & Performance -> Cache Settings -> Edit**, which is
+// NOT implied by the "R2 admin + DNS edit" scope the rest of this file runs on,
+// and is NOT the same as Zone Settings Write (the token had that and still got
+// 403). Searching the token editor for "Cache Rules" finds nothing. Preview
+// succeeds either way because it only reads; the apply fails with a 403 whose
+// message is the actively misleading "Authentication error". See infra/README.md.
+//
+// Measured after applying, from the same client that produced the numbers above:
+//   narinfo 200   MISS then HIT, 115-185 ms   (was 180-750 ms, never cached)
+//   narinfo 404   MISS then DYNAMIC, never HIT, 231 ms mean over 10 distinct
+//                 hashes (was 737-2122 ms)
+// The 404 improvement was not predicted — the rule was expected to help hits
+// only. Making the host cache-eligible evidently improves the miss path too.
+// cache.nixos.org answers the same 404 in ~167 ms, so R2 is now level with it.
 new cloudflare.Ruleset("nix-cache-caching", {
   zoneId: schwetschkeZone.zoneId,
   kind: "zone",
