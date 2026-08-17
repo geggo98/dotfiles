@@ -321,6 +321,19 @@ pulumi-install:
 pulumi-audit *args:
     python3 infra/scripts/osv-audit.py "$@"
 
+# --- Inventory of hosts Pulumi cannot manage ---
+
+# The hosts in infra/src/inventory.ts have no provider and no API (see that file's
+# header, and Architecture.md §11), so `pulumi preview` reconciles nothing about
+# them: the recorded constants could drift arbitrarily far from the real machine
+# and every Pulumi command would still report a clean stack. This is the only
+# thing that can tell you otherwise. Fails on a host-key mismatch AND on an
+# unreachable host — silence is never success.
+#
+# Verify infra/src/inventory.ts against the real hosts (reachable + host key matches)
+infra-verify *args:
+    python3 infra/scripts/infra-verify.py "$@"
+
 # --- Nix binary cache (Cloudflare R2) ---
 
 # Endpoint of the S3 push target (public pull URL is the custom domain).

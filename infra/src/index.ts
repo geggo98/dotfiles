@@ -1,5 +1,6 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as cloudflare from "@pulumi/cloudflare";
+import { unmanagedHosts } from "./inventory.js";
 
 // Export stack outputs
 export const stack = pulumi.getStack();
@@ -46,3 +47,11 @@ new cloudflare.R2CustomDomain("nix-cache-domain", {
 
 export const nixCacheUrl = `https://${cacheDomain}`;
 export const nixCacheS3Endpoint = `https://${cfAccountId}.r2.cloudflarestorage.com`;
+
+// --- Inventory of hosts Pulumi does not provision ---------------------------
+// Not resources — see the header of ./inventory.ts for why the IONOS VPS cannot
+// be one. Exported so it reaches infra/pulumi-outputs.json, the Pulumi->Nix
+// contract in Architecture.md §6, and is therefore already present when the
+// first NixOS host configuration lands (Plan.md Phase 3).
+// Drift is checked by `just infra-verify`, not by `pulumi preview`.
+export const inventory = unmanagedHosts;
