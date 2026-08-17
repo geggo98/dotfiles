@@ -339,14 +339,28 @@ runs outside a Nix wrapper must not assume either flavour.
   m{^ \s* url \s* = \s* "github:Homebrew/brew/(?<tag>[^"]+)"; \s* $}x
   ```
 
-- **Carve-out — scripts built by Nix.** Inside `pkgs.writeShellApplication` with an
-  explicit `runtimeInputs`, the BSD/GNU question is settled at build time and bash is
-  the right choice: `shellcheck` runs over it, `set -euo pipefail` is injected, and
-  every tool resolves to a pinned nixpkgs path. Reference:
-  `modules/nix-tarball-cache-repack.nix`.
-- **Carve-out — `justfile` recipes** keep `#!/usr/bin/env bash` + `set -euo pipefail`
-  to match the existing recipes, but follow the perl and regex rules above for their
-  text processing.
+- **Carve-out — `pkgs.writeShellApplication` stays bash.** It is a bash-only
+  nixpkgs builder with no zsh counterpart, and what it buys is worth the exception:
+  `shellcheck` runs over the source, `set -euo pipefail` is injected, and every tool
+  in `runtimeInputs` resolves to a pinned store path, so the BSD/GNU question is
+  settled at build time. ~20 call sites (`modules/mcp-servers.nix`,
+  `modules/vault.nix`, `modules/nix-tarball-cache-repack.nix`, …) rely on this.
+- **Other Nix-built scripts use zsh.** `writeShellScriptBin` hardcodes bash and gives
+  none of the above, so prefer `writeTextFile` with an explicit
+  `#!${pkgs.zsh}/bin/zsh` — pinned, not `/bin/zsh`, so the interpreter is fixed like
+  every other tool. See `mkZshScript` in `modules/nix-cache.nix`.
+- **`justfile` shebang recipes use `#!/bin/zsh`** + `set -euo pipefail` (zsh accepts
+  it verbatim), and follow the perl and regex rules above for text processing.
+  Non-shebang recipes still run under just's default `sh -cu`.
+
+  **When converting bash → zsh, the trap is word splitting.** zsh does *not* split
+  unquoted parameters — the property this whole section praises it for — so any code
+  that relied on `$VAR` expanding to several arguments silently collapses to one.
+  Use `${=VAR}` there. It bit the R2 post-build hook, whose `$OUT_PATHS` is a
+  space-separated path list; measured, `V="x y z"; set -- $V` gives `argc=1` under
+  zsh against `3` under bash. Everything else in this repo converted unchanged —
+  `read -r a b c <<<`, arrays with spaces, `"${arr[@]}"`, empty arrays under
+  `set -u`, globs in `[[ ]]`, and `[[ =~ ^[0-9a-f]{64}$ ]]`.
 
 ## Commit & Pull Request Guidelines
 
