@@ -84,6 +84,13 @@
     sops-nix.url = "github:Mic92/sops-nix";
     sops-nix.inputs.nixpkgs.follows = "nixpkgs";
 
+    # Declarative disk partitioning for the NixOS hosts. Consumed by
+    # modules/hosts/ionos-vps.nix and by `nixos-anywhere`, which reads the
+    # disko config out of the flake to partition the target before installing.
+    # https://github.com/nix-community/disko
+    disko.url = "github:nix-community/disko";
+    disko.inputs.nixpkgs.follows = "nixpkgs";
+
     # https://github.com/nix-community/nix-index-database
     nix-index-database.url = "github:nix-community/nix-index-database";
     nix-index-database.inputs.nixpkgs.follows = "nixpkgs";
