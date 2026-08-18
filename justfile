@@ -387,6 +387,10 @@ infra-verify *args:
 # nothing on the target; prints to stdout, so redirect to keep the result —
 #   just infra-recon root@87.106.149.208 > /tmp/ionos-recon.txt
 #
+# The second half covers storage appliances (ZFS, TrueNAS middleware, SMART,
+# dmidecode, clock, uplink) and collapses to a single line on a host that has
+# none of it, so one command still answers for every host we own.
+#
 # Read-only SSH survey of an unprovisioned host (hardware, disks, network, services)
 infra-recon target:
     #!/bin/zsh
@@ -401,7 +405,19 @@ infra-recon target:
     # Survey only. Every entry is a read; nothing here writes, installs or
     # restarts. A missing tool prints "(exit N)" rather than aborting the run —
     # for a survey "not present" is a real answer, not a swallowed failure.
-    run() { printf '\n### %s\n' "$1"; sh -c "$2" 2>&1 || printf '(exit %d)\n' "$?"; }
+    #
+    # Output is captured rather than streamed for one reason: a command that
+    # succeeds and prints nothing is otherwise indistinguishable from one that
+    # was never run. `dmidecode -t17` on a board without SMBIOS does exactly
+    # that, and an empty section under a heading reads like a checked box.
+    run() {
+      printf '\n### %s\n' "$1"
+      out=$(sh -c "$2" 2>&1); rc=$?
+      [ -n "$out" ] && printf '%s\n' "$out"
+      [ "$rc" -ne 0 ] && printf '(exit %d)\n' "$rc"
+      [ -z "$out" ] && [ "$rc" -eq 0 ] && printf '(no output)\n'
+      return 0
+    }
 
     run 'identity'        'hostnamectl; uname -a'
     run 'uptime / boot'   'uptime; who -b'
@@ -434,6 +450,67 @@ infra-recon target:
     run 'cron / timers'   'ls -1 /etc/cron.d 2>/dev/null; systemctl list-timers --no-pager --no-legend 2>/dev/null | head -20'
     run 'nix present?'    'test -d /nix && echo "/nix exists" || echo "no /nix"'
     run 'package count'   'dpkg -l | grep -c "^ii" || true'
+
+    # --- Storage appliance ---------------------------------------------------
+    # Added for p-own-lengenwang-c5esve (TrueNAS SCALE, which *is* Debian, so
+    # everything above applies). `have` short-circuits the whole block to one
+    # line on a host without ZFS, rather than printing a wall of "(exit 127)" —
+    # "not a ZFS host" is an answer, a column of failures is noise.
+    have() { command -v "$1" >/dev/null 2>&1; }
+
+    if have zpool; then
+      # Topology decides the migration strategy before anything else does: a
+      # mirror can be imported by the new system, a single-vdev pool that shares
+      # its disk with the boot pool has to be copied out and back byte by byte.
+      run 'zfs pools'      'zpool list -o name,size,alloc,free,frag,cap,health; echo; zpool status -v'
+      run 'zfs datasets'   'zfs list -o name,used,avail,refer,compression,compressratio,encryption,keystatus,mountpoint'
+      run 'zfs snapshots'  'zfs list -t snapshot -o name,used,refer,creation 2>/dev/null | head -50; printf "total snapshots: %s\n" "$(zfs list -t snapshot -H 2>/dev/null | wc -l)"'
+      # The question to answer before any wipe. `keylocation=prompt` means the
+      # key lives in the appliance keystore on the boot device — which a
+      # reinstall destroys, taking the data with it even if the data survives.
+      # A file:// path means it lives elsewhere, and that elsewhere becomes the
+      # thing to guard.
+      run 'zfs encryption' 'zfs get -o name,property,value encryption,keyformat,keylocation,encryptionroot,keystatus'
+      # Which pool sits on which *partition*. `zpool status` alone names vdevs,
+      # not devices, so two pools sharing one disk are invisible without -P.
+      run 'zfs vdev paths' 'zpool status -P'
+    else
+      run 'zfs'            'echo "(no zpool — not a ZFS host)"'
+    fi
+
+    if have midclt; then
+      # The appliance's own CLI. It answers as root over the local socket with
+      # no API token, and it reports the *configured* state, which is what a
+      # rebuild has to reproduce — `systemctl` only shows what happens to run.
+      run 'truenas config' 'for c in system.info sharing.smb.query sharing.nfs.query service.query vm.query chart.release.query; do printf "\n-- %s\n" "$c"; midclt call "$c" 2>&1 | python3 -m json.tool 2>/dev/null || midclt call "$c" 2>&1; done'
+    fi
+
+    # --- Hardware, for infra/src/inventory.ts --------------------------------
+    # dmidecode is the only source for the board part number: the appliance UI
+    # shows the chassis string ("Super Server"), which identifies nothing.
+    run 'board / bios'   'dmidecode -t1 -t2 -t3 2>/dev/null || echo "(needs root / no dmidecode)"'
+    run 'memory'         'dmidecode -t16 -t17 2>/dev/null | grep -E "Maximum Capacity|Number Of Devices|Size:|Type:|Speed:|Part Number|Rank" | head -40'
+    # Percentage Used and Data Units Written are the two numbers that turn
+    # "replace it eventually" into a date, and neither is visible in any UI here.
+    run 'disk health'    'nvme list 2>/dev/null; n=0; for d in /dev/nvme?n? /dev/sd? /dev/mmcblk?; do [ -e "$d" ] || continue; n=$((n+1)); printf "\n-- %s\n" "$d"; smartctl -a "$d" 2>&1 | grep -E "Model|Serial|Firmware|Capacity|Percentage Used|Data Units Written|Power On|Power_On|Temperature:|SMART overall" || echo "(smartctl gave nothing for $d)"; done; [ "$n" -eq 0 ] && echo "(no nvme/sd/mmcblk devices)"; true'
+    # sysfs first, lsusb only as a bonus: `usbutils` is absent on a TrueNAS appliance
+    # (and on plenty of minimal images), and "(no lsusb)" is a useless answer to
+    # "what is plugged into this machine". sysfs is always there on Linux, and it is
+    # what settles questions like "is that a USB stick or a KVM emulating one" --
+    # a device claiming interface class 08 while its siblings are class 03 HID is a
+    # KVM, not storage.
+    run 'usb peripherals' 'for d in /sys/bus/usb/devices/*/; do [ -f "$d/idVendor" ] || continue; printf "%-12s %s:%s  %s | %s | %s\n" "$(basename $d)" "$(cat $d/idVendor)" "$(cat $d/idProduct)" "$(cat $d/manufacturer 2>/dev/null || echo -)" "$(cat $d/product 2>/dev/null || echo -)" "$(cat $d/serial 2>/dev/null || echo -)"; done; echo; for i in /sys/bus/usb/devices/*:*/; do [ -e "$i/bInterfaceClass" ] || continue; printf "  %-14s class=%s driver=%s\n" "$(basename $i)" "$(cat $i/bInterfaceClass)" "$(basename $(readlink $i/driver 2>/dev/null) 2>/dev/null || echo -)"; done; command -v lsusb >/dev/null && { echo; lsusb; }; true'
+    run 'block devices+' 'lsblk -o NAME,SIZE,TRAN,TYPE,MODEL,SERIAL,MOUNTPOINT'
+    # A clock more than 15 minutes out makes every S3 request fail with
+    # RequestTimeTooSkewed. For a host that is about to push a backup into
+    # object storage this is a precondition, not a detail.
+    run 'clock'          'date -u; timedatectl 2>/dev/null; chronyc tracking 2>/dev/null || ntpq -p 2>/dev/null || echo "(no chrony/ntpq)"'
+    run 'backup tools'   'for t in restic rclone borg kopia tmux screen python3; do printf "%-8s %s\n" "$t" "$(command -v $t || echo -)"; done'
+    run 'k3s workloads'  'k3s kubectl get pods -A 2>/dev/null || echo "(no k3s)"'
+    # Upload is what decides whether a cloud backup takes hours or weeks, and no
+    # local measurement substitutes for it. Cloudflare's public speed endpoint
+    # needs no credentials and receives zeros; nothing on the target changes.
+    run 'uplink upload'  'command -v curl >/dev/null || { echo "(no curl)"; exit 0; }; dd if=/dev/zero bs=1M count=25 2>/dev/null | curl -s -o /dev/null -X POST --data-binary @- -w "upload %{speed_upload} B/s (%{size_upload} bytes in %{time_total} s)\n" https://speed.cloudflare.com/__up'
     REMOTE
 
 # --- Nix binary cache (Cloudflare R2) ---
