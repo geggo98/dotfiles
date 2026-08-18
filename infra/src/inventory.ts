@@ -170,7 +170,9 @@ export const machines = {
     arch: "amd64",
     role: "vps",
     managed: "nixos",
-    renameFrom: "ionos-vps",
+    // No `renameFrom`: the rename is done. Deployed 2026-08-18 and verified on the
+    // machine -- `hostname`, /proc/sys/kernel/hostname and the tailnet node all read
+    // p-ion-berlin-xs56r6, and hostnamectl no longer shows a divergent transient name.
     os: "nixos-26.05",
     addresses: {
       pub: { v4: "87.106.149.208", v6: "2a01:239:485:8d00::1" },

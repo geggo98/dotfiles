@@ -27,9 +27,10 @@ let
     # AGENTS.md carries the symptom and the client-side diagnosis.
     #
     # The trailing comment is free text that sshd ignores; it names the machine
-    # by its canonical name (infra/Naming.md). The 1Password ITEM is a separate
-    # string and still reads `p-ion-ber-xs56r6 SSH-Key` until renamed there —
-    # that is what `ssh-add -l` prints, so do not expect the two to match yet.
+    # by its canonical name (infra/Naming.md). The 1Password item is a separate
+    # string that happens to agree — `ssh-add -l` prints
+    # `p-ion-berlin-xs56r6 SSH-Key` — but nothing keeps them in step, so treat a
+    # mismatch as cosmetic and match on the fingerprint above instead.
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA15XU9mL8Qq9aBQdOxoyEnk5Qb3wfxu14yq42LvoHKn p-ion-berlin-xs56r6 (Ionos VPS)"
   ];
 

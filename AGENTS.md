@@ -337,7 +337,9 @@ not the host:
 ```bash
 # What is the agent actually offering?
 SSH_AUTH_SOCK=~/Library/Group\ Containers/2BUA8C4S2C.com.1password/t/agent.sock ssh-add -l
-# Expect a line ending in: p-ion-ber-xs56r6 SSH-Key (ED25519)
+# Expect: SHA256:YEUc7NtEQhufJSJroPQqWBvEULURYRJSiC9cKWJKgiE  p-ion-berlin-xs56r6 SSH-Key (ED25519)
+# Match on the fingerprint, not the title — the title is a 1Password item name that
+# nothing keeps in step with this repo (it read p-ion-ber-xs56r6 until 2026-08-18).
 
 # Is the key even being offered to the server?
 ssh -v root@87.106.149.208 true 2>&1 | grep -E 'Offering|Server accepts'
@@ -347,7 +349,7 @@ ssh -v root@87.106.149.208 true 2>&1 | grep -E 'Offering|Server accepts'
 authentication still fails:
 
 ```
-sign_and_send_pubkey: signing failed for ED25519 "p-ion-ber-xs56r6 SSH-Key"
+sign_and_send_pubkey: signing failed for ED25519 "p-ion-berlin-xs56r6 SSH-Key"
                       from agent: communication with agent failed
 ```
 
