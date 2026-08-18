@@ -1,7 +1,7 @@
 import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as cloudflare from "@pulumi/cloudflare";
-import { unmanagedHosts } from "./inventory.js";
+import { machines } from "./inventory.js";
 
 // Export stack outputs
 export const stack = pulumi.getStack();
@@ -223,10 +223,13 @@ export const s3Buckets = {
   private: privateBucket.bucket,
 };
 
-// --- Inventory of hosts Pulumi does not provision ---------------------------
+// --- Machine inventory ------------------------------------------------------
 // Not resources — see the header of ./inventory.ts for why the IONOS VPS cannot
 // be one. Exported so it reaches infra/pulumi-outputs.json, the Pulumi->Nix
 // contract in Architecture.md §6, and is therefore already present when the
 // first NixOS host configuration lands (Plan.md Phase 3).
 // Drift is checked by `just infra-verify`, not by `pulumi preview`.
-export const inventory = unmanagedHosts;
+//
+// Importing it also runs the naming checks at the bottom of that file, so a name
+// that does not fit the scheme in ../Naming.md fails `pulumi preview` here.
+export const inventory = machines;
