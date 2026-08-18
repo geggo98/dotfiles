@@ -13,6 +13,7 @@ in
       inputs.disko.nixosModules.disko
       inputs.home-manager.nixosModules.home-manager
       nixos.base
+      nixos.tailscale
     ];
 
     # --- Interactive environment ---------------------------------------------
