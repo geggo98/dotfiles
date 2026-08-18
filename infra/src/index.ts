@@ -2,6 +2,9 @@ import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as cloudflare from "@pulumi/cloudflare";
 import { machines } from "./inventory.js";
+// Imported for its side effects: ./dns.ts declares the records for the machine domain,
+// all of them derived from the inventory above.
+import { machineDomain } from "./dns.js";
 
 // Export stack outputs
 export const stack = pulumi.getStack();
@@ -233,3 +236,8 @@ export const s3Buckets = {
 // Importing it also runs the naming checks at the bottom of that file, so a name
 // that does not fit the scheme in ../Naming.md fails `pulumi preview` here.
 export const inventory = machines;
+
+// The domain machines and internal services are named under. Anything published for
+// humans lives in schwetschke.dev instead — see infra/Naming.md for why that split is
+// technical (the FRITZ!Box rebind exception is granted per domain) rather than cosmetic.
+export const machineZone = machineDomain;
