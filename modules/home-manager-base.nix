@@ -15,6 +15,10 @@ in
       hm.shell-secrets
       hm.git
       hm.gpg
+      # Which vaults the 1Password SSH agent may offer keys from. Per-machine
+      # state that 1Password does not sync, so a new Mac starts without it —
+      # and a key outside the personal vault is then never offered at all.
+      hm.onepassword
       hm.gradle
       hm.neovim
       hm.mcp-servers
