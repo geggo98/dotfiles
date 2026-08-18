@@ -14,6 +14,8 @@ in
       inputs.home-manager.nixosModules.home-manager
       nixos.base
       nixos.tailscale
+      nixos.secrets-ionos-vps
+      nixos.wireguard-home
     ];
 
     # --- Interactive environment ---------------------------------------------
