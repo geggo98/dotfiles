@@ -190,7 +190,31 @@ def verify_host_keys(name: str, machine: dict, timeout: int) -> list[str]:
     return failures
 
 
-def verify_dns(name: str, machine: dict, zone: str, sites: dict, timeout: int) -> list[str]:
+def zone_authority(zone: str, timeout: int) -> str | None:
+    """One of the zone's own nameservers, or None if they cannot be found.
+
+    The publication check asks the authority rather than whatever resolver this
+    machine happens to have, and that is not fussiness. Measured on the workstation
+    this runs from: consecutive runs disagreed with each other, reporting names as
+    unresolvable that had answered a minute earlier and vice versa -- the local path
+    forwards to several upstreams, one of which is the FRITZ!Box denying exactly the
+    names under test, and negative answers from before the records existed were still
+    cached. A check that flaps is worse than no check, because it teaches people to
+    ignore it.
+
+    Asking the authority also answers the right question. "Is the record published"
+    is a fact about the zone; "can this machine resolve it" is a fact about this
+    network, and that one has its own check below, aimed deliberately at the LAN
+    resolver.
+    """
+    servers = [ns.rstrip(".") for ns in dig(zone, "NS", timeout) if ns.endswith(".")]
+    return sorted(servers)[0] if servers else None
+
+
+def verify_dns(
+    name: str, machine: dict, zone: str, sites: dict, timeout: int,
+    authority: str | None,
+) -> list[str]:
     """Check that every recorded address is published under the scheme's name."""
     failures: list[str] = []
     for realm, endpoint in sorted(machine.get("addresses", {}).items()):
@@ -200,7 +224,7 @@ def verify_dns(name: str, machine: dict, zone: str, sites: dict, timeout: int) -
             if not expected:
                 continue
             label = f"{name} {realm} {rrtype}"
-            got = dig(fqdn, rrtype, timeout)
+            got = dig(fqdn, rrtype, timeout, server=authority)
             if expected in got:
                 print(f"  ok    {label}: {fqdn} -> {expected}")
             elif not got:
@@ -278,6 +302,25 @@ def main() -> int:
         print("inventory contains no machines -- nothing was verified", file=sys.stderr)
         return 2
 
+    authority: str | None = None
+    if not args.skip_dns:
+        try:
+            authority = zone_authority(zone, args.timeout)
+        except RuntimeError as e:
+            print(f"DNS checks could not run: {e}", file=sys.stderr)
+            return 2
+        if authority:
+            print(f"names checked against {authority} (authoritative for {zone})\n")
+        else:
+            # Said out loud rather than silently degrading: without the authority the
+            # publication check inherits this machine's resolver, which is exactly the
+            # unreliable path zone_authority() exists to avoid.
+            print(
+                f"could not find a nameserver for {zone}; falling back to this "
+                "machine's resolver, whose answers may flap\n",
+                file=sys.stderr,
+            )
+
     failures: list[str] = []
     checked = 0
     for name, machine in sorted(machines.items()):
@@ -292,7 +335,7 @@ def main() -> int:
         failures += verify_host_keys(name, machine, args.timeout)
         if not args.skip_dns:
             try:
-                failures += verify_dns(name, machine, zone, sites, args.timeout)
+                failures += verify_dns(name, machine, zone, sites, args.timeout, authority)
             except RuntimeError as e:
                 print(f"DNS checks could not run: {e}", file=sys.stderr)
                 return 2
