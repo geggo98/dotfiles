@@ -311,8 +311,10 @@ def verify_dns(
         print("          being filtered. FRITZ!Box -> Heimnetz -> Netzwerk ->")
         print("          Netzwerkeinstellungen -> DNS-Rebind-Schutz ->")
         print(f"          Hostname-Ausnahmen: {zone}")
-        print("          Note AVM's wording asks for the FULL hostname, so if the")
-        print(f"          bare zone is already listed, try {fqdn} as well.")
+        print("          The bare domain is enough — measured: one entry covers the")
+        print("          whole subtree, despite AVM's text asking for a full hostname.")
+        print("          So if it is already listed, look for a typo rather than")
+        print("          adding this name individually.")
         failures.append(label)
     return failures, inconclusive
 

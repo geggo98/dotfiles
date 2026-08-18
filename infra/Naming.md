@@ -142,21 +142,35 @@ worth stating because the correction is the more useful fact:
 | resolver | A `10.2.0.203` | AAAA `fd11:1b58:53c0::203` |
 |---|---|---|
 | `1.1.1.1`, `8.8.8.8` | answers | answers |
-| FRITZ!Box `10.2.0.1` | **NXDOMAIN** | **NXDOMAIN** |
-| MagicDNS `100.100.100.100` | **empty** | answers |
+| FRITZ!Box `10.2.0.1`, before the exception | **NXDOMAIN** | **NXDOMAIN** |
+| MagicDNS `100.100.100.100`, before the exception | **empty** | answers |
+| all three, after the exception | answers | answers |
 
-Two things follow. The FRITZ!Box does not strip the private *record*, it denies the
-whole *name* — NXDOMAIN, while `…pub.0xf1a5c0.net` on the same query path resolves
-fine, so this is the rebind protection and not a zone problem.
+Three things follow, and the third is the one that matters most.
 
-And **Tailscale is not an escape from it.** MagicDNS forwards to the system's other
-resolvers, the FRITZ!Box among them, so it inherits the filter — here partially, which
-is worse than inheriting it wholly: a client gets an AAAA and no A, so the failure
-depends on whether the caller can use IPv6 rather than being uniformly visible. Which
-upstream served which query is not established and is not worth relying on either way.
+The FRITZ!Box does not strip the private *record*, it denies the whole *name* —
+NXDOMAIN, while `…pub.0xf1a5c0.net` on the same query path resolves fine. That
+asymmetry is what identifies rebind protection rather than a zone problem.
 
-So the exception is needed for tailnet devices too, and "it works over Tailscale" is
-not evidence that it works.
+**Tailscale is not an escape from it.** MagicDNS forwards to the system's other
+resolvers, the FRITZ!Box among them, so it inherits the filter — and it inherited it
+*partially*, returning the AAAA and not the A, which is worse than inheriting it wholly
+because the failure then depends on whether the caller can use IPv6. Adding the
+exception fixed MagicDNS at the same instant it fixed the FRITZ!Box, which is what
+establishes the mechanism: MagicDNS was serving the FRITZ!Box's answer. So "it works
+over Tailscale" is not evidence that it works.
+
+**One exception covers the whole subtree.** AVM's own text asks for *"den vollständigen
+Hostnamen (Domainname mit Subdomain)"*, which reads like every name must be listed
+individually. It does not: the bare `0xf1a5c0.net` covers
+`p-ion-berlin-xs56r6.muenchen.0xf1a5c0.net` and everything else under it — measured,
+after the entry went in. That is what makes the domain split cheap to operate: one
+entry, once, for every machine and realm this scheme will ever add.
+
+Expect a delay before it takes effect. The FRITZ!Box caches the denial it gave earlier,
+and serves it until the zone's negative TTL runs out — 1800 s here. `just infra-verify`
+reads the remaining TTL out of the SOA and tells you which of the two you are looking
+at, precisely so that a cache does not get mistaken for a missing exception.
 
 `just infra-verify` therefore queries `@10.2.0.1` explicitly for site realms, so the
 exception is a checked state rather than a setting someone silently loses to a factory
