@@ -2,39 +2,50 @@
 let
   # Public key material — safe to commit, and exactly what authorized_keys wants.
   #
-  # These are LOAD-BEARING. After nixos-anywhere reboots the machine, this list
-  # is the only thing standing between you and the Cloud Panel's KVM console:
-  # nothing carries over from the old filesystem. Do not remove an entry without
-  # confirming the remaining ones actually work.
+  # LOAD-BEARING. Nothing carries over from the old filesystem after a
+  # nixos-anywhere reinstall, so this list is what stands between you and the
+  # Cloud Panel's KVM console. Do not remove an entry without confirming the
+  # remaining ones actually work — from the machine you will need them from.
+  #
+  # The other doors, for when this list is the problem: Tailscale SSH does NOT
+  # go through sshd and ignores this list entirely (but its ACL defaults to
+  # `check`, i.e. a browser round-trip, so it is an emergency route rather than
+  # an unattended one), and the KVM console reaches GRUB. Reaching 10.2.0.203
+  # over WireGuard is NOT a separate door in this sense: that is the same sshd
+  # and the same list.
+  # ONE key, on purpose. Two others were removed on 2026-08-18 — see below for
+  # what they were and why keeping them made the survivor pointless.
   rootAuthorizedKeys = [
     # SHA256:YEUc7NtEQhufJSJroPQqWBvEULURYRJSiC9cKWJKgiE — held in 1Password
     # (vault "Homelab") and released by its SSH agent behind Touch ID, so the
-    # private half is never a file on any disk. This is the key this host is
-    # meant to be reached with; the two below are the pre-existing ones and are
-    # kept only until this one is proven from BOTH workstations.
+    # private half is never a file on any disk anywhere.
     #
-    # Requires the agent to expose that vault — ~/.config/1Password/ssh/agent.toml
-    # lists it. That file is not managed by this repo (it is 1Password's, and it
-    # lives outside the flake), which is worth remembering when a new machine
-    # cannot log in despite having 1Password installed.
+    # Depends on something OUTSIDE this repo: the agent only offers that vault
+    # because ~/.config/1Password/ssh/agent.toml lists it. That file is
+    # 1Password's, not restored by `just switch`, and its absence is the most
+    # likely reason a machine with 1Password installed still cannot log in.
+    # AGENTS.md carries the symptom and the client-side diagnosis.
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA15XU9mL8Qq9aBQdOxoyEnk5Qb3wfxu14yq42LvoHKn p-ion-ber-xs56r6 (Ionos VPS)"
-
-    # The two below were copied verbatim from the running Ubuntu before the
-    # NixOS conversion.
-    #
-    # SHA256:qMz+MVejgC8S6KOgmZ79nJNliOMvJCxcVdEwbFGGRak — a plain file at
-    # ~/.ssh/id_ed25519 on FCX19GT9XR. Measured to be the key that actually
-    # authenticates today. While it is here the 1Password key above is
-    # decoration: anyone who can read that home directory gets in without Touch
-    # ID. Removing it is the actual security gain, and the only removal planned.
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDfDRtjeP6ihkQHraLor019i9dVcDdeBgbdwYPXuFpv3 stefan@FCX19GT9XR"
-    # SHA256:r6AR7CQY7+VJEP+tFglbyJ3P6kah1L4kQ+zBaiq2tEA — a GitLab deploy key,
-    # kept because it was there. Probably not an interactive way back in; the
-    # second workstation (DKL6GDJ7X1) is deliberately NOT added here, since that
-    # would be a change rather than a faithful carry-over. Worth adding on
-    # purpose if a single-laptop dependency is not acceptable.
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIBEh+/FqTXFLlhaIhR3RolOL+viECyVRJazrfpYp1yUk git@internal-git-host"
   ];
+
+  # Removed 2026-08-18, recorded because "why is this gone" is a question that
+  # gets asked at exactly the wrong moment:
+  #
+  #   SHA256:qMz+MVejgC8S6KOgmZ79nJNliOMvJCxcVdEwbFGGRak  stefan@FCX19GT9XR
+  #     A plain file at ~/.ssh/id_ed25519, and measured to be the key that
+  #     actually authenticated every session up to today. THIS removal is the
+  #     entire point of the exercise: while it was authorised, the biometric key
+  #     above was decoration — anyone able to read that home directory reached
+  #     root without Touch ID, which is precisely the risk the 1Password key was
+  #     introduced to close.
+  #
+  #   SHA256:r6AR7CQY7+VJEP+tFglbyJ3P6kah1L4kQ+zBaiq2tEA  git@internal-git-host
+  #     A GitLab deploy key inherited from the Ubuntu install and kept only
+  #     because it was there. Nothing in this repo used it; a key nobody can
+  #     account for is not a fallback, it is an unowned way in.
+  #
+  # If either is ever wanted back, it is one `git revert` away — but prefer
+  # adding a NEW key deliberately over restoring one that was inherited.
 in
 {
   flake.modules.nixos.base = { config, lib, ... }: {
