@@ -128,9 +128,43 @@ command for the user instead.
 ### The IONOS VPS (NixOS)
 
 `ionos-vps` (`87.106.149.208` / `2a01:239:485:8d00::1`, 4 vCore / 4 GB / 120 GB)
-is the first non-darwin host. Four facts about it are load-bearing and were each
-measured on the machine, not assumed — get any of them wrong and the box comes
-back unreachable, with the Cloud Panel KVM console as the only way in.
+is the first non-darwin host.
+
+**Four ways in, and knowing which one you are using matters when something
+breaks:**
+
+| Route | Address | Notes |
+|---|---|---|
+| Public SSH | `87.106.149.208` | real sshd; `deployTarget`, so the only route `just nixos-deploy` uses |
+| WireGuard from home | `10.2.0.203` | real sshd; transparent from the home LAN, no client software |
+| Tailscale SSH | `100.79.162.28` | **not** sshd, and **not** a deploy transport — see below |
+| KVM console | Cloud Panel | GRUB only; root's password is locked |
+
+The modules: `nixos-base` (sshd, keys, the lockout assertions), `nixos-tailscale`,
+`nixos-wireguard-home`, `nixos-secrets` (sops on the NixOS class), composed in
+`modules/hosts/ionos-vps.nix`, with `configurations.nixos.<host>.deployTarget`
+defined by `modules/nixos-wiring.nix`.
+
+**Tailscale SSH cannot deploy.** `tailscaled` answers TCP/22 on the tailnet
+address in userspace, so what replies there is not sshd, and it corrupts nix's
+`nix-store --serve` protocol (tailscale/tailscale#14093 and #14167, both open).
+`just nixos-deploy` is unaffected — it activates with a plain command exec and
+realises the closure from R2 — but `just cache-seed-remote` (`ssh-ng://`) and a
+`nixos-anywhere` reinstall would both break if `deployTarget` ever pointed at a
+tailnet name. Do not "simplify" it that way.
+
+**Deploys roll back by themselves.** `just nixos-deploy` arms a transient timer
+on the target before switching and disarms it over a second, fresh ssh
+connection; if that connection fails, the host restores its previous generation
+within `NIXOS_DEPLOY_ROLLBACK_DELAY` (300 s). A failing activation is covered
+too. It has fired for real. Two limits: transient units do not survive a reboot,
+so a config that only breaks at boot needs the GRUB generation list instead; and
+if the deploying machine dies between switch and disarm, the target rolls back
+although nothing was wrong.
+
+Four facts about the machine are load-bearing and were each measured on it, not
+assumed — get any of them wrong and the box comes back unreachable, with the
+Cloud Panel KVM console as the only way in.
 
 - **It boots legacy BIOS, not UEFI.** An ESP exists and Ubuntu mounted it at
   `/boot/efi`, which reads like UEFI — but `/sys/firmware/efi` is absent. The
@@ -635,7 +669,12 @@ Each module defines a single aspect across all relevant configuration classes (d
 | `neovim.nix` | Neovim (nvf) in two variants: `homeManager.neovim` (workstation, every `languages.*` enabled) and `homeManager.neovim-server` (same editor, no language toolchains). See "Neovim: why there are two variants" |
 | `packages.nix` | Common packages via `flake.modules.homeManager.packages` |
 | `mcp-servers.nix` | Claude Code MCP server wrappers via `flake.modules.homeManager.mcp-servers` |
-| `secrets.nix` | SOPS secret declarations and per-host secret merging |
+| `secrets.nix` | SOPS secret declarations and per-host secret merging (**home-manager only** — servers use `nixos-secrets.nix`) |
+| `nixos-wiring.nix` | Defines `configurations.nixos` (module + `deployTarget`) and wires it to `flake.nixosConfigurations` and `flake.deployTargets` |
+| `nixos-base.nix` | Baseline for every NixOS host: sshd, root's authorized keys, the lockout assertions, serial getty, nix settings, GC |
+| `nixos-tailscale.nix` | Tailscale with Tailscale SSH via `flake.modules.nixos.tailscale`. Note it is **not** a deploy transport — see "The IONOS VPS" |
+| `nixos-wireguard-home.nix` | WireGuard to the home FRITZ!Box via `flake.modules.nixos.wireguard-home`. Proxy-ARP addressing, so the LAN reaches the host without NAT |
+| `nixos-secrets.nix` | sops-nix on the **nixos** class — decrypts to `/run/secrets/` with a key generated on the host itself |
 | `misc.nix` | Key remapping, Hammerspoon, misc home config |
 | `aichat.nix` | AI chat tool configuration |
 | `ai-tools.nix` | AI tool packages and configuration |
