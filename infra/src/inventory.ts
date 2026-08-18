@@ -63,6 +63,21 @@ export interface UnmanagedHost {
    * install. Candidates for deletion in the Cloud Panel.
    */
   readonly firewallAllowsTcp: readonly number[];
+  /**
+   * Inbound UDP the same policy permits. Split from the TCP list because the
+   * Cloud Panel models protocol per rule, and because the two were established
+   * at very different times: the TCP set is IONOS' default template, the UDP set
+   * was added deliberately on 2026-08-18.
+   *
+   * That UDP passes at all was *measured*, not assumed — the provider firewall
+   * has no API, so its rules cannot be read back programmatically. Method: open
+   * the port here, add a temporary `iptables -I nixos-fw` rule on the host (the
+   * host firewall is a second, independent gate and normally has no UDP rule at
+   * all), run `nc -u -l`, send from a workstation. Proof was the payload
+   * arriving *plus* the rule's packet counter at 3/216 bytes. Both the temporary
+   * rule and the listener were removed afterwards.
+   */
+  readonly firewallAllowsUdp: readonly number[];
 }
 
 export const unmanagedHosts = {
@@ -79,5 +94,11 @@ export const unmanagedHosts = {
     sshHostKeyEd25519:
       "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAILpkgb2WWOEoZCzjXIQE81Z4LnYazELWDtZ4JPjQjrZd",
     firewallAllowsTcp: [22, 80, 443, 8443, 8447],
+    // 51820 WireGuard (the FRITZ!Box dials in — mandatory, the tunnel cannot be
+    // established without it). 41641 Tailscale — NOT mandatory: without it
+    // Tailscale still works via DERP relays, just indirectly and with more
+    // latency. The policy was also renamed from IONOS' default "My firewall
+    // policy" to `ionos-vps` and now carries a description pointing back here.
+    firewallAllowsUdp: [41641, 51820],
   },
 } as const satisfies Record<string, UnmanagedHost>;
