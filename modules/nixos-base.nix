@@ -25,7 +25,12 @@ let
     # 1Password's, not restored by `just switch`, and its absence is the most
     # likely reason a machine with 1Password installed still cannot log in.
     # AGENTS.md carries the symptom and the client-side diagnosis.
-    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA15XU9mL8Qq9aBQdOxoyEnk5Qb3wfxu14yq42LvoHKn p-ion-ber-xs56r6 (Ionos VPS)"
+    #
+    # The trailing comment is free text that sshd ignores; it names the machine
+    # by its canonical name (infra/Naming.md). The 1Password ITEM is a separate
+    # string and still reads `p-ion-ber-xs56r6 SSH-Key` until renamed there —
+    # that is what `ssh-add -l` prints, so do not expect the two to match yet.
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA15XU9mL8Qq9aBQdOxoyEnk5Qb3wfxu14yq42LvoHKn p-ion-berlin-xs56r6 (Ionos VPS)"
   ];
 
   # Removed 2026-08-18, recorded because "why is this gone" is a question that

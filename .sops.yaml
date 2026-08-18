@@ -40,7 +40,7 @@ creation_rules:
   # different recipient types. That is why every rule above carries both forms.
   # The ssh-ed25519 entry is kept anyway: it is what a human reading this file
   # can match against a known_hosts line or `ssh-keygen -lf`.
-  - path_regex: ^hosts/ionos-vps/secrets\.enc\.yaml$
+  - path_regex: ^hosts/p-ion-berlin-xs56r6/secrets\.enc\.yaml$
     pgp: ["B6CA7BD9B0973FBF981C3B1E7C8C077F1B72E98B"]
     age: ["age1v5xe0z337y8f7uq5aa8aedz7k4sz72zlcnk2f6azjz87fpdes5nqj6cl5a", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIMoFAZXY9kFJjRBW/wDc6TJte+pP8Ov4KyK6MDpADV4h", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIItmRvgucsqvH3CkT74Iz0/Qurs8QGopIyThHJqRmE94", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIKFr5M5JvZRT4GHj57xF9jng6f/w+pflOLLh6pc6c+EP", "age1vygfenpy584kvfdge57ep2vwqqe33zd4auanwu7frmf0tht5jq0q5ugmgd", "age1ae3vaq0cwzd8y0eatczdz7dz26m3mpxfnelwfxle9mqdachftd7q96fvaz"]
   # Default for any path not matched above — same recipients as the Pulumi rule:

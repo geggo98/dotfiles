@@ -54,5 +54,5 @@ let
     };
 in
 {
-  flake.modules.nixos.secrets-ionos-vps = mkSecretsModule "ionos-vps";
+  flake.modules.nixos.secrets-p-ion-berlin-xs56r6 = mkSecretsModule "p-ion-berlin-xs56r6";
 }

@@ -11,7 +11,8 @@ The repository follows the **Dendritic Pattern** for Nix flake structure — use
 **Current Hosts:**
 - `FCX19GT9XR` - Personal Mac (user: `stefan`)
 - `DKL6GDJ7X1` - Work Mac (user: `stefan.schwetschke`)
-- `ionos-vps` - IONOS Core VPS, `x86_64-linux` (NixOS). Not a darwin host: it is
+- `p-ion-berlin-xs56r6` - IONOS Core VPS, `x86_64-linux` (NixOS). Named per
+  `infra/Naming.md`; was `ionos-vps` until 2026-08-18. Not a darwin host: it is
   selected by name rather than hardware serial and is **not** applied with
   `just switch`. See "The IONOS VPS (NixOS)" below.
 
@@ -127,7 +128,7 @@ command for the user instead.
 
 ### The IONOS VPS (NixOS)
 
-`ionos-vps` (`87.106.149.208` / `2a01:239:485:8d00::1`, 4 vCore / 4 GB / 120 GB)
+`p-ion-berlin-xs56r6` (`87.106.149.208` / `2a01:239:485:8d00::1`, 4 vCore / 4 GB / 120 GB)
 is the first non-darwin host.
 
 **Four ways in, and knowing which one you are using matters when something
@@ -137,12 +138,20 @@ breaks:**
 |---|---|---|
 | Public SSH | `87.106.149.208` | real sshd; `deployTarget`, so the only route `just nixos-deploy` uses |
 | WireGuard from home | `10.2.0.203` | real sshd; transparent from the home LAN, no client software |
-| Tailscale SSH | `100.79.162.28`, MagicDNS `ionos-vps.great-fiordland.ts.net` | **not** sshd — userspace, login shell; usable but deliberately not `deployTarget`, see below |
+| Tailscale SSH | `100.79.162.28`, MagicDNS `p-ion-berlin-xs56r6.great-fiordland.ts.net` | **not** sshd — userspace, login shell; usable but deliberately not `deployTarget`, see below |
 | KVM console | Cloud Panel | GRUB only; root's password is locked |
+
+Each of the first three has a name under the scheme in `infra/Naming.md`, and the
+name says which route it is:
+`p-ion-berlin-xs56r6.pub.0xf1a5c0.net`, `.muenchen.` and `.tailnet.`.
+
+The MagicDNS name is **not** ours: Tailscale derives it from the OS hostname, so it
+followed the rename from `ionos-vps` to `p-ion-berlin-xs56r6` when that was deployed —
+anything still pointing at the old MagicDNS name resolves to nothing.
 
 The modules: `nixos-base` (sshd, keys, the lockout assertions), `nixos-tailscale`,
 `nixos-wireguard-home`, `nixos-secrets` (sops on the NixOS class), composed in
-`modules/hosts/ionos-vps.nix`, with `configurations.nixos.<host>.deployTarget`
+`modules/hosts/p-ion-berlin-xs56r6.nix`, with `configurations.nixos.<host>.deployTarget`
 defined by `modules/nixos-wiring.nix`.
 
 **Tailscale SSH is not sshd, and `deployTarget` deliberately does not use it.**
@@ -203,8 +212,8 @@ emptied, rather than letting the outage happen at reboot. A serial getty on
 `ttyS0` is enabled as a second, network-independent route.
 
 **A bare Mac cannot build this host. A Mac with the Docker Linux builder can** —
-see "The Linux builder (Docker)" below. `just nixos-build ionos-vps` and
-`just nixos-deploy ionos-vps` are the everyday commands; the rest of this section
+see "The Linux builder (Docker)" below. `just nixos-build p-ion-berlin-xs56r6` and
+`just nixos-deploy p-ion-berlin-xs56r6` are the everyday commands; the rest of this section
 is why they are needed at all.
 
 The distinction that causes confusion: these Macs can *substitute* any
@@ -266,7 +275,7 @@ the recovery procedure:
 
 ```bash
 nix run github:nix-community/nixos-anywhere -- \
-  --flake .#ionos-vps --build-on remote --target-host root@87.106.149.208
+  --flake .#p-ion-berlin-xs56r6 --build-on remote --target-host root@87.106.149.208
 ```
 
 Deliberately *not* preceded by a Cloud Panel Image: image storage on this tariff
@@ -393,7 +402,7 @@ Two things that dry run established, both non-obvious:
 - **The console does deliver arrow keys.** Worth knowing, because the first
   attempts looked like it did not: the keys arrived *after* boot and showed up
   as a row of `^[[B` at the login prompt.
-- **`boot.loader.timeout` had to be raised to 30 s** (`modules/hosts/ionos-vps.nix`).
+- **`boot.loader.timeout` had to be raised to 30 s** (`modules/hosts/p-ion-berlin-xs56r6.nix`).
   NixOS' 5 s default does not survive the console's round-trip latency — by the
   time a screenshot comes back and a keypress goes out, the menu is gone. Send
   keypresses *blind* on a timer rather than reacting to what you see: any
@@ -414,9 +423,9 @@ Mechanism: `modules/_files/linux-builder/linux-builder` (control script) and
 ```bash
 just linux-builder-up               # start (x86_64 by default; `aarch64` as arg)
 just linux-builder-status           # state, reported system, store size vs cap
-just nixos-build ionos-vps          # build a host's closure, push it to R2
+just nixos-build p-ion-berlin-xs56r6          # build a host's closure, push it to R2
 just linux-build 'nixpkgs#hello'    # any flake attribute
-just nixos-deploy ionos-vps         # build, push, activate over ssh (NOT agent-safe)
+just nixos-deploy p-ion-berlin-xs56r6         # build, push, activate over ssh (NOT agent-safe)
 just linux-builder-gc               # sweep the store back under its cap
 just linux-builder-destroy          # container + volume + keypair
 ```
@@ -468,7 +477,7 @@ Six things that are load-bearing and were each measured on this machine:
   the image's own value, `useBuildUsers()` returns false, and every build runs as
   **root** — no uid isolation between concurrent builds, and the uid half of the
   output-ownership check never runs. Tolerable for a scratch container; not for
-  one that signs into the cache serving `ionos-vps`. Verified after fixing:
+  one that signs into the cache serving `p-ion-berlin-xs56r6`. Verified after fixing:
   a probe derivation reports `uid=30001 gid=30000 user=nixbld1`.
 - **`build-dir` must be set, and not under `/var/tmp`.** Since Nix 2.30 it no
   longer follows `$TMPDIR`; it defaults to `stateDir/builds` =
@@ -624,7 +633,7 @@ against 22.6 s cold, i.e. ~10 s for 84 paths ≈ 120 ms/path — which is
 `cache.nixos.org`'s measured RTT. The model is self-consistent.
 
 So the fix for "the builder is slow" is **fewer paths**, not more bandwidth. The
-`neovim-server` split (modules/neovim.nix) took `ionos-vps` from ~9000 paths to
+`neovim-server` split (modules/neovim.nix) took `p-ion-berlin-xs56r6` from ~9000 paths to
 941 for exactly this reason, and that is why it now builds in minutes where the
 old closure ran 1 h 37 m without finishing.
 
