@@ -543,6 +543,9 @@ bootstrap host:
 
 LINUX_BUILDER := "zsh modules/_files/linux-builder/linux-builder"
 NIX_CACHE_PUSH := "zsh modules/_files/nix-cache/nix-cache-push"
+# No interpreter prefix on this one, unlike the two above: it is not run here at
+# all — it is piped into the *target's* `sh -s` by `nixos-deploy`.
+NIXOS_ACTIVATE := "modules/_files/nixos-deploy/activate"
 
 # A clean first start seeds the volume from the image and fetches the builder's
 # own openssh and coreutils — measured at 28 s. Later starts are a second or two.
@@ -643,6 +646,28 @@ linux-build attr arch="x86_64" push="true": _check-untracked
     # The store paths are the ONLY thing on stdout; the push logs to stderr.
     print -rl -- "${outpaths[@]}"
 
+# Force a NixOS host's `system.build.toplevel` to EVALUATE, which is the only
+# thing that makes its assertions run — and `just check` does not do it.
+#
+# NixOS assertions fire from baseSystemAssertWarn, i.e. only when toplevel is
+# evaluated. modules/nixos-wiring.nix keys its flake checks by the host's own
+# system, and `nix flake check` never realises attributes under a foreign
+# system, so on an aarch64-darwin workstation every assertion in
+# modules/nixos-*.nix is silently skipped. `just nixos-deploy` does evaluate
+# them — inside the container, i.e. only after Docker has spun up.
+#
+# This is a pure evaluation: no builder, no Docker, no x86_64-linux anything.
+# It asks for the .drvPath, which instantiates the derivation without realising
+# it. Seconds, not minutes.
+#
+# Evaluate a NixOS host (runs its assertions) without building anything
+nixos-eval host="ionos-vps": _check-untracked
+    #!/bin/zsh
+    set -euo pipefail
+    drv=$(nix eval --raw ".#nixosConfigurations.$1.config.system.build.toplevel.drvPath")
+    echo "$1: evaluates cleanly, assertions pass"
+    echo "$drv"
+
 # The builder architecture comes from the host's own hostPlatform, so a future
 # aarch64-linux server needs no change here. Pushes to R2 like linux-build.
 #
@@ -714,8 +739,45 @@ nixos-deploy host: _check-untracked
         echo "NOTE: built under Rosetta emulation, not natively." >&2
     fi
 
-    echo "activating on $target ..." >&2
-    ssh -o BatchMode=yes "$target" \
-      "nix-store --realise '$toplevel' >/dev/null \
-       && nix-env -p /nix/var/nix/profiles/system --set '$toplevel' \
-       && '$toplevel/bin/switch-to-configuration' switch"
+    # --- activate, with an armed rollback --------------------------------
+    # deploy-rs' magicRollback, minus deploy-rs. A timer is armed on the target
+    # BEFORE the switch; liveness is then proven by disarming it over a SECOND,
+    # fresh ssh connection. If the switch cuts the network — a bad firewall
+    # rule, an sshd that does not come back, a broken interface — nobody
+    # disarms it and the target restores the previous generation by itself.
+    # This is the whole reason a config change to this host is not a coin flip:
+    # its only other fallback is the Cloud Panel's KVM console via GRUB.
+    #
+    # Two limits, stated rather than discovered later:
+    #   * transient units do NOT survive a reboot, so a config that only breaks
+    #     at boot is not covered — that is what the GRUB generation list is for;
+    #   * if THIS machine dies between switch and disarm, the target rolls back
+    #     although nothing was wrong. Same trade-off deploy-rs makes.
+    rollback_delay=${NIXOS_DEPLOY_ROLLBACK_DELAY:-300}
+    echo "activating on $target (rollback armed: ${rollback_delay}s) ..." >&2
+
+    # The activation script lives in its own file and is piped to the target's
+    # `sh -s` — see the header of {{ NIXOS_ACTIVATE }} for why sh and not zsh,
+    # and why piping rather than an ssh command string. It is a FILE and not a
+    # heredoc for a duller reason: just strips the *common* leading whitespace
+    # from a shebang recipe, so a heredoc terminator at column 0 would flatten
+    # the indentation of the entire recipe around it.
+    if ! ssh -o BatchMode=yes "$target" sh -s -- "$toplevel" "$rollback_delay" \
+           < {{ NIXOS_ACTIVATE }}; then
+        echo "activation FAILED — leaving the rollback armed on purpose." >&2
+        echo "  $target restores its previous generation within ${rollback_delay}s." >&2
+        exit 1
+    fi
+
+    # The disarm is a NEW connection, and that is the entire point: it is the
+    # liveness proof, not a formality. Failing here must not be "fixed" by
+    # retrying with the timer stopped.
+    if ssh -o BatchMode=yes -o ConnectTimeout=15 "$target" \
+         systemctl stop deploy-rollback.timer; then
+        echo "confirmed reachable; rollback disarmed" >&2
+    else
+        echo "WARNING: $target did not answer after the switch." >&2
+        echo "  Do nothing — that is the correct action. The armed timer will" >&2
+        echo "  restore the previous generation within ${rollback_delay}s." >&2
+        exit 1
+    fi

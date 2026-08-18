@@ -20,7 +20,7 @@ let
   ];
 in
 {
-  flake.modules.nixos.base = { lib, ... }: {
+  flake.modules.nixos.base = { config, lib, ... }: {
     # --- Remote access ------------------------------------------------------
     # A cloud VM with no working sshd is a brick that costs a console session to
     # revive, so everything here is oriented at not losing the door.
@@ -42,14 +42,44 @@ in
     # Fail the build rather than install a machine nobody can log into. With
     # password auth off and no keys, the only remaining route is the Cloud
     # Panel's KVM console — this turns that outage into an eval error.
-    assertions = [{
-      assertion = rootAuthorizedKeys != [ ];
-      message = ''
-        nixos-base: root has no authorized SSH keys, and password authentication
-        is disabled. Installing this would leave the KVM console as the only way
-        in. Add a key to rootAuthorizedKeys in modules/nixos-base.nix.
-      '';
-    }];
+    assertions = [
+      {
+        assertion = rootAuthorizedKeys != [ ];
+        message = ''
+          nixos-base: root has no authorized SSH keys, and password authentication
+          is disabled. Installing this would leave the KVM console as the only way
+          in. Add a key to rootAuthorizedKeys in modules/nixos-base.nix.
+        '';
+      }
+
+      # The keys above are useless if nothing is listening for them. This guards
+      # the *activation path*, which is a separate thing from the login: `just
+      # nixos-deploy` builds in a local Docker container, pushes the closure to
+      # R2, and then activates it with `ssh $deployTarget` — where deployTarget
+      # is a public IP. Lose public sshd and the host is not merely awkward to
+      # log into, it can no longer be deployed at all, because no workstation
+      # here can build x86_64-linux without that container round-trip.
+      #
+      # Tailscale SSH does NOT substitute for this. tailscaled answers port 22
+      # on the tailnet address in userspace, so what listens there is not sshd —
+      # which is also why nix's `nix-store --serve` protocol breaks over it
+      # (tailscale/tailscale#14093, #14167, both open). `just cache-seed-remote`
+      # would go with it.
+      {
+        assertion = config.services.openssh.enable
+          && config.services.openssh.listenAddresses == [ ]
+          && builtins.elem 22 config.networking.firewall.allowedTCPPorts;
+        message = ''
+          nixos-base: sshd must stay reachable on 0.0.0.0:22.
+            services.openssh.enable         = ${lib.boolToString config.services.openssh.enable}
+            services.openssh.listenAddresses = ${toString (builtins.length config.services.openssh.listenAddresses)} entries (expected 0 = wildcard)
+            22 in firewall.allowedTCPPorts   = ${lib.boolToString (builtins.elem 22 config.networking.firewall.allowedTCPPorts)}
+          `just nixos-deploy` activates over `ssh $deployTarget`, and that is the
+          only way this host can be deployed. Without it the remaining route is
+          the IONOS KVM console via GRUB.
+        '';
+      }
+    ];
 
     # Second way in, independent of the network stack: IONOS exposes a serial
     # console through the Cloud Panel, and the Ubuntu install was already running

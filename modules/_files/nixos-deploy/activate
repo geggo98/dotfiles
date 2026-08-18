@@ -1,0 +1,42 @@
+#!/bin/sh
+# Activate a NixOS system closure on a remote host, with an armed rollback.
+#
+# Piped to the target's `sh -s` by `just nixos-deploy`; not run locally.
+#   ssh <target> sh -s -- <toplevel> <rollback-delay-seconds> < this-file
+#
+# WHY POSIX sh AND NOT zsh, against the repo's usual rule: this executes on the
+# *target*, where zsh is not installed — the NixOS hosts here carry fish and
+# whatever /bin/sh points at, nothing else. And it must be fed through `sh -s`
+# rather than passed as an ssh command string, because root's login shell on
+# those hosts is fish (users.users.root.shell in modules/hosts/ionos-vps.nix),
+# which parses `prev=$(...)` as a syntax error. The previous one-line activation
+# survived that only by accident: `&&` and `>/dev/null` happen to mean the same
+# thing in fish.
+set -eu
+
+toplevel=$1
+delay=$2
+
+# The generation to come back to, captured BEFORE anything moves.
+#
+# An explicit `--set "$prev"` rather than `nix-env --rollback`: if the switch
+# dies after `--set` but before finishing, --rollback lands correctly, but if it
+# dies BEFORE `--set` ever runs, --rollback steps one generation too far and
+# reverts a deploy that was fine. Naming the path removes the ambiguity.
+prev=$(readlink -f /nix/var/nix/profiles/system)
+
+# Arm first, switch second. If the switch is what cuts the connection, the timer
+# has to already exist — there is no second chance to set it.
+#
+# --collect so the transient units are garbage-collected either way. A leftover
+# failed unit from a previous run would otherwise block the next --unit=.
+systemctl stop deploy-rollback.timer 2>/dev/null || true
+systemd-run --unit=deploy-rollback --collect --on-active="$delay" \
+  /bin/sh -c "nix-env -p /nix/var/nix/profiles/system --set '$prev' \
+              && '$prev/bin/switch-to-configuration' switch" >/dev/null
+
+# Realise from the substituters (R2), not over the deployer's uplink — the
+# closure was pushed there before this script ran.
+nix-store --realise "$toplevel" >/dev/null
+nix-env -p /nix/var/nix/profiles/system --set "$toplevel"
+"$toplevel/bin/switch-to-configuration" switch
