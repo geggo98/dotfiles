@@ -146,8 +146,20 @@ name says which route it is:
 `p-ion-berlin-xs56r6.pub.0xf1a5c0.net`, `.muenchen.` and `.tailnet.`.
 
 The MagicDNS name is **not** ours: Tailscale derives it from the OS hostname, so it
-followed the rename from `ionos-vps` to `p-ion-berlin-xs56r6` when that was deployed —
-anything still pointing at the old MagicDNS name resolves to nothing.
+moves when the host is renamed, and anything still pointing at the old one resolves to
+nothing.
+
+That it moves at all took two lines, because **`networking.hostName` does not rename a
+running system.** nixpkgs writes `/etc/hostname` and stops there (the option exists
+"for hostnamectl and the org.freedesktop.hostname1 dbus service"), and systemd reads
+that file only at boot — so a deployed rename reports success while `hostname` and
+tailscaled still answer with the old name. Measured immediately after deploying exactly
+that: `hostnamectl` showed `Transient hostname: ionos-vps` beside
+`Static hostname: p-ion-berlin-xs56r6`. `modules/nixos-base.nix` therefore also sets
+`boot.kernel.sysctl."kernel.hostname"` (nixpkgs' own documented workaround, which
+applies on `switch` because `systemd-sysctl.service` has a restartTrigger on the
+generated file), and `modules/nixos-tailscale.nix` gives `tailscaled` a restartTrigger
+on the hostname so the tailnet follows in the same activation.
 
 The modules: `nixos-base` (sshd, keys, the lockout assertions), `nixos-tailscale`,
 `nixos-wireguard-home`, `nixos-secrets` (sops on the NixOS class), composed in

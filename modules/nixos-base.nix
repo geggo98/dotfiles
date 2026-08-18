@@ -124,6 +124,34 @@ in
 
     networking.firewall.enable = true;
 
+    # --- Make a rename actually take effect ---------------------------------
+    # `networking.hostName` does NOT change the running system. nixpkgs says so in
+    # as many words at network-interfaces.nix:1421 — the option exists to write
+    # /etc/hostname "for hostnamectl and the org.freedesktop.hostname1 dbus
+    # service" — and systemd reads that file only at boot. So a rename lands in
+    # the configuration, `switch-to-configuration` reports success, and the
+    # machine keeps its old name until someone reboots.
+    #
+    # Measured here on 2026-08-18, immediately after deploying exactly such a
+    # rename, which is how this was found rather than guessed:
+    #
+    #   hostnamectl  ->  Transient hostname: ionos-vps
+    #                    Static hostname:    p-ion-berlin-xs56r6
+    #
+    # The transient one is what `hostname` returns and what tailscaled reports,
+    # so the tailnet node and its MagicDNS name stay on the old name too — while
+    # every file on disk claims the new one. A silent, half-applied rename.
+    #
+    # This is nixpkgs' own documented workaround (named at network-interfaces.nix:476),
+    # and it applies on `switch` rather than only at boot because config/sysctl.nix:63
+    # gives systemd-sysctl.service a restartTrigger on the generated sysctl file:
+    # change the hostname, the file changes, the unit restarts, the kernel follows.
+    #
+    # A reboot would also do it — but a reboot is the one thing `just nixos-deploy`'s
+    # rollback timer cannot cover, since transient units do not survive one.
+    boot.kernel.sysctl."kernel.hostname" = lib.mkIf (config.networking.hostName != "")
+      config.networking.hostName;
+
     # --- Nix ----------------------------------------------------------------
     nix.settings = {
       experimental-features = [ "nix-command" "flakes" ];

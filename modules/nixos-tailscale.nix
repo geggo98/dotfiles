@@ -38,7 +38,19 @@
 # depend on a remote control plane.
 { ... }:
 {
-  flake.modules.nixos.tailscale = { ... }: {
+  flake.modules.nixos.tailscale = { config, ... }: {
+    # tailscaled reports the OS hostname it saw at start, and that is what becomes
+    # the node name and the MagicDNS name. Renaming a host therefore leaves the
+    # tailnet on the old name until tailscaled is restarted — which is a quiet
+    # inconsistency, because everything else about the machine has already moved.
+    #
+    # A restartTrigger on the hostname string restarts it exactly when the name
+    # changes and never otherwise. The cost when it does fire is a few seconds of
+    # tailnet downtime during an activation that is already reconfiguring the host,
+    # and `deployTarget` is the public address, so nothing about the deploy depends
+    # on the tunnel staying up.
+    systemd.services.tailscaled.restartTriggers = [ config.networking.hostName ];
+
     services.tailscale = {
       enable = true;
 

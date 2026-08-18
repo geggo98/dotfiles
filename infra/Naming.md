@@ -229,6 +229,12 @@ attribute, `hosts/<name>/`, the `.sops.yaml` path regex, the secrets module name
 justfile defaults, the tailnet node name and its MagicDNS name. That cost is the reason
 roles live in DNS: a role changing must not become a machine renaming.
 
+It also does not happen by itself on the machine. `networking.hostName` writes
+`/etc/hostname` and nothing more, and systemd reads that only at boot — so a deployed
+rename reports success while the running system, and therefore tailscaled, keeps the old
+name. `modules/nixos-base.nix` closes that with `boot.kernel.sysctl."kernel.hostname"`;
+the comment there has the measurement.
+
 One thing that is *not* part of that cost: re-encrypting secrets. sops stores its
 recipients inside the file, and `.sops.yaml` only governs future writes — so moving
 `hosts/<old>/secrets.enc.yaml` to a new path needs the rule updated, not the file
