@@ -224,6 +224,54 @@ Deliberately *not* preceded by a Cloud Panel Image: image storage on this tariff
 costs more than the server, and "Image neu installieren" restores a stock distro
 for free — which is all a snapshot of this machine would have preserved anyway.
 
+#### The SSH key lives in 1Password, and its agent config is not in this repo
+
+`modules/nixos-base.nix` authorises `SHA256:YEUc7NtEQhufJSJroPQqWBvEULURYRJSiC9cKWJKgiE`,
+whose private half never touches a disk: 1Password holds it in the vault
+**`Homelab`** and releases it through its SSH agent behind Touch ID.
+
+**That only works if the agent is told to expose that vault**, and the file
+saying so is **`~/.config/1Password/ssh/agent.toml`** — 1Password's own file,
+outside the flake, unmanaged by this repo and not restored by `just switch`:
+
+```toml
+[[ssh-keys]]
+vault = "Persönlich"
+
+[[ssh-keys]]
+vault = "Homelab"
+```
+
+So the failure mode to recognise: **SSH to the VPS suddenly stops working, on a
+machine where nothing about the VPS changed** — typically after a 1Password
+update, a reinstall, a new Mac, or a vault rename. The server is fine; the agent
+simply is not offering the key any more. Diagnose on the client, not the host:
+
+```bash
+# What is the agent actually offering?
+SSH_AUTH_SOCK=~/Library/Group\ Containers/2BUA8C4S2C.com.1password/t/agent.sock ssh-add -l
+# Expect a line ending in: p-ion-ber-xs56r6 SSH-Key (ED25519)
+
+# Is the key even being offered to the server?
+ssh -v root@87.106.149.208 true 2>&1 | grep -E 'Offering|Server accepts'
+```
+
+If the key is missing from `ssh-add -l`, fix `agent.toml` — 1Password picks the
+change up immediately, no restart needed (measured). Two adjacent traps:
+
+- **`~/.ssh/config` is hand-maintained too** and carries the global
+  `IdentityAgent` line pointing at that socket. home-manager's `programs.ssh`
+  would overwrite the whole file, which is why it is deliberately not used here.
+- **`MaxAuthTries` is 6**, counting file-based identities. The vaults are offered
+  in `agent.toml` order; if `Homelab` grows, a host can start failing because the
+  right key is never reached. The fix is a per-host block with `IdentityFile` +
+  `IdentitiesOnly`, not reordering the vaults.
+
+Until the pre-existing `stefan@FCX19GT9XR` file key is removed from
+`rootAuthorizedKeys`, a broken agent is merely an annoyance — ssh falls through
+to `~/.ssh/id_ed25519`. After that removal it is the difference between logging
+in and reaching for Tailscale SSH or the KVM console.
+
 #### Getting back in when SSH is gone
 
 `root`'s password is **locked** (`passwd -S root` → `L`) and

@@ -1,15 +1,32 @@
 { ... }:
 let
-  # The keys currently in /root/.ssh/authorized_keys on the IONOS VPS, copied
-  # verbatim from the running Ubuntu before the NixOS conversion. Public key
-  # material — safe to commit, and exactly what authorized_keys wants.
+  # Public key material — safe to commit, and exactly what authorized_keys wants.
   #
   # These are LOAD-BEARING. After nixos-anywhere reboots the machine, this list
   # is the only thing standing between you and the Cloud Panel's KVM console:
   # nothing carries over from the old filesystem. Do not remove an entry without
   # confirming the remaining ones actually work.
   rootAuthorizedKeys = [
-    # SHA256:qMz+MVejgC8S6KOgmZ79nJNliOMvJCxcVdEwbFGGRak
+    # SHA256:YEUc7NtEQhufJSJroPQqWBvEULURYRJSiC9cKWJKgiE — held in 1Password
+    # (vault "Homelab") and released by its SSH agent behind Touch ID, so the
+    # private half is never a file on any disk. This is the key this host is
+    # meant to be reached with; the two below are the pre-existing ones and are
+    # kept only until this one is proven from BOTH workstations.
+    #
+    # Requires the agent to expose that vault — ~/.config/1Password/ssh/agent.toml
+    # lists it. That file is not managed by this repo (it is 1Password's, and it
+    # lives outside the flake), which is worth remembering when a new machine
+    # cannot log in despite having 1Password installed.
+    "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIA15XU9mL8Qq9aBQdOxoyEnk5Qb3wfxu14yq42LvoHKn p-ion-ber-xs56r6 (Ionos VPS)"
+
+    # The two below were copied verbatim from the running Ubuntu before the
+    # NixOS conversion.
+    #
+    # SHA256:qMz+MVejgC8S6KOgmZ79nJNliOMvJCxcVdEwbFGGRak — a plain file at
+    # ~/.ssh/id_ed25519 on FCX19GT9XR. Measured to be the key that actually
+    # authenticates today. While it is here the 1Password key above is
+    # decoration: anyone who can read that home directory gets in without Touch
+    # ID. Removing it is the actual security gain, and the only removal planned.
     "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIDfDRtjeP6ihkQHraLor019i9dVcDdeBgbdwYPXuFpv3 stefan@FCX19GT9XR"
     # SHA256:r6AR7CQY7+VJEP+tFglbyJ3P6kah1L4kQ+zBaiq2tEA — a GitLab deploy key,
     # kept because it was there. Probably not an interactive way back in; the
