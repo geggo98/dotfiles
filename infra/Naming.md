@@ -167,6 +167,20 @@ individually. It does not: the bare `0xf1a5c0.net` covers
 after the entry went in. That is what makes the domain split cheap to operate: one
 entry, once, for every machine and realm this scheme will ever add.
 
+The Munich FRITZ!Box carries **two** entries, `0xf1a5c0.net` and `schwetschke.dev`, both
+deliberate. They are recorded in `src/inventory.ts` under the site, next to the LAN
+resolver, because a factory reset takes them with it and nothing here can read them back.
+
+Which corrects an argument made earlier on this page. The domain split was partly
+justified by keeping the rebind exception off the domain that carries mail — but what
+makes an exception safe is **who can publish names in the zone**, not what else the zone
+is used for. Rebind protection defends against a name *somebody else* controls
+resolving into your LAN; in a zone you control end to end, nobody else can create one.
+Both of these are such zones. The split still stands on its remaining grounds — machine
+topology stays out of the domain humans read, the machine zone was empty so nothing had
+to be migrated, and the name nobody types is the right one for machines to use — but not
+on that one.
+
 Expect a delay before it takes effect. The FRITZ!Box caches the denial it gave earlier,
 and serves it until the zone's negative TTL runs out — 1800 s here. `just infra-verify`
 reads the remaining TTL out of the SOA and tells you which of the two you are looking

@@ -66,9 +66,25 @@ export const machineZone = "0xf1a5c0.net";
  */
 export const sites = {
   berlin: { description: "IONOS Cloud Panel datacentre", resolver: undefined },
-  muenchen: { description: "Hallsteinweg, 81739 Muenchen", resolver: "10.2.0.1" },
+  muenchen: {
+    description: "Hallsteinweg, 81739 Muenchen",
+    resolver: "10.2.0.1",
+    // Recorded for the same reason as providerFirewall above: state that lives in a
+    // console no API here can read, so the least it can do is be written down. These
+    // are the entries under Heimnetz -> Netzwerk -> Netzwerkeinstellungen ->
+    // DNS-Rebind-Schutz, and a factory reset takes them with it.
+    //
+    // The bare domain covers everything beneath it -- measured, despite AVM's dialog
+    // asking for "den vollstaendigen Hostnamen". So this list stays two lines long no
+    // matter how many machines and realms the scheme grows.
+    rebindExceptions: ["0xf1a5c0.net", "schwetschke.dev"],
+  },
   lengenwang: { description: "Aleutenstrasse, 87663 Lengenwang", resolver: undefined },
-} as const satisfies Record<Site, { description: string; resolver: string | undefined }>;
+} as const satisfies Record<Site, {
+  description: string;
+  resolver: string | undefined;
+  rebindExceptions?: readonly string[];
+}>;
 
 /** Where a machine answers within one realm: `<name>.<realm>.<zone>`. */
 export function fqdn(name: string, realm: Realm): string {
