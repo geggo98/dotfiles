@@ -798,6 +798,12 @@ earlier denial until the zone's negative TTL expires (1800 s here). `just infra-
 checks this against the LAN resolver directly and reads the remaining TTL out of the
 SOA, so a cache is never reported as a missing exception.
 
+Both `0xf1a5c0.net` and `schwetschke.dev` are listed there, on purpose, and the list is
+recorded in `infra/src/inventory.ts` under the Munich site because a factory reset takes
+it with it. What makes an exception safe is who may publish names in the zone, not what
+else the zone carries — rebind protection exists to stop a name *someone else* controls
+from resolving into the LAN, and neither of these is such a zone.
+
 Two exceptions, both deliberate: `nix-cache.pub.schwetschke.dev` does not move (its
 signing key is named after it, and that name is in every narinfo signature already
 shipped), and `pub` stays short for the same reason.
