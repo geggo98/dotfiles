@@ -136,10 +136,27 @@ exception entry in *Heimnetz → Netzwerk → Netzwerkeinstellungen → DNS-Rebi
 The exception applies **per domain**. Granting it to an infrastructure domain has a far
 smaller blast radius than granting it to the domain that also carries mail.
 
-Note who is affected: devices resolving through the FRITZ!Box — guests, IoT, anything
-without Tailscale. Devices on the tailnet resolve through MagicDNS and never hit the
-filter, which is why this can look like it works while being broken for exactly the
-audience the WireGuard tunnel exists for.
+Measured again on the real records once they existed, which corrected an assumption
+worth stating because the correction is the more useful fact:
+
+| resolver | A `10.2.0.203` | AAAA `fd11:1b58:53c0::203` |
+|---|---|---|
+| `1.1.1.1`, `8.8.8.8` | answers | answers |
+| FRITZ!Box `10.2.0.1` | **NXDOMAIN** | **NXDOMAIN** |
+| MagicDNS `100.100.100.100` | **empty** | answers |
+
+Two things follow. The FRITZ!Box does not strip the private *record*, it denies the
+whole *name* — NXDOMAIN, while `…pub.0xf1a5c0.net` on the same query path resolves
+fine, so this is the rebind protection and not a zone problem.
+
+And **Tailscale is not an escape from it.** MagicDNS forwards to the system's other
+resolvers, the FRITZ!Box among them, so it inherits the filter — here partially, which
+is worse than inheriting it wholly: a client gets an AAAA and no A, so the failure
+depends on whether the caller can use IPv6 rather than being uniformly visible. Which
+upstream served which query is not established and is not worth relying on either way.
+
+So the exception is needed for tailnet devices too, and "it works over Tailscale" is
+not evidence that it works.
 
 `just infra-verify` therefore queries `@10.2.0.1` explicitly for site realms, so the
 exception is a checked state rather than a setting someone silently loses to a factory
