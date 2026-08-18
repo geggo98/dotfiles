@@ -15,7 +15,8 @@
 # it the better dialer anyway, and PersistentKeepalive holds the path open.
 #
 # The FRITZ!Box side is NOT managed here. It lives in the router's own config
-# (Internet -> Freigaben -> VPN (WireGuard), connection "ionos-vps") and is the
+# (Internet -> Freigaben -> VPN (WireGuard), connection "ionos-vps" — the
+# router's own label, predating this host's rename to p-ion-berlin-xs56r6) and is the
 # one part of this host that no amount of `nixos-rebuild` can reconstruct. Its
 # peer entry routes exactly 10.2.0.203/32 and fd11:1b58:53c0::203/128 to us.
 { ... }:

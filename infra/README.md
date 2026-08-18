@@ -119,7 +119,7 @@ Running `pulumi` directly in `infra/` requires a prior `pnpm run build`:
 | `just pulumi-preview` | Preview infrastructure changes |
 | `just pulumi-up` | Apply infrastructure changes |
 | `just pulumi-stack` | Show current stack state |
-| `just infra-verify` | Check `src/inventory.ts` against the real machines (reachability + SSH host key) |
+| `just infra-verify` | Check `src/inventory.ts` against reality: reachability, SSH host key, and that every name resolves — including through the LAN's own resolver, which is what makes the FRITZ!Box rebind exception a checked state |
 | `just infra-recon <target>` | Read-only survey of an unprovisioned host over SSH |
 | `just cache-seed` | Seed the R2 binary cache with the current system's delta |
 | `just cache-push <paths>` | Push specific store paths to the R2 cache (repair/ad hoc) |
@@ -220,7 +220,7 @@ permissions does not change its value, so the sops secret stays valid — only
 ### What ends up in the bucket, and why it is more than you expect
 
 `nix-cache-push --seed` filters the closure against `cache.nixos.org` and hands
-only the survivors to `nix copy` — on `ionos-vps` that is 203 paths out of 1140.
+only the survivors to `nix copy` — on `p-ion-berlin-xs56r6` that is 203 paths out of 1140.
 **The bucket still ends up holding most of the closure**, and that is correct
 rather than a bug in the filter:
 

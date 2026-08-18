@@ -3,18 +3,20 @@ let
   inherit (config.flake.modules) nixos homeManager;
 in
 {
-  # Where `just nixos-deploy ionos-vps` activates. The IPv4 literal rather than
-  # a hostname: this box's own DNS is not what we want to depend on when the
-  # reason for deploying might be that something on it is broken.
-  configurations.nixos.ionos-vps.deployTarget = "root@87.106.149.208";
+  # Where `just nixos-deploy p-ion-berlin-xs56r6` activates. The IPv4 literal
+  # rather than a hostname — including the one this host now has under
+  # p-ion-berlin-xs56r6.pub.0xf1a5c0.net: this box's own DNS is not what we want
+  # to depend on when the reason for deploying might be that something on it is
+  # broken. infra/Naming.md states the same rule from the naming side.
+  configurations.nixos.p-ion-berlin-xs56r6.deployTarget = "root@87.106.149.208";
 
-  configurations.nixos.ionos-vps.module = {
+  configurations.nixos.p-ion-berlin-xs56r6.module = {
     imports = [
       inputs.disko.nixosModules.disko
       inputs.home-manager.nixosModules.home-manager
       nixos.base
       nixos.tailscale
-      nixos.secrets-ionos-vps
+      nixos.secrets-p-ion-berlin-xs56r6
       nixos.wireguard-home
     ];
 
@@ -70,7 +72,15 @@ in
 
     nixpkgs.hostPlatform = "x86_64-linux";
 
-    networking.hostName = "ionos-vps";
+    # The canonical name from infra/Naming.md: type, provider, site, random
+    # suffix. It is also what IONOS' Cloud Panel calls this machine, and what
+    # tailscaled reports — so the MagicDNS name follows it.
+    networking.hostName = "p-ion-berlin-xs56r6";
+
+    # Empty on purpose: `networking.fqdn` would otherwise become
+    # <hostName>.<domain>, and this host's names live in DNS realms
+    # (p-ion-berlin-xs56r6.pub.0xf1a5c0.net and two others), not in a single
+    # domain suffix the machine could assert about itself.
     networking.domain = "";
 
     # --- Disk layout --------------------------------------------------------

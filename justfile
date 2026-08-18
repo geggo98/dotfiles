@@ -613,7 +613,7 @@ linux-push storepath arch="x86_64":
 # A bare or `.#`-prefixed attribute resolves against this checkout (mounted at
 # /work); anything carrying its own flake reference is passed through.
 #   just linux-build 'nixpkgs#ponysay'
-#   just linux-build '.#nixosConfigurations.ionos-vps.config.system.build.toplevel'
+#   just linux-build '.#nixosConfigurations.p-ion-berlin-xs56r6.config.system.build.toplevel'
 #
 # The result is pushed to R2 straight away, minus whatever cache.nixos.org
 # already has. That is the point: a path built here otherwise exists in exactly
@@ -661,7 +661,7 @@ linux-build attr arch="x86_64" push="true": _check-untracked
 # it. Seconds, not minutes.
 #
 # Evaluate a NixOS host (runs its assertions) without building anything
-nixos-eval host="ionos-vps": _check-untracked
+nixos-eval host="p-ion-berlin-xs56r6": _check-untracked
     #!/bin/zsh
     set -euo pipefail
     drv=$(nix eval --raw ".#nixosConfigurations.$1.config.system.build.toplevel.drvPath")

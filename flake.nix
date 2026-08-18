@@ -85,7 +85,7 @@
     sops-nix.inputs.nixpkgs.follows = "nixpkgs";
 
     # Declarative disk partitioning for the NixOS hosts. Consumed by
-    # modules/hosts/ionos-vps.nix and by `nixos-anywhere`, which reads the
+    # modules/hosts/p-ion-berlin-xs56r6.nix and by `nixos-anywhere`, which reads the
     # disko config out of the flake to partition the target before installing.
     # https://github.com/nix-community/disko
     disko.url = "github:nix-community/disko";

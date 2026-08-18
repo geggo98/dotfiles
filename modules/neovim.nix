@@ -5,7 +5,7 @@
 #
 # WHY THE SPLIT. `languages.<lang>.enable` in nvf does not just add a treesitter
 # grammar — it puts that language's LSP, formatter and linter into the closure,
-# and those drag whole SDKs. Measured in the ionos-vps closure before this split:
+# and those drag whole SDKs. Measured in the p-ion-berlin-xs56r6 closure before this split:
 #
 #     llvm-21.1.8-lib          261 MiB   languages.clang
 #     go-1.26.5                244 MiB   languages.go
@@ -17,7 +17,7 @@
 #     openjdk-headless          55 MiB   languages.java
 #     … plus nodejs, biome, mypy, cmake, rust-lib-src, python3 x2
 #
-# modules/hosts/ionos-vps.nix already refuses `homeManager.packages` with the
+# modules/hosts/p-ion-berlin-xs56r6.nix already refuses `homeManager.packages` with the
 # note "~144 entries — the whole AI toolchain on a 4 GB server". This is the same
 # mistake arriving through a different door: a 4 GB / 120 GB VPS was being handed
 # a full multi-language IDE so that root could edit a config file.
