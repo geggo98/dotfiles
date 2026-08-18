@@ -5,19 +5,37 @@
 # host from anywhere, the home LAN reaches it over WireGuard, and the public
 # internet gets sshd and nothing else.
 #
-# NOT A DEPLOY TRANSPORT — this is the important thing to know before pointing
-# `deployTarget` at a tailnet name. tailscaled claims TCP/22 on the tailnet
+# WHAT ANSWERS ON :22 HERE IS NOT sshd. tailscaled claims TCP/22 on the tailnet
 # address in userspace (gVisor netstack) and never hands those packets to the
-# kernel, so what answers there is Tailscale's own SSH server, not sshd. That
-# server injects data into the exec channel, which corrupts nix's
-# `nix-store --serve` protocol:
+# kernel. Consequences worth knowing before pointing `deployTarget` at a tailnet
+# name:
 #
-#     error: 'nix-store --serve' protocol mismatch from 'root@…'
+#   * The kernel firewall cannot gate it, and cannot switch it off — `--ssh` is
+#     the only control (which is why port 22 is absent from the tier-3 list
+#     below and could not usefully be added).
+#   * It runs the command through a LOGIN SHELL, so anything that shell prints
+#     lands in the channel. For an interactive session that is invisible; for a
+#     protocol that expects the channel to itself, it is fatal.
 #
-# tailscale/tailscale#14093 and #14167, both still open as of 2026-08-18.
-# `just nixos-deploy` is unaffected — it activates with a plain command exec and
-# realises the closure from R2 — but `just cache-seed-remote` (ssh-ng://) and a
-# `nixos-anywhere` reinstall would both break over it.
+# That second point is the real content of tailscale/tailscale#14093 and #14167
+# ("'nix-store --serve' protocol mismatch"), both still open. Read their logs
+# closely and the corruption is preceded by
+#     set-environment: line 16: warning: setlocale: LC_NUMERIC: cannot change
+#     locale (de_DE.UTF-8): No such file or directory
+# — the reporters' hosts printed locale warnings into the channel. Tailscale is
+# not injecting anything; it is merely the transport that gives the shell a
+# chance to speak.
+#
+# Measured on THIS host on 2026-08-18, where the locale is generated and the
+# shell is quiet: `ssh <tailnet-name> /bin/true` yields 0 bytes on stdout,
+# `nix store info --store ssh-ng://…` succeeds, and a real `nix copy` of two
+# paths completes with exit 0. So it is a fragility, not an incompatibility.
+#
+# `deployTarget` still points at the public IP, for reasons that survive the
+# above: nothing enforces that the channel stays quiet, so a future motd, rc
+# file or ungenerated locale would break deploys with a message pointing at
+# nix rather than at the cause — and the route used to rescue a host should not
+# depend on a remote control plane.
 { ... }:
 {
   flake.modules.nixos.tailscale = { ... }: {

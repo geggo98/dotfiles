@@ -137,7 +137,7 @@ breaks:**
 |---|---|---|
 | Public SSH | `87.106.149.208` | real sshd; `deployTarget`, so the only route `just nixos-deploy` uses |
 | WireGuard from home | `10.2.0.203` | real sshd; transparent from the home LAN, no client software |
-| Tailscale SSH | `100.79.162.28` | **not** sshd, and **not** a deploy transport — see below |
+| Tailscale SSH | `100.79.162.28`, MagicDNS `ionos-vps.great-fiordland.ts.net` | **not** sshd — userspace, login shell; usable but deliberately not `deployTarget`, see below |
 | KVM console | Cloud Panel | GRUB only; root's password is locked |
 
 The modules: `nixos-base` (sshd, keys, the lockout assertions), `nixos-tailscale`,
@@ -145,13 +145,28 @@ The modules: `nixos-base` (sshd, keys, the lockout assertions), `nixos-tailscale
 `modules/hosts/ionos-vps.nix`, with `configurations.nixos.<host>.deployTarget`
 defined by `modules/nixos-wiring.nix`.
 
-**Tailscale SSH cannot deploy.** `tailscaled` answers TCP/22 on the tailnet
-address in userspace, so what replies there is not sshd, and it corrupts nix's
-`nix-store --serve` protocol (tailscale/tailscale#14093 and #14167, both open).
-`just nixos-deploy` is unaffected — it activates with a plain command exec and
-realises the closure from R2 — but `just cache-seed-remote` (`ssh-ng://`) and a
-`nixos-anywhere` reinstall would both break if `deployTarget` ever pointed at a
-tailnet name. Do not "simplify" it that way.
+**Tailscale SSH is not sshd, and `deployTarget` deliberately does not use it.**
+`tailscaled` answers TCP/22 on the tailnet address in userspace, so the kernel
+firewall can neither gate nor disable it (`--ssh` is the only control), and it
+runs commands through a **login shell** — which means anything that shell prints
+lands in the channel.
+
+That last point is what tailscale/tailscale#14093 and #14167 are actually about,
+both still open: their logs show `setlocale: … cannot change locale (de_DE.UTF-8)`
+warnings immediately before `'nix-store --serve' protocol mismatch`. The shell
+spoke into the protocol's channel. Tailscale injects nothing.
+
+Measured here on 2026-08-18, where the locale is generated and the shell is
+quiet: `ssh <tailnet-name> /bin/true` returns 0 bytes on stdout,
+`nix store info --store ssh-ng://…` succeeds, and a real two-path `nix copy`
+completes with exit 0. **So it is a fragility, not an incompatibility** — an
+earlier version of this section said the latter and was wrong.
+
+`deployTarget` stays on the public IP for reasons that survive that correction:
+nothing enforces that the channel stays quiet, so a future motd, rc file or
+ungenerated locale would break deploys with an error pointing at nix rather than
+at the cause; and the route used to rescue a host should not depend on a remote
+control plane.
 
 **Deploys roll back by themselves.** `just nixos-deploy` arms a transient timer
 on the target before switching and disarms it over a second, fresh ssh
@@ -689,7 +704,7 @@ Each module defines a single aspect across all relevant configuration classes (d
 | `secrets.nix` | SOPS secret declarations and per-host secret merging (**home-manager only** — servers use `nixos-secrets.nix`) |
 | `nixos-wiring.nix` | Defines `configurations.nixos` (module + `deployTarget`) and wires it to `flake.nixosConfigurations` and `flake.deployTargets` |
 | `nixos-base.nix` | Baseline for every NixOS host: sshd, root's authorized keys, the lockout assertions, serial getty, nix settings, GC |
-| `nixos-tailscale.nix` | Tailscale with Tailscale SSH via `flake.modules.nixos.tailscale`. Note it is **not** a deploy transport — see "The IONOS VPS" |
+| `nixos-tailscale.nix` | Tailscale with Tailscale SSH via `flake.modules.nixos.tailscale`. Answers :22 in userspace, so not sshd and not firewall-gateable — see "The IONOS VPS" |
 | `nixos-wireguard-home.nix` | WireGuard to the home FRITZ!Box via `flake.modules.nixos.wireguard-home`. Proxy-ARP addressing, so the LAN reaches the host without NAT |
 | `nixos-secrets.nix` | sops-nix on the **nixos** class — decrypts to `/run/secrets/` with a key generated on the host itself |
 | `misc.nix` | Key remapping, Hammerspoon, misc home config |

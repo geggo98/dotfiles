@@ -88,11 +88,12 @@ in
       # log into, it can no longer be deployed at all, because no workstation
       # here can build x86_64-linux without that container round-trip.
       #
-      # Tailscale SSH does NOT substitute for this. tailscaled answers port 22
-      # on the tailnet address in userspace, so what listens there is not sshd —
-      # which is also why nix's `nix-store --serve` protocol breaks over it
-      # (tailscale/tailscale#14093, #14167, both open). `just cache-seed-remote`
-      # would go with it.
+      # Tailscale SSH is not a substitute. tailscaled answers port 22 on the
+      # tailnet address in userspace, so what listens there is not sshd, and it
+      # runs commands through a login shell — measured to be quiet on this host
+      # and to carry `nix copy` fine, but nothing enforces that it stays quiet,
+      # and the route used to rescue a host should not depend on a remote
+      # control plane. See modules/nixos-tailscale.nix for the detail.
       {
         assertion = config.services.openssh.enable
           && config.services.openssh.listenAddresses == [ ]
