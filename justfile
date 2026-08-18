@@ -719,6 +719,41 @@ nixos-deploy host: _check-untracked
     fi
     rm -f /tmp/nixos-deploy-eval.$$
 
+    # Prove reachability AND authentication before spending minutes building.
+    # Three separate wins from one cheap round trip, and the third is why this
+    # exists at all:
+    #   * fail in seconds when the host is down, not after a full build+push;
+    #   * fail in seconds on a wrong key, same reason;
+    #   * make any biometric prompt appear NOW, while someone is still watching.
+    #
+    # That last one is not hypothetical. The deploy's first ssh used to come
+    # after the build and the R2 upload — minutes in, when attention has moved
+    # on. With the key held in 1Password behind Touch ID, the very first
+    # signature raises a dialog; unanswered, ssh reports
+    #     sign_and_send_pubkey: ... from agent: communication with agent failed
+    # which reads like a broken agent and is nothing of the sort. Measured
+    # afterwards: once authorised, signing is 0.6-1.2 s and reliable over both
+    # the public address and the tunnel, so warming it up front costs nothing.
+    #
+    # BatchMode does NOT suppress the prompt — verified. The dialog comes from
+    # the 1Password app, out of band, not from ssh.
+    if ! ssh -o BatchMode=yes -o ConnectTimeout=15 "$target" true \
+             2>/tmp/nixos-deploy-ssh.$$; then
+        echo "cannot authenticate to $target — nothing built, nothing changed." >&2
+        if grep -q 'communication with agent failed' /tmp/nixos-deploy-ssh.$$; then
+            echo "" >&2
+            echo "  The agent refused to SIGN, having happily offered the key." >&2
+            echo "  With a 1Password-held key that almost always means a Touch ID" >&2
+            echo "  prompt went unanswered. Approve it and re-run; the agent then" >&2
+            echo "  caches the authorisation and later connections need no prompt." >&2
+            echo "" >&2
+        fi
+        cat /tmp/nixos-deploy-ssh.$$ >&2
+        rm -f /tmp/nixos-deploy-ssh.$$
+        exit 1
+    fi
+    rm -f /tmp/nixos-deploy-ssh.$$
+
     toplevel=$({{ LINUX_BUILDER }} build \
       '.#nixosConfigurations.{{ host }}.config.system.build.toplevel' --arch "$arch")
     echo "built: $toplevel" >&2
