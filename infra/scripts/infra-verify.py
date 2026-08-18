@@ -162,6 +162,42 @@ def dig(name: str, rrtype: str, timeout: int, server: str | None = None) -> list
     return [line.strip() for line in proc.stdout.splitlines() if line.strip()]
 
 
+def negative_cache_seconds(name: str, server: str, timeout: int) -> int | None:
+    """Seconds left on a cached negative answer, or None if the answer is not one.
+
+    A resolver denying a name it has cached returns the zone's SOA in the AUTHORITY
+    section with the remaining negative TTL. Two queries a few seconds apart show it
+    counting down, which distinguishes "this resolver is filtering the name" from
+    "this resolver remembers the name not existing" -- and those have opposite
+    remedies. Reading it once is enough: the presence of a countdown-capable SOA
+    with a TTL below the zone's configured negative TTL means the answer came from
+    cache rather than being synthesised on the spot.
+
+    Worth the twelve lines, because guessing here sends someone into a router UI to
+    fix something that fixes itself. That happened once before this existed.
+    """
+    dig_bin = shutil.which("dig")
+    if dig_bin is None:
+        return None
+    proc = subprocess.run(
+        [dig_bin, f"+time={timeout}", "+tries=1", "+noall", "+authority",
+         f"@{server}", name, "A"],
+        capture_output=True, text=True,
+    )
+    # matches:  0xf1a5c0.net.  661  IN  SOA  apollo.ns.cloudflare.com. dns… 1800
+    #           -> remaining=661  configured=1800
+    for line in proc.stdout.splitlines():
+        fields = line.split()
+        if len(fields) >= 4 and fields[3] == "SOA" and fields[1].isdigit():
+            remaining = int(fields[1])
+            configured = int(fields[-1]) if fields[-1].isdigit() else None
+            # A full-length TTL is what a freshly synthesised denial looks like; a
+            # shortened one can only have come from a cache that has been counting.
+            if configured is None or remaining < configured:
+                return remaining
+    return None
+
+
 def verify_host_keys(name: str, machine: dict, timeout: int) -> list[str]:
     """Check the presented host key at every recorded address."""
     expected = (machine.get("ssh") or {}).get("hostKeyEd25519")
@@ -214,9 +250,15 @@ def zone_authority(zone: str, timeout: int) -> str | None:
 def verify_dns(
     name: str, machine: dict, zone: str, sites: dict, timeout: int,
     authority: str | None,
-) -> list[str]:
-    """Check that every recorded address is published under the scheme's name."""
+) -> tuple[list[str], list[str]]:
+    """Check that every recorded address is published under the scheme's name.
+
+    Returns (failures, inconclusive). The second list matters: a check that could not
+    run is not a check that passed, and the summary has to say so or the script ends
+    up reporting a green run over a state nobody established.
+    """
     failures: list[str] = []
+    inconclusive: list[str] = []
     for realm, endpoint in sorted(machine.get("addresses", {}).items()):
         fqdn = f"{name}.{realm}.{zone}"
         for rrtype, key in (("A", "v4"), ("AAAA", "v6")):
@@ -245,17 +287,34 @@ def verify_dns(
             # Control query failed: the resolver itself is not answering, so we are not
             # on that LAN. Say so rather than reporting either a pass or a failure.
             print(f"  --    {label}: resolver did not answer -- not on that network, check skipped")
+            inconclusive.append(label)
             continue
         got = dig(fqdn, "A", timeout, server=resolver)
         if expected4 in got:
             print(f"  ok    {label}: rebind exception in place")
-        else:
-            print(f"  FAIL  {label}: resolver answers for the zone but not for {fqdn}")
-            print("          This is DNS rebind protection eating the private address.")
-            print("          FRITZ!Box -> Heimnetz -> Netzwerk -> Netzwerkeinstellungen")
-            print(f"          -> DNS-Rebind-Schutz -> Hostname-Ausnahmen: {zone}")
-            failures.append(label)
-    return failures
+            continue
+
+        # Two very different faults look identical here, so say which one it is
+        # rather than guessing. A stale negative answer fixes itself; a missing
+        # exception does not.
+        stale = negative_cache_seconds(fqdn, resolver, timeout)
+        if stale is not None:
+            print(f"  --    {label}: cached denial, {stale}s left of the negative TTL")
+            print("          Published recently? Then this is the resolver still")
+            print("          remembering the name not existing. Re-run after that,")
+            print("          and only reach for the router if it survives.")
+            inconclusive.append(label)
+            continue
+
+        print(f"  FAIL  {label}: resolver answers for the zone but not for {fqdn},")
+        print("          and the denial is not from its cache — so the name is")
+        print("          being filtered. FRITZ!Box -> Heimnetz -> Netzwerk ->")
+        print("          Netzwerkeinstellungen -> DNS-Rebind-Schutz ->")
+        print(f"          Hostname-Ausnahmen: {zone}")
+        print("          Note AVM's wording asks for the FULL hostname, so if the")
+        print(f"          bare zone is already listed, try {fqdn} as well.")
+        failures.append(label)
+    return failures, inconclusive
 
 
 def main() -> int:
@@ -322,6 +381,7 @@ def main() -> int:
             )
 
     failures: list[str] = []
+    inconclusive: list[str] = []
     checked = 0
     for name, machine in sorted(machines.items()):
         addresses = machine.get("addresses", {})
@@ -335,7 +395,11 @@ def main() -> int:
         failures += verify_host_keys(name, machine, args.timeout)
         if not args.skip_dns:
             try:
-                failures += verify_dns(name, machine, zone, sites, args.timeout, authority)
+                dns_failures, dns_inconclusive = verify_dns(
+                    name, machine, zone, sites, args.timeout, authority
+                )
+                failures += dns_failures
+                inconclusive += dns_inconclusive
             except RuntimeError as e:
                 print(f"DNS checks could not run: {e}", file=sys.stderr)
                 return 2
@@ -348,7 +412,20 @@ def main() -> int:
             f"{args.inventory} rather than ignoring this."
         )
         return 1
-    print(f"OK: {checked} machine(s) match the inventory")
+
+    if inconclusive:
+        # Not a failure and not a pass. Reported on its own line rather than folded
+        # into the OK, because "3 machines match" over a check that never ran is how
+        # an unverified state gets remembered as a verified one.
+        print(f"OK: {checked} machine(s) match the inventory")
+        print(
+            f"    {len(inconclusive)} check(s) could not be made: "
+            f"{', '.join(inconclusive)}"
+        )
+        print("    Nothing is wrong and nothing was established -- re-run them.")
+        return 0
+
+    print(f"OK: {checked} machine(s) match the inventory, every check made")
     return 0
 
 
