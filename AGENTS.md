@@ -256,6 +256,30 @@ SSH_AUTH_SOCK=~/Library/Group\ Containers/2BUA8C4S2C.com.1password/t/agent.sock 
 ssh -v root@87.106.149.208 true 2>&1 | grep -E 'Offering|Server accepts'
 ```
 
+**A different symptom, with a misleading message.** If the key IS offered but
+authentication still fails:
+
+```
+sign_and_send_pubkey: signing failed for ED25519 "p-ion-ber-xs56r6 SSH-Key"
+                      from agent: communication with agent failed
+```
+
+the agent is not broken. It offered the key and then refused to *sign*, which
+with a 1Password-held key almost always means **a Touch ID prompt nobody
+answered**. Measured afterwards: once authorised, signing takes 0.6–1.2 s and is
+reliable over both the public address and the tunnel, so a failure here is about
+the prompt, not about speed or configuration.
+
+`BatchMode=yes` does NOT cause this and does not suppress the prompt — verified
+directly. The dialog comes from the 1Password app, out of band; ssh never sees it.
+
+This is why `just nixos-deploy` opens a throwaway `ssh … true` **before** the
+build rather than only after it. The first signature used to be requested
+minutes in, once the build and the R2 upload had finished and attention had
+moved elsewhere — precisely when a dialog gets missed. The preflight also turns
+"host is down" and "wrong key" into 15-second failures instead of failures after
+a full build.
+
 If the key is missing from `ssh-add -l`, fix `agent.toml` — 1Password picks the
 change up immediately, no restart needed (measured). Two adjacent traps:
 
