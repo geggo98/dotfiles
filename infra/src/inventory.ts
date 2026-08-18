@@ -79,7 +79,20 @@ export const sites = {
     // matter how many machines and realms the scheme grows.
     rebindExceptions: ["0xf1a5c0.net", "schwetschke.dev"],
   },
-  lengenwang: { description: "Aleutenstrasse, 87663 Lengenwang", resolver: undefined },
+  lengenwang: {
+    description: "Aleutenstrasse, 87663 Lengenwang",
+    // 192.168.2.0/24 behind a Telekom line, measured 2026-08-18 from
+    // p-own-lengenwang-ra4jpy: gateway .1 answers HTTP with `Location:
+    // http://speedport.ip/`, and the IPv6 prefix is 2003:eb::/32 (Deutsche Telekom).
+    //
+    // No `rebindExceptions` here, and that is a statement rather than an omission: no
+    // site realm is published for lengenwang yet (both machines carry tailnet
+    // addresses only), so nothing needs the exception yet. When that changes, note
+    // that this is a *Speedport*, not a FRITZ!Box -- the entry lives elsewhere in the
+    // menu and the "bare domain covers the subtree" behaviour measured in Munich is an
+    // AVM finding that says nothing about this router.
+    resolver: "192.168.2.1",
+  },
 } as const satisfies Record<Site, {
   description: string;
   resolver: string | undefined;
@@ -120,6 +133,45 @@ export type Managed = "nixos" | "nix-darwin" | "unmanaged" | "planned";
  */
 export type Ecosystem = "kvm" | "proxmox" | "libvirt" | "incus" | "vmware" | "xen";
 
+/**
+ * What the machine physically is, as read off the machine itself rather than off an
+ * invoice. Every field here came from `just infra-recon` (dmidecode, smartctl, lsblk).
+ *
+ * Two reasons this is worth carrying, and neither is "nice to have a datasheet":
+ *
+ *   * **`outOfBand` is the answer to "how do I get in when nothing works".** It is the
+ *     same job `providerFirewall` does for the VPS -- state that lives in a console no
+ *     API here can read, so the least this file can do is name it. Looking it up while
+ *     a machine is down is the wrong time to discover there was a second route.
+ *   * **Slots and populated counts decide what a rebuild can do.** "Four bays, one
+ *     disk" and "four DIMM slots, one module" are the difference between planning
+ *     redundancy and discovering there is nowhere to put it.
+ *
+ * Deliberately not modelled: anything that changes without the hardware changing
+ * (installed OS, running services). Those have their own fields or live in
+ * `infra/machines/<name>.md`.
+ */
+export interface Hardware {
+  /** Board part number from dmidecode -t2, not the chassis string a UI shows. */
+  readonly board?: string;
+  readonly boardSerial?: string;
+  readonly cpu?: string;
+  readonly cores?: number;
+  readonly memoryGiB?: number;
+  /** Worth a field of its own: it is the reason a machine is trustworthy for storage. */
+  readonly ecc?: boolean;
+  readonly memorySlots?: { readonly total: number; readonly populated: number };
+  readonly nics?: number;
+  readonly disks?: readonly {
+    readonly device: string;
+    readonly model: string;
+    readonly serial: string;
+    readonly note?: string;
+  }[];
+  /** Routes that survive the OS being broken, most independent first. */
+  readonly outOfBand?: readonly string[];
+}
+
 export interface Machine {
   readonly kind: Kind;
   readonly arch: Arch;
@@ -159,6 +211,9 @@ export interface Machine {
     readonly tcp: readonly number[];
     readonly udp: readonly number[];
   };
+
+  /** Physical machines only. See the Hardware doc comment for why it is here at all. */
+  readonly hardware?: Hardware;
 }
 
 export const machines = {
@@ -221,15 +276,91 @@ export const machines = {
     // was already decided, rather than a decision taken while a machine is half-built.
     managed: "unmanaged",
     renameFrom: "nas-aleuten",
+    // Capability, not census: TrueNAS SCALE drives VMs through libvirt/KVM, and this
+    // host runs exactly zero of them (`midclt call vm.query` -> []). Kept because the
+    // rebuild should preserve the capability.
     ecosystem: "kvm",
+    os: "truenas-scale-22.12.3.3",
     addresses: { tailnet: { v4: "100.121.105.41" } },
-    // No `ssh` entry on purpose. Both Lengenwang machines are reachable over exactly one
-    // route today, so a key scanned there cannot be cross-checked against a second one --
-    // and on the tailnet address it is `SSH-2.0-Tailscale` answering. On the VPS that
-    // turned out to serve the host's own key (measured, byte-identical to OpenSSH's), but
-    // "turned out to" is not a property to rely on for a machine we cannot check twice.
-    // Recording an unattributable key would produce a confusing failure the day tailscaled
-    // state is reset. Add it when the NixOS conversion gives these hosts a second route.
+
+    // Scanned 2026-08-18 from two independent directions and byte-identical in both:
+    // the tailnet address from a workstation, and 192.168.2.115 from
+    // p-own-lengenwang-ra4jpy on the LAN. That cross-check is what the previous comment
+    // here said was missing, and enabling sshd is what supplied it. It also corrected
+    // that comment's guess: nothing answers `SSH-2.0-Tailscale` on this host, because
+    // Tailscale SSH is not enabled -- it is OpenSSH_8.4p1, TrueNAS' own.
+    //
+    // CAVEAT, and it is the interesting half. The key's comment is
+    // `root@tnsbuilds01.tn.ixsystems.net`, so it was generated on an iXsystems build
+    // server and shipped inside the image -- this machine never made it. Whether iX
+    // ships the same pair to every install could not be established from here, but the
+    // conclusion does not depend on that: a private host key we did not generate is one
+    // we cannot treat as secret. So this value detects *change* (a reinstall, a swap)
+    // and nothing more; it is not proof of identity and offers no MITM protection.
+    // The NixOS conversion retires the problem by generating a real per-host key.
+    ssh: {
+      hostKeyEd25519:
+        "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIPSxk99smIcmyaGhrj1kAdOPOkJo1NhggkzndvTrQDR4",
+    },
+
+    hardware: {
+      board: "Supermicro A2SDi-12C-HLN4F",
+      boardSerial: "OM224S031552",
+      cpu: "Intel Atom C3858 (Denverton)",
+      cores: 12,
+      memoryGiB: 64,
+      ecc: true,
+      // One module in four slots, so 192 GiB of headroom without replacing anything.
+      // The chassis/system serial is Supermicro's unset placeholder "0123456789" --
+      // which is precisely why the naming scheme gives non-Macs a random suffix instead
+      // of trusting a serial (Naming.md).
+      memorySlots: { total: 4, populated: 1 },
+      nics: 4,
+      disks: [
+        {
+          device: "/dev/nvme0n1",
+          model: "Crucial CT4000P3PSSD8 (P3 Plus, 4 TB, QLC)",
+          serial: "2317E6CE9565",
+          // The single most consequential fact about this machine. Both pools live on
+          // this one disk with no redundancy of any kind: p3 (64 GiB) is boot-pool, p5
+          // (3.6 TiB) is boot-ssd-storage, p4 is encrypted swap. So a reinstall cannot
+          // preserve the data by importing the pool -- the data has to leave the
+          // machine first. Health as of 2026-08-18: SMART PASSED, 7% endurance used,
+          // 21.6 TB written, 26161 power-on hours, 40 C.
+          note: "carries boot-pool (p3) AND boot-ssd-storage (p5); no redundancy",
+        },
+      ],
+      // Both verified on 2026-08-18, not inferred from the board's datasheet. Listed
+      // remote-usable first, which is NOT the same as most-independent -- see below.
+      //
+      // A third KVM is physically attached and deliberately absent from this list: USB
+      // enumeration shows an ATEN HID composite (0557:2419 behind hub 0557:7000), i.e.
+      // a hardware KVM switch. It has no network side, so it cannot rescue anything
+      // from Munich. Recorded in ../machines/p-own-lengenwang-c5esve.md instead.
+      outOfBand: [
+        // HDMI capture (/dev/video0) plus USB HID gadgets (/dev/hidg0 keyboard,
+        // /dev/hidg1 mouse) and a 5 GiB emulated mass-storage device, which is what
+        // shows up on the host as `sda` model File-Stor_Gadget -- not a USB stick.
+        // The only route usable from outside the LAN, and the one to reach for.
+        "BliKVM p-own-lengenwang-ra4jpy -- reachable over the tailnet",
+        // The board's own BMC. /dev/ipmi0 present, ipmi_si loaded, `midclt call
+        // ipmi.query` reports channel 1 on 192.168.2.100 by DHCP. It is also the host
+        // that turned up in a LAN scan running dropbear 2019.78 with a web UI --
+        // Supermicro BMC firmware, not a separate machine.
+        //
+        // LAN-ONLY ON PURPOSE, and this is a security boundary rather than a routing
+        // accident. A BMC is a second computer with total control over the first: it
+        // reads and writes host memory, mounts virtual media and survives the host
+        // being off. Supermicro BMC firmware is rarely updated after purchase, IPMI 2.0
+        // carries protocol-level weaknesses independent of the firmware (RAKP password
+        // hash disclosure to any client that merely asks, cipher-suite-zero auth
+        // bypass), and what is running here dates from 2019 by its own SSH banner.
+        // Never port-forward it, never put it on the tailnet, and treat "it is on the
+        // flat house LAN with a DHCP lease" as the current weakest link rather than as
+        // a design. Segmenting it is a candidate for the rebuild.
+        "IPMI/BMC 192.168.2.100 (DHCP, dedicated port) -- LAN only, never expose",
+      ],
+    },
   },
 
   // The out-of-band manager for the machine above -- its own computer, on its own
