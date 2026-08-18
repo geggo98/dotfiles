@@ -17,12 +17,16 @@ What it checks, per machine:
   rebind        do site realms still resolve *through the LAN's own resolver*
 
 The last one is the reason this grew past host keys. A site realm publishes RFC 1918
-addresses, and the FRITZ!Box strips those out of public DNS answers unless the domain
-is listed under DNS-Rebind-Schutz. That exception is unmanaged state: it survives no
-factory reset, and losing it breaks name resolution for exactly the devices that have
-no Tailscale -- while every device that *does* have Tailscale keeps working, because
-MagicDNS never consults the FRITZ!Box. Without this check the failure is invisible from
-the machine you would run the check on.
+addresses, and the FRITZ!Box denies the whole name -- NXDOMAIN, not a stripped record --
+unless the domain is listed under DNS-Rebind-Schutz. That exception is unmanaged state
+which no factory reset survives.
+
+Measured against the live records, and it is why the check queries the LAN resolver
+rather than trusting the local one: a workstation on the tailnet is NOT insulated from
+this. MagicDNS forwards to the system's other resolvers, the FRITZ!Box among them, and
+returned the AAAA but not the A for the same name -- a half-answer, so the failure
+depends on whether the caller can use IPv6 instead of being uniformly visible. Asking
+the machine's own resolver would therefore have reported a pass on a broken network.
 
 The control for that test is our own `pub` record: it is published in the same zone and
 holds a public address, so a resolver that answers it but not the site realm is

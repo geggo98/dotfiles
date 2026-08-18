@@ -783,9 +783,12 @@ Services are CNAMEs onto machine names, one per realm — so a role moving costs
 not a rename. **`0xf1a5c0.net` is the machine domain, `schwetschke.dev` the published
 one.** That split is technical: the FRITZ!Box strips private addresses out of public DNS
 answers (measured — `dig @10.2.0.1 10.2.0.203.nip.io` is empty where `@1.1.1.1` answers),
-and the rebind exception that re-enables them is granted per domain. Devices on the
-tailnet resolve through MagicDNS and never see the filter, which is exactly how this
-breaks silently for the guest and IoT devices the tunnel is meant to serve.
+and the rebind exception that re-enables them is granted per domain. Measured against
+the live records, the FRITZ!Box answers **NXDOMAIN** for the whole name while the `pub`
+name on the same path resolves — and **MagicDNS is not an escape**: it forwards to the
+system's other resolvers, the FRITZ!Box among them, and returned the AAAA but not the A.
+A half-answer is worse than none, because the failure then depends on whether the caller
+can use IPv6. `just infra-verify` checks this against the LAN resolver directly.
 
 Two exceptions, both deliberate: `nix-cache.pub.schwetschke.dev` does not move (its
 signing key is named after it, and that name is in every narinfo signature already
