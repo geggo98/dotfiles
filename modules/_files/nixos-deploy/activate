@@ -25,6 +25,37 @@ delay=$2
 # reverts a deploy that was fine. Naming the path removes the ambiguity.
 prev=$(readlink -f /nix/var/nix/profiles/system)
 
+# ABSOLUTE PATHS, and they are the whole reason this works.
+#
+# A systemd unit gets a minimal PATH — it does NOT inherit the one this script
+# runs under. A bare `nix-env` inside the timer's command therefore resolves to
+# nothing. Measured, before this was fixed:
+#
+#   sh[8031]: /bin/sh: line 1: nix-env: command not found
+#   deploy-rollback.service: Main process exited, code=exited, status=127/n/a
+#
+# The timer fired on the second; the rollback simply did nothing, and --collect
+# then tidied the corpse away. Nothing anywhere would have said so. This is the
+# same class of trap AGENTS.md already records for launchd ("launchd jobs get no
+# shell environment … must never fall back silently") — systemd, same lesson.
+#
+# nix-env is taken from the TARGET generation rather than /run/current-system:
+# it is guaranteed to exist exactly when it is needed, and it does not depend on
+# the current generation, which at fire time is by definition the broken one.
+rollback_nix_env="$prev/sw/bin/nix-env"
+rollback_switch="$prev/bin/switch-to-configuration"
+
+# Check at ARM time, not at fire time. An armed timer that cannot possibly run
+# is worse than no timer, because it reads like protection. If this fails, the
+# deploy stops before anything is switched.
+for tool in "$rollback_nix_env" "$rollback_switch"; do
+    if [ ! -x "$tool" ]; then
+        echo "rollback would be a no-op: $tool is missing or not executable" >&2
+        echo "refusing to switch — fix this before deploying" >&2
+        exit 1
+    fi
+done
+
 # Arm first, switch second. If the switch is what cuts the connection, the timer
 # has to already exist — there is no second chance to set it.
 #
@@ -32,8 +63,8 @@ prev=$(readlink -f /nix/var/nix/profiles/system)
 # failed unit from a previous run would otherwise block the next --unit=.
 systemctl stop deploy-rollback.timer 2>/dev/null || true
 systemd-run --unit=deploy-rollback --collect --on-active="$delay" \
-  /bin/sh -c "nix-env -p /nix/var/nix/profiles/system --set '$prev' \
-              && '$prev/bin/switch-to-configuration' switch" >/dev/null
+  /bin/sh -c "'$rollback_nix_env' -p /nix/var/nix/profiles/system --set '$prev' \
+              && '$rollback_switch' switch" >/dev/null
 
 # Realise from the substituters (R2), not over the deployer's uplink — the
 # closure was pushed there before this script ran.
