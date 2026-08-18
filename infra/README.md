@@ -141,11 +141,32 @@ infra/
   Pulumi.prod.yaml     # Stack config (created by pulumi stack init)
   package.json         # Node.js dependencies
   tsconfig.json        # TypeScript config
+  Naming.md            # Host/service naming scheme — the rule and its evidence
   src/
     index.ts           # Main program — resource definitions
+    dns.ts             # DNS records, derived from the inventory
+    inventory.ts       # Every machine, and the addresses each one answers on
     helpers/
       sops.ts          # readSopsSecret() — SOPS-to-Pulumi bridge
 ```
+
+## Naming
+
+Machines, sites and DNS realms follow one scheme, written down in
+[`Naming.md`](./Naming.md) and **enforced by `src/inventory.ts`** — a malformed name
+fails `tsc` and `pulumi preview` rather than reaching the zone.
+
+The short version: physical machines are `p-<provider>-<site>-<rand6>`
+(`p-ion-berlin-xs56r6`), virtual ones are `[vc]-<arch>-<rand6>` (`v-amd64-k9y25p`), Macs
+keep their serial. DNS puts the network in the label —
+`<name>.pub|tailnet|<site>.0xf1a5c0.net` — and services are CNAMEs onto machine names,
+so moving a role costs one line.
+
+Two domains, two jobs: **`0xf1a5c0.net` carries machines and internal services,
+`schwetschke.dev` carries what is published.** That split is technical, not cosmetic:
+the FRITZ!Box filters private addresses out of public DNS answers, and the exception
+that re-enables them is granted per domain. `Naming.md` has the measurement and the two
+documented exceptions to the rule.
 
 ## SOPS bridge
 
