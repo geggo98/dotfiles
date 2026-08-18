@@ -235,6 +235,18 @@ rename reports success while the running system, and therefore tailscaled, keeps
 name. `modules/nixos-base.nix` closes that with `boot.kernel.sysctl."kernel.hostname"`;
 the comment there has the measurement.
 
+And one client-side leftover, which is expected rather than a fault: `known_hosts`
+entries are keyed by name, so the first connection to the new name fails with
+`Host key verification failed` even though the host key never changed. Clear the old
+name and accept the new one:
+
+```bash
+ssh-keygen -R <old-name>
+```
+
+The recorded `sshHostKeyEd25519` in `src/inventory.ts` is the value to check the new
+entry against, rather than accepting whatever answers.
+
 One thing that is *not* part of that cost: re-encrypting secrets. sops stores its
 recipients inside the file, and `.sops.yaml` only governs future writes — so moving
 `hosts/<old>/secrets.enc.yaml` to a new path needs the rule updated, not the file
