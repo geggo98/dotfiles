@@ -784,11 +784,19 @@ not a rename. **`0xf1a5c0.net` is the machine domain, `schwetschke.dev` the publ
 one.** That split is technical: the FRITZ!Box strips private addresses out of public DNS
 answers (measured — `dig @10.2.0.1 10.2.0.203.nip.io` is empty where `@1.1.1.1` answers),
 and the rebind exception that re-enables them is granted per domain. Measured against
-the live records, the FRITZ!Box answers **NXDOMAIN** for the whole name while the `pub`
-name on the same path resolves — and **MagicDNS is not an escape**: it forwards to the
+the live records, the FRITZ!Box answered **NXDOMAIN** for the whole name while the `pub`
+name on the same path resolved — and **MagicDNS was not an escape**: it forwards to the
 system's other resolvers, the FRITZ!Box among them, and returned the AAAA but not the A.
 A half-answer is worse than none, because the failure then depends on whether the caller
-can use IPv6. `just infra-verify` checks this against the LAN resolver directly.
+can use IPv6.
+
+The exception is entered under *Heimnetz → Netzwerk → Netzwerkeinstellungen →
+DNS-Rebind-Schutz*, and **the bare domain covers the whole subtree** — AVM's text asks
+for the "vollständigen Hostnamen", but `0xf1a5c0.net` alone was measured to cover
+`<name>.<realm>.0xf1a5c0.net`. It does not take effect immediately: the box serves its
+earlier denial until the zone's negative TTL expires (1800 s here). `just infra-verify`
+checks this against the LAN resolver directly and reads the remaining TTL out of the
+SOA, so a cache is never reported as a missing exception.
 
 Two exceptions, both deliberate: `nix-cache.pub.schwetschke.dev` does not move (its
 signing key is named after it, and that name is in every narinfo signature already
