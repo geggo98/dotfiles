@@ -296,6 +296,46 @@ Recorded because a survey that quietly modifies its subject is worse than no sur
    which is not installed here (`not-found`); classic `ntpd` never sets it. Check
    `ntpq -pn` instead.
 
+3. **Nameservers reordered** to `1.1.1.1`, `8.8.8.8`, `192.168.2.1` (was the Speedport
+   first, then `fe80::1`, then `8.8.8.8`), via
+   `midclt call network.configuration.update`. Reason below — it blocked the backup
+   outright.
+
+### The Speedport breaks Go's DNS resolver, and only for some names
+
+`restic` is a static Go binary and therefore uses Go's own DNS resolver. Pointed at the
+R2 endpoint it failed every time, immediately:
+
+```
+dial tcp: lookup 81e63dbf073ca45ebf67c430beac09a4.r2.cloudflarestorage.com
+  on 192.168.2.1:53: no such host
+```
+
+Everything that would normally explain that was measured and ruled out:
+
+| checked | result |
+|---|---|
+| glibc (`getent hosts`, `socket.gethostbyname`) via the same resolver | resolves correctly |
+| raw UDP queries to 192.168.2.1 — A and AAAA, with and without EDNS0 | 80/80 succeeded |
+| response shape — source address, transaction id, TC bit, RCODE, echoed question | all correct, 2×A and 2×AAAA returned |
+| concurrent A+AAAA, the pattern Go actually uses | 10/10 succeeded |
+| other names through Go via the same resolver (`s3.amazonaws.com`, `r2.cloudflarestorage.com`) | resolve fine |
+| the `search`/`domain` lines in resolv.conf | irrelevant, tested with and without |
+
+What settles it is the substitution test: with `nameserver 8.8.8.8` alone, restic works
+instantly; with `nameserver 192.168.2.1` alone, it fails every time. An `/etc/hosts`
+entry for the name also makes it work, which is consistent.
+
+**The mechanism is not identified.** The failure cannot be reproduced outside Go, and
+guessing at one would be worse than saying so. What is established: it is the Speedport,
+it is specific to Go's resolver, and it is not intermittent. The household has seen DNS
+oddities with this router on other devices too, so this is likely one instance of
+something broader rather than a quirk of this host.
+
+Practical consequence for the NixOS rebuild: **do not let this router be the first
+resolver.** Any Go program — and that is most of the modern infrastructure toolchain —
+inherits this failure mode.
+
 ## Open questions
 
 - Where are the family photos? Not on this machine.
