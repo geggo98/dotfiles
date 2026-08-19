@@ -977,6 +977,21 @@ Two traps, both paid for once:
   in `hosts/<host>/secrets.nix` against the top-level keys of
   `hosts/<host>/secrets.enc.yaml`.
 
+  **This is a NixOS-class statement and does not generalise — the home-manager
+  class is stricter, and in the useful direction.** There, `sops-install-secrets`
+  checks the manifest at *build* time, so `just build` fails outright:
+
+  ```
+  manifest is not valid: secret restic_password in …-secrets.enc.yaml
+  is not valid: the key 'restic_password' cannot be found
+  ```
+
+  Measured on 2026-08-19 while adding `restic_password` to
+  `modules/secrets.nix`. The practical consequence is an ordering constraint
+  rather than a hazard: on a workstation, put the value in the encrypted file
+  *before* declaring it, or the tree does not build. The comparison-by-hand above
+  is only needed for servers.
+
 ### Adding an MCP Server
 
 1. Add shell wrapper and server entry in `modules/mcp-servers.nix` (follow existing patterns)
