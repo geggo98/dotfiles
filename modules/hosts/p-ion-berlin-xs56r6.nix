@@ -16,6 +16,18 @@ in
       inputs.home-manager.nixosModules.home-manager
       nixos.base
       nixos.tailscale
+
+      # Makes this host capable of being an exit node / subnet router: IP
+      # forwarding for both families, plus the UDP GRO tuning tailscaled asks
+      # for. It does NOT advertise anything — that is `tailscale set
+      # --advertise-exit-node` on the host plus an approval in the admin
+      # console. Removing this line is how you take the capability away.
+      #
+      # Read modules/nixos-tailscale-exit-node.nix before relying on it: with
+      # forwarding on, a client using this exit node also reaches the home LAN
+      # through wg0, which is either the point or a surprise.
+      nixos.tailscale-exit-node
+
       nixos.secrets-p-ion-berlin-xs56r6
       nixos.wireguard-home
     ];

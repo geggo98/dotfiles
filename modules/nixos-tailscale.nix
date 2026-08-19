@@ -38,7 +38,7 @@
 # depend on a remote control plane.
 { ... }:
 {
-  flake.modules.nixos.tailscale = { config, ... }: {
+  flake.modules.nixos.tailscale = { config, lib, ... }: {
     # tailscaled reports the OS hostname it saw at start, and that is what becomes
     # the node name and the MagicDNS name. Renaming a host therefore leaves the
     # tailnet on the old name until tailscaled is restarted — which is a quiet
@@ -62,10 +62,17 @@
       # records what was set there.
       openFirewall = true;
 
-      # No subnet router and no exit node for now. Keeping this at "none" leaves
-      # IP forwarding off and, just as importantly, leaves
+      # No subnet router and no exit node by default. "none" leaves IP
+      # forwarding off and, just as importantly, leaves
       # networking.firewall.checkReversePath at its strict default — see below.
-      useRoutingFeatures = "none";
+      #
+      # mkDefault, so that modules/nixos-tailscale-exit-node.nix can raise it to
+      # "server" by being imported. Without it the two plain definitions would
+      # collide and eval would fail with a conflict rather than merge — which
+      # would make "import one more aspect" the wrong shape for a switch that
+      # ought to be exactly that. Nothing else in the tree overrides it, so on
+      # every host that does not import that aspect this still reads "none".
+      useRoutingFeatures = lib.mkDefault "none";
 
       # extraSetFlags, NOT extraUpFlags. Verified against the pinned nixpkgs:
       # extraUpFlags is interpolated only inside tailscaled-autoconnect.service
