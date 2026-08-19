@@ -336,6 +336,60 @@ Practical consequence for the NixOS rebuild: **do not let this router be the fir
 resolver.** Any Go program — and that is most of the modern infrastructure toolchain —
 inherits this failure mode.
 
+## The backup
+
+Repository: `s3:https://<account>.r2.cloudflarestorage.com/restic-backup/p-own-lengenwang-c5esve`,
+id `c88e1334f4`, restic 0.18.1 on both ends (the appliance runs the official
+static release, hash-verified against the GPG-signed SHA256SUMS; the workstation
+gets it from the devenv shell). Credentials and repository password come from
+sops — `restic_r2_access_key_id`, `restic_r2_secret_access_key`,
+`restic_password` — and the password is also in 1Password, because a restic
+repository without it is unrecoverable by design.
+
+**Phase 1** (`Musik`, `eBooks`, `Familie`), snapshot `0bbb0e05`:
+
+```
+32051 files, 5968 dirs
+38.910 GiB processed · 37.725 GiB added · 36.708 GiB stored
+4:15:47 at full uplink speed
+```
+
+Verified before anything else was started, in two independent ways:
+
+* `restic check --read-data` — 2239/2239 packs read back and their MACs
+  verified, `no errors were found`, 1:38:46. Two `readFull: unexpected EOF`
+  appeared mid-run and both succeeded on the first retry: transport hiccups, not
+  damage.
+* A real restore to a workstation — 20 files, 187 MiB, compared by SHA-256
+  against the originals on the appliance: **20 identical, 0 differing, 0
+  missing**. Read *from the Mac* with the password *from sops*, i.e. exactly the
+  path that has to work once this machine no longer exists.
+
+Restore throughput was ~8.5 MB/s from R2, roughly 3.5× the upload rate. That
+asymmetry is the number that matters in an actual recovery.
+
+**Phase 2** (`Filme`, 765 GiB) runs throttled to `--limit-upload 1776`, i.e. 75 %
+of 2369 KiB/s — measured over 92 s against the running phase-1 job (2.43 MB/s)
+and consistent with three Cloudflare speed tests (2.20 / 2.62 / 2.64 MB/s).
+Costs ~5.2 days instead of ~3.9, and leaves the household a quarter of the line.
+An interrupted run costs nothing; restic resumes.
+
+`Download` (241 GiB) is deliberately not backed up pending a look inside — see
+the data table above.
+
+### Operating notes paid for once
+
+* **`check` takes an EXCLUSIVE lock.** While it runs, every other client fails
+  with `repository is already locked exclusively`. Read-only work alongside it
+  needs `--no-lock` (safe: it only skips lock *creation*). This will matter more
+  with 765 GiB, where the check runs for many hours.
+* **restic prints no progress when stdout is not a terminal.** Under `tee` in
+  tmux the log stays silent until the summary. Measure progress at the bucket
+  instead: `aws s3 ls s3://restic-backup/<prefix>/ --recursive --summarize`.
+* **The workstation's restic lives in the devenv shell**, and direnv does not
+  watch `modules/devshell.nix` — adding a package there appears to do nothing
+  until `.envrc` is touched.
+
 ## Open questions
 
 - Where are the family photos? Not on this machine.
