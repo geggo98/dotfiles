@@ -97,6 +97,14 @@ new cloudflare.R2BucketLifecycle("restic-backup-lifecycle", {
  *
  * R2 bucket locks are not S3 Object Lock: no compliance mode, no legal hold. They stop
  * accidents, not a determined attacker with account access.
+ *
+ * **Neither this resource nor the lifecycle above can be deleted by Pulumi.** Both warn
+ * on create: *"This resource cannot be destroyed from Terraform. If you create this
+ * resource, it will be present in the API until manually deleted."* Changing the rules
+ * works, because the provider writes the whole rule set at once — but removing either
+ * declaration from this file leaves the live rules in place, silently. If these ever
+ * need to go, delete them in the Cloudflare dashboard as well, and treat a `pulumi
+ * destroy` that reports success as having done nothing here.
  */
 new cloudflare.R2BucketLock("restic-backup-lock", {
   accountId: cloudflareAccountId,
