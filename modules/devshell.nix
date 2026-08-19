@@ -27,6 +27,18 @@
           pkgs.sops
           pkgs.just # justfile
           pkgs.moreutils # ts
+
+          # Backup tooling. Here rather than in home-manager's packages for the same
+          # reason pulumi is: it is used to operate infrastructure from this
+          # repository, not to work on a laptop.
+          #
+          # rclone is not an alternative to restic but a dependency of one path
+          # through it: restic's rclone backend works by spawning
+          # `rclone serve restic --stdio`, so a repository like `rclone:dropbox:…`
+          # fails outright without it. Nothing references it by name, so without this
+          # note a future tidy-up would remove it as unused.
+          pkgs.rclone
+          pkgs.restic
         ];
 
         git-hooks.hooks = {
