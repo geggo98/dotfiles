@@ -5,13 +5,13 @@
 # forwarding off, which is the right default for a machine that only wants to
 # be reachable over the tailnet.
 #
-# ACTIVATION IS TWO-STAGE, and only the first stage lives here:
+# ACTIVATION IS TWO-STAGE, and the first stage lives here entirely:
 #
-#   1. This module — forwarding on, UDP GRO tuned. `just nixos-deploy <host>`.
-#   2. The tailnet — `tailscale set --advertise-exit-node` on the host, then
-#      *approving* the route in the admin console (Machines -> the node ->
-#      Edit route settings). Neither is expressible in this repo: the second is
-#      state in Tailscale's control plane, not on the machine.
+#   1. This module — forwarding on, UDP GRO tuned, AND the advertisement
+#      itself via extraSetFlags below. `just nixos-deploy <host>`.
+#   2. The tailnet — *approving* the advertised route in the admin console
+#      (Machines -> the node -> Edit route settings). Not expressible in this
+#      repo: that is state in Tailscale's control plane, not on the machine.
 #
 # Measured on p-ion-berlin-xs56r6 on 2026-08-19, and worth knowing before
 # reading further: stage 2a has ALREADY been done by hand and nothing in this
@@ -22,13 +22,13 @@
 # and tailscaled's own health check says why:
 #     "Subnet routing is enabled, but IP forwarding is disabled."
 #
-# That advertisement is runtime state in /var/lib/tailscale/tailscaled.state.
-# A `nixos-anywhere` reinstall — the documented recovery path for this host —
-# would NOT restore it. Making it declarative means adding
-# "--advertise-exit-node" to `extraSetFlags` in modules/nixos-tailscale.nix;
-# deliberately NOT done here, because advertising is a statement to a shared
-# control plane rather than a property of the machine, and the decision should
-# be taken rather than inherited from this comment.
+# That hand-made advertisement is runtime state in
+# /var/lib/tailscale/tailscaled.state, and a `nixos-anywhere` reinstall — the
+# documented recovery path for this host — would NOT restore it. So the
+# extraSetFlags entry below is not merely tidiness: it is what stops the
+# capability from quietly disappearing at exactly the moment someone is
+# rebuilding the machine under pressure. From here on the two agree, and the
+# declarative one wins on a reinstall.
 { ... }:
 {
   flake.modules.nixos.tailscale-exit-node =
@@ -134,6 +134,34 @@
       # tailscale0 with source 100.64.0.0/10, and `ip rule` sends exactly that
       # lookup to table 52, which holds a per-peer route out of tailscale0.
       services.tailscale.useRoutingFeatures = "server";
+
+      # --- The advertisement itself -------------------------------------------
+      # `extraSetFlags` is a listOf str, so this concatenates with the base list
+      # in modules/nixos-tailscale.nix rather than replacing it — the --ssh,
+      # --accept-dns=false and --accept-routes=false set there all survive.
+      #
+      # It belongs in THIS aspect and not the shared one: advertising a default
+      # route is a property of the one host that should carry traffic, and every
+      # other NixOS host importing `nixos.tailscale` must keep quiet.
+      #
+      # Advertising is not the same as being used. The route still has to be
+      # approved in the admin console, and clients still have to select the node
+      # explicitly. Until both happen this flag changes nothing observable —
+      # which is why it is safe to carry ahead of that decision.
+      #
+      # TAKING IT BACK NEEDS A FLAG, NOT A DELETION, and the trap is worth
+      # spelling out because the intuitive move is the wrong one. `tailscale set
+      # --help` states it plainly: "Only settings explicitly mentioned will be
+      # set. There are no default values." So deleting this line stops *asking*
+      # for the advertisement while tailscaled happily keeps the one it already
+      # has — the node goes on offering itself as an exit node, and nothing in
+      # this repository says so any more. That is the same class of silent
+      # divergence the hand-set state above created in the first place.
+      #
+      # To withdraw it, change the flag to its negative form for one deploy:
+      #     services.tailscale.extraSetFlags = [ "--advertise-exit-node=false" ];
+      # then remove the module import once the node has stopped advertising.
+      services.tailscale.extraSetFlags = [ "--advertise-exit-node" ];
 
       # --- The IPv6 trap this deliberately steps around -----------------------
       # There is a second, tempting way to enable IPv6 forwarding: systemd-networkd's
