@@ -2,9 +2,14 @@ import * as pulumi from "@pulumi/pulumi";
 import * as aws from "@pulumi/aws";
 import * as cloudflare from "@pulumi/cloudflare";
 import { machines } from "./inventory.js";
+import { cloudflareAccountId } from "./account.js";
 // Imported for its side effects: ./dns.ts declares the records for the machine domain,
 // all of them derived from the inventory above.
 import { machineDomain } from "./dns.js";
+// Likewise for side effects: ./backup.ts declares the R2 bucket that holds restic
+// backups, with its own credential and its own lifecycle -- deliberately sharing nothing
+// with the nix-cache bucket below except the account.
+import { resticRepositories, backupBucketName } from "./backup.js";
 
 // Export stack outputs
 export const stack = pulumi.getStack();
@@ -22,7 +27,7 @@ export const stack = pulumi.getStack();
 // We use the default (not a named) provider so the CLI `pulumi import` below
 // records the bucket under the same provider the code declares it with — a
 // named provider would import under the default and mismatch on the next `up`.
-const cfAccountId = "81e63dbf073ca45ebf67c430beac09a4";
+const cfAccountId = cloudflareAccountId;
 const cacheDomain = "nix-cache.pub.schwetschke.dev";
 
 const nixCacheBucket = new cloudflare.R2Bucket(
@@ -133,6 +138,13 @@ new cloudflare.Ruleset("nix-cache-caching", {
 
 export const nixCacheUrl = `https://${cacheDomain}`;
 export const nixCacheS3Endpoint = `https://${cfAccountId}.r2.cloudflarestorage.com`;
+
+// --- Encrypted file backups (R2, restic) -----------------------------------
+// Declared in ./backup.ts. Re-exported so the repository URL reaches
+// infra/pulumi-outputs.json rather than being retyped into a shell command, where a
+// typo would silently create a second, empty repository instead of failing.
+export const resticBucket = backupBucketName;
+export const resticRepos = resticRepositories;
 
 // --- AWS S3 -----------------------------------------------------------------
 // Both buckets predate this stack and were adopted, not created:
