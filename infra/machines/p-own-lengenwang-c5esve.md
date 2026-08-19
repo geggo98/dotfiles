@@ -142,11 +142,53 @@ device.
 
 Two consequences:
 
-1. **Export every dataset key before touching the disk** (Datasets → ZFS Encryption →
-   Export Key, or System Settings → Manage Configuration → Download File with "Export
-   Password Secret Seed"). Store in 1Password. Never in this repository.
+1. **Export every dataset key before touching the disk.** Store in 1Password, labelled
+   per dataset. Never in this repository.
 2. **Do not reboot** until the data is off. The datasets lock on boot, and the unlock
    path runs through the same configuration database.
+
+### Exporting and verifying the keys
+
+`pool.dataset.export_key` is a **job**, so it needs `-job`; without it midclt returns a
+job id and you get an integer where you expected a key. With it, stdout is exactly 64
+hex characters and nothing else. Prefer the raw hex over "Manage Configuration →
+Download File": the config blob is only restorable *into TrueNAS*, whereas 64 hex
+characters can be handed to `zfs load-key` from any rescue system — which is the
+situation these keys exist for.
+
+```bash
+# Export all five, tab-separated, ready to paste into 1Password.
+ssh root@nas-aleuten.great-fiordland.ts.net \
+  'for d in Download Familie Filme Musik eBooks; do
+     printf "boot-ssd-storage/%-9s\t%s\n" "$d" \
+       "$(midclt call -job pool.dataset.export_key "boot-ssd-storage/$d" 2>/dev/null)"
+   done'
+```
+
+Verification uses **`zfs load-key -n`**, a dry run that checks a key against the
+dataset's wrapping key without loading it. It works while the dataset is *unlocked*, so
+there is no unmount, no service interruption and no risk of locking yourself out. This
+is the test that matters — it takes what is in 1Password and asks the pool:
+
+```bash
+# Copy the key out of 1Password first; pbpaste keeps it out of shell history.
+pbpaste | ssh root@nas-aleuten.great-fiordland.ts.net \
+  'umask 077; t=$(mktemp); cat > "$t"; \
+   zfs load-key -n -L "file://$t" boot-ssd-storage/Filme; shred -u "$t"'
+```
+
+`1 / 1 key(s) successfully verified` is the pass. A trailing newline in the pasted key
+does not matter (measured).
+
+The check discriminates — verified by feeding it a deliberately wrong key, which
+answers `Key load error: Incorrect key provided` and `0 / 1 key(s) successfully
+verified`. A verification that can only ever say OK proves nothing, so that control is
+worth repeating if the procedure is ever changed.
+
+**What this does and does not buy.** Exported keys defend against exactly one failure:
+the machine rebooting before the data is off, which locks every dataset. They also keep
+the door open to reading this pool from a rescue system later. They are **not a backup**
+— if the single NVMe fails, the keys unlock nothing.
 
 ## Data
 
