@@ -54,6 +54,31 @@ let
         r2_access_key_id = { };
         r2_secret_access_key = { };
         nix_cache_signing_key = { };
+
+        # Encrypted file backups (infra/src/backup.ts, R2 bucket `restic-backup`).
+        # A SEPARATE R2 credential from the three above, on purpose: those are used by
+        # a root post-build-hook on every build and therefore sit on every workstation,
+        # and a backup that may temporarily be the only copy of the data must not be
+        # reachable with them. The token is scoped to the `restic-backup` bucket alone
+        # (permission groups "Workers R2 Storage Bucket Item Read" and "… Item Write").
+        #
+        # Unlike r2_secret_access_key, this is the NATIVE S3 secret Cloudflare shows in
+        # the token dialog, not a `cfat_…` value: restic's S3 backend reads
+        # AWS_SECRET_ACCESS_KEY literally and has no equivalent of nix-cache-push's
+        # SHA-256 derivation.
+        #
+        # restic_password is the repository password. Losing it loses the backup
+        # outright — there is no recovery path, by design — so it lives here *and* in
+        # 1Password. One copy of it is the real single point of failure in the whole
+        # arrangement, not the bucket.
+        #
+        # `restic_r2_token` is deliberately NOT declared here although it is stored in
+        # the same file: it is the Cloudflare token the two S3 values were derived from,
+        # worth keeping to inspect or rotate the token later, but nothing on a
+        # workstation reads it. Declaring it would write it to disk for no reason.
+        restic_r2_access_key_id = { };
+        restic_r2_secret_access_key = { };
+        restic_password = { };
       };
     in
     {
