@@ -894,6 +894,57 @@ runs outside a Nix wrapper must not assume either flavour.
   `read -r a b c <<<`, arrays with spaces, `"${arr[@]}"`, empty arrays under
   `set -u`, globs in `[[ ]]`, and `[[ =~ ^[0-9a-f]{64}$ ]]`.
 
+### Any script that processes a list must be resumable
+
+Long-running batch work here gets interrupted — a quota fills, a link drops, a
+deploy times out, someone hits Ctrl-C. A script that cannot be re-run without
+thought turns every interruption into an investigation. Four rules, each of
+which was paid for.
+
+- **Classify every item as SUCCESS, SKIP, ERROR or CLEANUP, and never collapse
+  two of them.** A skip is not a failure. Reported together they make the summary
+  worthless and the resume decision impossible.
+
+  Paid for on 2026-08-20 while decoding 204 `.otrkey` files: the wrapper treated
+  any non-zero exit from the decoder as an error, so `output file "…" exists,
+  skipping` — the tool correctly declining to redo finished work — was counted as
+  a failure. Two consecutive runs reported "142 failed" and then "148 failed"
+  while the number of finished files rose. Neither number meant anything, and the
+  list of "failures" driving the next run was garbage. When wrapping a foreign
+  tool, map its exit codes and messages deliberately; `|| fail` is where the
+  distinction dies.
+
+- **Derive state from the work products, not from a file the script wrote.** A
+  progress file, a failed-list, a marker — all of them are missing exactly when
+  the run died badly, which is the case they exist for. Ask the filesystem, the
+  bucket, the database: does the output for this item exist and is it valid?
+
+- **"The output file exists" is a weak predicate. Prefer "the output verifies".**
+  An interrupted write leaves a file that looks finished. In the same incident, a
+  quota hit mid-write left truncated outputs behind; the next run saw them, said
+  "exists, skipping", and would have deleted the corresponding inputs had it been
+  told to. Where a checksum is available — a hash in a header, a manifest, `restic
+  check` — that is the resume predicate. Where none exists, at least compare size
+  against the expected value.
+
+- **Publish results atomically: write to a temporary name in the same directory,
+  `fsync` if it matters, then `mv` into place.** A rename within one filesystem is
+  atomic, so an interrupted run leaves a stray temp file — obvious, harmless,
+  cleanable — instead of a plausible-looking corpse under the real name. This is
+  what makes the previous rule work: if only complete outputs ever carry the final
+  name, "exists" becomes trustworthy again. Clean stale temp files at start-up and
+  count that as CLEANUP.
+
+Two additions that follow from the same reasoning:
+
+- **Make the summary self-describing.** Print all four counts every run, plus what
+  a re-run would do. `62 ok, 142 failed` invites the wrong conclusion; `62 done,
+  142 skipped (already complete), 0 errors — nothing left to do` ends the
+  conversation.
+- **Use exit codes to distinguish "did work" from "nothing to do" from "failed".**
+  A resumable script run twice must exit 0 the second time; anything else trains
+  people to ignore its exit code.
+
 ## Commit & Pull Request Guidelines
 
 Use Conventional Commits: `type(scope): subject` (imperative present tense, ≤72 chars)
