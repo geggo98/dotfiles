@@ -377,6 +377,70 @@ An interrupted run costs nothing; restic resumes.
 `Download` (241 GiB) is deliberately not backed up pending a look inside — see
 the data table above.
 
+## The OTR recordings, and why `Download` was not throwaway
+
+`Download` was excluded from the backup on the assumption that it held
+re-acquirable Mediathek recordings. That was true of a fifth of it. Measured
+before deciding anything:
+
+```
+206 .otrkey   151.73 GiB   169× Doctor Who, 24× Pumuckl, 2016-2024 — ENCRYPTED
+ 97 .mp4       84.72 GiB   Mediathek, each title in up to 9 resolutions
+  6 .part       0.60 GiB   aborted downloads
+```
+
+**None of it existed decoded elsewhere.** The cross-check was done both ways: the
+`.otrkey` names carry the decoded filename, and `Filme` uses the same TVOON
+scheme — but its 124 TVOON files are from 2012–2021 and contain no Doctor Who at
+all, so the sets are disjoint. Two apparent title matches on the mp4 side were
+false: *Der Staatsfeind Nr. 1* (1998) is not *Becoming Nawalny – Putins
+Staatsfeind Nr. 1*, and *Apocalypse Now Redux* is a different cut from *Final
+Cut*.
+
+Cleanup removed 33.3 GiB (resolution duplicates keeping the largest per title,
+two SHA-256-confirmed duplicate otrkeys, and the fragments). The remaining
+149 GiB was decoded and the encrypted originals deleted.
+
+### Decoding: get the keys first, decrypt later
+
+`otrdecoder` is proprietary and `otrtool` (last release 2023) targets
+`gencode2.php`, which is now **404**. [ilyich](https://github.com/not-a-user/ilyich)
+uses the current endpoint `/quelle_neu1.php`. OTR itself is alive — the homepage
+carries developer comments dated 2026-07-21.
+
+Two changes were needed and both are worth knowing:
+
+* `Crypto` → `Cryptodome`. The appliance already ships **pycryptodomex**, so
+  nothing had to be installed on it — no pip, no venv, no lasting change.
+* `SCHEME = 'http'` → `'https'`. The endpoint serves HTTPS identically (measured).
+  Over plain HTTP the account **email travels in clear text**, and while the
+  password is Blowfish-encrypted, the key derives from `md5(password)` with known
+  plaintext from block 2 onward — offline-guessable by anyone on the path.
+
+**The order matters more than the tooling.** `ilyich fetch` retrieves the
+keyphrases into a local cache without decrypting anything. Once
+`/root/.ilyich_cache.json` holds all 204, the dependency on onlinetvrecorder.com
+is gone and decryption is pure local computation. That step takes minutes and
+should always come first; it earned its keep immediately, because the decode run
+that followed failed 142 times and the cache made those retries free.
+
+Those 142 failures were **`[Errno 122] Disk quota exceeded`**, every single one:
+`decoded/` was created inside the 250 GiB-quota'd dataset. Quota raised to
+450 GiB; the peak needs 357 GiB while originals and outputs coexist, and it can
+go back to 250 once the snapshot below is destroyed.
+
+Result: 204/204 decoded and verified against the hash in each otrkey header
+(`ilyich verify`), then the originals deleted with a per-file re-verification.
+Snapshots were taken first — `Download@pre-otr-unlink-2026-08-20` plus
+`<dataset>@pre-migration-2026-08-20` on all five data datasets. They cost nothing
+to make and now hold the 149 GiB of deleted originals, so `used` did not drop:
+`usedbysnapshots` went from 0 to 149 GiB. **Space is only reclaimed by
+`zfs destroy`**, which should wait until the decoded files are backed up.
+
+They are not backed up yet. `Download` still sits outside the restic repository,
+so 169 Doctor Who episodes and 24 Pumuckl episodes exist in exactly one place, on
+the disk this migration intends to erase.
+
 ### Operating notes paid for once
 
 * **`check` takes an EXCLUSIVE lock.** While it runs, every other client fails
