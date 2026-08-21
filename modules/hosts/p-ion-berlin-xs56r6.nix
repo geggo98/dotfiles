@@ -30,6 +30,15 @@ in
 
       nixos.secrets-p-ion-berlin-xs56r6
       nixos.wireguard-home
+
+      # Copies the restic repository from R2 to Dropbox as a second copy. Adds
+      # rclone plus two manually-started template units; nothing runs on its own.
+      #
+      # This host was chosen because it has a data-centre uplink (measured
+      # 37 MB/s in, 91 MB/s out) and no nightly forced disconnect, unlike both
+      # homes. It moves the encrypted objects verbatim and therefore never gets
+      # the restic repository password — see the module header.
+      nixos.backup-copy
     ];
 
     # --- Interactive environment ---------------------------------------------

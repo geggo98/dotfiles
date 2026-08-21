@@ -438,6 +438,193 @@ of waiting fixes it, and patiently retrying would hide it.
 `Download` (241 GiB, now 356 GiB with snapshots) is deliberately not backed up —
 see the OTR section below.
 
+### The second copy: R2 → Dropbox, driven from the VPS
+
+Prepared but **not yet runnable** — the five secrets below are declared and not
+encrypted yet, and a `nixos-deploy` before they exist fails at activation, not
+at build. That is the NixOS class's behaviour, not an oversight; see the sops
+note in `AGENTS.md`.
+
+`modules/nixos-backup-copy.nix` puts rclone and two manually-started template
+units on `p-ion-berlin-xs56r6`:
+
+```bash
+systemctl start backup-copy-to-dropbox@p-own-lengenwang-c5esve   # ~1 TB
+systemctl start backup-copy-check@p-own-lengenwang-c5esve        # sizes only
+```
+
+**Why the VPS and not a Mac.** Measured from the box on 2026-08-21: 37.0 MB/s
+from R2 (319 MB in 8.6 s, against our own nix-cache) and 91.2 MB/s outbound
+(100 MB in 1.1 s). Both homes are behind lines that drop nightly and whose
+upstream is a fraction of their downstream. IONOS states "Unbegrenzt Traffic bis
+zu 1 Gbit/s" with no fair-use clause on the product page — caveat, that is the
+product page and not the Core VPS contract.
+
+**Why rclone and not `restic copy --from-repo`.** `restic copy` decrypts the
+source and re-encrypts into the destination, so it needs the repository password
+— the one secret that unlocks every backup — on the only machine here that faces
+the open internet. rclone copies the encrypted objects verbatim. The VPS
+therefore holds a **read-only** R2 credential and a Dropbox token, and nothing
+that can damage the original.
+
+The trade is that a byte-identical copy would copy damage too. Sequencing
+answers that rather than tooling: `restic check --read-data` against R2 *first*,
+then copy, then verify the destination *as a repository* from a workstation —
+`restic -r rclone:dropbox:restic-backup/<prefix> check`, which needs the
+password and deliberately does not run on the VPS.
+
+Note `rclone copy`, never `sync`: sync deletes whatever the source lacks, which
+is exactly wrong if the source is ever truncated.
+
+**Cost is a deadline, not a rate.** R2 egress is free in both classes, so the
+copy itself is ~$0.02 in Class B operations — *while the objects are still
+Standard*. The lifecycle rule demotes `<prefix>/data/` to Infrequent Access 30
+days after upload, and IA charges $0.01/GB to read: the same copy afterwards
+costs ~$10.30. `restic check --read-data` has the identical exposure. Phase-1
+objects were written 2026-08-19 and turn cold on **2026-09-18**; the Filme
+objects follow at the end of September.
+
+**Still to do, in this order:**
+
+1. An R2 API token scoped to the `restic-backup` bucket with permission group
+   **"Workers R2 Storage Bucket Item Read"** only — no write group. Cloudflare
+   shows the native S3 pair once; those are the values, not the `cfat_…` token,
+   and they need no SHA-256 derivation (unlike `modules/nix-cache.nix`).
+
+   The group's ID is `6a018a9f2fc74eb6b293b0c548f38b39`, confirmed against
+   Cloudflare's own docs source (`r2/api/tokens.mdx:161`, `:210-211`), resource
+   class `com.cloudflare.edge.r2.bucket` — the object tier, not the
+   account-level "Workers R2 Storage" groups.
+
+   **Restricting the token by IP works on the S3 endpoint — measured, because no
+   Cloudflare page states it.** R2's token page defers the whole envelope to
+   *Create API tokens via the API* without saying whether `condition` reaches the
+   S3 data plane. Settled here on 2026-08-21 by an A/B test: the *same* command
+   with the *same* credentials returned `403 AccessDenied` from the Munich
+   workstation and succeeded through the IONOS Tailscale exit node. One command,
+   two routes — which is also the first production use of that exit node.
+
+   The token in use restricts to `2a01:239:485:8d00::/80` (the subnet IONOS
+   assigns) plus `87.106.149.208/32`. Three notes, two of which correct
+   plausible-sounding advice:
+
+   * **`/80` works.** A 2023 community report has `/8 /16 /32 /128` working and
+     `/48 /64` returning 500, which reads like "unusual prefix lengths break".
+     It does not generalise: `/80` was measured working here. Either the bug was
+     narrower than it looked or it has been fixed. Do not avoid a prefix on the
+     strength of that report alone — but do test after changing it.
+   * **`request_ip` (underscore) works**, at least as the API returns it, even
+     though the docs' examples write `request.ip` with a dot. The dot form is
+     what the documentation shows for *input*; the underscore is what came back
+     and it is demonstrably in force. Verify by test, not by spelling.
+   * **List IPv4 *and* IPv6.** Not optional: `curl` on this host picks IPv6
+     unprompted and Cloudflare sees `2a01:239:485:8d00::1`. A v4-only allow-list
+     would fail on the first connection. (No temporary addresses are in play —
+     `use_tempaddr=0` on `ens6`, and the address arrives via DHCPv6 as a `/128`,
+     which privacy extensions do not touch.)
+
+   **`restic check` fails with a read-only token, and the error misleads.** It
+   takes an *exclusive lock*, which is a PutObject into `locks/`, so it dies on
+   lock creation rather than on reading — pointing at the repository instead of
+   at the credential. Use `restic check --read-data --no-lock`. Expect the same
+   trap from anything else that "only reads".
+2. A **dedicated** Dropbox app, access type **App folder** (not Full Dropbox),
+   then `rclone authorize dropbox <client_id> <client_secret>` on a Mac and keep
+   the JSON it prints. rclone's shared built-in app is throttled across all its
+   users worldwide, which on 1 TB is the difference between a day and a week.
+
+   **Order matters, and getting it wrong is silent until it isn't.** Dropbox:
+   *"Just adding a scope to your app via the App Console does not retroactively
+   grant that scope to existing access tokens or refresh tokens."* A token
+   carries the scopes that existed **when it was issued**. So:
+
+   1. *Permissions* tab → tick `account_info.read`, `files.metadata.read`,
+      `files.metadata.write`, `files.content.read`, `files.content.write` →
+      **Submit** (the button is easy to miss, and without it nothing is saved)
+   2. *only then* `rclone authorize`
+
+   Do it the other way round and every write fails with `missing_scope/` —
+   observed here on 2026-08-21 with `rclone mkdir`. The same applies to any
+   later scope change: it needs a fresh `rclone authorize`, not just a tick.
+
+   Diagnosing it takes one command, because read and write scopes fail
+   separately: `rclone lsd db:` needs only `files.metadata.read`, while
+   `rclone mkdir` needs `files.content.write`. If listing works and mkdir does
+   not, the write scopes are missing; if both fail, the token predates all of
+   them.
+
+   **The button labelled *Generated access token* is a trap for this job.** It
+   issues a token that expires in ~4 hours with no refresh token — fine for a
+   scope check, fatal for a 12–24 h transfer. `modules/nixos-backup-copy.nix`
+   refuses to start if `dropbox_token` contains no `refresh_token`, rather than
+   dying mid-transfer with a 401 that looks like a network fault.
+
+   So the shortest path is to skip the button entirely: once the scopes are
+   submitted, a single `rclone authorize` yields a token that has both the
+   scopes and a refresh token.
+
+   Verified end to end on 2026-08-21: `rclone mkdir db:restic-backup` succeeded
+   and the folder appeared at **`/Apps/nix-restic-backup/restic-backup`** — the
+   path itself confirming the App-folder scope holds, since rclone's `restic-backup`
+   resolved *inside* the app directory and not at the account root.
+3. `sops edit hosts/p-ion-berlin-xs56r6/secrets.enc.yaml` and add this block,
+   leaving the two existing `wireguard_wg0_*` keys where they are:
+
+   ```yaml
+   restic:
+     r2_ro:
+       access_key_id: <from the Cloudflare token dialog>
+       secret_access_key: <from the same dialog>
+     dropbox:
+       client_id: <Dropbox app key>
+       client_secret: <Dropbox app secret>
+       token: <the whole JSON rclone authorize printed>
+   ```
+
+   Nested, not five more `restic_r2_*` keys at the top level. `key` and `name`
+   are separate options in sops-nix, so the file gets structure while
+   `/run/secrets` keeps flat, predictable filenames — see the header of
+   `hosts/p-ion-berlin-xs56r6/secrets.nix` for why that matters and why the
+   NixOS module's own "no nested data structures" note is wrong.
+
+4. `sops edit secrets/secrets.enc.yaml` and regroup the seven existing keys the
+   same way. **No new values here — these are moves.** Until the file and
+   `modules/secrets.nix` agree, `just build` fails with `manifest is not valid:
+   … the key 'nix_cache' cannot be found`, which is the home-manager class
+   catching it at build time rather than at activation.
+
+   ```yaml
+   nix_cache:
+     r2:
+       access_key_id:     <was r2_access_key_id>
+       secret_access_key: <was r2_secret_access_key>
+     signing_key:         <was nix_cache_signing_key>
+   restic:
+     password:            <was restic_password>
+     r2:
+       access_key_id:     <was restic_r2_access_key_id>
+       secret_access_key: <was restic_r2_secret_access_key>
+       token:             <was restic_r2_token>
+   ```
+
+   Nothing that reads these files changes: `nix-cache-push` still opens
+   `r2_access_key_id`, `r2_secret_access_key` and `nix_cache_signing_key` by
+   name, because `path` is built from the attribute name and not from `key`.
+5. Deploy, then run the copy — but only after the Filme backup has finished.
+   Copying a repository that is being written to yields an inconsistent copy.
+
+**Deployed and verified on 2026-08-21.** Two results worth keeping:
+
+* Activation logged `adding secrets: dropbox_client_id, dropbox_client_secret,
+  dropbox_token, r2_backup_ro_access_key_id, r2_backup_ro_secret_access_key` —
+  all five nested `key` paths resolved, which is the NixOS class doing exactly
+  what its own documentation says it cannot.
+* `systemctl start backup-copy-verify-credentials` → *"OK -- Bucket ist
+  lesbar"*, *"OK -- Schreiben wurde abgelehnt, wie es sein soll."* Because it
+  ran from the allow-listed address, the refused write measures the
+  **permission** and not the origin — which is the whole reason that probe lives
+  on the VPS rather than on a workstation.
+
 ## The OTR recordings, and why `Download` was not throwaway
 
 `Download` was excluded from the backup on the assumption that it held
