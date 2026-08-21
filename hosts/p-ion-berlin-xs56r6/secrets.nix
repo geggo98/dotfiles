@@ -8,6 +8,36 @@
   #
   # These are SYSTEM secrets, decrypted to /run/secrets/<name> before the
   # services that need them start — not into anyone's home directory.
+  #
+  # GROUPED IN THE YAML, FLAT ON DISK, and the split is deliberate. `name` (the
+  # attribute) and `key` (where the value sits in the encrypted file) are
+  # separate options in sops-nix: `path` defaults to /run/secrets/${name}, never
+  # ${key}. So a nested `key` buys a readable file without creating
+  # subdirectories under /run/secrets that every consumer would have to know
+  # about.
+  #
+  # What it buys is not cosmetic. The workstation file currently carries both
+  # `r2_access_key_id` (nix-cache, read+write) and `restic_r2_access_key_id`
+  # (backup, read+write) as flat neighbours — two credential pairs for the same
+  # provider with different powers, told apart by a prefix. Grouping makes that
+  # confusion structurally impossible.
+  #
+  # Note the NixOS module's own description says "No tested data structures are
+  # supported right now" — a typo for "nested", and wrong either way. Both
+  # classes call the same `recurseSecretKey` (sops-install-secrets/main.go:291),
+  # which splits on `/` and descends. The home-manager module documents it
+  # correctly, and `aws/credentials` in modules/secrets.nix has relied on it all
+  # along.
+  #
+  # rw and ro cannot appear side by side here, and that is the point: the
+  # read+write credential lives in the workstations' file. This host is on the
+  # open internet and must not be able to damage the backup it is copying.
+
+  # The two WireGuard secrets below stay FLAT, on purpose. They already exist,
+  # already work, and are not part of the problem grouping solves — there is no
+  # second `wireguard_wg0_private` anywhere to confuse them with. Regrouping
+  # them would mean moving live values of one of this host's access routes for
+  # tidiness alone. Worth doing when something else touches them; not on its own.
 
   # WireGuard private key for wg0 (modules/nixos-wireguard-home.nix).
   #
@@ -35,6 +65,65 @@
   # world-readable in /nix/store). It is applied by a PostUp hook instead:
   #   wg set wg0 peer <pubkey> preshared-key <(cat /run/secrets/...)
   wireguard_wg0_preshared = {
+    mode = "0400";
+    owner = "root";
+  };
+
+  # --- Second backup copy: R2 -> Dropbox (modules/nixos-backup-copy.nix) ------
+  #
+  # This host copies the ~1 TB restic repository out of R2 into Dropbox. It
+  # moves the encrypted objects verbatim, so it deliberately does NOT get the
+  # restic repository password: an attacker who takes this box -- the only
+  # machine here on the open internet -- gets ciphertext and nothing else.
+  #
+  # For the same reason the R2 credential is a SEPARATE, READ-ONLY token, not
+  # the one the appliance backs up with:
+  #
+  #   * `restic_r2_*` (workstations)  = read + write on restic-backup
+  #   * `r2_backup_ro_*` (this host)  = "Workers R2 Storage Bucket Item Read"
+  #                                     ONLY, scoped to the restic-backup bucket
+  #
+  # With read-only there is no credential on this machine that can damage the
+  # backup, which matters most during the window in which it is the only copy.
+  # Cloudflare shows both values once, in the token dialog; these are the native
+  # S3 pair, NOT a `cfat_…` value needing the SHA-256 derivation that
+  # modules/nix-cache.nix does.
+  r2_backup_ro_access_key_id = {
+    key = "restic/r2_ro/access_key_id";
+    mode = "0400";
+    owner = "root";
+  };
+  r2_backup_ro_secret_access_key = {
+    key = "restic/r2_ro/secret_access_key";
+    mode = "0400";
+    owner = "root";
+  };
+
+  # Dropbox OAuth for rclone. A DEDICATED Dropbox app, not rclone's built-in
+  # shared credentials: the shared app is used by every rclone user on earth and
+  # is throttled accordingly, which on a 1 TB transfer is the difference between
+  # a day and a week. rclone's own documentation says to register your own.
+  #
+  # Create it with the "App folder" access type, not "Full Dropbox" — then this
+  # token cannot touch anything outside its own directory, and a mistake in a
+  # path expression cannot reach the rest of the account.
+  #
+  # `dropbox_token` is the whole JSON object rclone prints, e.g.
+  #   {"access_token":"…","token_type":"bearer","refresh_token":"…","expiry":"…"}
+  # The refresh_token is the durable half; the access_token expires in hours and
+  # rclone renews it on its own.
+  dropbox_client_id = {
+    key = "restic/dropbox/client_id";
+    mode = "0400";
+    owner = "root";
+  };
+  dropbox_client_secret = {
+    key = "restic/dropbox/client_secret";
+    mode = "0400";
+    owner = "root";
+  };
+  dropbox_token = {
+    key = "restic/dropbox/token";
     mode = "0400";
     owner = "root";
   };
