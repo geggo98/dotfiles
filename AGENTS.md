@@ -1004,6 +1004,36 @@ Use the `/nix-dendritic-pattern` skill for guidance. In short:
 2. Add secret declaration in `modules/secrets.nix` or `hosts/<serial>/secrets.nix`
 3. Access via `config.sops.secrets.<name>.path` in configurations
 
+**Group related secrets in the YAML with `key`, keep the attribute name flat.**
+`name` and `key` are separate options: `key` addresses a value *inside* the
+encrypted file, `/`-separated, while `path` defaults to a location built from
+`name` and never from `key`. So a nested `key` reorganises the file without
+moving a single file on disk — no consumer changes.
+
+```nix
+r2_access_key_id.key = "nix_cache/r2/access_key_id";     # file: …/r2_access_key_id
+restic_r2_access_key_id.key = "restic/r2/access_key_id"; # file: …/restic_r2_access_key_id
+```
+
+Do it whenever two secrets are the same *kind* of thing with different powers.
+The case that motivated it: `r2_access_key_id` (nix-cache, read+write, on both
+Macs, used automatically many times a day) sat next to `restic_r2_access_key_id`
+(backup, read+write, able to destroy the only copy of the data) — same provider,
+same shape, told apart by a prefix. Structure beats care.
+
+**The NixOS module's description of `key` is wrong** — it says "No tested data
+structures are supported right now", a typo for "nested" and untrue regardless.
+Both classes call the same `recurseSecretKey` in `sops-install-secrets`, which
+splits on `/` and descends. The home-manager module documents it correctly, and
+a deploy of `p-ion-berlin-xs56r6` on 2026-08-21 settled it on the NixOS class
+too: activation logged `adding secrets: dropbox_client_id, …,
+r2_backup_ro_secret_access_key`, all five of them nested.
+
+Renaming or regrouping an existing key means moving the value in the encrypted
+file too. On the home-manager class that is safe: the build fails until they
+agree, with `manifest is not valid: … the key '<x>' cannot be found`. On the
+NixOS class the same mistake surfaces only at activation — see below.
+
 **On the NixOS class it is a different module and a different identity.**
 `modules/secrets.nix` is home-manager only. Servers use
 `modules/nixos-secrets.nix`, which decrypts to `/run/secrets/<name>` for system
