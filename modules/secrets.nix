@@ -48,12 +48,31 @@ let
         "c24_bi_kfz_test_liquibase.json" = { };
         "c24_bi_kfz_prod_liquibase.json" = { };
 
+        # GROUPED IN THE YAML, FLAT ON DISK. `key` says where a value sits in the
+        # encrypted file; `name` (the attribute) still decides the filename,
+        # because sops-nix defaults `path` to "${defaultSymlinkPath}/${name}"
+        # and never to ${key}. Nothing that reads these files changes —
+        # modules/_files/nix-cache/nix-cache-push:44-46 still opens
+        # r2_access_key_id, r2_secret_access_key and nix_cache_signing_key by
+        # those exact names.
+        #
+        # The grouping is not tidiness. Flat, these two pairs were neighbours:
+        #
+        #   r2_access_key_id           nix-cache, read+write, on both Macs,
+        #                              used by an automated hook many times a day
+        #   restic_r2_access_key_id    backup, read+write, the credential that
+        #                              can destroy the only copy of the data
+        #
+        # Same provider, same shape, different blast radius, told apart by a
+        # prefix. Grouping makes reaching for the wrong one a structural
+        # impossibility rather than a matter of care.
+        #
         # R2 binary cache (modules/nix-cache.nix): S3 push credentials + NAR
         # signing secret key. Read by nix-cache-push (user) and the root
         # post-build-hook (root reads the user's decrypted files).
-        r2_access_key_id = { };
-        r2_secret_access_key = { };
-        nix_cache_signing_key = { };
+        r2_access_key_id.key = "nix_cache/r2/access_key_id";
+        r2_secret_access_key.key = "nix_cache/r2/secret_access_key";
+        nix_cache_signing_key.key = "nix_cache/signing_key";
 
         # Encrypted file backups (infra/src/backup.ts, R2 bucket `restic-backup`).
         # A SEPARATE R2 credential from the three above, on purpose: those are used by
@@ -72,13 +91,19 @@ let
         # 1Password. One copy of it is the real single point of failure in the whole
         # arrangement, not the bucket.
         #
-        # `restic_r2_token` is deliberately NOT declared here although it is stored in
+        # `restic/r2/token` is deliberately NOT declared here although it is stored in
         # the same file: it is the Cloudflare token the two S3 values were derived from,
         # worth keeping to inspect or rotate the token later, but nothing on a
         # workstation reads it. Declaring it would write it to disk for no reason.
-        restic_r2_access_key_id = { };
-        restic_r2_secret_access_key = { };
-        restic_password = { };
+        #
+        # Note there is a THIRD R2 credential which is deliberately absent from this
+        # file: the read-only one, declared in hosts/p-ion-berlin-xs56r6/secrets.nix
+        # under restic/r2_ro. It belongs to the VPS that copies the backup to Dropbox
+        # and lives only there — no workstation needs it, and a credential that cannot
+        # write is worth nothing here.
+        restic_r2_access_key_id.key = "restic/r2/access_key_id";
+        restic_r2_secret_access_key.key = "restic/r2/secret_access_key";
+        restic_password.key = "restic/password";
       };
     in
     {
