@@ -368,14 +368,75 @@ Verified before anything else was started, in two independent ways:
 Restore throughput was ~8.5 MB/s from R2, roughly 3.5× the upload rate. That
 asymmetry is the number that matters in an actual recovery.
 
-**Phase 2** (`Filme`, 765 GiB) runs throttled to `--limit-upload 1776`, i.e. 75 %
-of 2369 KiB/s — measured over 92 s against the running phase-1 job (2.43 MB/s)
-and consistent with three Cloudflare speed tests (2.20 / 2.62 / 2.64 MB/s).
-Costs ~5.2 days instead of ~3.9, and leaves the household a quarter of the line.
-An interrupted run costs nothing; restic resumes.
+**Phase 2** (`Filme`) runs throttled to `--limit-upload 1776`, i.e. 75 % of
+2369 KiB/s — measured over 92 s against the running phase-1 job (2.43 MB/s) and
+consistent with three Cloudflare speed tests (2.20 / 2.62 / 2.64 MB/s). Costs
+~6 days instead of ~4.5, and leaves the household a quarter of the line.
 
-`Download` (241 GiB) is deliberately not backed up pending a look inside — see
-the data table above.
+It now covers 962 GiB, not the 765 GiB originally planned, and phase 3 has been
+folded into it: once the 204 decoded recordings moved to `Filme/OTR` (+149 GiB)
+and 35 Mediathek files were filed into `Filme/Infuse` and
+`Filme/This Is Going To Hurt` (+48 GiB), both phases addressed the same path.
+`/root/backup-phase2.sh` and `backup-phase3.sh` are therefore renamed
+`.superseded`; `/root/backup-filme.sh` is the one to run.
+
+Note on finding that +48 GiB: `find -newermt` reported **nothing**, because the
+files were copied with their mtimes preserved (2023/2024). `find -newerct`
+found all 35 at once. mtime is not the time a file appeared.
+
+### An unattended multi-day upload must restart itself
+
+`restic` resumes cheaply, and that was the whole argument for not worrying about
+interruptions. It was half the story, and the missing half cost 28 hours.
+
+The phase-2 run died at **03:50** on 2026-08-20 with `Fatal: unable to save
+snapshot: … dial tcp: lookup ….r2.cloudflarestorage.com: i/o timeout`, then sat
+idle until someone looked. The timestamp is the diagnosis: **German ISPs force a
+reconnect nightly**, handing out a new IP, with the line dead for 10–30 minutes.
+Both sites do this. It is a scheduled event, not a fault — and an upload that
+takes six days meets it six times.
+
+The error text points at DNS and invites blaming the Speedport's EDNS0 bug
+(above). It was not that. `1.1.1.1` and `8.8.8.8` are `nameserver1`/`2` here, the
+Speedport is only the third fallback; Go named it because it was the last
+resolver it tried after all of them timed out.
+
+`/root/backup-filme.sh` wraps restic in a restart loop. Four decisions in it are
+load-bearing:
+
+- **`systemd-run` does not set `HOME`.** First start logged `unable to open
+  cache: neither $XDG_CACHE_HOME nor $HOME are defined` — restic then runs
+  *without its local cache* and re-fetches the index from R2 on every restart,
+  which is exactly the cost the restart loop exists to avoid. Pass
+  `--setenv=HOME=/root`.
+- **No exponential backoff.** Backoff exists to spare an overloaded service; here
+  the service is healthy and the line is gone. Exponential retreat would idle up
+  to 15 minutes past the end of a 10-minute outage, every night. A flat 60 s plus
+  a real reachability probe (`getent hosts` **and** a TCP connect to :443 —
+  after a redial the resolver often answers before the route is back) costs
+  nothing per attempt.
+- **Restarting is genuinely cheap, checked rather than assumed.** Uploaded packs
+  are in the index and do not go over the line again — of 107.8 GiB in the bucket
+  on 2026-08-21, 36.7 GiB was phase 1 and the remaining 71.1 GiB was what the
+  aborted run had already achieved and kept. Without a parent snapshot restic
+  must re-read and re-hash all 962 GiB, but the CPU reports `sha_ni`, so SHA-256
+  runs in hardware: minutes, not hours. **This is why splitting the upload into
+  per-directory stages is unnecessary here** — on a CPU without `sha_ni` that
+  calculation flips.
+- **`--json` plus a filter, or the log stays silent.** Without a TTY restic draws
+  no progress bar, so the aborted run left no trace of how far it got — the only
+  way to answer "how far along is it" was to measure the bucket with `rclone
+  size`. The wrapper lets a status line through every 5 minutes and passes
+  everything else verbatim.
+
+restic's exit codes are mapped deliberately, per the resumability rule in
+`AGENTS.md`: `0` done, `3` done but some files were unreadable (a valid snapshot
+— not an error, and not to be retried), anything else means no snapshot, so wait
+and restart. A missing `.restic-env` or binary exits `2` immediately: no amount
+of waiting fixes it, and patiently retrying would hide it.
+
+`Download` (241 GiB, now 356 GiB with snapshots) is deliberately not backed up —
+see the OTR section below.
 
 ## The OTR recordings, and why `Download` was not throwaway
 
