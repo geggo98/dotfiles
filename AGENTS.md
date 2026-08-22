@@ -29,10 +29,13 @@ A `justfile` provides safe, pre-approved commands that agents can run without us
 | `just check` | Run `nix flake check` |
 | `just fmt` | Format all Nix files with `nixpkgs-fmt` |
 | `just fmt-check` | Check formatting without modifying files |
-| `just update [days]` | Update all flake inputs, never to code younger than the cooldown (default 5 days) |
-| `just update-preview [days]` | Show what `just update` would do, without touching `flake.lock` |
-| `just update-input <input> [days]` | Update a single flake input, still honouring the cooldown |
+| `just update` | Update all flake inputs, never to code younger than the cooldown |
+| `just update-preview` | Show what `just update` would do, without touching `flake.lock` |
+| `just update-input <input>` | Update a single flake input, still honouring the cooldown |
 | `just update-head` | Update everything to branch HEAD — **cooldown bypassed**, deliberate use only |
+| `just audit` | Cooldown + withdrawal audit: input ages, npm package ages, VS Code extensions |
+| `just audit-inputs` | Layer 1 only — fast, no npm or marketplace lookups |
+| `just audit-extensions [ids…]` | VS Code extensions: old enough **and** still published upstream |
 | `just diff` | Build and show package delta vs. current system |
 | `just verify-no-diff` | Build and assert no package delta (useful after refactoring) |
 | `just deps` | Show flake dependency tree |
@@ -1085,8 +1088,14 @@ Two traps, both paid for once:
 **Use `just update`, not `nix flake update`.** They are not the same command any more.
 `nix flake update` always jumps every input to the CURRENT head of its branch, which is
 precisely the window a supply-chain attack lives in. `just update` runs
-`scripts/flake-cooldown.py`, which resolves each input to the newest revision that is at
-least N days old (default 5) and writes those revisions into `flake.lock`.
+`scripts/supply-chain.py`, which resolves each input to the newest revision that is at
+least N days old and writes those revisions into `flake.lock`.
+
+**Policy lives in `scripts/supply-chain.toml`, not in the recipes or the code** — the
+cooldowns, the per-input overrides and the freeze list, each with the measurement that
+justifies it. The same file drives `just audit`, so the check and the thing being
+checked cannot drift apart. Defaults: 5 days for flake inputs, 14 for npm packages and
+VS Code extensions, matching `modules/supply-chain-hardening.nix`.
 
 Measured on 2026-08-22, and the reason this exists: a plain `nix flake update` in this
 repo moved six inputs to a HEAD committed the same day — worktrunk 0.1 days old,
@@ -1131,9 +1140,54 @@ Four behaviours worth knowing, each of which cost a measurement:
   filter earned its keep immediately: determinate 3.22.0 was old enough at 15 days but
   had been yanked on 2026-08-17, so the script correctly fell back to 3.21.9.
 
+- **An update never moves an input BACKWARDS.** Raising a bar — say `nixpkgs-llm-agents`
+  from 5 to 14 days — would otherwise roll the lock back to a revision that has already
+  been built, cached and possibly deployed, to fix a problem that waiting fixes anyway.
+  The regression is reported, not silent: *"5b3a7eff4 (5.2d) is NEWER than the 14d bar's
+  pick df0664e9f (14.5d) — not rolled back; it clears the bar on its own in 8.8d."*
+  `--allow-rollback` forces it, for the one case that wants it: a lock polluted by a
+  bare `nix flake update`.
+
 `just update-preview` shows the decision without writing anything, and re-running
 `just update` when there is nothing to do exits 0 and says so. `just update-head` is the
 deliberate bypass — if you use it, write down why in the commit body.
+
+#### `just audit` — the other half, and a different question
+
+`just pulumi-audit` asks *"is anything KNOWN-bad?"* against OSV. `just audit` asks *"is
+anything suspiciously NEW, or has upstream WITHDRAWN it?"*. Do not let one be reported
+as if it answered the other: on 2026-08-04 ChainDrop's poisoned tarballs carried valid
+npm provenance and SLSA L3 attestations, and every scanner said clean.
+
+The second half of that question is the one a cooldown alone misses. **A withdrawn
+artifact is the strongest signal available**, because the ecosystem emits it *after*
+someone found the problem — and age cannot express it, since a malicious version pulled
+yesterday is still "old enough" tomorrow. So each layer checks presence as well as age:
+FlakeHub `yanked_at`, npm `unpublished` or a version missing from the registry's `time`
+map, and for a VS Code extension a 404, a `deprecated` flag, or a chosen version that
+has vanished from `allVersions` while the extension itself survives. That is not
+hypothetical — on its first real run it rejected determinate 3.22.0, comfortably old
+enough at 15 days and yanked on 2026-08-17.
+
+Layer 2 exists because **an input's age bounds its contents only from below, and
+loosely.** Measured with `nixpkgs-llm-agents` at 5.2 days old, the npm packages inside
+it were claude-code 7.9 d, opencode 9.6 d, gemini-cli 10.8 d, ccusage 7.1 d — every one
+still inside the 14-day npm bar. Hence the per-input override raising that input to 14.
+
+Two traps in layer 3, both found by testing rather than reading docs:
+
+- **Open VSX `allVersions` begins with ALIASES, not versions** — measured,
+  `['latest', 'pre-release', '0.4.3022', …]`. Both resolve to a real manifest, so a
+  naive walk "finds" one and pins the literal string `latest`: a floating pointer, i.e.
+  exactly what this tool exists to prevent. Only keys starting with a digit are used.
+- **The per-version walk is capped at 40 and says so.** Open VSX costs one request per
+  version and some extensions ship nightlies (rust-analyzer lists 100). A bounded search
+  that reports "no suitable version" without saying how far it looked is
+  indistinguishable from a real absence.
+
+`[[extensions]]` in the manifest is deliberately empty until the default-extension set
+is actually wired into a module; `just audit-extensions <id>…` exercises the machinery
+meanwhile.
 
 The cooldown bounds the age of everything *inside* an input from below (a llm-agents.nix
 rev from 14 days ago cannot pin an npm version published yesterday), but it is a soak,
