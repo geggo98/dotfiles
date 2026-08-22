@@ -329,15 +329,27 @@ let
 
       notes.obsidian = {
         enable = true;
-        # obsidian.nvim (obsidian-nvim/obsidian.nvim fork) runs each
-        # workspace path through vim.fs.normalize, which expands ~ and
-        # env vars — so this stays portable across both Macs.
-        setupOpts.workspaces = [
-          {
-            name = "work_notes";
-            path = "~/Documents/Obsidian/work_notes";
-          }
-        ];
+        setupOpts = {
+          # Opt out of the `ObsidianBacklinks`-style commands ahead of
+          # obsidian.nvim 4.0, which deletes them. They default to on, and
+          # 3.16.4 pays for that with a vim.notify_once deprecation on the
+          # first markdown buffer of every session
+          # (lua/obsidian/config/init.lua:332). Keeping the commands *and*
+          # silencing the warning is not on offer — the warning is gated on
+          # exactly this flag. `:Obsidian <subcommand>` is unaffected and is
+          # the form upstream documents; nothing here binds the old names.
+          legacy_commands = false;
+
+          # obsidian.nvim (obsidian-nvim/obsidian.nvim fork) runs each
+          # workspace path through vim.fs.normalize, which expands ~ and
+          # env vars — so this stays portable across both Macs.
+          workspaces = [
+            {
+              name = "work_notes";
+              path = "~/Documents/Obsidian/work_notes";
+            }
+          ];
+        };
       };
 
       assistant.avante-nvim.enable = true;
