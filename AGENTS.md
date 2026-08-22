@@ -29,8 +29,10 @@ A `justfile` provides safe, pre-approved commands that agents can run without us
 | `just check` | Run `nix flake check` |
 | `just fmt` | Format all Nix files with `nixpkgs-fmt` |
 | `just fmt-check` | Check formatting without modifying files |
-| `just update` | Update all flake inputs |
-| `just update-input <input>` | Update a single flake input |
+| `just update [days]` | Update all flake inputs, never to code younger than the cooldown (default 5 days) |
+| `just update-preview [days]` | Show what `just update` would do, without touching `flake.lock` |
+| `just update-input <input> [days]` | Update a single flake input, still honouring the cooldown |
+| `just update-head` | Update everything to branch HEAD — **cooldown bypassed**, deliberate use only |
 | `just diff` | Build and show package delta vs. current system |
 | `just verify-no-diff` | Build and assert no package delta (useful after refactoring) |
 | `just deps` | Show flake dependency tree |
@@ -1079,6 +1081,81 @@ Two traps, both paid for once:
 2. Ensure secret loading logic uses `$XDG_CONFIG_HOME/sops-nix/secrets`
 
 ### Updating flake inputs
+
+**Use `just update`, not `nix flake update`.** They are not the same command any more.
+`nix flake update` always jumps every input to the CURRENT head of its branch, which is
+precisely the window a supply-chain attack lives in. `just update` runs
+`scripts/flake-cooldown.py`, which resolves each input to the newest revision that is at
+least N days old (default 5) and writes those revisions into `flake.lock`.
+
+Measured on 2026-08-22, and the reason this exists: a plain `nix flake update` in this
+repo moved six inputs to a HEAD committed the same day — worktrunk 0.1 days old,
+home-manager 0.2, llm-agents 0.3, devenv 0.5, determinate 0.6, nix-homebrew 0.8 — while
+the ChainDrop/Shai-Hulud npm campaign was live and still classified active by CSA
+advisory AD-2026-009. Nothing in the repo said a word about it.
+
+**Why a cooldown rather than a scanner.** The poisoned ChainDrop tarballs carried valid
+npm provenance and SLSA L3 attestations, signed by GitHub Actions through Sigstore: every
+cryptographic check passed, because the source was trojanized before the build ran. A
+vulnerability scanner answers "clean" for exactly as long as it matters. Age is the one
+signal an attacker cannot forge — malicious releases are typically pulled within hours to
+days, so declining to be the first consumer turns most of these incidents into a
+non-event. This is the same reasoning `modules/supply-chain-hardening.nix` already
+applies to npm/pnpm/bun/uv, moved one level up to the flake inputs.
+
+Four behaviours worth knowing, each of which cost a measurement:
+
+- **The cooldown lives in `flake.lock`, not `flake.nix`.** `nix flake lock
+  --override-input <name> github:<o>/<r>/<rev>` writes the explicit rev while leaving
+  `original` as plain branch-tracking. The consequence: **a bare `nix flake update`
+  silently discards the cooldown.** `just update` is the only update path that honours
+  it, exactly as `just switch` is the only supported apply path.
+- **nixpkgs channel branches are exempt, automatically, and must stay that way.**
+  `nixos-26.05` and `nixos-unstable` advance only to revisions Hydra has built and
+  tested; their HEAD is the published channel. The commits *between* two heads were never
+  published as a channel, so they are neither Hydra-validated nor covered by
+  cache.nixos.org. Cooling nixpkgs down trades "2 days old and fully cached" for "5 days
+  old, never validated, rebuild the world". Verified:
+  `channels.nixos.org/nixos-26.05/git-revision` returned exactly the branch head a plain
+  update had locked, while a 5-day cooldown selected the intermediate commit `5c11f83f0`.
+  The script detects this via channels.nixos.org and reports those inputs as `channel`.
+- **A `ref` may be a branch or a tag, and guessing from the string does not work** —
+  `6.0.17` and `release-26.05` are both plausible either way. Each `ref` is resolved
+  against the GitHub branches endpoint: branch → cooldown applies, tag → immutable, `nix
+  flake update` never moved it anyway.
+- **FlakeHub inputs are covered too, and yanks are honoured.** `determinate` is a semver
+  *range* (`…/determinate/3`), so it re-resolves on every lock — a floating range on the
+  root `nix-daemon` would defeat every cooldown in the repo. It moved 3.21.8 → 3.22.2
+  (0.7 days old) on that same update. The script reads FlakeHub's releases endpoint,
+  which carries `published_at` **and `yanked_at`**, and pins `=<version>`. That yank
+  filter earned its keep immediately: determinate 3.22.0 was old enough at 15 days but
+  had been yanked on 2026-08-17, so the script correctly fell back to 3.21.9.
+
+`just update-preview` shows the decision without writing anything, and re-running
+`just update` when there is nothing to do exits 0 and says so. `just update-head` is the
+deliberate bypass — if you use it, write down why in the commit body.
+
+The cooldown bounds the age of everything *inside* an input from below (a llm-agents.nix
+rev from 14 days ago cannot pin an npm version published yesterday), but it is a soak,
+not a verdict: it says nothing about whether that older code is malicious, and it cannot
+help against an attack nobody notices for longer than the threshold.
+
+**The date is attacker-settable, and that defines what the cooldown is for.** The
+committer date this sorts by is chosen by whoever makes the commit — measured
+2026-08-22, `GIT_COMMITTER_DATE=2019-01-01 git commit` yields an input this tool reports
+as 2790 days old. So anyone who already controls the upstream repo walks through the
+bar, and the same holds one level down: npm's `time` map and GitHub's `published_at` are
+supplied by the party being audited. What the cooldown *does* defend against is the
+common shape of these incidents — a compromised account publishes, the release is live
+for hours, someone notices, it gets pulled — where simply not being an early consumer
+takes you out of the blast radius. Do not present it as more than that.
+
+**The largest uncovered surface is Homebrew, not Nix.** The generated Brewfile carries
+83 casks and **zero version strings** (`cask "1password", trusted: true`); Homebrew 6
+resolves them from a rolling JSON API at `just switch` time
+(`~/Library/Caches/Homebrew/api/cask.jws.json`, ~20 MB), entirely outside `flake.lock`.
+1Password, Firefox, Brave, Chrome and ChatGPT install whatever that API serves at
+activation. No cooldown, pin or audit in this repo covers any of it.
 
 - **nvf variants:** `modules/neovim.nix` exports `neovim` *and* `neovim-server`,
   built from a shared `common` plus a `workstation` overlay. When adding a

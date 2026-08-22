@@ -84,13 +84,49 @@ fmt:
 fmt-check:
     nix run nixpkgs#nixpkgs-fmt -- --check $(find . -name '*.nix' -not -path './_*')
 
-# Update all flake inputs
-update:
-    nix flake update
+# Update all mutable flake inputs — but never to code younger than the cooldown.
+#
+# `nix flake update` always jumps to the CURRENT branch head, which is exactly the
+# window a supply-chain attack lives in. Measured 2026-08-22: a plain update moved six
+# inputs to a HEAD committed the same day (worktrunk 0.1 days old, home-manager 0.2,
+# llm-agents 0.3, devenv 0.5, determinate 0.6, nix-homebrew 0.8) while the
+# ChainDrop/Shai-Hulud npm campaign was live. scripts/flake-cooldown.py resolves each
+# input to the newest revision at least N days old instead. See the module docstring
+# for why age beats scanning here (the poisoned ChainDrop tarballs had VALID SLSA L3
+# provenance — the source was trojanized before the build).
+#
+# nixpkgs channel branches are exempt AUTOMATICALLY and must stay that way: their head
+# is Hydra-gated and cache-covered, while an intermediate commit is neither.
+#
+# nix-vscode-extensions is frozen on purpose — it is an unused input kept for a future
+# default-extension set, and its pinned rev predates the Open VSX evil-twin campaign.
+#
+# Update all flake inputs, skipping anything younger than DAYS (default 5)
+update days="5":
+    #!/bin/zsh
+    set -euo pipefail
+    python3 scripts/flake-cooldown.py --days "$1" --freeze nix-vscode-extensions
 
-# Update a single flake input
-update-input input:
-    nix flake update {{ input }}
+# Show what `just update` would do, without touching flake.lock
+update-preview days="5":
+    #!/bin/zsh
+    set -euo pipefail
+    python3 scripts/flake-cooldown.py --days "$1" --freeze nix-vscode-extensions --dry-run
+
+# Update a single flake input, still honouring the cooldown
+update-input input days="5":
+    #!/bin/zsh
+    set -euo pipefail
+    python3 scripts/flake-cooldown.py --days "$2" --only "$1"
+
+# Escape hatch: update everything to branch HEAD, cooldown BYPASSED. For the case where
+# you have decided, deliberately and with the reason written down, that you need code
+# younger than the bar — a security fix that just landed, say. `just update` is the
+# normal path; if you reach for this one, say why in the commit body.
+#
+# Update every input to branch HEAD — COOLDOWN BYPASSED, use deliberately
+update-head:
+    nix flake update
 
 # Bump the pinned Homebrew source (brew-src in flake.nix) to the latest upstream
 # release and relock. Homebrew 6 serves casks from a rolling JSON API that cannot
