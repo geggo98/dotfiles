@@ -75,6 +75,22 @@
     # API serving it by TWO DAYS. This pin must not lag more than a release or two.
     #
     # Fix, and the routine cure whenever this recurs: `just brew-bump`.
+    #
+    # DO NOT SANITY-CHECK THIS PIN AGAINST THE VERSION NUMBER NIX REPORTS — it lies,
+    # and it lies in the alarming direction. `nix store diff-closures` prints e.g.
+    # `brew: 6.0.12 -> 6.0.16` and the store path is `brew-6.0.16-patched`, both while
+    # this input is pinned to 6.0.17. That label comes from nix-homebrew's OWN default
+    # brew-src, not from ours; `nix-homebrew.inputs.brew-src.follows` redirects the
+    # source but not the version string. Verified 2026-08-22: the built derivation's
+    # only `-source` input is our tree, `gh api repos/Homebrew/brew/git/ref/tags/6.0.17`
+    # returns exactly the locked rev 4dacfe77a…, and that tree does contain
+    # Library/Homebrew/cask/artifact/command_wrapper.rb — the class whose absence caused
+    # the 6.0.9 breakage above. `brew --version` is no help either; it prints
+    # "Homebrew >=4.3.0 (shallow or no git repository)".
+    #
+    # So the authoritative check is the flake.lock rev, not the closure diff:
+    #   nix eval --raw .#inputs.brew-src.rev   (or read flake.lock)
+    # Reading the label instead invites "fixing" a pin that was never wrong.
     brew-src = {
       url = "github:Homebrew/brew/6.0.17";
       flake = false;
@@ -112,8 +128,31 @@
     # printed hashes into modules/agent-browser.nix -> `just build`.
     # Pinned by tag, not rev: github archive URLs are ambiguous when a repo has a
     # branch and tag of the same name (llm-agents hit this in 62903bf).
+    #
+    # HELD AT 0.33.2 (2026-08-02), NOT 0.34.0 (2026-08-11) — deliberate. This is a tag
+    # pin, so `just update`'s cooldown does not move it and the choice is made here by
+    # hand. 0.34.0 is 11 days old and would clear the repo's 5-day bar; 0.33.2 is 20
+    # days old, is patch-level on the 0.33 minor already trusted here, and carries the
+    # identical asset names — so the bump needs only the four hashes below, no
+    # structural change to modules/agent-browser.nix.
+    #
+    # THE OPEN ISSUE, and why bumping further would not address it:
+    # vercel-labs/agent-browser#1679 — the CLI auto-discovers a project-local
+    # `agent-browser.json` from its working directory and honours `executablePath` and
+    # `plugins` from it. A repository that merely *contains* such a file therefore runs
+    # code as you the moment you invoke agent-browser inside that checkout. The fix,
+    # PR #1702, is unmerged and is NOT in 0.34.0 either, so this is not a reason to
+    # prefer the newer tag. It is also not a regression: the same exposure exists at
+    # 0.33.0, which this repo shipped before.
+    #   -> Until #1702 lands, do not run agent-browser with cwd inside an untrusted
+    #      checkout. Re-read the issue before the next bump.
+    #
+    # BEHAVIOUR CHANGE that arrives with this bump: 0.33.1 gave the daemon a default
+    # 1-hour idle timeout (#1605), after which it closes the browser and exits. Set
+    # AGENT_BROWSER_IDLE_TIMEOUT_MS=0 to restore the old always-persist daemon if a
+    # long-running skill workflow depends on it.
     agent-browser-src = {
-      url = "github:vercel-labs/agent-browser/v0.33.0";
+      url = "github:vercel-labs/agent-browser/v0.33.2";
       flake = false;
     };
 

@@ -173,6 +173,19 @@ let
             # removed in nvim-treesitter's main-branch rewrite that nvf now
             # bundles. Use minimap-vim (code-minimap based, treesitter-free).
             #
+            # There is deliberately no `codewindow.enable = false;` here any more.
+            # nvf reached the same conclusion and DELETED the option (its
+            # mkRemovedOptionModule says "Disabled, because it doesn't support
+            # tree-sitter main branch"), and that flavour of removal asserts on
+            # `isDefined` — so even setting it to `false` fails evaluation:
+            #
+            #   error: Failed assertions:
+            #   - The option definition `vim.minimap.codewindow.enable' … no longer
+            #     has any effect; please remove it.
+            #
+            # Do not re-add it "for explicitness". Verified 2026-08-22 against nvf
+            # main b05fadedb and af19044e; both fail.
+            #
             # Kept in `common` although it is not strictly needed on a server:
             # code-minimap is a couple of MB, and its keymap lives in the shared
             # `keymaps` list below. Splitting the plugin from its binding would
@@ -180,7 +193,6 @@ let
             # in an order the module system does not promise — which would move
             # the workstation derivation and break the invariant above.
             minimap-vim.enable = true;
-            codewindow.enable = false;
           };
 
           dashboard = {
