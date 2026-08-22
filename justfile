@@ -90,34 +90,75 @@ fmt-check:
 # window a supply-chain attack lives in. Measured 2026-08-22: a plain update moved six
 # inputs to a HEAD committed the same day (worktrunk 0.1 days old, home-manager 0.2,
 # llm-agents 0.3, devenv 0.5, determinate 0.6, nix-homebrew 0.8) while the
-# ChainDrop/Shai-Hulud npm campaign was live. scripts/flake-cooldown.py resolves each
+# ChainDrop/Shai-Hulud npm campaign was live. scripts/supply-chain.py resolves each
 # input to the newest revision at least N days old instead. See the module docstring
 # for why age beats scanning here (the poisoned ChainDrop tarballs had VALID SLSA L3
 # provenance — the source was trojanized before the build).
 #
-# nixpkgs channel branches are exempt AUTOMATICALLY and must stay that way: their head
-# is Hydra-gated and cache-covered, while an intermediate commit is neither.
+# Policy lives in scripts/supply-chain.toml, not in these recipes: the cooldowns, the
+# per-input overrides and the freeze list are all there, each with the measurement that
+# justifies it. Same file drives `just audit`, so the check and the thing it checks
+# cannot drift apart.
 #
-# nix-vscode-extensions is frozen on purpose — it is an unused input kept for a future
-# default-extension set, and its pinned rev predates the Open VSX evil-twin campaign.
+# Two behaviours worth knowing at the call site:
+#   - nixpkgs channel branches are exempt AUTOMATICALLY and must stay that way: their
+#     head is Hydra-gated and cache-covered, an intermediate commit is neither.
+#   - an update never moves an input BACKWARDS. Raising a bar (e.g. llm-agents to 14 d)
+#     leaves the locked rev alone and says how long until it clears on its own;
+#     `--allow-rollback` forces the regression when that is genuinely wanted.
 #
-# Update all flake inputs, skipping anything younger than DAYS (default 5)
-update days="5":
+# Update all flake inputs, never to code younger than the cooldown
+update *args:
     #!/bin/zsh
     set -euo pipefail
-    python3 scripts/flake-cooldown.py --days "$1" --freeze nix-vscode-extensions
+    python3 scripts/supply-chain.py update "$@"
 
 # Show what `just update` would do, without touching flake.lock
-update-preview days="5":
+update-preview *args:
     #!/bin/zsh
     set -euo pipefail
-    python3 scripts/flake-cooldown.py --days "$1" --freeze nix-vscode-extensions --dry-run
+    python3 scripts/supply-chain.py update --dry-run "$@"
 
 # Update a single flake input, still honouring the cooldown
-update-input input days="5":
+update-input input:
     #!/bin/zsh
     set -euo pipefail
-    python3 scripts/flake-cooldown.py --days "$2" --only "$1"
+    python3 scripts/supply-chain.py --only "$1" update
+
+# --- Supply-chain audit (read-only, agent-safe: no sudo, publishes nothing) ---
+#
+# Answers a DIFFERENT question from `just pulumi-audit`, and the two must not be
+# conflated. pulumi-audit asks "is anything KNOWN-bad?" against OSV. This asks "is
+# anything suspiciously NEW, or has upstream WITHDRAWN it?" — the question that
+# actually mattered on 2026-08-04, when ChainDrop's poisoned tarballs carried valid
+# npm provenance and SLSA L3 attestations and every scanner said clean.
+#
+# Three layers: flake inputs, tracked npm packages (an input's age bounds its contents
+# only from below, and loosely), and VS Code extensions. Exit 1 on findings, 2 on error.
+#
+# Audit every layer: input ages, npm package ages, extension ages + withdrawals
+audit *args:
+    #!/bin/zsh
+    set -euo pipefail
+    python3 scripts/supply-chain.py audit "$@"
+
+# Fast path — layer 1 only, no npm or marketplace lookups
+audit-inputs:
+    #!/bin/zsh
+    set -euo pipefail
+    python3 scripts/supply-chain.py audit --inputs-only
+
+# Check VS Code extensions by id, e.g. `just audit-extensions rust-lang.rust-analyzer`.
+# With no argument it reads [[extensions]] from scripts/supply-chain.toml. An extension
+# that 404s is reported as WITHDRAWN, not as a skip — that is the evil-twin signal.
+#
+# Check VS Code extensions: old enough AND still published (ids, or the manifest list)
+audit-extensions *ids:
+    #!/bin/zsh
+    set -euo pipefail
+    args=()
+    for id in "$@"; do args+=(--extension "$id"); done
+    python3 scripts/supply-chain.py audit --extensions-only "${args[@]}"
 
 # Escape hatch: update everything to branch HEAD, cooldown BYPASSED. For the case where
 # you have decided, deliberately and with the reason written down, that you need code

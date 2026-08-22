@@ -1,0 +1,110 @@
+# Manifest for scripts/supply-chain.py. Read by `just update` and `just audit`.
+#
+# Three layers, because they answer the same question at different depths and fail
+# differently. Layer 1 is the only one that can WRITE flake.lock; 2 and 3 are report-only
+# until the thing they describe is actually wired into a module.
+
+[cooldown]
+# Days a release must have existed before this repo will adopt it. 5 is the flake-input
+# default; npm and the VS Code marketplaces get 14, matching
+# modules/supply-chain-hardening.nix, because those are the ecosystems with live
+# self-propagating campaigns and no Hydra-style gate in front of them.
+inputs = 5
+packages = 14
+extensions = 14
+
+[cooldown.per_input]
+# Per-input override of the 5-day default, and the reason this exists rather than one
+# global number: an input's age bounds the age of its CONTENTS only from below, and
+# loosely. Measured 2026-08-22 with nixpkgs-llm-agents at 5.2 days old, the npm packages
+# inside it were claude-code 7.9 d, opencode 9.6 d, gemini-cli 10.8 d, ccusage 7.1 d —
+# all still inside the 14-day npm bar that layer 2 and
+# modules/supply-chain-hardening.nix apply everywhere else.
+#
+# These CLIs run with the user's full privileges and hold API keys, and ChainDrop
+# targets .claude.json and .codex/auth.json by name, so they get the npm bar rather than
+# the flake-input bar. The cost is real and worth stating: claude-code moves roughly a
+# week later than upstream.
+nixpkgs-llm-agents = 14
+
+[freeze]
+# Inputs `just update` must not touch at all, with the reason. A freeze is NOT a
+# cooldown: it says "do not move this", not "move it to something older".
+#
+# nix-vscode-extensions: currently has zero consumers. It is kept, not deleted, because
+# it is intended to manage the VS Code DEFAULT extension set (further extensions go in
+# each project's .vscode metadata). Until that lands there is nothing to update it for,
+# and its pinned rev 242a696 (2026-07-25) sits one day before the Open VSX evil-twin
+# campaign window (2026-07-26 .. 08-01, 77 counterfeit extensions beaconing to
+# mangorbit[.]com). Unfreeze in the same change that declares [[extensions]] below.
+inputs = ["nix-vscode-extensions"]
+
+# ---------------------------------------------------------------------------------
+# Layer 2 — packages worth dating individually.
+#
+# A flake input's age only bounds its contents from BELOW, and loosely: an
+# llm-agents.nix rev from 5 days ago cannot pin an npm version published yesterday, but
+# it can pin one published 5 days ago. These are the packages where that distinction
+# carries real privilege, so they are dated against their own registry.
+#
+# The ecosystem is NOT recoverable from the derivation graph — measured 2026-08-22,
+# claude-code's drv carries `src = /nix/store/…-claude` with empty inputDrvs, a bare
+# store path with no deriver and no URL. So this mapping is hand-maintained out of
+# necessity, not laziness. An entry that stops resolving is reported, never skipped.
+
+[[packages]]
+name = "claude-code"
+input = "nixpkgs-llm-agents"
+attr = "claude-code"
+npm = "@anthropic-ai/claude-code"
+
+[[packages]]
+name = "codex"
+input = "nixpkgs-llm-agents"
+attr = "codex"
+npm = "@openai/codex"
+
+[[packages]]
+name = "opencode"
+input = "nixpkgs-llm-agents"
+attr = "opencode"
+npm = "opencode-ai"
+
+[[packages]]
+name = "gemini-cli"
+input = "nixpkgs-llm-agents"
+attr = "gemini-cli"
+npm = "@google/gemini-cli"
+
+[[packages]]
+name = "ccusage"
+input = "nixpkgs-llm-agents"
+attr = "ccusage"
+npm = "ccusage"
+
+# ---------------------------------------------------------------------------------
+# Layer 3 — VS Code extensions.
+#
+# DELIBERATELY EMPTY. The default-extension set this repo intends to manage through
+# nix-vscode-extensions does not exist yet, and inventing one here would be a guess
+# presented as configuration. The machinery is implemented and tested (exercise it with
+# `just audit-extensions <id>…`); add entries in the same change that wires the input
+# into a module, and drop nix-vscode-extensions from [freeze] at the same time.
+#
+# The rule applied to each entry, which is stricter than a plain cooldown:
+#   1. the extension must STILL EXIST upstream today  (404 => hard failure, not a skip)
+#   2. the chosen version must be at least `extensions` days old
+#   3. that version must still be listed today — an individually withdrawn version is
+#      rejected even though it was old enough
+#   4. non-deprecated, non-prerelease, and the namespace/publisher verified
+#
+# Rule 3 is the one a plain cooldown misses, and it is the one that matters here: a
+# malicious extension is REMOVED once noticed, so "is it still there?" is the signal
+# that a date cannot give you. Same shape as the FlakeHub `yanked_at` check in layer 1,
+# which caught determinate 3.22.0 — old enough at 15 days, but yanked.
+#
+# Example of the intended shape:
+#   [[extensions]]
+#   id = "rust-lang.rust-analyzer"
+#   registry = "open-vsx"          # or "vscode-marketplace"
+extensions = []
