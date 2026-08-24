@@ -45,6 +45,7 @@ A `justfile` provides safe, pre-approved commands that agents can run without us
 | `just optimise` | Deduplicate the store (hard-link identical files) |
 | `just linux-builder-up [arch]` | Start the Docker Linux builder (`x86_64` default, or `aarch64`) |
 | `just linux-builder-status [arch]` | Builder state, reported system, store size against its cap |
+| `just linux-builder-probe [arch]` | Prove the daemon delegates Linux builds to the container |
 | `just linux-builder-gc [arch] [gb]` | Sweep the builder's store back under its cap |
 | `just linux-builder-down [arch]` | Remove the container, keep the store volume |
 | `just linux-build <attr> [arch] false` | Build a flake attribute for Linux — the trailing `false` skips the R2 push |
@@ -251,6 +252,15 @@ error: Cannot build '…-ponysay-….drv'.
        Required system: 'x86_64-linux'
        Current system: 'aarch64-darwin'
 ```
+
+**`--rebuild` proves the platform gap, never the builder.** Check builds decline
+the build hook and must run locally, so this command reports `platform mismatch`
+*even when a Linux builder is configured and working*. Measured 2026-08-24, twice
+in the same minute against the same derivation: without `--rebuild` it built on
+the container and was copied back from `ssh-ng://root@nix-linux-builder-x86_64`;
+with `--rebuild` it failed with the message above. Passing `--builders` explicitly
+or aiming at a private `--store` changes nothing. To check delegation, use the
+probe in "The Linux builder (Docker)" instead.
 
 The two obvious remedies are still closed:
 
@@ -695,7 +705,24 @@ just daemon-restart      # sudo launchctl kickstart -k system/systems.determinat
 ```
 
 After that, a plain `nix build .#nixosConfigurations.<host>.config.system.build.toplevel`
-works on the Mac — **provided the container is running**. This module starts
+works on the Mac — **provided the container is running**. To verify delegation
+itself, build something no cache can hold, and watch where the path comes from:
+
+```console
+$ just linux-builder-probe
+→ building delegation-probe-20260824-135833 for x86_64-linux — watch for 'copying path … from ssh-ng://'
+copying path '/nix/store/…-delegation-probe-20260824-135833' from 'ssh-ng://root@nix-linux-builder-x86_64'
+/nix/store/…-delegation-probe-20260824-135833
+x86_64
+Linux
+```
+
+The recipe names the derivation after the current second, because an existing
+output is reused and proves nothing, and prints the built file so a silent
+fallback cannot pass as success. `linux-builder-status` does **not** answer this
+question — it only proves the container answers ssh from your own account, not
+that the root daemon delegates to it. Do **not** reach for `nix build --rebuild`
+here — see the `--rebuild` note in "The IONOS VPS (NixOS)". This module starts
 nothing; genuine on-demand start would need a launchd-socket-activated proxy and
 was deliberately left out.
 

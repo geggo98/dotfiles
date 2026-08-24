@@ -766,6 +766,29 @@ linux-builder-gc arch="x86_64" max_gb="25":
 linux-builder-shell arch="x86_64":
     {{ LINUX_BUILDER }} shell --arch {{ arch }}
 
+# Answers "does the nix-daemon actually delegate?", which `linux-builder-status`
+# cannot: that only proves the container answers ssh from THIS user. The probe
+# derivation is named after the current second, because an existing output would
+# be reused and prove nothing, and no cache can hold a name minted just now.
+#
+# Do NOT use `nix build --rebuild` for this. Check builds decline the build hook
+# and must run locally, so they report `platform mismatch` even while delegation
+# works — measured 2026-08-24, twice in the same minute on one derivation.
+#
+# Prove that Linux builds are delegated to the builder, not just substituted
+linux-builder-probe arch="x86_64":
+    #!/bin/zsh
+    set -euo pipefail
+    system="{{ arch }}-linux"
+    name="delegation-probe-$(date +%Y%m%d-%H%M%S)"
+    echo "→ building $name for $system — watch for 'copying path … from ssh-ng://'" >&2
+    outpath=$(nix build --impure --no-link --print-out-paths --expr \
+        "(builtins.getFlake \"nixpkgs\").legacyPackages.${system}.runCommand \"${name}\" {} \"{ uname -m; uname -s; } > \$out\"")
+    echo "$outpath"
+    # The build ran wherever the daemon put it; the output says which kernel and
+    # machine that was, so a silent fallback cannot pass as success.
+    cat "$outpath"
+
 # Runs on THIS machine and reads the builder over ssh-ng, so the R2 write key
 # never enters the container — the same reasoning as cache-seed-remote above.
 # `--seed` is what keeps it cheap: it HEADs cache.nixos.org for every path in
