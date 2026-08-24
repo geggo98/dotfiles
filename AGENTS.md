@@ -10,7 +10,10 @@ The repository follows the **Dendritic Pattern** for Nix flake structure — use
 
 **Current Hosts:**
 - `FCX19GT9XR` - Personal Mac (user: `stefan`)
-- `DKL6GDJ7X1` - Work Mac (user: `stefan.schwetschke`)
+- `DKL6GDJ7X1` - Work Mac (user: `stefan.schwetschke`). Holds the CHECK24 work credentials
+  (`jira_*`, `confluence_*`, `absence_io_*`, `c24_bi_kfz_*`) in
+  `hosts/DKL6GDJ7X1/secrets.enc.yaml`, and is the only host with
+  `my.ai.atlassian.enable`
 - `p-ion-berlin-xs56r6` - IONOS Core VPS, `x86_64-linux` (NixOS). Named per
   `infra/Naming.md`; was `ionos-vps` until 2026-08-18. Not a darwin host: it is
   selected by name rather than hardware serial and is **not** applied with
@@ -761,7 +764,7 @@ Each module defines a single aspect across all relevant configuration classes (d
 | `git.nix` | Git configuration via `flake.modules.homeManager.git` |
 | `neovim.nix` | Neovim (nvf) in two variants: `homeManager.neovim` (workstation, every `languages.*` enabled) and `homeManager.neovim-server` (same editor, no language toolchains). See "Neovim: why there are two variants" |
 | `packages.nix` | Common packages via `flake.modules.homeManager.packages` |
-| `mcp-servers.nix` | Claude Code MCP server wrappers via `flake.modules.homeManager.mcp-servers` |
+| `mcp-servers.nix` | Claude Code MCP server wrappers + the deployed skill tree via `flake.modules.homeManager.mcp-servers`. `my.ai.atlassian.enable` gates the Atlassian server and the `jira`/`bitbucket-pr` skills onto the work host |
 | `secrets.nix` | SOPS secret declarations and per-host secret merging (**home-manager only** — servers use `nixos-secrets.nix`) |
 | `nixos-wiring.nix` | Defines `configurations.nixos` (module + `deployTarget`) and wires it to `flake.nixosConfigurations` and `flake.deployTargets` |
 | `nixos-base.nix` | Baseline for every NixOS host: sshd, root's authorized keys, the lockout assertions, serial getty, nix settings, GC |
@@ -1150,10 +1153,84 @@ Two traps, both paid for once:
   *before* declaring it, or the tree does not build. The comparison-by-hand above
   is only needed for servers.
 
+### Moving a secret between SOPS files
+
+Host-scoping a credential — global `secrets/secrets.enc.yaml` → `hosts/<serial>/secrets.enc.yaml`
+— is four steps in a fixed order, and **`sops edit` is not one of them.** `sops`
+has `set` and `unset`, so the whole move is scriptable and no editor opens at all:
+
+```bash
+sops -d --extract '["k"]' "$SRC" \
+  | python3 -c 'import json,sys; sys.stdout.write(json.dumps(sys.stdin.buffer.read().decode()))' \
+  | sops set --value-stdin "$DST" '["k"]'
+sops unset "$SRC" '["k"]'
+```
+
+Three details in those two commands each cost a measurement:
+
+- **`--value-stdin` wants JSON, and says so when it doesn't get it.** Fed the raw
+  value it aborts with `Value for --set is not valid JSON` — loudly, never
+  truncating. Hence the `json.dumps`. `--value-file` behaves the same and both
+  exist for one reason: passing the value as an *argument* would put the secret in
+  the process list.
+- **Pipe the value; never `v=$(sops -d …)`.** Command substitution strips trailing
+  newlines, which silently corrupts any multi-line value — the
+  `c24_bi_kfz_*.json` service accounts are 12 lines each.
+- **`--idempotent` on both** makes the loop resumable, which the rules under *Any
+  script that processes a list must be resumable* require anyway.
+
+**The order is not stylistic.** Each step is safe to stop after:
+
+1. **`.sops.yaml` first, then `sops updatekeys -y <dst>`.** `sops set` inherits the
+   key groups of the **file**, not the creation rule, so a rule fixed afterwards
+   leaves the new values encrypted to the old recipient set in the meantime.
+   `-y` is required — without it sops asks `Is this okay? (y/n)` and dies on EOF.
+   `updatekeys` re-encrypts only the data key; the values stay byte-identical.
+2. **Copy the values.** Both files now hold them; nothing is broken, nothing is
+   deployed differently yet.
+3. **Flip the declarations** (`modules/secrets.nix` → `hosts/<serial>/secrets.nix`),
+   atomically. The reverse order fails: the home-manager class validates the
+   manifest at **build** time, so a declaration without a value breaks `just build`
+   with `manifest is not valid: … the key '<x>' cannot be found`.
+4. **Only then `sops unset` from the source** — and make the delete predicate
+   "the destination's decrypted value hashes the same as the source's, right now",
+   not "I copied it earlier". An interrupted copy fails that check.
+
+Two things this does **not** buy, both worth stating before someone relies on them:
+
+- **It scopes deployment, not readability.** Every rule in `.sops.yaml` carries the
+  same pair of `age1…` recipients, and their private halves sit on both
+  workstations — measured: `sops -d hosts/FCX19GT9XR/secrets.enc.yaml` succeeds
+  from DKL6GDJ7X1, whose SSH key is not among that file's `ssh-ed25519` recipients
+  and whose GPG keyring holds neither of its PGP fingerprints. What changes is
+  which host writes the value into `~/.config/sops-nix/secrets`.
+- **The other host keeps the stale files until it is switched.** sops-nix removes
+  what it no longer manages during activation, not before.
+
+**Watch for Nix-side references.** A secret consumed only at runtime
+(`load_from_secret`, a skill reading `$SOPS_SECRETS_DIR`) moves freely. One that a
+module dereferences as `config.sops.secrets.<name>.path` does not: that is an
+**eval** error where it is undeclared, so a host-specific secret referenced from a
+module both hosts import — `modules/shells.nix` via `homeManager.base` is the live
+example — breaks the *other* host's build. Grep before moving:
+
+```bash
+grep -rn --include='*.nix' 'sops\.secrets\.' modules/
+```
+
 ### Adding an MCP Server
 
 1. Add shell wrapper and server entry in `modules/mcp-servers.nix` (follow existing patterns)
 2. Ensure secret loading logic uses `$XDG_CONFIG_HOME/sops-nix/secrets`
+3. If it needs a credential only one host declares, gate it rather than shipping a
+   server that cannot start. `mcpServerPkgs` feeds four sinks — the claude-code,
+   opencode and codex configs plus `home.packages` — so a second module cannot
+   simply merge into it: the codex path bakes its TOML in one activation script.
+   `atlassian` is the worked example: an option declared by a small imported
+   module (`imports` may sit beside bare config attributes, `options` may not),
+   `lib.optionalAttrs` on the package set, and `lib.cleanSourceWith` dropping the
+   matching skill directories. `modules/hosts/DKL6GDJ7X1.nix` sets
+   `my.ai.atlassian.enable = true`; the default is off.
 
 ### The iTerm2 Web profile carries its DuckDuckGo settings in the URL
 
