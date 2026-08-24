@@ -6,7 +6,7 @@ This file provides guidance to AI coding agents when working with code in this r
 
 This is a Nix-darwin configuration repository for managing macOS systems (Stefan Schwetschke's personal dotfiles). It uses Nix flakes, flake-parts, nix-darwin, Home Manager, and Determinate Nix for declarative system configuration on Apple Silicon Macs.
 
-The repository follows the **Dendritic Pattern** for Nix flake structure — use the `/nix-dendritic-pattern` skill for detailed guidance on creating and modifying modules.
+The repository follows the **Dendritic Pattern** for Nix flake structure — use the `/dendritic-nix` skill for detailed guidance on creating and modifying modules.
 
 **Current Hosts:**
 - `FCX19GT9XR` - Personal Mac (user: `stefan`)
@@ -739,7 +739,7 @@ the hook ran.
 
 ### Dendritic Pattern with flake-parts
 
-This repository uses the **Dendritic Pattern**: every file in `./modules/` is a flake-parts module organized by feature (aspect), not by configuration class. The `/nix-dendritic-pattern` skill provides full documentation on this pattern.
+This repository uses the **Dendritic Pattern**: every file in `./modules/` is a flake-parts module organized by feature (aspect), not by configuration class. The `/dendritic-nix` skill provides full documentation on this pattern.
 
 ### Entry Point
 - **`flake.nix`** - Uses `flake-parts.lib.mkFlake` and auto-imports all modules via `import-tree ./modules`
@@ -803,7 +803,7 @@ Host-specific secrets declarations live in **`hosts/<serial>/secrets.nix`**.
 - **Host naming:** see "Host and DNS naming" below — Macs mirror their serial exactly
   (`FCX19GT9XR`, `DKL6GDJ7X1`), everything else follows the scheme in `infra/Naming.md`
 - **Format before committing:** `just fmt` or `nix run nixpkgs#nixpkgs-fmt -- <files>`
-- **Module pattern:** Each module file exports `flake.modules.<class>.<name>` — see `/nix-dendritic-pattern` skill
+- **Module pattern:** Each module file exports `flake.modules.<class>.<name>` — see `/dendritic-nix` skill
 
 ### Host and DNS naming
 
@@ -1062,7 +1062,7 @@ returns 401 and looks exactly like a dead credential.
 
 ### Adding a New Module
 
-Use the `/nix-dendritic-pattern` skill for guidance. In short:
+Use the `/dendritic-nix` skill for guidance. In short:
 
 1. Create `modules/<aspect>.nix`
 2. Export `flake.modules.<class>.<name>` (e.g. `flake.modules.homeManager.my-feature`)

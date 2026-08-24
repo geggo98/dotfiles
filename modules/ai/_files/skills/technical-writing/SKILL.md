@@ -1,5 +1,5 @@
 ---
-name: writing-clearly-and-concisely
+name: technical-writing
 description: "Use when writing documentation, commit messages, error text, explanations, reports, or summaries. Applies especially to Jira tickets, pull request descriptions, and review comments: always start these with a TL;DR summary. Combines Strunk, ASD-STE100 (Simplified Technical English), and ISO 24495-1 (plain language), for English and German text. Triggers: writing human-readable content, verbose text, unclear explanations, Jira tickets, pull requests, review comments."
 allowed-tools: Read(references/*) Bash(zsh *) Read
 ---

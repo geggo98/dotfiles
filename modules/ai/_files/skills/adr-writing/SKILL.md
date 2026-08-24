@@ -141,7 +141,7 @@ Forbidden without justification:
 
 ## Integration with Other Skills
 
-- writing-clearly-and-concisely: Apply to ADR prose
+- technical-writing: Apply to ADR prose
 - tracing-knowledge-lineages: Review existing ADRs before creating new ones
 
 ## When Not to Use ADRs
