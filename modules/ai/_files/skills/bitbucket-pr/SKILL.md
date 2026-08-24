@@ -1,7 +1,6 @@
 ---
 name: bitbucket-pr
 description: "Read and manage Bitbucket Cloud pull requests, comments, and tasks via the `bb` CLI (gildas/bitbucket-cli v0.18.1+). Use when reviewing PR feedback, replying to comments, creating tasks/PRs, or marking review tasks done. Also bridges JIRA issues to their linked Bitbucket PRs/branches/repos via Jira's dev-status API — find the PR(s) for a JIRA key (e.g. JIRA-1234), even in repos that aren't cloned locally."
-context: fork
 allowed-tools: Bash(./scripts/bitbucket_pr.sh *) Bash(./scripts/bitbucket_pr_comments.sh *) Bash(./scripts/bitbucket_pr_tasks.sh *) Bash(./scripts/bitbucket_jira.sh *) Bash(./scripts/bitbucket_pr_reviewers.py *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_comments.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_tasks.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_jira.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_reviewers.py *) Bash(zsh *)
 dependencies: "bb (Bitbucket CLI, installed via Nix on this host), jq, curl (JIRA bridge), uv (runs the reviewer REST helper bitbucket_pr_reviewers.py — httpx/pyyaml, pinned in its .py.lock). REST credentials reuse bb's config-cli.yml profile (or BITBUCKET_USER / BITBUCKET_APP_PASSWORD). JIRA bridge credentials: jira_url / jira_username / jira_api_token via env (JIRA_URL, JIRA_USERNAME, JIRA_API_TOKEN / ATLASSIAN_API_TOKEN) or files in ~/.config/sops-nix/secrets"
 ---
