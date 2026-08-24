@@ -1,7 +1,7 @@
 ---
 name: bitbucket-pr
 description: "Read and manage Bitbucket Cloud pull requests, comments, and tasks via the `bb` CLI (gildas/bitbucket-cli v0.18.1+). Use when reviewing PR feedback, replying to comments, creating tasks/PRs, or marking review tasks done. Also bridges JIRA issues to their linked Bitbucket PRs/branches/repos via Jira's dev-status API — find the PR(s) for a JIRA key (e.g. JIRA-1234), even in repos that aren't cloned locally."
-allowed-tools: Bash(./scripts/bitbucket_pr.sh *) Bash(./scripts/bitbucket_pr_comments.sh *) Bash(./scripts/bitbucket_pr_tasks.sh *) Bash(./scripts/bitbucket_jira.sh *) Bash(./scripts/bitbucket_pr_reviewers.py *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_comments.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_tasks.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_jira.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_reviewers.py *) Bash(zsh *)
+allowed-tools: Bash(./scripts/bitbucket_pr.sh *) Bash(./scripts/bitbucket_pr_comments.sh *) Bash(./scripts/bitbucket_pr_tasks.sh *) Bash(./scripts/bitbucket_jira.sh *) Bash(./scripts/bitbucket_pr_reviewers.py *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_comments.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_tasks.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_jira.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_reviewers.py *) Bash(zsh *) Skill(technical-writing)
 dependencies: "bb (Bitbucket CLI, installed via Nix on this host), jq, curl (JIRA bridge), uv (runs the reviewer REST helper bitbucket_pr_reviewers.py — httpx/pyyaml, pinned in its .py.lock). REST credentials reuse bb's config-cli.yml profile (or BITBUCKET_USER / BITBUCKET_APP_PASSWORD). JIRA bridge credentials: files jira_url / jira_username / jira_api_token in ~/.config/sops-nix/secrets, overridable per invocation via JIRA_URL / JIRA_USERNAME / JIRA_API_TOKEN"
 ---
 
@@ -99,7 +99,14 @@ MD
 #### PR description conventions (attribution & prompt reference)
 
 When **you (the agent) create a PR via `create`** (or replace its description via
-`update`), compose the body as usual, then apply these conventions:
+`update`), compose the body, then apply these conventions.
+
+> **Write the prose with `Skill(technical-writing)`.** It names pull request
+> descriptions explicitly and asks for a **TL;DR summary first** — which matters
+> more here than in most places, because a reviewer decides whether to open the
+> diff from the description alone. Load it before composing, not after:
+> rewriting a finished description into a summary-first one is more work than
+> writing it that way.
 
 **Attribution footer (on by default, opt-out).** Make the **very last line** of
 the description a single footer line: a robot emoji plus a note that the PR was
@@ -161,6 +168,12 @@ Clarifications:
 > bite when calling `bb pr create/update --description "..."` inline.
 
 ### Comments
+
+> **Review comments and task text are prose too** — use
+> `Skill(technical-writing)` for anything you post here. The skill names review
+> comments explicitly, and its TL;DR-first rule applies to any comment long
+> enough to have a point buried in it. It covers German and English, so match
+> the thread's language rather than switching to English.
 
 ```bash
 # All comments on a PR — JSON filtered to {id, content, inline}

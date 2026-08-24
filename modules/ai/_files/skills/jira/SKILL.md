@@ -14,7 +14,7 @@ description: >
   or edit a description or comment body, upload/embed/delete attachment, add/remove labels,
   link issues, search JQL, resolve an assignee, or undo a prior change.
 argument-hint: "[--write|--dangerous] <command> [args...] | help"
-allowed-tools: Read(references/*) Bash(./scripts/jira.sh *) Bash(zsh *) Read
+allowed-tools: Read(references/*) Bash(./scripts/jira.sh *) Bash(zsh *) Skill(technical-writing) Read
 dependencies: "uv, gtimeout"
 ---
 
@@ -75,6 +75,8 @@ $J users bob --issue JIRA-3052           # assignable-user search (paged + cache
 $J undo --list --issue JIRA-3052         # list undoable journal entries
 
 # --- write (need --write) ---
+# Ticket summaries, descriptions and comments are prose that other people read:
+# write them with Skill(technical-writing) — see "Writing the prose" below.
 $J --write transition JIRA-3052 "In Code Review"   # any status, by name, idempotent
 $J --write transition JIRA-3052 61                  # or by transition id
 printf '%s' "<wiki body>" | $J --write comment JIRA-3052 -   # body via stdin (no escaping)
@@ -247,7 +249,27 @@ documented for humans in [`references/workflow.md`](references/workflow.md):
 `Open, Backlog, To Do, In Progress, In Code Review, In QA, In Test PM, Ready for Release,
 Done, Closed` (`In Review` is a decoupled legacy status — no global transition reaches it).
 
+## Writing the prose
+
+Everything this skill posts — summaries, descriptions, comments — is read by
+colleagues, not by a machine. Compose it with **`Skill(technical-writing)`**,
+which names **JIRA tickets** explicitly and asks for a **TL;DR summary first**.
+
+Two reasons it matters more here than in most places:
+
+- A JIRA description is often read once, by someone deciding whether the ticket
+  concerns them. If the point is in the last paragraph, it is not read.
+- Descriptions and comments here are **wiki markup**, and long bodies go through
+  `--file` / `--output` round-trips (see "Long fields" above). Restructuring a
+  finished body into a summary-first one after the fact means another
+  read-edit-write cycle, so load the skill before writing, not after.
+
+It covers German and English: match the language the ticket is already in
+rather than switching.
+
 ## Related skills
 
+- **`technical-writing`**: how to write the summaries, descriptions and comments
+  this skill posts. TL;DR first — see "Writing the prose" above.
 - **`bitbucket-pr`**: JIRA ↔ Bitbucket bridge (linked PRs/branches/repos for a ticket) and
   PR management. Shares this skill's credential chain.
