@@ -1,6 +1,6 @@
 ---
 name: web-browser
-description: "Fast browser automation for AI agents via the agent-browser CLI. Use for navigating web pages, filling forms, clicking, taking screenshots, extracting data, testing web apps, login flows, persistent sessions, video recording, React tree inspection, and exploratory QA / dogfooding (systematic bug hunts with reproduction evidence). Chrome/Chromium via CDP with accessibility-tree snapshots and compact @eN element refs. Triggers: open a URL, fill a form, click a button, scrape a page, take a screenshot, test a web app, dogfood / QA / bug-hunt a site. Pass --aws-agent-core to run against AWS Bedrock AgentCore cloud browsers instead of local Chrome (credentials auto-loaded from sops-nix secrets when available). Also automates Electron desktop apps (VS Code, Slack desktop, Discord, Figma, Notion, Spotify) — for those load the electron-ui skill; for Slack workflows specifically load slack-ui."
+description: "Fast browser automation for AI agents via the agent-browser CLI. Use for navigating web pages, filling forms, clicking, taking screenshots, extracting data, testing web apps, login flows, persistent sessions, video recording, React tree inspection, and exploratory QA / dogfooding (systematic bug hunts with reproduction evidence). Chrome/Chromium via CDP with accessibility-tree snapshots and compact @eN element refs. Triggers: open a URL, fill a form, click a button, scrape a page, take a screenshot, test a web app, dogfood / QA / bug-hunt a site. Pass --aws-agent-core to run against AWS Bedrock AgentCore cloud browsers instead of local Chrome (credentials come from the standard AWS CLI chain, i.e. ~/.aws/*). Also automates Electron desktop apps (VS Code, Slack desktop, Discord, Figma, Notion, Spotify) — for those load the electron-ui skill; for Slack workflows specifically load slack-ui."
 argument-hint: "<task description or URL>"
 allowed-tools: Read(references/*) Read(templates/*) Bash(./scripts/web-browser.sh *) Bash(zsh *) Bash(camoufox-driver *) Skill(electron-ui) Skill(slack-ui) Read
 dependencies: "agent-browser, gtimeout, camoufox-driver"
@@ -338,10 +338,16 @@ agent-browser dialog dismiss
 Pass `--aws-agent-core` to run the same workflows against AWS Bedrock
 AgentCore cloud browsers instead of local Chrome. The wrapper automatically:
 
-1. Loads `AWS_*` and `AGENTCORE_*` env vars from `~/.config/sops-nix/secrets/`
-   (lowercase snake_case filenames — e.g. `aws_access_key_id`,
-   `agentcore_region`) **only if they are not already set in the environment**.
+1. Reports the region and the identity the run will use, so a stray
+   `AWS_PROFILE` cannot silently redirect it at another AWS account.
 2. Prepends `-p agentcore` to the command.
+
+Credentials come from the **standard AWS CLI chain** — `~/.aws/config` and
+`~/.aws/credentials`, both written by sops-nix (`modules/secrets.nix`) — or from
+`AWS_*` environment variables if you set them. The wrapper loads no secrets of
+its own. (It used to claim it read `aws_access_key_id` and friends from
+`~/.config/sops-nix/secrets/`; those files never existed and the code was a
+no-op.)
 
 ```bash
 ${CLAUDE_SKILL_DIR}/scripts/web-browser.sh --aws-agent-core open https://example.com

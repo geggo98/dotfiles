@@ -16,21 +16,18 @@ cleanup() {
 
 SCRIPT_DIR="${0:A:h}"
 AGENT_BROWSER="${AGENT_BROWSER:-agent-browser}"
-SECRETS_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/sops-nix/secrets"
-
-# Load env var from sops-nix secrets if not already set and the file exists.
-# Silent on missing secrets — agent-browser falls back to the AWS CLI / SSO chain.
-load_from_secret() {
-  local var_name="$1" file_name="$2"
-  local current_val="${(P)var_name-}"
-  if [[ -z "$current_val" && -r "${SECRETS_DIR}/${file_name}" ]]; then
-    local val
-    val="$(<"${SECRETS_DIR}/${file_name}")"
-    if [[ -n "$val" ]]; then
-      export "${var_name}=${val}"
-    fi
-  fi
-}
+# AWS credentials deliberately have NO sops-nix lookup here.
+#
+# There used to be one — eight load_from_secret calls for aws_access_key_id,
+# aws_session_token, agentcore_region and friends. Every one of them was dead:
+# none of those files has ever existed, and none is declared in
+# modules/secrets.nix. What actually works is the standard AWS CLI chain, fed by
+# ~/.aws/config and ~/.aws/credentials, which sops-nix writes directly
+# (modules/secrets.nix). agent-browser reads that chain itself, so this script
+# has nothing to load and no secret to hold.
+#
+# AGENTCORE_* remain plain environment variables with documented defaults
+# (us-east-1, aws.browser.v1, 3600) — see references/aws-agentcore.md.
 
 timeout="5m"
 silent=false
@@ -66,14 +63,24 @@ case "$engine" in
 esac
 
 if $aws_agent_core; then
-  load_from_secret AWS_ACCESS_KEY_ID         aws_access_key_id
-  load_from_secret AWS_SECRET_ACCESS_KEY     aws_secret_access_key
-  load_from_secret AWS_SESSION_TOKEN         aws_session_token
-  load_from_secret AWS_PROFILE               aws_profile
-  load_from_secret AGENTCORE_REGION          agentcore_region
-  load_from_secret AGENTCORE_BROWSER_ID      agentcore_browser_id
-  load_from_secret AGENTCORE_PROFILE_ID      agentcore_profile_id
-  load_from_secret AGENTCORE_SESSION_TIMEOUT agentcore_session_timeout
+  # Say which identity this run will bill and act as, before doing either.
+  #
+  # AWS_PROFILE is inherited, not chosen here, and sops-nix writes the *C24 work*
+  # profile into ~/.aws/credentials — so a stray AWS_PROFILE from a direnv or an
+  # earlier command silently redirects AgentCore at another identity. The
+  # justfile hits the same hazard with Pulumi and unsets the variable; that is
+  # right there, where explicit static keys are injected and must not be
+  # overridden. Here the profile *is* the credential source, so unsetting it
+  # would break a deliberate choice. Report it instead: visible beats silent,
+  # and the fix stays in the caller's hands.
+  if [[ -n "${AWS_ACCESS_KEY_ID:-}" ]]; then
+    identity="static key ${AWS_ACCESS_KEY_ID:0:4}… from \$AWS_ACCESS_KEY_ID"
+  elif [[ -n "${AWS_PROFILE:-}" ]]; then
+    identity="profile '${AWS_PROFILE}' (from \$AWS_PROFILE)"
+  else
+    identity="profile 'default' (~/.aws/config)"
+  fi
+  $silent || print -u2 "agentcore: region ${AGENTCORE_REGION:-us-east-1}, ${identity}"
   args=(-p agentcore "${args[@]}")
 fi
 

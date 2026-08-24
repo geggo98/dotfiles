@@ -24,16 +24,29 @@ Resolved automatically (in priority order):
 
 ## Environment Variables
 
-| Variable                    | Sops-nix file              | Description                                              | Default      |
-|-----------------------------|----------------------------|----------------------------------------------------------|--------------|
-| `AWS_ACCESS_KEY_ID`         | `aws_access_key_id`        | Access key                                               | (CLI fallback) |
-| `AWS_SECRET_ACCESS_KEY`     | `aws_secret_access_key`    | Secret key                                               | (CLI fallback) |
-| `AWS_SESSION_TOKEN`         | `aws_session_token`        | STS session token (optional)                             | —            |
-| `AWS_PROFILE`               | `aws_profile`              | Named CLI profile                                        | `default`    |
-| `AGENTCORE_REGION`          | `agentcore_region`         | AWS region                                               | `us-east-1`  |
-| `AGENTCORE_BROWSER_ID`      | `agentcore_browser_id`     | Browser identifier                                       | `aws.browser.v1` |
-| `AGENTCORE_PROFILE_ID`      | `agentcore_profile_id`     | Persistent browser profile (cookies, localStorage)       | (none)       |
-| `AGENTCORE_SESSION_TIMEOUT` | `agentcore_session_timeout`| Session timeout in seconds                               | `3600`       |
+| Variable                    | Description                                              | Default      |
+|-----------------------------|----------------------------------------------------------|--------------|
+| `AWS_ACCESS_KEY_ID`         | Access key                                               | (CLI chain)  |
+| `AWS_SECRET_ACCESS_KEY`     | Secret key                                               | (CLI chain)  |
+| `AWS_SESSION_TOKEN`         | STS session token (optional)                             | —            |
+| `AWS_PROFILE`               | Named CLI profile                                        | `default`    |
+| `AGENTCORE_REGION`          | AWS region                                               | `us-east-1`  |
+| `AGENTCORE_BROWSER_ID`      | Browser identifier                                       | `aws.browser.v1` |
+| `AGENTCORE_PROFILE_ID`      | Persistent browser profile (cookies, localStorage)       | (none)       |
+| `AGENTCORE_SESSION_TIMEOUT` | Session timeout in seconds                               | `3600`       |
+
+**There is no sops-nix column, deliberately.** An earlier version of this table
+listed a file per variable (`aws_access_key_id`, `agentcore_region`, …). None of
+those files ever existed, none was declared in `modules/secrets.nix`, and the
+eight lookups in `web-browser.sh` were permanent no-ops. AWS credentials reach
+this tool through `~/.aws/config` and `~/.aws/credentials`, which sops-nix writes
+directly — that is the whole mechanism.
+
+`web-browser.sh --aws-agent-core` prints the region and the identity in use
+before it starts, because `AWS_PROFILE` is inherited from the surrounding shell
+and sops-nix writes the *work* profile into `~/.aws/credentials`: a leftover
+`AWS_PROFILE` would otherwise redirect the session at another account without a
+word.
 
 ## Persistent Profiles
 
