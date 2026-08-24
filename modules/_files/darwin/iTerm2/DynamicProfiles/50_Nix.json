@@ -620,7 +620,7 @@
       "Dynamic Profile Parent Name": "Nix (Dracula black)",
       "Guid": "C4EC1D55-30EC-4DD4-9E24-7E2CF68DB4AE",
       "Custom Command": "Browser",
-      "Initial URL": "https:\/\/duckduckgo.com\/",
+      "Initial URL": "https:\/\/start.duckduckgo.com\/?kae=t&kbi=1&kp=-2&kpsb=-1",
       "Shortcut": "C",
       "Icon": 1,
       "Show Status Bar": false,
