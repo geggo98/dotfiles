@@ -1002,6 +1002,45 @@ Include host IDs and commands executed in commit body when relevant. Iterate wit
 
 ## Secrets & Configuration Tips
 
+### One env name, one file — and export as few secret values as possible
+
+**Files are the default source. An environment variable is a deliberate manual
+override.** Two rules follow, and both were paid for.
+
+**A credential chain gets exactly one env name and one file.** No generic
+aliases, no cross-product fallback tiers. Measured 2026-08-24: `modules/shells.nix`
+exported `ATLASSIAN_API_TOKEN` into every shell holding the *Bitbucket* token,
+while the `jira` and `bitbucket-pr` skills consulted **every env name before any
+file** — so the dead alias outranked the correct `jira_api_token` file and every
+Jira call failed. Both skills were dead in any interactive shell for weeks.
+
+The symptom is what makes this worth a section: **Jira answers 404, not 401**, on
+an issue endpoint when the token is invalid, because it hides issue existence
+from unauthenticated callers. `prs JIRA-3325` reported *"Jira resource not
+found"* for a ticket that exists. Reordering the tiers would only postpone the
+next instance, so the alias tier is gone; both scripts now also print **which
+source** the token came from on 401/404, never the token.
+
+**`modules/shells.nix` exports no secret VALUES at all** — only `*_PATH`. Every
+consumer in this repo reads its sops-nix file through `load_from_secret`
+(`modules/_files/shell/load-secrets.sh`), so the ambient copy bought nothing and
+cost plenty: a globally exported secret lands in every child process, `env` dump,
+crash report and agent transcript. Tools with no file-based key store of their
+own (`llm`, `ollama`) get a same-named wrapper in `modules/ai-tools.nix` that
+loads the key per invocation instead. Adding a secret value back to `shells.nix`
+needs a reason a wrapper cannot serve.
+
+**Atlassian tokens, specifically.** The classic `ATATT3…` tokens used here are
+**unscoped** — they carry the user's full Jira/Confluence permissions — they
+**expire**, and they are **not Bitbucket credentials**: the Bitbucket REST API
+rejects them as a category ("API Token provided has no Bitbucket scopes" means
+the wrong *kind* of credential, not a missing scope; Bitbucket goes through `bb`
+and its own `config-cli.yml`). The token is opaque, so nothing can read its
+expiry — `just creds-check` probes instead. Note the two products do **not**
+share an auth scheme: Jira Cloud is Basic (email + token), while the
+self-hosted Confluence (Data Center) needs **Bearer**. Guessing wrong
+returns 401 and looks exactly like a dead credential.
+
 - **Location:** `secrets/secrets.enc.yaml` (global), `hosts/<serial>/secrets.enc.yaml` (per-host)
 - **Decryption keys:** SSH Ed25519 key at `~/.ssh/id_ed25519_sops_nopw` (passwordless)
 - **Secrets declaration:** In `modules/secrets.nix` and `hosts/<serial>/secrets.nix`
