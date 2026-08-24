@@ -272,7 +272,7 @@ Determinate daemon reads the `post-build-hook` setting at startup and
 `darwin-rebuild switch` does not restart it, so the new hook is inert until
 
 ```bash
-sudo launchctl kickstart -k system/systems.determinate.nix-daemon
+just daemon-restart   # sudo launchctl kickstart -k system/systems.determinate.nix-daemon
 ```
 
 Rotation is handled by macOS' own `newsyslog` via `/etc/newsyslog.d/`, capped at
@@ -353,7 +353,7 @@ So the rules for any repeat:
   switch (or any change to `nix-cache-push`) the `post-build-hook` only becomes
   active once the daemon restarts:
   ```bash
-  sudo launchctl kickstart -k system/systems.determinate.nix-daemon   # or reboot
+  just daemon-restart   # sudo launchctl kickstart -k …nix-daemon, or reboot
   ```
   Substituter (pull) settings are read per client invocation and need no restart.
 - **Fresh machine (disaster recovery):** the first `just switch` on a

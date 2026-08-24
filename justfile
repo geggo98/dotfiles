@@ -1,7 +1,8 @@
 # Nix-darwin configuration tasks
 # Recipes are sandbox-safe for LLM agents (no sudo, non-destructive) EXCEPT
-# `switch` / `switch-host`, which apply the system config with sudo — run those
-# interactively yourself, not from an agent.
+# `switch` / `switch-host`, which apply the system config, and `daemon-restart`,
+# which restarts the nix-daemon — all three use sudo, so run them interactively
+# yourself, not from an agent.
 
 # Pass recipe arguments to shebang recipes as real positional params ($@/$1…),
 # so variadic wrappers (e.g. `pulumi`) can forward them via "$@" without the
@@ -47,7 +48,7 @@ build-host host: _check-untracked
     set -euo pipefail   # see the note on `build` — without it `| ts` eats failures
     time nix build '.#darwinConfigurations.{{ host }}.system' --keep-going --keep-failed | ts
 
-# --- Apply configuration (needs sudo; interactive — NOT agent-safe) ---
+# --- Apply configuration, restart the daemon (needs sudo; interactive — NOT agent-safe) ---
 
 # Apply THIS host's configuration. Selects the flake attr by hardware serial
 # (IOPlatformSerialNumber) so a transiently drifted LocalHostName — macOS's
@@ -71,6 +72,35 @@ switch *args:
 # Apply a SPECIFIC host by name, e.g. `just switch-host DKL6GDJ7X1`
 switch-host host:
     sudo darwin-rebuild switch --flake ".#{{ host }}"
+
+# Needed after a switch that changes a setting the daemon reads only at STARTUP,
+# because `darwin-rebuild switch` writes the config without restarting it. Two
+# such settings live in this repo: the R2 `post-build-hook` (modules/nix-cache.nix)
+# and the Linux builders registered via `determinateNix.buildMachines`
+# (modules/linux-builder.nix). Both fail SILENTLY until the restart — nothing is
+# pushed, nothing is delegated, and no error says why — so restart rather than
+# wait for a diagnosis.
+#
+# Restart the Determinate nix-daemon (after enabling the R2 hook or a builder)
+daemon-restart:
+    #!/bin/zsh
+    set -euo pipefail
+    echo "→ sudo launchctl kickstart -k system/systems.determinate.nix-daemon" >&2
+    sudo launchctl kickstart -k system/systems.determinate.nix-daemon
+    # `kickstart -k` returns once launchd has signalled the restart, not once the
+    # daemon serves again — so ask the daemon itself instead of trusting the exit
+    # code. Same reasoning as the builder's SSH handshake wait: a control plane
+    # answering is not the service being ready.
+    for i in {1..20}; do
+        if nix store info --store daemon >/dev/null 2>&1; then
+            nix store info --store daemon
+            exit 0
+        fi
+        sleep 0.5
+    done
+    echo "nix-daemon did not answer within 10s." >&2
+    echo "Inspect it with: launchctl print system/systems.determinate.nix-daemon" >&2
+    exit 1
 
 # Run flake checks
 check: _check-untracked
@@ -613,7 +643,7 @@ cache-log filter="":
     if [ ! -f "$log" ]; then
         echo "$log does not exist yet." >&2
         echo "The hook only starts writing after a switch AND a daemon restart:" >&2
-        echo "  sudo launchctl kickstart -k system/systems.determinate.nix-daemon" >&2
+        echo "  just daemon-restart" >&2
         exit 1
     fi
     if [ -z "{{ filter }}" ]; then

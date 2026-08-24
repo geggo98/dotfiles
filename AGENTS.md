@@ -18,7 +18,7 @@ The repository follows the **Dendritic Pattern** for Nix flake structure — use
 
 ## Build, Test, and Development Commands
 
-A `justfile` provides safe, pre-approved commands that agents can run without user approval. Raw `nix` and `darwin-rebuild` commands require user approval. The **only** exceptions in the justfile are `just switch` / `just switch-host`, which apply the system config with `sudo` — these are for the user to run interactively, not agents. `just switch` is also the *only* supported way to apply the config: it selects the flake attribute by hardware serial, which a bare `darwin-rebuild switch --flake .` cannot do reliably (see "Applying the configuration").
+A `justfile` provides safe, pre-approved commands that agents can run without user approval. Raw `nix` and `darwin-rebuild` commands require user approval. The **only** exceptions in the justfile are `just switch` / `just switch-host`, which apply the system config, and `just daemon-restart`, which restarts the nix-daemon — all three use `sudo` and are for the user to run interactively, not agents. `just switch` is also the *only* supported way to apply the config: it selects the flake attribute by hardware serial, which a bare `darwin-rebuild switch --flake .` cannot do reliably (see "Applying the configuration").
 
 ### Safe commands (via justfile, no approval needed)
 
@@ -94,6 +94,11 @@ just switch
 
 # Dry-run switch (extra args are forwarded to darwin-rebuild)
 just switch --dry-run
+
+# Restart the nix-daemon (requires sudo). Needed after a switch that first
+# enables the R2 post-build-hook or the Linux builders — both are read only at
+# daemon startup and fail silently until then.
+just daemon-restart
 
 # Build for a specific host directly
 nix build .#darwinConfigurations.DKL6GDJ7X1.system
@@ -686,7 +691,7 @@ rejects a key owned by anyone else) and registers both builders via
 effect after one daemon restart:
 
 ```bash
-sudo launchctl kickstart -k system/systems.determinate.nix-daemon
+just daemon-restart      # sudo launchctl kickstart -k system/systems.determinate.nix-daemon
 ```
 
 After that, a plain `nix build .#nixosConfigurations.<host>.config.system.build.toplevel`
@@ -761,7 +766,7 @@ Host-specific secrets declarations live in **`hosts/<serial>/secrets.nix`**.
 - **Nix management:** Determinate Nix manages the Nix installation, not nix-darwin's built-in `nix.enable`
 - **SIP restriction:** `launchd.envVariables` is blocked by macOS System Integrity Protection. To set environment variables for GUI apps (e.g. PATH), use a `launchd.user.agents` entry that runs `/bin/launchctl setenv` at login instead
 - **launchd jobs get no shell environment:** the converse of the SIP restriction above. An agent or daemon inherits only `PATH`, `SSH_AUTH_SOCK` and the XPC keys — never what `programs.fish.interactiveShellInit`, `home.sessionVariables`, or a hand-edited rc file exports (verify with `launchctl print gui/$(id -u)/<label>`). Anything scheduled must therefore bake its inputs in at build time or receive them through `launchd.agents.<name>.config.EnvironmentVariables`, and must never fall back **silently** when one is missing. Worked example: `modules/nix-tarball-cache-repack.nix` resolves `${XDG_CACHE_HOME:-$HOME/.cache}/nix/tarball-cache-v2` exactly as Nix's `getCacheDir()` does, so exporting that variable from the shell alone would leave Nix writing to one directory while the agent repacks another — and its miss branch exits 0, which reads exactly like success. It forwards the variable when `xdg.enable` is set (the same condition home-manager uses to export it) and warns loudly, naming the variable, when the resolved directory is empty. `modules/nix-cache.nix` sidesteps the same class of bug for the root `post-build-hook` by passing `NIX_CACHE_SECRETS_DIR` and an explicit `PATH`
-- **Binary cache (R2):** both hosts share a Cloudflare R2 cache (`modules/nix-cache.nix`). Pull is a public custom-domain substituter; push is a signed `nix copy` (root `post-build-hook`, or `just cache-seed`/`cache-push`). The hook is referenced by the **stable** `/run/current-system/sw/bin` path, but Determinate's `nix-daemon` reads the hook setting only at startup and `darwin-rebuild switch` does **not** restart it — after first enabling the cache, run `sudo launchctl kickstart -k system/systems.determinate.nix-daemon` (or reboot) once. Push credentials: `r2_secret_access_key` stores a Cloudflare API token (`cfat_…`) whose SHA-256 the push script derives as the S3 secret
+- **Binary cache (R2):** both hosts share a Cloudflare R2 cache (`modules/nix-cache.nix`). Pull is a public custom-domain substituter; push is a signed `nix copy` (root `post-build-hook`, or `just cache-seed`/`cache-push`). The hook is referenced by the **stable** `/run/current-system/sw/bin` path, but Determinate's `nix-daemon` reads the hook setting only at startup and `darwin-rebuild switch` does **not** restart it — after first enabling the cache, run `just daemon-restart` (or reboot) once. Push credentials: `r2_secret_access_key` stores a Cloudflare API token (`cfat_…`) whose SHA-256 the push script derives as the S3 secret
 
 ## Coding Style & Naming Conventions
 

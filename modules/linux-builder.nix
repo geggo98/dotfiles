@@ -17,7 +17,9 @@
 # AFTER THE FIRST SWITCH, RESTART THE DAEMON ONCE — same story as the R2
 # post-build-hook (modules/nix-cache.nix): the Determinate nix-daemon reads
 # /etc/nix/machines at startup and `darwin-rebuild switch` does not restart it.
-#   sudo launchctl kickstart -k system/systems.determinate.nix-daemon
+#   just daemon-restart
+# (which runs `sudo launchctl kickstart -k system/systems.determinate.nix-daemon`
+# and then waits for the daemon to answer again).
 { ... }:
 {
   flake.modules.darwin.linux-builder = { config, lib, ... }:

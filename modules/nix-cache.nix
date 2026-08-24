@@ -171,8 +171,9 @@
         #     deleted store path (the raw-store-path form could — the old path
         #     was only GC-rooted by the superseded generation).
         # Only the FIRST enable needs one daemon restart, to load this string:
-        #   sudo launchctl kickstart -k system/systems.determinate.nix-daemon
-        # (or reboot). Substituter/pull settings are read per client invocation
+        #   just daemon-restart
+        # (which kickstarts systems.determinate.nix-daemon, or reboot).
+        # Substituter/pull settings are read per client invocation
         # and never need a restart.
         "post-build-hook" = "/run/current-system/sw/bin/nix-cache-post-build-hook";
       };
