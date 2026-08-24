@@ -2,7 +2,7 @@
 let
   llm-agents-pkgs = system: inputs.nixpkgs-llm-agents.packages.${system};
 
-  mkMcpServersModule = { pkgs, lib, ... }:
+  mkMcpServersModule = { config, pkgs, lib, ... }:
     let
       unstable = inputs.nixpkgs-unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system};
       llm-agents = llm-agents-pkgs pkgs.stdenv.hostPlatform.system;
@@ -145,11 +145,57 @@ let
         '';
       });
 
+      # Whether this host gets the Atlassian integration at all.
+      #
+      # Declared as its own tiny module rather than an `options` key on the
+      # block below: the moment that block gains an `options` or `config`
+      # attribute, every one of its ~80 bare config lines has to move under
+      # `config`. `imports` may sit beside bare config attributes; `options`
+      # may not.
+      #
+      # Default off. +mcp-atlassian and the jira / bitbucket-pr skills all need
+      # the jira_* / confluence_* secrets, and those are CHECK24 work
+      # credentials that live on DKL6GDJ7X1 only (hosts/DKL6GDJ7X1/secrets.nix).
+      # On the private Mac the server would appear in the client's list, start,
+      # and die on `require_secrets` — worse than not being offered. `bb` is
+      # already DKL-only via homeManager.bitbucket-cli, so bitbucket-pr had no
+      # working CLI there either.
+      atlassianOptions = { lib, ... }: {
+        options.my.ai.atlassian.enable = lib.mkEnableOption
+          "the Atlassian integration — the +mcp-atlassian server plus the jira and bitbucket-pr skills";
+      };
+
+      atlassian = config.my.ai.atlassian.enable;
+
+      skillsSrc = ./ai/_files/skills;
+
+      # Filtered at eval time, not in a runCommand: no extra derivation, and
+      # with the option on, the path is handed through untouched, so the work
+      # host's store path does not move at all.
+      #
+      # `builtins.path`, NOT `lib.cleanSourceWith`. The latter returns an
+      # ATTRSET carrying `outPath`, while `programs.claude-code.skills` wants a
+      # path — handed the attrset, the module system descends into its
+      # attributes and fails with `A definition for option
+      # ...claude-code.skills._isLibCleanSourceWith is not of type ...`, which
+      # names the wrapper's marker attribute rather than the mistake.
+      # builtins.path returns a real store path and takes the same filter.
+      skillsDir =
+        if atlassian then skillsSrc
+        else
+          builtins.path {
+            name = "claude-skills";
+            path = skillsSrc;
+            filter = path: type:
+              let rel = lib.removePrefix (toString skillsSrc + "/") (toString path);
+              in !(type == "directory" && builtins.elem rel [ "jira" "bitbucket-pr" ]);
+          };
+
       # Single source of truth for which MCP servers exist and which
       # package provides each one. Each agent (claude-code, opencode,
       # codex) consumes this through a small mapping function below.
+      # `atlassian` is the only conditional entry — see atlassianOptions above.
       mcpServerPkgs = {
-        atlassian = mcp-atlassian;
         context7 = mcp-context7;
         devenv = mcp-devenv;
         javadocs = mcp-javadocs;
@@ -158,7 +204,7 @@ let
         zai-search = mcp-zai-search;
         zai-vision = mcp-zai-vision;
         zai-web-reader = mcp-zai-web-reader;
-      };
+      } // lib.optionalAttrs atlassian { atlassian = mcp-atlassian; };
 
       mcpCmd = name: pkg: "${pkg}/bin/+mcp-${name}";
 
@@ -188,6 +234,8 @@ let
       root = ./..;
     in
     {
+      imports = [ atlassianOptions ];
+
       programs.claude-code = {
         enable = true;
         package = llm-agents.claude-code;
@@ -226,7 +274,7 @@ let
           };
         };
         mcpServers = claudeMcpServers;
-        skills = ./ai/_files/skills;
+        skills = skillsDir;
       };
 
       programs.opencode = {
@@ -268,7 +316,7 @@ let
       };
 
       home.file.".agents/skills" = {
-        source = ./ai/_files/skills;
+        source = skillsDir;
         recursive = true;
       };
     };
