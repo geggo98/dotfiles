@@ -5,17 +5,61 @@
       unstable = inputs.nixpkgs-unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system};
       llm-agents = inputs.nixpkgs-llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
       loadSecretsLib = builtins.readFile ./_files/shell/load-secrets.sh;
+
+      # Bound rather than inlined below, because each is now consumed by a
+      # wrapper of the SAME name instead of being installed directly. The
+      # wrapper loads the key from its sops-nix file per invocation, so nothing
+      # has to be exported into every shell — see the note in modules/shells.nix.
+      # Neither tool has another key source: `llm` keeps keys in keys.json,
+      # which is empty here and unmanaged, so it read those env vars and nothing
+      # else.
+      llmPkg = unstable.python313Packages.llm.withPlugins {
+        llm-openrouter = true;
+        llm-groq = true;
+        llm-ollama = true;
+        llm-anthropic = true;
+        llm-gemini = true;
+        llm-cmd = true;
+      };
     in
     {
       home.packages = [
-        unstable.ollama
-        (unstable.python313Packages.llm.withPlugins {
-          llm-openrouter = true;
-          llm-groq = true;
-          llm-ollama = true;
-          llm-anthropic = true;
-          llm-gemini = true;
-          llm-cmd = true;
+        # `ollama` and `llm` keep their own names: these wrappers REPLACE the
+        # bare packages rather than sitting beside them, so the commands people
+        # (and llm's own activation script) already type keep working. Inside
+        # the wrapper runtimeInputs come first on PATH, so `exec ollama` / `exec
+        # llm` reach the real binary, not the wrapper again.
+        (pkgs.writeShellApplication {
+          name = "ollama";
+          runtimeInputs = [ unstable.ollama ];
+          text = ''
+            ${loadSecretsLib}
+            # Not required: the launchd server on localhost needs no auth, and
+            # the key is only for ollama.com cloud models. Load it if present,
+            # never fail without it.
+            load_from_secret OLLAMA_API_KEY ollama_api_key
+            exec ollama "$@"
+          '';
+        })
+        (pkgs.writeShellApplication {
+          name = "llm";
+          runtimeInputs = [ llmPkg ];
+          text = ''
+            ${loadSecretsLib}
+            # The llm-* plugins read these names; llm itself has no key store
+            # configured here. Not required — `llm` has plenty of subcommands
+            # (aliases, logs, models) that need no credential at all, and the
+            # activation script below calls one of them.
+            load_from_secret OPENROUTER_API_KEY  openrouter_api_key
+            load_from_secret LLM_OPENROUTER_KEY  openrouter_api_key
+            load_from_secret OPENROUTER_KEY      openrouter_api_key
+            load_from_secret LLM_GEMINI_KEY      gemini_api_key
+            load_from_secret GEMINI_API_KEY      gemini_api_key
+            load_from_secret LLM_GROQ_KEY        groq_api_key
+            load_from_secret GROQ_API_KEY        groq_api_key
+            load_from_secret OPENAI_API_KEY      openai_api_key
+            exec llm "$@"
+          '';
         })
         # Prebuilt release binary rather than llm-agents/nixpkgs: both of those
         # build the pnpm dashboard, whose deps FOD resolves time-dependently

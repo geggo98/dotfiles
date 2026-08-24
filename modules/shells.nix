@@ -11,53 +11,48 @@
   # `types.lines` merging gives no order guarantee between two modules, so
   # without this the exports could be emitted before the functions exist.
   flake.modules.homeManager.shell-secrets = { config, lib, ... }: {
+    # NOTE: *_PATH only — this block deliberately exports no secret VALUES.
+    #
+    # Files are the default source; an environment variable is a manual
+    # override. Every consumer in this repo reads its sops-nix file (the
+    # `load_from_secret` helper in _files/shell/load-secrets.sh, used by the
+    # +agent-* and +mcp-* wrappers), so an ambient copy in the shell bought
+    # nothing and cost plenty: a globally exported secret lands in every child
+    # process, `env` dump, crash report and agent transcript.
+    #
+    # It also caused a real outage. ATLASSIAN_API_TOKEN was exported here
+    # holding the *Bitbucket* token, and the jira / bitbucket-pr skills checked
+    # every env name before any file — so the dead alias outranked the correct
+    # jira_api_token file and every Jira call failed, as a 404 that read like a
+    # missing ticket. Both the alias tier and the value exports are gone.
+    #
+    # Adding a secret VALUE here needs a reason that a per-invocation wrapper
+    # cannot serve. `llm` and `ollama` are the tools that needed one; they are
+    # wrapped in modules/ai-tools.nix instead.
     programs.fish.interactiveShellInit = lib.mkAfter ''
       export_nix_sops_secret_path OPENAI_API_KEY_PATH "${config.sops.secrets.openai_api_key.path}"
-      export_nix_sops_secret_value OPENAI_API_KEY "${config.sops.secrets.openai_api_key.path}"
 
       export_nix_sops_secret_path OPENROUTER_API_KEY_PATH "${config.sops.secrets.openrouter_api_key.path}"
-      export_nix_sops_secret_value OPENROUTER_API_KEY "${config.sops.secrets.openrouter_api_key.path}"
-      # llm-openrouter expects the key in the environment variables LLM_OPENROUTER_KEY and OPENROUTER_KEY.
-      export_nix_sops_secret_value LLM_OPENROUTER_KEY "${config.sops.secrets.openrouter_api_key.path}"
-      export_nix_sops_secret_value OPENROUTER_KEY "${config.sops.secrets.openrouter_api_key.path}"
 
       export_nix_sops_secret_path GROQ_API_KEY_PATH "${config.sops.secrets.groq_api_key.path}"
-      export_nix_sops_secret_value GROQ_API_KEY "${config.sops.secrets.groq_api_key.path}"
 
-      # llm-openrouter expects the key in the environment variables LLM_GEMINI_KEY
-      export_nix_sops_secret_value LLM_GEMINI_KEY "${config.sops.secrets.gemini_api_key.path}"
-      export_nix_sops_secret_value GEMINI_API_KEY "${config.sops.secrets.gemini_api_key.path}"
       export_nix_sops_secret_path GEMINI_API_KEY_PATH "${config.sops.secrets.gemini_api_key.path}"
 
       export_nix_sops_secret_path CONTEXT7_API_KEY_PATH "${config.sops.secrets.context7_api_key.path}"
-      export_nix_sops_secret_value CONTEXT7_API_KEY "${config.sops.secrets.context7_api_key.path}"
 
       export_nix_sops_secret_path OLLAMA_API_KEY_PATH "${config.sops.secrets.ollama_api_key.path}"
-      export_nix_sops_secret_value OLLAMA_API_KEY "${config.sops.secrets.ollama_api_key.path}"
 
       export_nix_sops_secret_path TRAVILY_API_KEY_PATH "${config.sops.secrets.travily_api_key.path}"
-      export_nix_sops_secret_value TRAVILY_API_KEY "${config.sops.secrets.travily_api_key.path}"
 
       export_nix_sops_secret_path Z_AI_API_KEY_PATH "${config.sops.secrets.z_ai_api_key.path}"
-      export_nix_sops_secret_value Z_AI_API_KEY "${config.sops.secrets.z_ai_api_key.path}"
 
       export_nix_sops_secret_path HF_TOKEN_PATH "${config.sops.secrets.huggingface_ro_token.path}"
-      export_nix_sops_secret_value HF_TOKEN "${config.sops.secrets.huggingface_ro_token.path}"
-      # huggingface_hub / transformers / datasets also honor the legacy alias
-      export_nix_sops_secret_value HUGGING_FACE_HUB_TOKEN "${config.sops.secrets.huggingface_ro_token.path}"
-      # LangChain reads HUGGINGFACEHUB_API_TOKEN
-      export_nix_sops_secret_value HUGGINGFACEHUB_API_TOKEN "${config.sops.secrets.huggingface_ro_token.path}"
 
       export_nix_sops_secret_path ABSENCE_IO_API_ID_PATH "${config.sops.secrets.absence_io_api_id.path}"
-      export_nix_sops_secret_value ABSENCE_IO_API_ID "${config.sops.secrets.absence_io_api_id.path}"
 
       export_nix_sops_secret_path ABSENCE_IO_API_KEY_PATH "${config.sops.secrets.absence_io_api_key.path}"
-      export_nix_sops_secret_value ABSENCE_IO_API_KEY "${config.sops.secrets.absence_io_api_key.path}"
 
-      export_nix_sops_secret_value SLACK_C24_API_KEY "${config.sops.secrets.slack_c24_api_key.path}"
-
-      export_nix_sops_secret_value ATLASSIAN_C24_BITBUCKET_API_TOKEN "${config.sops.secrets.atlassian_c24_bitbucket_api_token.path}"
-      export_nix_sops_secret_value ATLASSIAN_API_TOKEN "${config.sops.secrets.atlassian_c24_bitbucket_api_token.path}"
+      export_nix_sops_secret_path SLACK_C24_API_KEY_PATH "${config.sops.secrets.slack_c24_api_key.path}"
     '';
   };
 

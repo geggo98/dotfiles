@@ -19,6 +19,24 @@ cleanup() {
 
 SCRIPT_DIR="${0:A:h}"
 
+# Provider keys, loaded per invocation from sops-nix rather than inherited from
+# the shell. modules/shells.nix deliberately exports no secret VALUES (see the
+# note there), so a key that used to arrive ambiently has to be fetched here.
+# Env still wins, so a caller can point this at a different account for one run.
+SECRETS_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/sops-nix/secrets"
+load_from_secret() {
+  local var_name="$1" file_name="$2"
+  [[ -n "${(P)var_name-}" ]] && return 0
+  [[ -r "${SECRETS_DIR}/${file_name}" ]] || return 0
+  local val; val="$(<"${SECRETS_DIR}/${file_name}")"
+  [[ -n "$val" ]] && export "${var_name}=${val}"
+  return 0
+}
+# Silent when a secret is absent: browser-use only needs the key for the provider
+# actually selected, and failing here would break the modes that need none.
+load_from_secret OPENAI_API_KEY openai_api_key
+load_from_secret GOOGLE_API_KEY gemini_api_key
+
 timeout="5m"
 silent=false
 head_n=""
