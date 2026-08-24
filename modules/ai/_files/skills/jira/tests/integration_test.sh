@@ -196,6 +196,41 @@ run --write label JIRA-1 --add --remove >/dev/null 2>&1; rc=$?
 run --write comment JIRA-1 --file a --file b >/dev/null 2>&1; rc=$?
 [[ $rc -eq 1 ]] && ok "a repeated --file is an error" || no "duplicate --file silently took the last"
 
+echo "== test 11: the sops file outranks a generic env alias =="
+# Regression guard for the 2026-08-24 bug: modules/shells.nix exported
+# ATLASSIAN_API_TOKEN globally, holding a *Bitbucket* token, and the credential
+# chain consulted every env name before any file -- so the alias beat the
+# correct jira_api_token file and every call failed. It failed as 404, not 401,
+# because Jira hides issue existence from unauthenticated callers, so it read
+# like a missing ticket. The chain is now ONE env name then ONE file.
+mkdir -p "$TMP/sops"
+printf 'secret-token' >"$TMP/sops/jira_api_token"
+printf '%s' "$BASE"   >"$TMP/sops/jira_url"
+printf 'test@example.com' >"$TMP/sops/jira_username"
+
+out="$(env -u JIRA_API_TOKEN -u JIRA_URL -u JIRA_USERNAME \
+        SOPS_SECRETS_DIR="$TMP/sops" ATLASSIAN_API_TOKEN=bogus-bitbucket-token \
+        "$CLIENT" whoami 2>&1)"; rc=$?
+{ [[ $rc -eq 0 ]] && grep -q "acc-self" <<<"$out"; } \
+  && ok "a bogus \$ATLASSIAN_API_TOKEN does not shadow the jira_api_token file" \
+  || no "env alias still shadows the file rc=$rc out=$out"
+
+# ...and a failure names the source it actually used. The mock does not verify
+# tokens, so provoke the message with a 404 rather than a 401 -- which is also
+# the exact path that made the original bug unreadable.
+err="$(env -u JIRA_URL -u JIRA_USERNAME SOPS_SECRETS_DIR="$TMP/sops" \
+        JIRA_API_TOKEN=explicit-token "$CLIENT" get JIRA-404 2>&1 >/dev/null)"; rc=$?
+{ [[ $rc -ne 0 ]] && grep -q 'token source: \$JIRA_API_TOKEN (environment override)' <<<"$err"; } \
+  && ok "an explicit \$JIRA_API_TOKEN overrides the file, and the error names it" \
+  || no "override precedence or source reporting broken rc=$rc err=$err"
+
+# A 404 must say that a bad token also produces 404, or it reads as a missing ticket.
+err="$(env -u JIRA_API_TOKEN -u JIRA_URL -u JIRA_USERNAME SOPS_SECRETS_DIR="$TMP/sops" \
+        "$CLIENT" get JIRA-404 2>&1 >/dev/null)"
+{ grep -q 'jira_api_token' <<<"$err" && grep -q 'also answers 404' <<<"$err"; } \
+  && ok "a 404 names the token source and warns that auth also yields 404" \
+  || no "404 is not self-diagnosing: $err"
+
 echo
 echo "== results: $pass passed, $fail failed =="
 [[ $fail -eq 0 ]]

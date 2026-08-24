@@ -206,14 +206,26 @@ not journaled.
 
 ## Credentials
 
-Same chain as the `bitbucket-pr` skill (env wins; else `$SOPS_SECRETS_DIR` files):
+Same chain as the `bitbucket-pr` skill: **one env name, then one file.** The
+`$SOPS_SECRETS_DIR` file is the default source; the environment variable is a
+deliberate manual override.
 
 - `JIRA_URL` | `jira_url` (required — no built-in default)
 - `JIRA_USERNAME` | `jira_username`
-- `JIRA_API_TOKEN` ← `ATLASSIAN_API_TOKEN` | `jira_api_token` → `atlassian_c24_bitbucket_api_token`
+- `JIRA_API_TOKEN` | `jira_api_token`
+
+There is deliberately **no generic alias tier** (no `ATLASSIAN_API_TOKEN`, no
+`atlassian_c24_bitbucket_api_token`). It was removed on 2026-08-24: the shell
+exported `ATLASSIAN_API_TOKEN` globally holding a *Bitbucket* token, and because
+the chain tried every env name before any file, that dead alias outranked the
+correct `jira_api_token` file and every call failed. Worse, it failed as **HTTP
+404**, since Jira hides issue existence from unauthenticated callers — so it read
+as "that ticket does not exist". Do not reintroduce it.
 
 HTTP Basic against the Jira site; httpx puts the token in a header, so it never reaches
-the process argv. Missing credentials → exit 2 with a clear hint (no silent 401).
+the process argv. Missing credentials → exit 2 with a clear hint (no silent 401). A 401
+or 404 now also names the source the token came from (`$JIRA_API_TOKEN` vs. the file),
+never the token itself.
 Exit codes: `0` ok, `1` bad args / gating refusal, `2` missing prereq/credentials,
 `3` API/auth/network, `4` not found, `124` timeout (killed by gtimeout).
 

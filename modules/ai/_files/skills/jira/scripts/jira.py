@@ -29,10 +29,11 @@ Two local SQLite stores back the extra capabilities:
   * undo journal (durable, $JIRA_STATE_DIR) — every op that OVERWRITES or DELETES
                 data snapshots the prior value first, so `undo` can restore it.
 
-Credentials (env wins; else read from $SOPS_SECRETS_DIR files):
+Credentials: ONE env name, then ONE file. The file is the default source; the
+environment variable is a deliberate manual override.
   JIRA_URL        | jira_url            (required; no built-in default)
   JIRA_USERNAME   | jira_username
-  JIRA_API_TOKEN  <- ATLASSIAN_API_TOKEN | jira_api_token -> atlassian_c24_bitbucket_api_token
+  JIRA_API_TOKEN  | jira_api_token
 Auth is HTTP Basic ("$JIRA_USERNAME:$JIRA_API_TOKEN") against the Jira site. httpx
 puts it in a header, so the token never reaches the process argv.
 
@@ -254,11 +255,18 @@ def _secrets_dir() -> Path:
     return Path(base) / "sops-nix" / "secrets"
 
 
-def _resolve(env_names: list[str], files: list[str], default: str | None = None) -> str | None:
+def _resolve_src(
+    env_names: list[str], files: list[str], default: str | None = None
+) -> tuple[str | None, str]:
+    """Resolve a credential and report WHERE it came from.
+
+    The source string is what lets an auth failure name its own cause; it never
+    contains the value. Precedence is env-then-file, and callers pass exactly one
+    of each -- see Ctx.client for why a generic alias tier is not allowed here."""
     for e in env_names:
         v = os.environ.get(e)
         if v:
-            return v
+            return v, f"${e} (environment override)"
     d = _secrets_dir()
     for f in files:
         p = d / f
@@ -268,8 +276,12 @@ def _resolve(env_names: list[str], files: list[str], default: str | None = None)
             except OSError:
                 continue
             if v:
-                return v
-    return default
+                return v, f"file {p}"
+    return default, "none"
+
+
+def _resolve(env_names: list[str], files: list[str], default: str | None = None) -> str | None:
+    return _resolve_src(env_names, files, default)[0]
 
 
 # --------------------------------------------------------------------------
@@ -278,8 +290,12 @@ def _resolve(env_names: list[str], files: list[str], default: str | None = None)
 
 
 class JiraClient:
-    def __init__(self, base_url: str, username: str, token: str):
+    def __init__(self, base_url: str, username: str, token: str, token_source: str = "unknown"):
         self.base_url = base_url.rstrip("/")
+        self.username = username
+        # Where the token came from, so an auth failure can name its own cause.
+        # Never holds the token itself.
+        self.token_source = token_source
         self.api = f"{self.base_url}/rest/api/2"
         # BasicAuth goes in a header, never the argv. follow_redirects lets
         # attachment `content` URLs 302 to the (pre-signed) media host.
@@ -341,12 +357,24 @@ class JiraClient:
         code = resp.status_code
         if code in (401, 403):
             raise SkillError(
-                f"Jira auth failed (HTTP {code}) on {method} {path}: {msg}. "
-                "Run 'whoami' to verify the account behind the token.",
+                f"Jira auth failed (HTTP {code}) on {method} {path}: {msg}.\n"
+                f"  user:         {self.username}\n"
+                f"  token source: {self.token_source}\n"
+                "  Run 'whoami' to verify the account behind the token.",
                 3,
             )
         if code == 404:
-            raise SkillError(f"Jira resource not found (HTTP 404): {method} {path}", 4)
+            # Jira hides issue existence from unauthenticated callers, so a bad
+            # token surfaces here as 404 rather than 401. Say so -- otherwise
+            # this reads as "the ticket does not exist".
+            raise SkillError(
+                f"Jira resource not found (HTTP 404): {method} {path}\n"
+                f"  token source: {self.token_source}\n"
+                "  Note: Jira also answers 404 when the token is not valid for this\n"
+                "        site. Run 'whoami' to check the account behind the token\n"
+                "        before assuming the key is wrong.",
+                4,
+            )
         if code == 413:
             raise SkillError(f"Attachment too large (HTTP 413) on {method} {path}", 3)
         raise SkillError(f"Jira request failed (HTTP {code}) on {method} {path}: {msg}", 3)
@@ -626,10 +654,15 @@ class Ctx:
         if self._client is None:
             url = _resolve(["JIRA_URL"], ["jira_url"])
             user = _resolve(["JIRA_USERNAME"], ["jira_username"])
-            token = _resolve(
-                ["JIRA_API_TOKEN", "ATLASSIAN_API_TOKEN"],
-                ["jira_api_token", "atlassian_c24_bitbucket_api_token"],
-            )
+            # ONE env name, then ONE file -- deliberately no generic alias tier.
+            # This used to also accept $ATLASSIAN_API_TOKEN and the file
+            # atlassian_c24_bitbucket_api_token. That alias tier was a bug
+            # factory: the shell exported ATLASSIAN_API_TOKEN globally holding a
+            # *Bitbucket* token, so it outranked the correct jira_api_token file
+            # and every Jira call failed -- as 404 rather than 401 (Jira hides
+            # issue existence from unauthenticated callers), which reads as a
+            # missing ticket. Do not reintroduce it.
+            token, token_source = _resolve_src(["JIRA_API_TOKEN"], ["jira_api_token"])
             if not url or not user or not token:
                 missing = []
                 if not url:
@@ -637,10 +670,7 @@ class Ctx:
                 if not user:
                     missing.append("JIRA_USERNAME (or file jira_username)")
                 if not token:
-                    missing.append(
-                        "JIRA_API_TOKEN / ATLASSIAN_API_TOKEN "
-                        "(or file jira_api_token / atlassian_c24_bitbucket_api_token)"
-                    )
+                    missing.append("JIRA_API_TOKEN (or file jira_api_token)")
                 raise SkillError(
                     "Missing Jira credentials:\n  - "
                     + "\n  - ".join(missing)
@@ -650,7 +680,7 @@ class Ctx:
             url = url.rstrip("/")
             if not (url.startswith("http://") or url.startswith("https://")):
                 url = "https://" + url
-            self._client = JiraClient(url, user, token)
+            self._client = JiraClient(url, user, token, token_source)
         return self._client
 
 
@@ -1822,9 +1852,9 @@ DANGEROUS (need --dangerous):
   comment-rm <KEY> <comment-id>                Delete a comment (snapshot kept for undo).
   attach-rm  <KEY> <attachment-id>             Delete an attachment (bytes kept for undo).
 
-CREDENTIALS (env wins; else $SOPS_SECRETS_DIR files):
+CREDENTIALS (ONE env name overrides ONE file; files are the default source):
   JIRA_URL | jira_url ;  JIRA_USERNAME | jira_username
-  JIRA_API_TOKEN <- ATLASSIAN_API_TOKEN | jira_api_token -> atlassian_c24_bitbucket_api_token
+  JIRA_API_TOKEN | jira_api_token
 
 ENVIRONMENT:
   JIRA_PROJECT_KEY        default project for create   (default: VUKFZIF)

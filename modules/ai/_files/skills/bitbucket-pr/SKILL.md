@@ -2,7 +2,7 @@
 name: bitbucket-pr
 description: "Read and manage Bitbucket Cloud pull requests, comments, and tasks via the `bb` CLI (gildas/bitbucket-cli v0.18.1+). Use when reviewing PR feedback, replying to comments, creating tasks/PRs, or marking review tasks done. Also bridges JIRA issues to their linked Bitbucket PRs/branches/repos via Jira's dev-status API — find the PR(s) for a JIRA key (e.g. JIRA-1234), even in repos that aren't cloned locally."
 allowed-tools: Bash(./scripts/bitbucket_pr.sh *) Bash(./scripts/bitbucket_pr_comments.sh *) Bash(./scripts/bitbucket_pr_tasks.sh *) Bash(./scripts/bitbucket_jira.sh *) Bash(./scripts/bitbucket_pr_reviewers.py *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_comments.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_tasks.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_jira.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_reviewers.py *) Bash(zsh *)
-dependencies: "bb (Bitbucket CLI, installed via Nix on this host), jq, curl (JIRA bridge), uv (runs the reviewer REST helper bitbucket_pr_reviewers.py — httpx/pyyaml, pinned in its .py.lock). REST credentials reuse bb's config-cli.yml profile (or BITBUCKET_USER / BITBUCKET_APP_PASSWORD). JIRA bridge credentials: jira_url / jira_username / jira_api_token via env (JIRA_URL, JIRA_USERNAME, JIRA_API_TOKEN / ATLASSIAN_API_TOKEN) or files in ~/.config/sops-nix/secrets"
+dependencies: "bb (Bitbucket CLI, installed via Nix on this host), jq, curl (JIRA bridge), uv (runs the reviewer REST helper bitbucket_pr_reviewers.py — httpx/pyyaml, pinned in its .py.lock). REST credentials reuse bb's config-cli.yml profile (or BITBUCKET_USER / BITBUCKET_APP_PASSWORD). JIRA bridge credentials: files jira_url / jira_username / jira_api_token in ~/.config/sops-nix/secrets, overridable per invocation via JIRA_URL / JIRA_USERNAME / JIRA_API_TOKEN"
 ---
 
 # Bitbucket Pull Request Skill
@@ -267,8 +267,7 @@ echo "Fixed in <commit-hash>" | \
 | `CURL_PATH`            | (JIRA bridge) Path to `curl` (default `curl`)                                                |
 | `JIRA_URL`             | (JIRA bridge) Jira base URL; else file `jira_url` in `$SOPS_SECRETS_DIR`                     |
 | `JIRA_USERNAME`        | (JIRA bridge) Jira account email for Basic auth; else file `jira_username`                   |
-| `JIRA_API_TOKEN`       | (JIRA bridge) Atlassian API token; falls back to `ATLASSIAN_API_TOKEN`, then files           |
-| `ATLASSIAN_API_TOKEN`  | (JIRA bridge) Fallback token (already exported in this shell)                                |
+| `JIRA_API_TOKEN`       | (JIRA bridge) Atlassian API token; else file `jira_api_token`. Manual override only          |
 | `SOPS_SECRETS_DIR`     | (JIRA bridge) sops-nix secrets dir (default `~/.config/sops-nix/secrets`)                    |
 | `JIRA_DEV_APPLICATION_TYPE` | (JIRA bridge) dev-status `applicationType` (default `bitbucket`)                        |
 
@@ -349,11 +348,11 @@ API directly, runs from **any CWD**, and uses `curl` + `jq` (no `bb`, no git).
 Resolved in this order — the first non-empty wins; missing values produce a clear
 error listing what to set:
 
-| Value          | env                                        | else file in `$SOPS_SECRETS_DIR` (default `~/.config/sops-nix/secrets`) |
+| Value          | env (manual override)                      | file in `$SOPS_SECRETS_DIR` — the default source                        |
 |----------------|--------------------------------------------|------------------------------------------------------------------------|
 | Base URL       | `JIRA_URL`                                 | `jira_url`                                                              |
 | Username/email | `JIRA_USERNAME`                            | `jira_username`                                                         |
-| API token      | `JIRA_API_TOKEN` → `ATLASSIAN_API_TOKEN`   | `jira_api_token` → `atlassian_c24_bitbucket_api_token`                  |
+| API token      | `JIRA_API_TOKEN`                           | `jira_api_token`                                                        |
 
 Auth is **HTTP Basic** (`"$JIRA_USERNAME:$JIRA_API_TOKEN"`) against the Jira site —
 an Atlassian API token works for Jira this way. (The same token does **not** work as

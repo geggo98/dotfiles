@@ -16,10 +16,11 @@
 #   slug=$(bitbucket_jira.sh repos JIRA-2978 --format tsv | head -1 | cut -f3)
 #   bitbucket_pr_comments.sh list <pr-id> --repo "$slug"
 #
-# Credentials (env wins; otherwise read from $SOPS_SECRETS_DIR files):
+# Credentials: ONE env name, then ONE file. The file is the default source;
+# the environment variable is a deliberate manual override.
 #   JIRA_URL        | jira_url
 #   JIRA_USERNAME   | jira_username
-#   JIRA_API_TOKEN  → ATLASSIAN_API_TOKEN | jira_api_token → atlassian_c24_bitbucket_api_token
+#   JIRA_API_TOKEN  | jira_api_token
 # Auth is HTTP Basic ("$JIRA_USERNAME:$JIRA_API_TOKEN") against the Jira site.
 
 if [ -n "${BASH_VERSION:-}" ]; then
@@ -72,18 +73,34 @@ resolve_secret() {
   return 0
 }
 
+# Where the token came from, so an auth failure can name its own cause.
+# Never holds the token itself.
+typeset -g JIRA_TOKEN_SOURCE="none"
+
 load_credentials() {
   resolve_secret JIRA_URL      jira_url
   resolve_secret JIRA_USERNAME jira_username
-  if [[ -z "${JIRA_API_TOKEN:-}" && -n "${ATLASSIAN_API_TOKEN:-}" ]]; then
-    JIRA_API_TOKEN="$ATLASSIAN_API_TOKEN"
+
+  # ONE env name, then ONE file — deliberately no generic alias tier.
+  # This used to also accept $ATLASSIAN_API_TOKEN and the file
+  # atlassian_c24_bitbucket_api_token. That alias tier was a bug factory: the
+  # shell exported ATLASSIAN_API_TOKEN globally holding a *Bitbucket* token, so
+  # it outranked the correct jira_api_token file and every Jira call failed —
+  # and failed as 404 rather than 401 (see jira_get), which reads as a missing
+  # ticket. Do not reintroduce it.
+  if [[ -n "${JIRA_API_TOKEN:-}" ]]; then
+    JIRA_TOKEN_SOURCE='$JIRA_API_TOKEN (environment override)'
+  else
+    resolve_secret JIRA_API_TOKEN jira_api_token
+    if [[ -n "${JIRA_API_TOKEN:-}" ]]; then
+      JIRA_TOKEN_SOURCE="file $SOPS_SECRETS_DIR/jira_api_token"
+    fi
   fi
-  resolve_secret JIRA_API_TOKEN jira_api_token atlassian_c24_bitbucket_api_token
 
   local -a missing=()
   [[ -n "${JIRA_URL:-}" ]]       || missing+=("JIRA_URL (or file jira_url)")
   [[ -n "${JIRA_USERNAME:-}" ]]  || missing+=("JIRA_USERNAME (or file jira_username)")
-  [[ -n "${JIRA_API_TOKEN:-}" ]] || missing+=("JIRA_API_TOKEN / ATLASSIAN_API_TOKEN (or file jira_api_token / atlassian_c24_bitbucket_api_token)")
+  [[ -n "${JIRA_API_TOKEN:-}" ]] || missing+=("JIRA_API_TOKEN (or file jira_api_token)")
   if (( ${#missing[@]} > 0 )); then
     log_error "Missing Jira credentials:"
     local m; for m in "${missing[@]}"; do printf '  - %s\n' "$m" >&2; done
@@ -129,9 +146,17 @@ jira_get() {
       cat "$body_file"; rm -f "$body_file" "$err_file"; return 0 ;;
     401|403)
       log_error "Jira authentication failed (HTTP $http_code). Check JIRA_USERNAME + token; run '$SCRIPT_NAME whoami' to verify the account behind the token."
+      printf '  user:         %s\n  token source: %s\n' "$JIRA_USERNAME" "$JIRA_TOKEN_SOURCE" >&2
       jira_err_snippet "$body_file"; rm -f "$body_file" "$err_file"; exit 3 ;;
     404)
+      # Jira hides issue existence from unauthenticated callers, so a bad token
+      # surfaces here as 404 rather than 401. Say so — otherwise this reads as
+      # "the ticket does not exist" and sends the reader after the wrong thing.
       log_error "Jira resource not found (HTTP 404): $url"
+      printf '  token source: %s\n' "$JIRA_TOKEN_SOURCE" >&2
+      printf '  Note: Jira also answers 404 when the token is not valid for this\n' >&2
+      printf '        site. Run '"'"'%s whoami'"'"' to check the account behind the\n' "$SCRIPT_NAME" >&2
+      printf '        token before assuming the key is wrong.\n' >&2
       rm -f "$body_file" "$err_file"; exit 4 ;;
     *)
       log_error "Jira request failed (HTTP $http_code): $url"
@@ -400,9 +425,10 @@ Commands:
 Chaining into the bb wrappers (linked repos are usually not cloned locally):
   bitbucket_pr_comments.sh list <pr-id> --repo <workspace>/<slug>
 
-Credentials (env wins; else \$SOPS_SECRETS_DIR files; default $SOPS_SECRETS_DIR):
+Credentials (ONE env name overrides ONE file; files are the default source,
+  under \$SOPS_SECRETS_DIR; default $SOPS_SECRETS_DIR):
   JIRA_URL | jira_url ;  JIRA_USERNAME | jira_username
-  JIRA_API_TOKEN → ATLASSIAN_API_TOKEN | jira_api_token → atlassian_c24_bitbucket_api_token
+  JIRA_API_TOKEN | jira_api_token
 
 Environment:
   CURL_PATH             Path to curl             (default: curl)
