@@ -36,6 +36,7 @@ A `justfile` provides safe, pre-approved commands that agents can run without us
 | `just audit` | Cooldown + withdrawal audit: input ages, npm package ages, VS Code extensions |
 | `just audit-inputs` | Layer 1 only — fast, no npm or marketplace lookups |
 | `just audit-extensions [ids…]` | VS Code extensions: old enough **and** still published upstream |
+| `just creds-check` | Do the long-lived credentials still authenticate? (jira, confluence, bb) |
 | `just diff` | Build and show package delta vs. current system |
 | `just verify-no-diff` | Build and assert no package delta (useful after refactoring) |
 | `just deps` | Show flake dependency tree |

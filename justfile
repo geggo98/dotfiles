@@ -190,6 +190,21 @@ audit-extensions *ids:
     for id in "$@"; do args+=(--extension "$id"); done
     python3 scripts/supply-chain.py audit --extensions-only "${args[@]}"
 
+# The third audit question, and again a different one. `just audit` asks "is anything
+# suspiciously NEW or WITHDRAWN?"; `just pulumi-audit` asks "is anything KNOWN-bad?".
+# This asks the dull one nobody asks until it bites: "does what I already trust still
+# work?" Measured 2026-08-24 — an Atlassian token had expired 17 days earlier and the
+# only symptom was Jira returning HTTP 404 on a real ticket, because Jira hides issue
+# existence from unauthenticated callers. Classic ATATT3… tokens carry no readable
+# expiry, so a probe is the only way to know. Reads files, prints accounts, never tokens.
+# Exit 0 all good (skips included), 1 something no longer authenticates, 2 tool error.
+#
+# Check that long-lived credentials still authenticate (jira, confluence, bb)
+creds-check *args:
+    #!/bin/zsh
+    set -euo pipefail
+    python3 scripts/creds-check.py "$@"
+
 # Escape hatch: update everything to branch HEAD, cooldown BYPASSED. For the case where
 # you have decided, deliberately and with the reason written down, that you need code
 # younger than the bar — a security fix that just landed, say. `just update` is the
