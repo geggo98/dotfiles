@@ -29,6 +29,15 @@
     # Adding a secret VALUE here needs a reason that a per-invocation wrapper
     # cannot serve. `llm` and `ollama` are the tools that needed one; they are
     # wrapped in modules/ai-tools.nix instead.
+    #
+    # ONLY SECRETS EVERY HOST DECLARES belong in this list. `shell-secrets`
+    # hangs on both workstations via homeManager.base, and each line below
+    # dereferences `config.sops.secrets.<name>.path`, which is an EVAL error —
+    # not a runtime one — where the secret is not declared. So a host-specific
+    # secret referenced here breaks the *other* host's build. That is why the
+    # two ABSENCE_IO_*_PATH lines left with the absence.io credentials when
+    # they moved to hosts/DKL6GDJ7X1 on 2026-08-24; nothing read them anyway,
+    # and consumers find the file under its plain name in $SOPS_SECRETS_DIR.
     programs.fish.interactiveShellInit = lib.mkAfter ''
       export_nix_sops_secret_path OPENAI_API_KEY_PATH "${config.sops.secrets.openai_api_key.path}"
 
@@ -47,10 +56,6 @@
       export_nix_sops_secret_path Z_AI_API_KEY_PATH "${config.sops.secrets.z_ai_api_key.path}"
 
       export_nix_sops_secret_path HF_TOKEN_PATH "${config.sops.secrets.huggingface_ro_token.path}"
-
-      export_nix_sops_secret_path ABSENCE_IO_API_ID_PATH "${config.sops.secrets.absence_io_api_id.path}"
-
-      export_nix_sops_secret_path ABSENCE_IO_API_KEY_PATH "${config.sops.secrets.absence_io_api_key.path}"
 
       export_nix_sops_secret_path SLACK_C24_API_KEY_PATH "${config.sops.secrets.slack_c24_api_key.path}"
     '';

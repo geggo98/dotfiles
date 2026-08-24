@@ -34,18 +34,13 @@ let
         z_ai_api_key = { };
         huggingface_ro_token = { };
         slack_c24_api_key = { };
-        confluence_url = { };
-        confluence_username = { };
-        confluence_personal_token = { };
-        jira_url = { };
-        jira_username = { };
-        jira_api_token = { };
-        absence_io_api_id = { };
-        absence_io_api_key = { };
-        "c24_bi_kfz_test_stefan_schwetschke.json" = { };
-        "c24_bi_kfz_prod_stefan_schwetschke.json" = { };
-        "c24_bi_kfz_test_liquibase.json" = { };
-        "c24_bi_kfz_prod_liquibase.json" = { };
+
+        # NOT here, on purpose: the Atlassian (jira_*, confluence_*), absence.io
+        # and C24-BI credentials. They are CHECK24 work credentials with no use
+        # on the private Mac, and live in hosts/DKL6GDJ7X1/secrets.nix so only
+        # that host writes them to disk. Note that this scopes DEPLOYMENT, not
+        # readability -- every rule in .sops.yaml shares the same age recovery
+        # key, so either workstation can still open either file.
 
         # GROUPED IN THE YAML, FLAT ON DISK. `key` says where a value sits in the
         # encrypted file; `name` (the attribute) still decides the filename,
