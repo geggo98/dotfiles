@@ -67,7 +67,7 @@ $J transitions JIRA-3052                 # available transitions (id, target, na
 $J comments JIRA-3052 --max 50           # newest comments first (idempotency pre-check)
 $J comment-get JIRA-3052 121771          # one comment's raw body (read side of comment-edit)
 $J search 'project = VUKFZIF AND status = "In QA"' --max 20   # JQL search
-$J links JIRA-3052                       # issue links
+$J links JIRA-3052                       # issue links: id, relation, key, status, summary
 $J attachments JIRA-3052                 # id/filename/size/mime/content-url per attachment
 $J download JIRA-3052 crawllog.zip       # download an attachment (by id or filename)
 $J user alex.beispiel@example.com        # resolve accountId (cached; see below)
@@ -84,7 +84,9 @@ $J --write comment JIRA-3052 --file note.md
 $J --write comment-edit JIRA-3052 121771 --file note.md      # replace a comment body
 $J --write assign JIRA-3052 @me                     # email / accountId / alias / --unassign
 $J --write label JIRA-3052 --add security --remove wip
-$J --write link JIRA-3052 "Blocks" JIRA-3060
+$J --write link JIRA-3052 "Blocks" JIRA-3060        # -> 3052 blocks 3060
+$J --write link JIRA-3052 "is blocked by" OPS-2328  # the inward phrasing too
+$J --write unlink JIRA-3052 72461                      # remove a link (id from `links`)
 $J --write watch JIRA-3052                          # add self as watcher (or unwatch)
 printf '%s' "<description>" | \
   $J --write create --type Task --label security --summary "[ServiceA] High CVEs (netty)" -
@@ -111,6 +113,18 @@ $J --write undo --id 42                                 # revert a specific jour
   **idempotent** (already in the target status → no-op). Accepts a numeric transition id too.
 - **`comment`** reads the body from **stdin** by default (`-`), so you post exactly the
   wiki-markup you intend without shell-quoting issues.
+- **`link` / `unlink`** — the arguments read as a **sentence**: `link A "Blocks" B` means
+  *A blocks B*. The middle argument may be the type name (`Blocks`), its outward
+  description (`blocks`) or its **inward** one (`is blocked by`), which reverses the
+  direction — so you never have to reason about which end of the REST payload is which.
+  An ambiguous phrase is refused, not guessed: `"Used by"` is the outward description of
+  `Used` **and** the inward one of `Depends`, and the error names both. `link` is
+  **idempotent** — an identical link is reported with its id instead of being created a
+  second time (Jira duplicates links silently). Every `link` **reads the result back**
+  and prints what Jira actually stored, e.g. `JIRA-3333 is blocked by OPS-2328
+  (link 72461, type Blocks)`; stdout gets the bare link id. `unlink <KEY> <link-id>`
+  takes the id from `links`; `KEY` must be one of the link's two ends, which is the guard
+  against deleting the wrong link from a stale id.
 - **`comments`** shows the newest `--max` (default 50) and warns on stderr when the ticket
   has more (`Showing newest N of M …`) — raise `--max` before trusting a negative
   idempotency check on a long-history ticket.
@@ -203,8 +217,11 @@ delete is reversible.
 
 Restores are honest about their limits: a deleted comment comes back as a **new**
 comment (original id/author/timestamps can't be recreated); this is stated in the output.
-Additive ops (`comment`, `attach`, `create`, `link`, `watch`) overwrite nothing and are
-not journaled.
+`link` and `unlink` are journaled too, and their inverses are exact: undo of a `link`
+deletes it, undo of an `unlink` re-creates it from the recorded type and both ends. Only
+the link **id** changes (ids are not reusable), which the output says. The remaining
+additive ops (`comment`, `attach`, `create`, `watch`) overwrite nothing and are not
+journaled.
 
 ## Credentials
 
@@ -234,8 +251,10 @@ Exit codes: `0` ok, `1` bad args / gating refusal, `2` missing prereq/credential
 ## Security
 
 - The client speaks **only issue-scoped endpoints** (`/issue/…`, `/user/…`, `/myself`,
-  `/search`, `/issueLink`, `/attachment/<id>`). It knows **no** board/workflow-config
-  endpoints — boards and the workflow itself cannot be changed, only individual tickets.
+  `/search`, `/issueLink`, `/issueLinkType`, `/attachment/<id>`). It knows **no**
+  board/workflow-config endpoints — boards and the workflow itself cannot be changed,
+  only individual tickets. `/issueLinkType` is read-only here: it is queried to resolve a
+  relation phrase, never to create or edit a link type.
 - `create` is pre-set to `$JIRA_PROJECT_KEY` (`--project` / env overrides deliberately).
 - `describe` **replaces** the description (journaled for undo). Deletes require the
   explicit `--dangerous` flag and are journaled (with bytes, for attachments).
