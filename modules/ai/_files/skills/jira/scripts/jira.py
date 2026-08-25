@@ -83,6 +83,10 @@ def log_info(msg: str) -> None:
     print(f"{YELLOW}Info: {msg}{NC}", file=sys.stderr)
 
 
+def log_warn(msg: str) -> None:
+    print(f"{YELLOW}Warning: {msg}{NC}", file=sys.stderr)
+
+
 # Human status lines go to STDERR so stdout carries ONLY the machine result
 # (id/key/json/tsv) — e.g. CID=$(jira.sh --write comment KEY -) captures just the id.
 def log_success(msg: str) -> None:
@@ -1143,31 +1147,151 @@ def cmd_search(ctx: Ctx, args: list[str]) -> None:
     emit(text, out=out, label="search", ext=("json" if fmt == "json" else "txt"))
 
 
-def cmd_links(ctx: Ctx, args: list[str]) -> None:
-    fmt, key, out = _parse_format_key(args, "links", "tsv", "json")
-    key = require_key(key, "links")
-    validate_format(fmt, "tsv", "json")
-    data = ctx.client.get(f"/issue/{key}?fields=issuelinks")
+# --------------------------------------------------------------------------
+# Issue links — helpers shared by the read side (`links`) and the write side
+# (`link` / `unlink` / undo), so the two can never drift apart
+# --------------------------------------------------------------------------
+
+# THE POST PAYLOAD'S FIELD NAMES DO NOT MEAN WHAT THEY LOOK LIKE:
+#
+#     {"type": T, "inwardIssue": A, "outwardIssue": B}   ==   "A <T.outward> B"
+#
+# The inwardIssue is the SUBJECT of the type's *outward* description. Measured
+# 2026-08-25 against the live site, from two independent directions:
+#
+#     GET /issueLink/72461  -> type Blocks (outward "blocks", inward "is blocked by")
+#                              inwardIssue   OPS-2328
+#                              outwardIssue  JIRA-3333
+#     GET /issue/JIRA-3333?fields=issuelinks   -> "is blocked by OPS-2328"
+#     GET /issue/OPS-2328?fields=issuelinks  -> "blocks JIRA-3333"
+#
+# cmd_link had the two fields swapped until 2026-08-25 and silently created
+# backwards links. Do not "fix" this back by reading the field names —
+# _read_links() below renders a link exactly as Jira's own UI does and is the
+# cross-check, which is why every write here is verified by reading it back
+# instead of by trusting this comment.
+
+
+def _link_types(client: JiraClient) -> list[dict]:
+    return (client.get("/issueLinkType") or {}).get("issueLinkTypes") or []
+
+
+def _resolve_link_phrase(client: JiraClient, phrase: str) -> tuple[str, bool]:
+    """Map a caller's phrase onto (link type name, reversed?).
+
+    Accepts the type NAME ("Blocks"), its OUTWARD description ("blocks") or its
+    INWARD one ("is blocked by"), so the caller never has to think about which
+    end of the payload is which. reversed=True means the inward reading:
+    "KEY <inward> OTHER" is the same link as "OTHER <outward> KEY".
+    """
+    want = (phrase or "").strip().casefold()
+    if not want:
+        raise SkillError("link requires a link type or relation phrase", 1)
+    types = _link_types(client)
+    # A type NAME wins outright. It is unambiguous by construction, and without
+    # this precedence "Contains" would collide with its own outward description.
+    for t in types:
+        if (t.get("name") or "").strip().casefold() == want:
+            return t["name"], False
+    cands: list[tuple[str, bool]] = []
+    for t in types:
+        if (t.get("outward") or "").strip().casefold() == want:
+            cands.append((t["name"], False))
+        if (t.get("inward") or "").strip().casefold() == want:
+            cands.append((t["name"], True))
+    uniq = sorted(set(cands))
+    if len({name for name, _ in uniq}) == 1:
+        # Exactly one type. Two entries here means a SYMMETRIC type ("Relates",
+        # whose inward and outward descriptions are both "relates to"): the two
+        # directions render identically, so collapse rather than report an
+        # ambiguity the caller could not act on.
+        return uniq[0][0], uniq[0][1] if len(uniq) == 1 else False
+    if not uniq:
+        lines = [f"Unknown link type or relation: '{phrase}'. This site offers:"]
+        for t in sorted(types, key=lambda x: (x.get("name") or "")):
+            lines.append(
+                f"  {(t.get('name') or ''):<26}"
+                f"outward: {t.get('outward')!r:<24}inward: {t.get('inward')!r}"
+            )
+        raise SkillError("\n".join(lines), 1)
+    # Real collision, e.g. "Used by" is the outward of `Used` AND the inward of
+    # `Depends`. Never guess — name both and make the caller choose.
+    lines = [f"'{phrase}' is ambiguous — it names {len(uniq)} different relations:"]
+    for name, rev in uniq:
+        t = next(x for x in types if x["name"] == name)
+        lines.append(f"  type {name!r}: KEY {(t['inward'] if rev else t['outward'])!r} OTHER")
+    lines.append("Re-run with the exact type name to say which one you mean.")
+    raise SkillError("\n".join(lines), 1)
+
+
+def _link_payload(key: str, other: str, type_name: str, reverse: bool) -> dict:
+    # See the block comment above: inwardIssue is the subject of the OUTWARD
+    # description, so "KEY <outward> OTHER" puts KEY in inwardIssue.
+    subject, obj = (other, key) if reverse else (key, other)
+    return {
+        "type": {"name": type_name},
+        "inwardIssue": {"key": subject},
+        "outwardIssue": {"key": obj},
+    }
+
+
+def _read_links(client: JiraClient, key: str) -> list[dict]:
+    """Every link on `key`, rendered from KEY's point of view.
+
+    Each entry names the OTHER issue, and the field it sits in gives the
+    direction: `outwardIssue` present -> KEY is the subject (type.outward),
+    otherwise KEY is the object (type.inward). Same rule Jira's UI applies.
+    """
+    data = client.get(f"/issue/{key}?fields=issuelinks")
     rows = []
     for l in (data["fields"].get("issuelinks") or []):
         t = l.get("type", {})
         if l.get("outwardIssue"):
-            other, rel = l["outwardIssue"], t.get("outward")
+            other, rel, direction = l["outwardIssue"], t.get("outward"), "outward"
         else:
-            other, rel = l.get("inwardIssue", {}), t.get("inward")
+            other, rel, direction = l.get("inwardIssue", {}), t.get("inward"), "inward"
         of = other.get("fields", {}) or {}
         rows.append(
             {
+                "id": l.get("id"),
+                "type": t.get("name"),
+                "direction": direction,
                 "relation": rel,
                 "key": other.get("key"),
                 "status": (of.get("status") or {}).get("name"),
                 "summary": of.get("summary"),
             }
         )
+    return rows
+
+
+def _render_link(key: str, row: dict) -> str:
+    return f"{key} {row['relation']} {row['key']} (link {row['id']}, type {row['type']})"
+
+
+def _find_link(rows: list[dict], other: str, type_name: str, direction: str) -> dict | None:
+    hits = [r for r in rows if r["key"] == other and r["type"] == type_name and r["direction"] == direction]
+    # Jira hands out ascending ids, so the highest is the one a POST just made
+    # when an identical pair already existed.
+    hits.sort(key=lambda r: int(r["id"]) if str(r["id"]).isdigit() else 0)
+    return hits[-1] if hits else None
+
+
+def cmd_links(ctx: Ctx, args: list[str]) -> None:
+    fmt, key, out = _parse_format_key(args, "links", "tsv", "json")
+    key = require_key(key, "links")
+    validate_format(fmt, "tsv", "json")
+    rows = _read_links(ctx.client, key)
     if fmt == "json":
         text = json.dumps(rows, indent=2, ensure_ascii=False)
     else:
-        text = "\n".join(f"{r['relation']}\t{r['key']}\t{r['status'] or '-'}\t{r['summary'] or ''}" for r in rows)
+        # The id comes FIRST: it is the handle `unlink` needs, and it was missing
+        # from both formats until 2026-08-25 — which is what made a wrongly
+        # directed link unfixable without hand-written REST calls.
+        text = "\n".join(
+            f"{r['id']}\t{r['relation']}\t{r['key']}\t{r['status'] or '-'}\t{r['summary'] or ''}"
+            for r in rows
+        )
     emit(text, out=out, label=f"links-{key}", ext=("json" if fmt == "json" else "txt"))
 
 
@@ -1596,18 +1720,91 @@ def cmd_label(ctx: Ctx, args: list[str]) -> None:
 
 def cmd_link(ctx: Ctx, args: list[str]) -> None:
     pos = [a for a in args if not a.startswith("--")]
-    if [a for a in args if a.startswith("--")]:
-        raise SkillError(f"Unknown link flag: '{[a for a in args if a.startswith('--')][0]}'", 1)
+    flags = [a for a in args if a.startswith("--")]
+    if flags:
+        raise SkillError(f"Unknown link flag: '{flags[0]}'", 1)
     if len(pos) != 3:
-        raise SkillError('link requires <KEY> <type> <other-KEY> (e.g. link A "Blocks" B)', 1)
-    key, ltype, other = pos
+        raise SkillError(
+            "link requires <KEY> <type-or-phrase> <other-KEY>, read as a sentence:\n"
+            '  link A "Blocks" B          ->  A blocks B\n'
+            '  link A "is blocked by" B   ->  A is blocked by B',
+            1,
+        )
+    key, phrase, other = pos
     key = require_key(key, "link")
     other = require_key(other, "link")
-    ctx.client.post(
-        "/issueLink",
-        {"type": {"name": ltype}, "outwardIssue": {"key": key}, "inwardIssue": {"key": other}},
+    if key == other:
+        raise SkillError(f"Refusing to link {key} to itself.", 1)
+    client = ctx.client
+    type_name, reverse = _resolve_link_phrase(client, phrase)
+    direction = "inward" if reverse else "outward"
+
+    # Already there? Jira creates duplicate links without a word, so look before
+    # posting and report the existing one instead of adding a second.
+    existing = _find_link(_read_links(client, key), other, type_name, direction)
+    if existing:
+        log_warn(f"link already exists — {_render_link(key, existing)}. Nothing posted.")
+        print(existing["id"])
+        return
+
+    client.post("/issueLink", _link_payload(key, other, type_name, reverse))
+
+    # Report the RESULT, not the intent. POST /issueLink answers 201 with an
+    # empty body, so the id and the actual direction can only come from a
+    # read-back — which is also what makes a reversed payload visible at once
+    # instead of weeks later on the ticket.
+    row = _find_link(_read_links(client, key), other, type_name, direction)
+    if not row:
+        raise SkillError(
+            f"{key}: the POST succeeded but the new link is not visible on read-back.\n"
+            f"  expected: {key} <{type_name}, {direction}> {other}\n"
+            f"  DO NOT re-run this command — Jira creates duplicate links silently.\n"
+            f"  Check with: links {key}",
+            3,
+        )
+    UndoJournal().record(
+        key,
+        "link",
+        str(row["id"]),
+        {"type": type_name, "reverse": reverse, "other": other, "rendered": _render_link(key, row)},
     )
-    log_success(f"Linked {key} —{ltype}→ {other}.")
+    log_success(f"{_render_link(key, row)} (undo available).")
+    print(row["id"])
+
+
+def cmd_unlink(ctx: Ctx, args: list[str]) -> None:
+    pos = [a for a in args if not a.startswith("--")]
+    flags = [a for a in args if a.startswith("--")]
+    if flags:
+        raise SkillError(f"Unknown unlink flag: '{flags[0]}'", 1)
+    if len(pos) != 2:
+        raise SkillError("unlink requires <KEY> <link-id> (the id comes from 'links KEY')", 1)
+    key, lid = pos
+    key = require_key(key, "unlink")
+    if not lid.isdigit():
+        raise SkillError(f"unlink requires a numeric link id, got '{lid}' — see 'links {key}'", 1)
+    client = ctx.client
+    l = client.get(f"/issueLink/{lid}")
+    t = l.get("type") or {}
+    inward = (l.get("inwardIssue") or {}).get("key")
+    outward = (l.get("outwardIssue") or {}).get("key")
+    # The API does not need KEY; this command does. It is the guard that keeps a
+    # stale id from quietly deleting a link on some other ticket.
+    if key not in (inward, outward):
+        raise SkillError(
+            f"Link {lid} does not touch {key} — it connects {inward} and {outward}.\n"
+            f"  Refusing to delete it. Run 'links {key}' for this issue's link ids.",
+            1,
+        )
+    rendered = f"{inward} {t.get('outward')} {outward}"
+    UndoJournal().record(
+        key,
+        "unlink",
+        lid,
+        {"type": t.get("name"), "inwardIssue": inward, "outwardIssue": outward, "rendered": rendered},
+    )
+    client.delete(f"/issueLink/{lid}")
+    log_success(f"{key}: link {lid} deleted — was: {rendered} (undo available).")
 
 
 def cmd_watch(ctx: Ctx, args: list[str]) -> None:
@@ -1693,6 +1890,28 @@ def _apply_undo(client: JiraClient, row: tuple) -> str:
     if op == "label":
         client.put(f"/issue/{key}", {"fields": {"labels": prior.get("labels", [])}})
         return f"{key}: labels restored."
+    if op == "link":
+        client.delete(f"/issueLink/{ref}")
+        return f"{key}: link {ref} removed (was: {prior.get('rendered')})."
+    if op == "unlink":
+        inward, outward = prior.get("inwardIssue"), prior.get("outwardIssue")
+        client.post(
+            "/issueLink",
+            {
+                "type": {"name": prior.get("type")},
+                "inwardIssue": {"key": inward},
+                "outwardIssue": {"key": outward},
+            },
+        )
+        # Read back for the new id — link ids are not reusable, so say so rather
+        # than let someone assume the old id still addresses this link.
+        other = outward if key == inward else inward
+        direction = "outward" if key == inward else "inward"
+        row = _find_link(_read_links(client, key), other, prior.get("type"), direction)
+        return (
+            f"{key}: link re-created as {row['id'] if row else '?'} "
+            f"(original id {ref}; ids are not reusable)."
+        )
     if op == "comment-rm":
         resp = client.post(f"/issue/{key}/comment", {"body": prior.get("body", "")})
         return (
@@ -1788,6 +2007,7 @@ COMMANDS: dict[str, tuple[Any, str]] = {
     "describe": (cmd_describe, WRITE),
     "label": (cmd_label, WRITE),
     "link": (cmd_link, WRITE),
+    "unlink": (cmd_unlink, WRITE),
     "watch": (cmd_watch, WRITE),
     "unwatch": (cmd_unwatch, WRITE),
     # dangerous
@@ -1829,7 +2049,7 @@ READ (all accept [--output PATH|-]):
   users    <query>  --project KEY | --issue KEY [--format json|tsv] [--refresh]
                                                Assignable-user search (paged + cached).
   search   <JQL>    [--format tsv|json] [--max n]    JQL issue search.
-  links    <KEY>    [--format tsv|json]        List issue links.
+  links    <KEY>    [--format tsv|json]        Issue links: id, relation, key, status, summary.
   attachments <KEY>                            List attachments (id/name/size/mime/url).
   download <KEY> <att-id|filename> [--output P|-]   Download an attachment.
   undo     --list [--issue KEY]                List undoable journal entries.
@@ -1844,7 +2064,11 @@ WRITE (need --write):
   attach     <KEY> <file>...                   Upload attachment(s).
   describe   <KEY> [text | --file P | --file - | -] [--attach F]... [--embed F]...  Set/replace description.
   label      <KEY> [--add L]... [--remove L]...   Add/remove labels.
-  link       <KEY> <type> <other-KEY>          Link two issues (e.g. "Blocks").
+  link       <KEY> <type|phrase> <other-KEY>   Link two issues; reads as a sentence.
+             "Blocks" / "blocks" -> KEY blocks OTHER; "is blocked by" reverses it.
+             Idempotent: an identical link is reported, not duplicated.
+  unlink     <KEY> <link-id>                   Remove a link ('links' prints the ids).
+             KEY must be one of the link's two ends — a guard against a stale id.
   watch / unwatch <KEY> [accountId|@me]        Add/remove a watcher.
   undo       [--issue KEY] [--id N]            Apply the inverse of the last (or chosen) entry.
 
