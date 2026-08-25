@@ -153,16 +153,21 @@ let
       # `config`. `imports` may sit beside bare config attributes; `options`
       # may not.
       #
-      # Default off. +mcp-atlassian and the jira / bitbucket-pr skills all need
-      # the jira_* / confluence_* secrets, and those are CHECK24 work
-      # credentials that live on DKL6GDJ7X1 only (hosts/DKL6GDJ7X1/secrets.nix).
-      # On the private Mac the server would appear in the client's list, start,
-      # and die on `require_secrets` — worse than not being offered. `bb` is
-      # already DKL-only via homeManager.bitbucket-cli, so bitbucket-pr had no
-      # working CLI there either.
+      # Since 2026-08-25 this gates the SKILLS ONLY — the +mcp-atlassian server
+      # is commented out of mcpServerPkgs below. The option keeps its name: it
+      # still means "this host holds the Atlassian credentials", which is what
+      # both the skills and a re-enabled server would depend on.
+      #
+      # Default off. The jira / bitbucket-pr skills need the jira_* /
+      # confluence_* secrets, and those are CHECK24 work credentials that live
+      # on DKL6GDJ7X1 only (hosts/DKL6GDJ7X1/secrets.nix). On the private Mac
+      # the skills would be offered and then fail on a missing credential —
+      # worse than not being offered. `bb` is already DKL-only via
+      # homeManager.bitbucket-cli, so bitbucket-pr had no working CLI there
+      # either.
       atlassianOptions = { lib, ... }: {
         options.my.ai.atlassian.enable = lib.mkEnableOption
-          "the Atlassian integration — the +mcp-atlassian server plus the jira and bitbucket-pr skills";
+          "the Atlassian integration — currently the jira and bitbucket-pr skills";
       };
 
       atlassian = config.my.ai.atlassian.enable;
@@ -194,7 +199,17 @@ let
       # Single source of truth for which MCP servers exist and which
       # package provides each one. Each agent (claude-code, opencode,
       # codex) consumes this through a small mapping function below.
-      # `atlassian` is the only conditional entry — see atlassianOptions above.
+      #
+      # atlassian is DISABLED since 2026-08-25 (commented out, not deleted).
+      # The `jira` and `bitbucket-pr` skills cover the same ground with a
+      # narrower, testable client, and the server cost one `docker run` per
+      # Claude session: `--rm` fires on a clean exit, so a killed session
+      # leaves the container behind and they accumulate. The mcp-atlassian
+      # let-binding above stays so re-enabling is this one line again.
+      #
+      # Note this attrset feeds FOUR sinks — the claude-code, opencode and
+      # codex configs plus home.packages below — so the commented-out entry
+      # also removes `+mcp-atlassian` from PATH, not just from the MCP lists.
       mcpServerPkgs = {
         context7 = mcp-context7;
         devenv = mcp-devenv;
@@ -204,7 +219,7 @@ let
         zai-search = mcp-zai-search;
         zai-vision = mcp-zai-vision;
         zai-web-reader = mcp-zai-web-reader;
-      } // lib.optionalAttrs atlassian { atlassian = mcp-atlassian; };
+      }; # // lib.optionalAttrs atlassian { atlassian = mcp-atlassian; };
 
       mcpCmd = name: pkg: "${pkg}/bin/+mcp-${name}";
 

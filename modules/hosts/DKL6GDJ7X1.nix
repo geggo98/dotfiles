@@ -56,9 +56,10 @@ in
     homebrew.masApps = { };
 
     home-manager.users."stefan.schwetschke" = {
-      # The Atlassian integration lives on the work host alone: +mcp-atlassian
-      # and the jira / bitbucket-pr skills all need the jira_* / confluence_*
-      # credentials, which are declared in hosts/DKL6GDJ7X1/secrets.nix.
+      # The Atlassian integration lives on the work host alone: the jira and
+      # bitbucket-pr skills need the jira_* / confluence_* credentials, which
+      # are declared in hosts/DKL6GDJ7X1/secrets.nix. (The +mcp-atlassian
+      # server this used to gate as well is commented out in mcp-servers.nix.)
       my.ai.atlassian.enable = true;
 
       programs.git.settings.user.email = "stefan.schwetschke@check24.de";
