@@ -1176,7 +1176,7 @@ def _link_types(client: JiraClient) -> list[dict]:
     return (client.get("/issueLinkType") or {}).get("issueLinkTypes") or []
 
 
-def _resolve_link_phrase(client: JiraClient, phrase: str) -> tuple[str, bool]:
+def _resolve_link_phrase(client: JiraClient, phrase: str, key: str, other: str) -> tuple[str, bool]:
     """Map a caller's phrase onto (link type name, reversed?).
 
     Accepts the type NAME ("Blocks"), its OUTWARD description ("blocks") or its
@@ -1216,11 +1216,20 @@ def _resolve_link_phrase(client: JiraClient, phrase: str) -> tuple[str, bool]:
         raise SkillError("\n".join(lines), 1)
     # Real collision, e.g. "Used by" is the outward of `Used` AND the inward of
     # `Depends`. Never guess — name both and make the caller choose.
-    lines = [f"'{phrase}' is ambiguous — it names {len(uniq)} different relations:"]
+    #
+    # Each candidate is rendered in the type's CANONICAL OUTWARD direction, with
+    # the real issue keys. That is the only rendering in which the candidates
+    # actually differ: echoing the phrase the caller typed ("KEY 'Used by'
+    # OTHER") produces two identical lines, which names the ambiguity without
+    # resolving it. Measured against the live site on 2026-08-25 — the first
+    # version of this message did exactly that.
+    lines = [f"'{phrase}' is ambiguous — {len(uniq)} link types use that phrase:"]
+    width = max(len(repr(n)) for n, _ in uniq)
     for name, rev in uniq:
         t = next(x for x in types if x["name"] == name)
-        lines.append(f"  type {name!r}: KEY {(t['inward'] if rev else t['outward'])!r} OTHER")
-    lines.append("Re-run with the exact type name to say which one you mean.")
+        subj, obj = (other, key) if rev else (key, other)
+        lines.append(f"  type {repr(name):<{width}}  ->  {subj} {t['outward']} {obj}")
+    lines.append(f'Re-run with the exact type name, e.g.: link {key} "{uniq[0][0]}" {other}')
     raise SkillError("\n".join(lines), 1)
 
 
@@ -1736,7 +1745,7 @@ def cmd_link(ctx: Ctx, args: list[str]) -> None:
     if key == other:
         raise SkillError(f"Refusing to link {key} to itself.", 1)
     client = ctx.client
-    type_name, reverse = _resolve_link_phrase(client, phrase)
+    type_name, reverse = _resolve_link_phrase(client, phrase, key, other)
     direction = "inward" if reverse else "outward"
 
     # Already there? Jira creates duplicate links without a word, so look before

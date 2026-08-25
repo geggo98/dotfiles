@@ -303,6 +303,13 @@ err="$(run --write link $A "Used by" $B 2>&1 >/dev/null)"; rc=$?
   && [[ "$b" == "$(lpost)" ]]; } \
   && ok "an ambiguous phrase names both candidate types and posts nothing" \
   || no "ambiguity not reported rc=$rc err=$err"
+# ...and the two candidates must READ differently. Echoing the phrase the caller
+# typed renders both as "KEY 'Used by' OTHER" — that names the ambiguity without
+# resolving it, which is what the first version of this message did. Only the
+# canonical outward direction tells them apart.
+{ grep -q "$A Used by $B" <<<"$err" && grep -q "$B Depends on $A" <<<"$err"; } \
+  && ok "the two candidates are rendered so they differ (outward direction, real keys)" \
+  || no "ambiguity message does not distinguish the candidates: $err"
 
 # ...while a SYMMETRIC type matches both directions harmlessly and must not be
 # reported as ambiguous.
