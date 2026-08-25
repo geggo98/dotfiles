@@ -3,8 +3,9 @@
 
 No real JIRA account. Serves just enough of /rest/api/2 to exercise the client:
 read commands, comment post/delete, description PUT (for the undo round-trip),
-and a *paginated* /user/search that injects one HTTP 429 (to prove the client's
-retry/backoff) so the cache test can show the second lookup hits SQLite, not the API.
+issue links (create/list/delete + the link-type table), and a *paginated*
+/user/search that injects one HTTP 429 (to prove the client's retry/backoff) so
+the cache test can show the second lookup hits SQLite, not the API.
 
 Usage: mock_server.py <PORTFILE> <REQLOG> <BODYLOG>
   PORTFILE  the chosen port is written here once bound
@@ -33,7 +34,17 @@ STATE = {
             "updated": "2026-07-20T10:00:00.000+0000",
             "description": "ORIG DESC",
             "attachment": [],
-            "issuelinks": [],
+        },
+        # A second real issue, so links have somewhere to point.
+        "JIRA-2": {
+            "summary": "Link target",
+            "status": "To Do",
+            "issuetype": "Task",
+            "assignee": None,
+            "labels": [],
+            "updated": "2026-07-20T10:00:00.000+0000",
+            "description": "TARGET",
+            "attachment": [],
         },
         # ~60 KB description: proves `get --format json` stays parseable (it must not be
         # routed through the spill guard) and that `description` does spill.
@@ -46,9 +57,9 @@ STATE = {
             "updated": "2026-07-20T10:00:00.000+0000",
             "description": "BIG " * 15000,
             "attachment": [],
-            "issuelinks": [],
         },
     },
+    "links": {},
     "comments": {
         "JIRA-1": [
             {
@@ -62,6 +73,7 @@ STATE = {
     },
     "next_comment_id": 2000,
     "next_issue_id": 500,
+    "next_link_id": 9000,
     "user_429_served": False,
 }
 
@@ -71,6 +83,48 @@ TRANSITIONS = [
     {"id": "71", "name": "In QA", "to": {"id": "10091", "name": "In QA"}},
     {"id": "31", "name": "Done", "to": {"id": "10085", "name": "Done"}},
 ]
+
+# The four types below are copied VERBATIM from the live site (2026-08-25), and
+# the selection is deliberate — each one buys a test the others cannot:
+#   Blocks   asymmetric, the everyday case
+#   Relates  SYMMETRIC (outward == inward), so a phrase matches both directions
+#   Depends / Used  a REAL collision: "Used by" is the outward of `Used` AND the
+#                   inward of `Depends`, so the ambiguity test is genuine rather
+#                   than an invented string nothing would ever produce.
+LINK_TYPES = [
+    {"id": "10000", "name": "Blocks", "outward": "blocks", "inward": "is blocked by"},
+    {"id": "10003", "name": "Relates", "outward": "relates to", "inward": "relates to"},
+    {"id": "10010", "name": "Depends", "outward": "Depends on", "inward": "Used by"},
+    {"id": "10012", "name": "Used", "outward": "Used by", "inward": "Uses"},
+]
+
+
+def _link_side(key):
+    """The nested issue stub Jira puts on each end of a link."""
+    it = STATE["issue"].get(key)
+    if not it:
+        return {"key": key}
+    return {"key": key, "fields": {"status": {"name": it["status"]}, "summary": it["summary"]}}
+
+
+def _issue_links(key):
+    """The `issuelinks` field as real Jira renders it, from KEY's point of view.
+
+    Mirrors the shape measured on link 72461: on the link's *inwardIssue* the
+    counterpart appears under `outwardIssue` (that end is the subject of
+    type.outward), and on the *outwardIssue* it appears under `inwardIssue`.
+    Getting this backwards would make the direction test cheerfully confirm the
+    very bug it exists to catch, so it is asserted against the real site, not
+    inferred from the field names."""
+    out = []
+    for lid, l in sorted(STATE["links"].items(), key=lambda kv: int(kv[0])):
+        inw, outw = l["inwardIssue"]["key"], l["outwardIssue"]["key"]
+        if key == inw:
+            out.append({"id": lid, "type": l["type"], "outwardIssue": _link_side(outw)})
+        elif key == outw:
+            out.append({"id": lid, "type": l["type"], "inwardIssue": _link_side(inw)})
+    return out
+
 
 # 60 users matching any query — forces two pages at the client's 50/page.
 USERS = [
@@ -100,7 +154,7 @@ def _issue_fields(key, fields=None):
         "updated": it["updated"],
         "description": it["description"],
         "attachment": it["attachment"],
-        "issuelinks": it["issuelinks"],
+        "issuelinks": _issue_links(key),
     }
     if not fields:
         return all_fields
@@ -198,6 +252,53 @@ class Handler(BaseHTTPRequestHandler):
             ]
             return self._send(200, {"issues": issues, "isLast": True, "nextPageToken": None})
 
+        # Issue links. Kept above the /issue/... routes below: the regex there does
+        # not match "/issueLink", but the paths are one character apart and the next
+        # person to widen that regex should trip over this comment first.
+        if path == "/rest/api/2/issueLinkType" and method == "GET":
+            return self._send(200, {"issueLinkTypes": LINK_TYPES})
+
+        if path == "/rest/api/2/issueLink" and method == "POST":
+            b = body or {}
+            name = (b.get("type") or {}).get("name")
+            t = next((x for x in LINK_TYPES if x["name"] == name), None)
+            if not t:
+                return self._send(400, {"errorMessages": [f"no such link type: {name}"]})
+            inw = (b.get("inwardIssue") or {}).get("key")
+            outw = (b.get("outwardIssue") or {}).get("key")
+            for k in (inw, outw):
+                if k not in STATE["issue"]:
+                    return self._send(404, {"errorMessages": [f"issue not found: {k}"]})
+            with LOCK:
+                STATE["next_link_id"] += 1
+                lid = str(STATE["next_link_id"])
+            # Real Jira answers 201 with an EMPTY body — the id is not returned.
+            # That is precisely why the client has to read the link back.
+            STATE["links"][lid] = {
+                "id": lid,
+                "type": t,
+                "inwardIssue": {"key": inw},
+                "outwardIssue": {"key": outw},
+            }
+            return self._send(201)
+
+        lm = re.match(r"^/rest/api/2/issueLink/([0-9]+)$", path)
+        if lm:
+            lid = lm.group(1)
+            l = STATE["links"].get(lid)
+            if not l:
+                return self._send(404, {"errorMessages": [f"no such link: {lid}"]})
+            if method == "GET":
+                return self._send(200, {
+                    "id": lid,
+                    "type": l["type"],
+                    "inwardIssue": _link_side(l["inwardIssue"]["key"]),
+                    "outwardIssue": _link_side(l["outwardIssue"]["key"]),
+                })
+            if method == "DELETE":
+                del STATE["links"][lid]
+                return self._send(204)
+
         # Bare POST /issue — create. Must come before the /issue/<KEY> regex below, which
         # does not match this path (which is why `create` was untestable until now).
         if path == "/rest/api/2/issue" and method == "POST":
@@ -214,7 +315,6 @@ class Handler(BaseHTTPRequestHandler):
                 "updated": "2026-07-20T12:00:00.000+0000",
                 "description": fields.get("description"),
                 "attachment": [],
-                "issuelinks": [],
             }
             return self._send(201, {"id": str(STATE["next_issue_id"]), "key": key})
 

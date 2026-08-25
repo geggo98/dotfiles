@@ -231,6 +231,118 @@ err="$(env -u JIRA_API_TOKEN -u JIRA_URL -u JIRA_USERNAME SOPS_SECRETS_DIR="$TMP
   && ok "a 404 names the token source and warns that auth also yields 404" \
   || no "404 is not self-diagnosing: $err"
 
+echo "== test 12: issue links — direction, ids, idempotency, unlink, undo =="
+# The bug this block exists for: cmd_link filled inwardIssue/outwardIssue the
+# wrong way round, so `link A "Blocks" B` recorded "B blocks A". Nothing caught
+# it because (a) there was no test, (b) the command reported its INTENT
+# ("Linked A —Blocks→ B") rather than what Jira had stored, and (c) `links`
+# printed no id, so the wrong link could not even be named, let alone deleted.
+A=JIRA-1; B=JIRA-2
+lpost(){ count 'POST /rest/api/2/issueLink$'; }
+ldel(){ count 'DELETE /rest/api/2/issueLink/'; }
+# The inward/outward keys of the most recent POST /issueLink, as the client sent it.
+lastlink(){ python3 - "$BODYLOG" <<'PY'
+import json, sys
+last = None
+for line in open(sys.argv[1]):
+    d = json.loads(line)
+    if d["method"] == "POST" and d["path"] == "/rest/api/2/issueLink":
+        last = d["body"]
+if last:
+    print(last["inwardIssue"]["key"], last["outwardIssue"]["key"], last["type"]["name"])
+PY
+}
+# One link row from `links`, by link id: "<relation>|<other>"
+lrow(){ run links "$1" --format tsv --output - 2>/dev/null \
+          | perl -F'\t' -lane 'print "$F[1]|$F[2]" if $F[0] eq $ENV{LID}'; }
+
+b="$(lpost)"
+err="$(run link $A "Blocks" $B 2>&1 >/dev/null)"; rc=$?
+{ [[ $rc -eq 1 ]] && grep -q -- "--write" <<<"$err" && [[ "$b" == "$(lpost)" ]]; } \
+  && ok "link without --write is refused (no POST)" || no "link gating rc=$rc (before=$b after=$(lpost))"
+
+lid="$(run --write link $A "Blocks" $B 2>"$TMP/e12a")"; rc=$?
+{ [[ $rc -eq 0 ]] && [[ "$lid" =~ ^[0-9]+$ ]]; } \
+  && ok "link --write puts the link id on stdout ($lid)" || no "link rc=$rc lid='$lid'"
+
+# THE REGRESSION GUARD. Measured on the live site: the payload's inwardIssue is
+# the SUBJECT of the type's outward description, so "A blocks B" is
+# {inwardIssue: A, outwardIssue: B}. Swapped, this line reads "$B $A Blocks".
+[[ "$(lastlink)" == "$A $B Blocks" ]] \
+  && ok "payload direction: inwardIssue=$A, outwardIssue=$B for 'A blocks B'" \
+  || no "REGRESSION: payload is '$(lastlink)', expected '$A $B Blocks'"
+
+grep -q "$A blocks $B" "$TMP/e12a" \
+  && ok "link reports the read-back result ('$A blocks $B'), not its intent" \
+  || no "no rendered result on stderr: $(cat "$TMP/e12a")"
+
+LID="$lid" lrow $A | grep -qx "blocks|$B" \
+  && ok "links lists the new link by id, relation 'blocks'" || no "links row: $(LID=$lid lrow $A)"
+
+b="$(lpost)"
+lid2="$(run --write link $A "Blocks" $B 2>"$TMP/e12b")"; rc=$?
+{ [[ $rc -eq 0 ]] && [[ "$lid2" == "$lid" ]] && [[ "$b" == "$(lpost)" ]] \
+  && grep -q "already exists" "$TMP/e12b"; } \
+  && ok "an identical link is warned about and NOT duplicated (id $lid2 reported again)" \
+  || no "idempotency broke rc=$rc lid2='$lid2' posts $b->$(lpost)"
+
+# The inward phrasing: "A Uses B" is the inward reading of type `Used`, so the
+# payload must be swapped — the caller never has to think about direction.
+lid3="$(run --write link $A "Uses" $B 2>/dev/null)"
+[[ "$(lastlink)" == "$B $A Used" ]] \
+  && ok "an inward phrase reverses the payload (inwardIssue=$B)" \
+  || no "inward phrase payload is '$(lastlink)', expected '$B $A Used'"
+LID="$lid3" lrow $A | grep -qx "Uses|$B" \
+  && ok "links renders it back as the inward phrase ('Uses')" || no "links row: $(LID=$lid3 lrow $A)"
+
+# "Used by" is the outward of `Used` AND the inward of `Depends` — a real
+# collision on the live site, not an invented one.
+b="$(lpost)"
+err="$(run --write link $A "Used by" $B 2>&1 >/dev/null)"; rc=$?
+{ [[ $rc -eq 1 ]] && grep -q "Depends" <<<"$err" && grep -q "Used" <<<"$err" \
+  && [[ "$b" == "$(lpost)" ]]; } \
+  && ok "an ambiguous phrase names both candidate types and posts nothing" \
+  || no "ambiguity not reported rc=$rc err=$err"
+
+# ...while a SYMMETRIC type matches both directions harmlessly and must not be
+# reported as ambiguous.
+run --write link $A "relates to" $B >/dev/null 2>&1 \
+  && ok "a symmetric phrase ('relates to') resolves instead of erroring" || no "symmetric phrase rejected"
+
+b="$(lpost)"
+err="$(run --write link $A "frobnicates" $B 2>&1 >/dev/null)"; rc=$?
+{ [[ $rc -eq 1 ]] && grep -q "Blocks" <<<"$err" && [[ "$b" == "$(lpost)" ]]; } \
+  && ok "an unknown phrase lists the available types and posts nothing" || no "unknown phrase rc=$rc"
+
+b="$(lpost)"
+run --write link $A "Blocks" $A >/dev/null 2>&1; rc=$?
+{ [[ $rc -eq 1 ]] && [[ "$b" == "$(lpost)" ]]; } \
+  && ok "linking an issue to itself is refused" || no "self-link accepted"
+
+b="$(ldel)"
+err="$(run unlink $A "$lid" 2>&1 >/dev/null)"; rc=$?
+{ [[ $rc -eq 1 ]] && grep -q -- "--write" <<<"$err" && [[ "$b" == "$(ldel)" ]]; } \
+  && ok "unlink without --write is refused (no DELETE)" || no "unlink gating rc=$rc"
+
+# The KEY argument is the guard: the API would happily delete this by id alone.
+lidx="$(run --write link JIRA-99 "Blocks" $B 2>/dev/null)"
+b="$(ldel)"
+err="$(run --write unlink $A "$lidx" 2>&1 >/dev/null)"; rc=$?
+{ [[ $rc -eq 1 ]] && grep -q "does not touch" <<<"$err" && [[ "$b" == "$(ldel)" ]]; } \
+  && ok "unlink refuses a link that does not touch KEY (no DELETE)" || no "KEY guard rc=$rc err=$err"
+
+run --write unlink $A "$lid" >/dev/null 2>&1 && ok "unlink deletes with --write" || no "unlink failed"
+[[ -z "$(LID=$lid lrow $A)" ]] && ok "the deleted link is gone from links" || no "link $lid survived unlink"
+
+# undo, both directions
+lid4="$(run --write link $A "Blocks" $B 2>/dev/null)"
+run --write undo --issue $A >/dev/null 2>&1
+[[ -z "$(LID=$lid4 lrow $A)" ]] && ok "undo removes a link that 'link' journalled" || no "undo did not remove link $lid4"
+run --write unlink $A "$lid3" >/dev/null 2>&1
+run --write undo --issue $A >/dev/null 2>&1
+run links $A --format tsv --output - 2>/dev/null | perl -F'\t' -lane 'print $F[1]' | grep -qx "Uses" \
+  && ok "undo re-creates a link that 'unlink' deleted (relation preserved)" || no "undo did not restore the unlinked link"
+
 echo
 echo "== results: $pass passed, $fail failed =="
 [[ $fail -eq 0 ]]
