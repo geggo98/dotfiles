@@ -764,7 +764,7 @@ Each module defines a single aspect across all relevant configuration classes (d
 | `git.nix` | Git configuration via `flake.modules.homeManager.git` |
 | `neovim.nix` | Neovim (nvf) in two variants: `homeManager.neovim` (workstation, every `languages.*` enabled) and `homeManager.neovim-server` (same editor, no language toolchains). See "Neovim: why there are two variants" |
 | `packages.nix` | Common packages via `flake.modules.homeManager.packages` |
-| `mcp-servers.nix` | Claude Code MCP server wrappers + the deployed skill tree via `flake.modules.homeManager.mcp-servers`. `my.ai.atlassian.enable` gates the `jira`/`bitbucket-pr` skills onto the work host; the `+mcp-atlassian` server it also used to gate is commented out (the skills replaced it) |
+| `mcp-servers.nix` | Claude Code MCP server wrappers + the deployed skill tree via `flake.modules.homeManager.mcp-servers`. `my.ai.atlassian.enable` gates the Atlassian server and the `jira`/`bitbucket-pr` skills onto the work host; `claudeMcpExclude` additionally hides a server from **Claude only** (currently `atlassian`, replaced there by the skills) |
 | `secrets.nix` | SOPS secret declarations and per-host secret merging (**home-manager only** — servers use `nixos-secrets.nix`) |
 | `nixos-wiring.nix` | Defines `configurations.nixos` (module + `deployTarget`) and wires it to `flake.nixosConfigurations` and `flake.deployTargets` |
 | `nixos-base.nix` | Baseline for every NixOS host: sshd, root's authorized keys, the lockout assertions, serial getty, nix settings, GC |
@@ -1234,9 +1234,17 @@ grep -rn --include='*.nix' 'sops\.secrets\.' modules/
    which `programs.claude-code.skills` rejects with a message naming
    `_isLibCleanSourceWith` rather than the mistake.
    `modules/hosts/DKL6GDJ7X1.nix` sets `my.ai.atlassian.enable = true`; the
-   default is off. Note the server half is now commented out — the option gates
-   only the skills, so the `lib.optionalAttrs` line survives as the pattern
-   rather than as live code.
+   default is off.
+
+   **That option is the HOST gate, not a per-agent one.** `mcpServerPkgs` feeds
+   all three agents *and* `home.packages`, so removing an entry there also takes
+   the `+mcp-<name>` wrapper off `PATH`. To hide a server from a single agent,
+   subtract it from that agent's own list instead — `claudeMcpExclude` does
+   exactly that for claude-code. And note home-manager renders
+   `programs.claude-code.mcpServers` into a *generated plugin*
+   (`claude-code-home-manager`, handed to the wrapper as `--plugin-dir`), so
+   that one list governs both the MCP entry and the plugin-provided tools:
+   they are the same mechanism, not two switches.
 
 ### The iTerm2 Web profile carries its DuckDuckGo settings in the URL
 
