@@ -141,9 +141,13 @@ because VS Code loads the higher version and the gallery copy carries a version 
 in its directory name while the Nix one does not. The pin then exists and does nothing.
 
 ```bash
-ls -l ~/.vscode/extensions | grep -c -- '-> /nix/store'   # expect 16
+find ~/.vscode/extensions -maxdepth 1 -type l | wc -l     # expect 16
 ls ~/.vscode/extensions | grep -E '^(docker\.docker|eamodio\.gitlens)-'  # expect nothing
 ```
+
+`find`, deliberately, not `ls -l | grep -- '->'`: the latter reported 0 on a correctly
+switched machine because the interactive `ls` renders symlinks with `⇒`. A shell alias
+must not decide whether a check passes.
 
 `extensions.autoUpdate` and `extensions.autoCheckUpdates` are both off in
 `modules/vscode.nix` for exactly this reason. The cost is deliberate and worth stating:

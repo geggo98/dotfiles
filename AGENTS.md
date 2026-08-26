@@ -1296,8 +1296,14 @@ so a leftover gallery copy silently wins and the Nix pin does nothing. That is w
 uninstalls the gallery copies first, and why the check after a switch is:
 
 ```bash
-ls -l ~/.vscode/extensions | grep -c -- '-> /nix/store'   # expect 16
+find ~/.vscode/extensions -maxdepth 1 -type l | wc -l     # expect 16
 ```
+
+Use `find`, not `ls -l | grep -- '->'`. That pipeline reported **0** on a correctly
+switched machine on 2026-08-26, because the interactive `ls` here renders symlinks with
+`⇒` rather than `->` — a shell alias silently turned a passing check into a failing one.
+`find -type l` depends on neither the alias nor the arrow, and every symlink at that
+depth is a Nix one: VS Code's own installs are real directories.
 
 `mutableExtensionsDir = true` keeps that directory real and writable, which is what lets
 project-specific extensions be installed into it by hand. The alternative — a single
