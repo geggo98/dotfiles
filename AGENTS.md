@@ -1004,6 +1004,36 @@ Include host IDs and commands executed in commit body when relevant. Iterate wit
 
 **`Co-Authored-By` trailer (Claude Code):** Use only the generic form — `Co-Authored-By: Claude <noreply@anthropic.com>`. Do **not** embed a specific model name, version, or context label (e.g. `Claude Opus 4.7 (1M context)`): Claude's content-integrity guardrail may block such trailers as impersonation of a "fabricated model". The block is non-deterministic (observed: the same string passed in one turn and was rejected in another), so even "it worked last time" is not a safe signal. The generic form always passes.
 
+## This repository is PUBLIC — what needs explicit clearance
+
+`github.com/geggo98/dotfiles` is public, and it carries work configuration. Two kinds of
+content therefore need the user's **explicit** go-ahead before they are committed, every
+single time. **A clearance given once does not carry over to the next occurrence.**
+
+1. **Personal data of third parties** — names, email addresses, account ids, handles, of
+   anyone other than the repository owner. They did not agree to be published here.
+2. **Internal infrastructure** — hostnames, repository and product names, Jira project
+   keys, cloud project ids, real ticket numbers, runbook names, workflow configuration.
+
+**Re-question these at every review, including what is already in the tree.** That
+something sits in the repo is not evidence that anyone cleared it; far more often it
+means nobody looked. Measured 2026-08-26 while preparing a routine push: a colleague's
+name, work email and Atlassian `accountId` had been committed and pushed months earlier.
+The `accountId` sat in `jira.py` as a bare string with no company name anywhere near it,
+so no keyword search had ever surfaced it. Alongside it: internal repository tags taken
+"from real tickets", an internal runbook reference, GCP project ids, and a Bitbucket repo
+slug. None of it had been noticed, and none of it had to be there.
+
+**Pasted example output is the usual way in**, because it carries whatever happened to be
+on the line. Before committing an example, replace real ticket keys, PR numbers, repo
+slugs and account ids with placeholders. That this is a live risk rather than a
+hypothetical one is visible in the repo's own history: in `bitbucket-pr/SKILL.md` the
+branch name (`feature/x`) and the numeric issue id (`123456`) had been sanitised, while
+the repo slug and the PR number on the very same line had not.
+
+When in doubt, ask. The cost of asking is one question; the cost of not asking was a
+196-commit history rewrite and a force-push.
+
 ## Secrets & Configuration Tips
 
 ### One env name, one file — and export as few secret values as possible
