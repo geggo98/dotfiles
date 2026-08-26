@@ -226,11 +226,29 @@ let
       # `docker run` per session. `--rm` only fires on a clean exit, so every
       # killed session left its container behind and they accumulated.
       #
+      # devenv, since 2026-08-26 — TEMPORARY, remove once upstream is fixed:
+      # cachix/devenv#3065, "devenv mcp holds ~4 GiB per process for the
+      # lifetime of the process, and ignores SIGTERM" (open as of this date;
+      # reported on Linux, observed here on macOS too). It is a fixed
+      # initialisation cost rather than growth — ~4 GiB whether the process has
+      # run 2 h or 8 h — and because SIGTERM is ignored, each one outlives the
+      # session that started it, so they accumulate. Claude starts one in EVERY
+      # session, which is why it bites here first.
+      #
+      # Do not go looking for this in RSS: the report measures ~600 KiB
+      # resident against 4.1–4.3 GiB of swap. The same idle server is already on
+      # record in nix-tarball-cache-repack.nix holding 1815 open handles into
+      # the tarball cache.
+      #
+      # To hand it back when the issue closes: delete "devenv" below. Nothing
+      # else changes — opencode and codex keep the server either way, and
+      # `+mcp-devenv` stays on PATH.
+      #
       # home-manager renders programs.claude-code.mcpServers into a generated
       # plugin (`claude-code-home-manager`, passed as --plugin-dir), so this
       # one list governs BOTH the MCP entry and the plugin-provided tools —
       # they are the same mechanism, not two switches.
-      claudeMcpExclude = [ "atlassian" ];
+      claudeMcpExclude = [ "atlassian" "devenv" ];
 
       claudeMcpServers = lib.mapAttrs
         (name: pkg: {
