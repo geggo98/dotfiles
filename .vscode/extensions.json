@@ -1,0 +1,26 @@
+{
+  // What this REPOSITORY expects, which is a different question from what any one
+  // machine has installed globally. modules/vscode.nix pins a general set for these
+  // Macs; this file is what tells a colleague — or this user on a fresh machine —
+  // which extensions the repo itself assumes. See modules/_files/vscode/EXTENSIONS.md.
+  "recommendations": [
+    // 53 *.nix files. nix-ide brings the LSP (nixd/nil), not just highlighting.
+    "jnoortheen.nix-ide",
+    // 19 *.py files, scripts/supply-chain.py among them, plus the uv-based skill scripts.
+    "ms-python.python",
+    // 176 *.md files. AGENTS.md is the one that matters and it is long.
+    "davidanson.vscode-markdownlint",
+    // modules/_files/shell/*.fish and the fish functions in modules/shells.nix.
+    "bmalehorn.vscode-fish",
+    // hosts/*/secrets.enc.yaml, .sops.yaml, the Brewfile-adjacent YAML.
+    "redhat.vscode-yaml"
+  ],
+  // Deliberately NOT recommended, so nobody re-adds them:
+  //   TypeScript (infra/, 9 files) needs no extension — VS Code ships the language
+  //   service, and infra/ carries only a tsconfig.json, no eslint or biome config.
+  "unwantedRecommendations": [
+    // Syntax highlighting only, last published 2020, no language server.
+    // Superseded by jnoortheen.nix-ide above.
+    "bbenoist.nix"
+  ]
+}

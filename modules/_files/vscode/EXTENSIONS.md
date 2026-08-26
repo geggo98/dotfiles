@@ -89,6 +89,21 @@ folder is opened, and the pinning question stays with the project that needs the
 | Slides | `antfu.slidev` |
 | AWS | `amazonwebservices.aws-toolkit-vscode` |
 | XML | `dotjoshjohnson.xml` (Maven POMs) |
+| Nix | `jnoortheen.nix-ide` — cross-listed, see below |
+
+**`jnoortheen.nix-ide` appears in both lists on purpose**, and the two entries mean
+different things. It is in the managed set because this machine edits Nix everywhere, so
+the editor should always have it. It belongs in a Nix project's `.vscode/extensions.json`
+regardless: that file states what the PROJECT expects, for a colleague or for this user on
+a machine without the managed set. The managed set is a property of the machine; the
+recommendation is a property of the repository. `bbenoist.nix` is the one it replaces —
+syntax highlighting only, last published 2020, no LSP.
+
+```json
+{
+  "recommendations": ["jnoortheen.nix-ide"]
+}
+```
 
 `ms-python.vscode-pylance` is proprietary and exists only on the marketplace — another
 reason it is not a candidate for the managed set.
