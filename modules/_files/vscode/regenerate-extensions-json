@@ -1,0 +1,78 @@
+# Force VS Code to rebuild ~/.vscode/extensions/extensions.json from a directory scan.
+#
+# WHY THIS EXISTS. VS Code does not rescan its extension directory on its own —
+# extensions.json is the authority, and a symlink appearing beside it changes nothing.
+# home-manager knows that and ships an onChange hook doing exactly this, but the hook is
+# gated on `programs.vscode.package != null` (mkVscodeModule.nix). This repo sets
+# `package = null` because VS Code comes from a Homebrew cask, so the hook is off and
+# this replaces it.
+#
+# Measured 2026-08-26, right after a switch that planted all 16 symlinks correctly:
+# `code --list-extensions` listed NONE of them; deleting extensions.json and re-running
+# it listed all 16 at their pinned versions.
+#
+# Exit codes follow the repo's rule for resumable scripts: 0 = did work OR nothing to do,
+# 1 = refused (with a reason), 2 = error.
+set -euo pipefail
+
+extdir="${VSCODE_EXT_DIR:-$HOME/.vscode/extensions}"
+
+if [[ ! -d "$extdir" ]]; then
+  print -u2 -- "SKIP: $extdir does not exist — nothing to regenerate."
+  exit 0
+fi
+
+# Locate the cask's `code`. Not $(command -v code): an activation script inherits almost
+# no PATH, and a silent miss here looks exactly like success.
+code=""
+for c in "$HOME/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" \
+         "/Applications/Visual Studio Code.app/Contents/Resources/app/bin/code" \
+         "/opt/homebrew/bin/code"; do
+  if [[ -x "$c" ]]; then code="$c"; break; fi
+done
+if [[ -z "$code" ]]; then
+  print -u2 -- "REFUSED: no VS Code binary found. extensions.json was NOT regenerated,"
+  print -u2 -- "         so the Nix-managed extensions stay invisible to VS Code. Looked in"
+  print -u2 -- "         ~/Applications, /Applications and /opt/homebrew/bin."
+  exit 1
+fi
+
+# THE TRAP THIS GUARD EXISTS FOR. Uninstalling an extension only queues its directory in
+# .obsolete; VS Code deletes it at its next start. A rescan performed while the queue is
+# non-empty picks those directories up again — and since they carry a version suffix
+# while the nix symlinks do not, the higher version wins and the pin loses.
+# Measured the same day: regenerating with 39 queued directories resurrected five
+# uninstalled extensions and pinned gitlens to the gallery's 19.0.1 instead of 18.3.0.
+pending=$(python3 -c '
+import json, os, sys
+d = sys.argv[1]
+f = os.path.join(d, ".obsolete")
+try:
+    obsolete = json.load(open(f)) if os.path.exists(f) else {}
+except Exception:
+    print("?")
+    sys.exit(0)
+print(sum(1 for name in obsolete if os.path.exists(os.path.join(d, name))))
+' "$extdir" 2>/dev/null) || pending="?"
+
+if [[ -z "$pending" || "$pending" == "?" ]]; then
+  print -u2 -- "REFUSED: could not read $extdir/.obsolete. Not regenerating, because doing"
+  print -u2 -- "         so blind risks resurrecting uninstalled extensions over the pins."
+  exit 1
+fi
+
+if (( pending > 0 )); then
+  print -u2 -- "REFUSED: $pending extension director$( (( pending == 1 )) && print -n y || print -n ies ) still queued for deletion in"
+  print -u2 -- "         $extdir/.obsolete. Regenerating now would bring them back and shadow"
+  print -u2 -- "         the Nix pins. Start VS Code once so it clears the queue, then re-run."
+  exit 1
+fi
+
+rm -f -- "$extdir/extensions.json" "$extdir/.init-default-profile-extensions"
+"$code" --list-extensions >/dev/null
+
+n=$(python3 -c '
+import json, sys
+print(len(json.load(open(sys.argv[1]))))
+' "$extdir/extensions.json" 2>/dev/null) || n="?"
+print -u2 -- "OK: extensions.json regenerated — $n extensions registered."

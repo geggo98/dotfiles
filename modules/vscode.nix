@@ -19,6 +19,48 @@
       # `open-vsx-release` yields 18.3.0.
       ovsx = pkgs.nix-vscode-extensions.open-vsx-release;
       vsmp = pkgs.nix-vscode-extensions.vscode-marketplace-release;
+
+      # Same wrapper shape as mkZshScript in modules/nix-cache.nix. PATH is set
+      # explicitly rather than inherited: an activation script gets almost none, and the
+      # script's python3 must not depend on what happens to be installed.
+      regenScript = pkgs.writeTextFile {
+        name = "+vscode-regen-extensions";
+        destination = "/bin/+vscode-regen-extensions";
+        executable = true;
+        text = ''
+          #!${pkgs.zsh}/bin/zsh
+          export PATH="${lib.makeBinPath [ pkgs.python3 pkgs.coreutils ]}:/usr/bin:/bin"
+          ${builtins.readFile ./_files/vscode/regenerate-extensions-json}
+        '';
+      };
+
+      generalExtensions = [
+        # -- Markdown, docs, diagrams ------------------------------------
+        ovsx.davidanson.vscode-markdownlint
+        vsmp.yzhang.markdown-all-in-one # Open VSX is stuck on 3.6.2 (2024-01)
+        ovsx.jebbs.plantuml
+        vsmp.pomdtr.excalidraw-editor # Open VSX is stuck on 3.9.0
+
+        # -- Containers and Kubernetes -----------------------------------
+        ovsx.docker.docker
+        vsmp.ms-azuretools.vscode-containers # Open VSX lags: 2.4.5 vs 2.5.0
+        ovsx.ms-kubernetes-tools.vscode-kubernetes-tools
+
+        # -- Git ---------------------------------------------------------
+        ovsx.eamodio.gitlens
+
+        # -- This repo's own languages -----------------------------------
+        ovsx.jnoortheen.nix-ide
+        ovsx.redhat.vscode-yaml
+        ovsx.bmalehorn.vscode-fish
+
+        # -- Editor comfort ----------------------------------------------
+        ovsx.vscode-icons-team.vscode-icons
+        vsmp.christian-kohler.path-intellisense # Open VSX: 2.8.0 from 2022
+        ovsx.marclipovsky.string-manipulation
+        ovsx.ms-vscode.hexeditor
+        vsmp.deerawan.vscode-dash # not on Open VSX at all (404)
+      ];
     in
     {
       programs.vscode = {
@@ -50,33 +92,7 @@
           # higher version — the pin would survive and do nothing.
           enableExtensionUpdateCheck = false;
 
-          extensions = [
-            # -- Markdown, docs, diagrams ------------------------------------
-            ovsx.davidanson.vscode-markdownlint
-            vsmp.yzhang.markdown-all-in-one # Open VSX is stuck on 3.6.2 (2024-01)
-            ovsx.jebbs.plantuml
-            vsmp.pomdtr.excalidraw-editor # Open VSX is stuck on 3.9.0
-
-            # -- Containers and Kubernetes -----------------------------------
-            ovsx.docker.docker
-            vsmp.ms-azuretools.vscode-containers # Open VSX lags: 2.4.5 vs 2.5.0
-            ovsx.ms-kubernetes-tools.vscode-kubernetes-tools
-
-            # -- Git ---------------------------------------------------------
-            ovsx.eamodio.gitlens
-
-            # -- This repo's own languages -----------------------------------
-            ovsx.jnoortheen.nix-ide
-            ovsx.redhat.vscode-yaml
-            ovsx.bmalehorn.vscode-fish
-
-            # -- Editor comfort ----------------------------------------------
-            ovsx.vscode-icons-team.vscode-icons
-            vsmp.christian-kohler.path-intellisense # Open VSX: 2.8.0 from 2022
-            ovsx.marclipovsky.string-manipulation
-            ovsx.ms-vscode.hexeditor
-            vsmp.deerawan.vscode-dash # not on Open VSX at all (404)
-          ];
+          extensions = generalExtensions;
 
           userSettings = {
             # Theme
@@ -179,11 +195,38 @@
         };
       };
 
+      # VS Code does not rescan its extension directory: extensions.json is the
+      # authority, and a symlink appearing beside it changes nothing. home-manager ships
+      # an onChange hook for exactly this, gated on `package != null` — so the `package =
+      # null` above switches it off. This puts it back. The reasoning, the measurement
+      # and the .obsolete trap it guards against are in the script itself.
+      #
+      # The file's content is the canonical extension list, so it changes precisely when
+      # the managed set does. Nothing reads it; it exists to trigger onChange.
+      home.file.".vscode/extensions/.nix-managed-extensions.json" = {
+        text = pkgs.vscode-utils.toExtensionJson generalExtensions;
+        # `|| [ $? -eq 1 ]` tolerates exit 1 and ONLY exit 1. The script uses 1 for a
+        # deliberate refusal with a printed reason — a state a human resolves, not a
+        # reason to abort a whole system activation. A real error (2) still propagates,
+        # and a plain `|| true` would have swallowed that too.
+        onChange = "${regenScript}/bin/+vscode-regen-extensions || [ $? -eq 1 ]";
+      };
+
+      # Also on PATH, because the one case the hook cannot handle is the one that needs
+      # a human: extensions queued for deletion have to be cleared by starting VS Code
+      # once, and only then can the registry be rebuilt.
+      home.packages = [ regenScript ];
+
       # The Turbo Vision theme stays a hand-built local extension: it exists in no
-      # registry, so nix-vscode-extensions cannot supply it. Leaf files inside a
-      # real directory, which is also the proof that VS Code discovers extensions
-      # by scanning — its entry in extensions.json carries no `metadata` block,
-      # unlike every gallery install.
+      # registry, so nix-vscode-extensions cannot supply it. Leaf files inside a real
+      # directory rather than a directory symlink, so VS Code's own writes to that
+      # directory keep working.
+      #
+      # Its entry in extensions.json carries no `metadata` block, unlike every gallery
+      # install. That was once read here as proof that VS Code discovers new directories
+      # by scanning — it is not. It only proves the directory was scanned ONCE, whenever
+      # this theme first appeared. Measured 2026-08-26: VS Code did not pick up sixteen
+      # freshly planted symlinks until extensions.json was deleted. Hence regenScript.
       home.file.".vscode/extensions/local-turbo-vision-theme/package.json".source =
         ./_files/vscode/turbo-vision-package.json;
       home.file.".vscode/extensions/local-turbo-vision-theme/themes/turbo-vision-color-theme.json".source =
