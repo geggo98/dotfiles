@@ -27,17 +27,29 @@ extensions = 14
 # week later than upstream.
 nixpkgs-llm-agents = 14
 
+# nix-vscode-extensions gets the EXTENSION bar, not the input bar, because for this
+# input the two are the same number. It carries no version strings of its own: each
+# daily revision pins whatever each registry served that day, so a revision N days old
+# pins extension versions at least N days old. Setting 5 here would quietly grant every
+# extension a 5-day cooldown while layer 3 below claims 14.
+nix-vscode-extensions = 14
+
 [freeze]
 # Inputs `just update` must not touch at all, with the reason. A freeze is NOT a
 # cooldown: it says "do not move this", not "move it to something older".
 #
-# nix-vscode-extensions: currently has zero consumers. It is kept, not deleted, because
-# it is intended to manage the VS Code DEFAULT extension set (further extensions go in
-# each project's .vscode metadata). Until that lands there is nothing to update it for,
-# and its pinned rev 242a696 (2026-07-25) sits one day before the Open VSX evil-twin
+# Empty since 2026-08-26. nix-vscode-extensions was frozen here while it had zero
+# consumers, held at rev 242a696 (2026-07-25) — one day before the Open VSX evil-twin
 # campaign window (2026-07-26 .. 08-01, 77 counterfeit extensions beaconing to
-# mangorbit[.]com). Unfreeze in the same change that declares [[extensions]] below.
-inputs = ["nix-vscode-extensions"]
+# mangorbit[.]com). modules/vscode.nix now consumes it and [[extensions]] below is
+# populated, which was the stated condition for unfreezing.
+#
+# Moving it forward does not walk into that window: the cooldown picks the NEWEST
+# revision that clears the bar, so a 14-day bar lands near today-minus-14 — after the
+# window closed on 08-01, not inside it. And a later snapshot is the safer one, because
+# counterfeit extensions are REMOVED once noticed; freezing preserves whatever was true
+# on the pinned day, including anything not yet found.
+inputs = []
 
 # ---------------------------------------------------------------------------------
 # Layer 2 — packages worth dating individually.
@@ -103,8 +115,88 @@ npm = "ccusage"
 # that a date cannot give you. Same shape as the FlakeHub `yanked_at` check in layer 1,
 # which caught determinate 3.22.0 — old enough at 15 days, but yanked.
 #
-# Example of the intended shape:
-#   [[extensions]]
-#   id = "rust-lang.rust-analyzer"
-#   registry = "open-vsx"          # or "vscode-marketplace"
-extensions = []
+# Populated 2026-08-26, in the same change that wired the input into
+# modules/vscode.nix and emptied [freeze] above. Registry per entry, because Open VSX is
+# not a faithful mirror — measured that day, it served path-intellisense 2.8.0 (2022)
+# against the marketplace's 2.10.0, and answered 404 for vscode-dash outright.
+#
+# NOTE these were array-of-tables from the start for a reason. The placeholder this
+# replaced was a bare `extensions = []` sitting AFTER the [[packages]] tables, so TOML
+# parsed it as a key of the last package (ccusage) rather than a top-level list —
+# `manifest.get("extensions")` never saw it. Harmless while empty, since the fallback is
+# also []; not harmless the moment anything is declared. Keep this section last and keep
+# it as [[extensions]].
+#
+# What this layer does NOT check: it resolves its own candidate version from the
+# registry and reports that. It does not read the version nix-vscode-extensions actually
+# pins, so a clean run means "this extension is still healthy upstream", not "the
+# installed version is healthy". Rules 1 and 3 — still there, still listed — are the
+# withdrawal signal, and those are what a date cannot give you.
+
+[[extensions]]
+id = "bmalehorn.vscode-fish"
+registry = "open-vsx"
+
+[[extensions]]
+id = "christian-kohler.path-intellisense"
+registry = "vscode-marketplace"      # Open VSX is stuck on 2.8.0 (2022-02)
+
+[[extensions]]
+id = "davidanson.vscode-markdownlint"
+registry = "open-vsx"
+
+[[extensions]]
+id = "deerawan.vscode-dash"
+registry = "vscode-marketplace"      # not on Open VSX at all (404)
+
+[[extensions]]
+id = "docker.docker"
+registry = "open-vsx"
+
+[[extensions]]
+# Audited against the marketplace although modules/vscode.nix takes it from Open VSX.
+# GitLens ships nightlies — 1141 of its 1488 listed versions are pre-releases — and the
+# Open VSX walk costs one HTTP request per version, so it is capped at 40 and never
+# reaches a release build. The marketplace returns the whole list in one request.
+id = "eamodio.gitlens"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "jebbs.plantuml"
+registry = "open-vsx"
+
+[[extensions]]
+id = "jnoortheen.nix-ide"
+registry = "open-vsx"
+
+[[extensions]]
+id = "marclipovsky.string-manipulation"
+registry = "open-vsx"
+
+[[extensions]]
+id = "ms-azuretools.vscode-containers"
+registry = "vscode-marketplace"      # Open VSX lags: 2.4.5 against 2.5.0
+
+[[extensions]]
+id = "ms-kubernetes-tools.vscode-kubernetes-tools"
+registry = "open-vsx"
+
+[[extensions]]
+id = "ms-vscode.hexeditor"
+registry = "open-vsx"
+
+[[extensions]]
+id = "pomdtr.excalidraw-editor"
+registry = "vscode-marketplace"      # Open VSX is stuck on 3.9.0
+
+[[extensions]]
+id = "redhat.vscode-yaml"
+registry = "open-vsx"
+
+[[extensions]]
+id = "vscode-icons-team.vscode-icons"
+registry = "open-vsx"
+
+[[extensions]]
+id = "yzhang.markdown-all-in-one"
+registry = "vscode-marketplace"      # Open VSX is stuck on 3.6.2 (2024-01)
