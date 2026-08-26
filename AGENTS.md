@@ -1397,6 +1397,32 @@ last switch — it compares the session name against the `lstat` mtime of the se
 symlink, which home-manager re-creates on every activation — because "VS Code has not
 started since" must never be reported as "clean".
 
+**Settings Sync is the second writer, and it is a structural conflict, not an accident.**
+Both Macs get `hm.vscode` from `modules/home-manager-base.nix`, and their two files cannot
+be identical: `terminal.integrated.profiles.osx` embeds
+`/etc/profiles/per-user/<username>/…`. Each side therefore wants to write the other's
+values into a file it may not touch. Measured on the same day: 5 of 5 syncs failed, and
+the last successfully applied state (`sync/settings/lastSyncsettings.json`) was months old
+— frozen precisely because a failed write is never acknowledged.
+
+The fix is to tell Sync that Nix owns these keys, generated rather than hand-listed:
+
+```nix
+userSettings = managedSettings // {
+  "settingsSync.ignoredSettings" = builtins.attrNames
+    (managedSettings // { "extensions.autoCheckUpdates" = false; });
+};
+```
+
+Two details in those three lines. `extensions.autoCheckUpdates` is named explicitly
+because home-manager merges it in **after** this attrset (out of
+`enableExtensionUpdateCheck`), so `attrNames` cannot see it. And
+`settingsSync.ignoredSettings` itself is deliberately absent from its own list: the
+setting carries `disallowSyncIgnore`, VS Code filters it out at runtime anyway, and naming
+it would show up as "Value is not accepted" against its own enum schema. Keys of
+extensions that are not installed can draw the same cosmetic hint — they are still
+honoured, because the list is evaluated as plain strings.
+
 #### The `[Theme]`-scoped colour warnings are a VS Code bug, not a bad value
 
 VS Code 1.134.0 marks **every** property inside the theme-scoped

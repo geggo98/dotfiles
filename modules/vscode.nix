@@ -61,6 +61,129 @@
         ovsx.ms-vscode.hexeditor
         vsmp.deerawan.vscode-dash # not on Open VSX at all (404)
       ];
+
+      # Named rather than inline so the Settings Sync ignore list below can be
+      # generated from its key set. Everything VS Code reads out of settings.json
+      # is in here.
+      managedSettings = {
+        # Theme
+        "workbench.colorTheme" = "Turbo Vision (based on Gerry Cyberpunk Plus)";
+        "workbench.preferredHighContrastColorTheme" = "Turbo Vision (based on Gerry Cyberpunk Plus)";
+        # Was unset until 2026-08-26, which made both installed icon themes
+        # inert. Named explicitly so the managed one is the one in effect.
+        "workbench.iconTheme" = "vscode-icons";
+
+        # Editor font: Operator Mono Lig → Maple Mono NF (OSS) → Victor Mono → Monaspace Radon
+        "editor.fontFamily" = "'Operator Mono Lig', 'Maple Mono NF', 'Victor Mono', 'Monaspace Radon', 'JetBrainsMono Nerd Font Mono', monospace";
+        "editor.fontSize" = 18;
+        "editor.fontLigatures" = true;
+        "editor.lineHeight" = 1.2;
+
+        "editor.accessibilitySupport" = "off";
+        "editor.lineNumbers" = "relative";
+
+        "notebook.lineNumbers" = "on";
+
+        # Terminal font: BerkeleyMono Nerd Font → IoskeleyMono Nerd Font (OSS) → JetBrains Mono Nerd Font
+        "terminal.integrated.fontFamily" = "'BerkeleyMono Nerd Font', 'IoskeleyMono Nerd Font', 'JetBrainsMono Nerd Font', 'Victor Mono', monospace";
+        "terminal.integrated.fontSize" = 13;
+
+        # Terminal profiles: Nix-managed shells
+        "terminal.integrated.profiles.osx" = {
+          "fish ❄️" = {
+            path = "/etc/profiles/per-user/${config.home.username}/bin/fish";
+            args = [ "-l" ];
+          };
+          "zsh ❄️" = {
+            path = "/etc/profiles/per-user/${config.home.username}/bin/zsh";
+            args = [ "-l" ];
+          };
+          "Agent (Claude)" = {
+            path = "/etc/profiles/per-user/${config.home.username}/bin/+agent-claude";
+          };
+        };
+        "terminal.integrated.defaultProfile.osx" = "fish ❄️";
+
+        # UI font hint: Nokia Sans Wide → Fira Sans (limited VS Code support)
+        "editor.inlayHints.fontFamily" = "'Nokia Sans Wide', 'Fira Sans', sans-serif";
+
+        # Editor behavior matching the IntelliJ theme
+        "editor.cursorBlinking" = "smooth";
+        "editor.cursorSmoothCaretAnimation" = "on";
+        "editor.smoothScrolling" = true;
+        "editor.renderWhitespace" = "boundary";
+        "editor.bracketPairColorization.enabled" = true;
+        "editor.guides.bracketPairs" = true;
+        "editor.guides.bracketPairsHorizontal" = "active";
+        "editor.guides.highlightActiveIndentation" = true;
+        "editor.semanticHighlighting.enabled" = true;
+
+        # Rainbow brackets & indent guides — colors scoped to the active theme
+        # See https://stackoverflow.com/a/72125627
+        #
+        # VS Code 1.134.0 marks every property in this block with "Property
+        # editorBracketPairGuide.background1 is not allowed." The values are correct and
+        # the colors ARE applied; the schema is at fault. A `[Theme]` block is validated
+        # against `{ $ref: "vscode://schemas/workbench-colors", additionalProperties: false }`,
+        # and the bundled JSON language service now follows draft-2019-09 semantics, where
+        # a `$ref` no longer contributes the `properties` annotation that
+        # `additionalProperties` consults — so every property inside the block is rejected,
+        # while the same keys one level up validate. microsoft/vscode#328165, closed for
+        # 1.135.0. Do not silence it by unscoping: that leaks these colors into every theme.
+        "workbench.colorCustomizations" = {
+          "[Turbo Vision (based on Gerry Cyberpunk Plus)]" = {
+            "editorBracketPairGuide.background1" = "#FFB86C";
+            "editorBracketPairGuide.background2" = "#FF75B5";
+            "editorBracketPairGuide.background3" = "#45A9F9";
+            "editorBracketPairGuide.background4" = "#B084EB";
+            "editorBracketPairGuide.background5" = "#E6E6E6";
+            "editorBracketPairGuide.background6" = "#19F9D8";
+            "editorBracketPairGuide.activeBackground1" = "#FFB86C";
+            "editorBracketPairGuide.activeBackground2" = "#FF75B5";
+            "editorBracketPairGuide.activeBackground3" = "#45A9F9";
+            "editorBracketPairGuide.activeBackground4" = "#B084EB";
+            "editorBracketPairGuide.activeBackground5" = "#E6E6E6";
+            "editorBracketPairGuide.activeBackground6" = "#19F9D8";
+          };
+        };
+
+        "files.autoSave" = "onFocusChange";
+
+        # Mark vendored/external source files as read-only
+        "files.readonlyInclude" = {
+          "**/.cargo/registry/src/**/*.rs" = true;
+          "**/.cargo/git/checkouts/**/*.rs" = true;
+          "**/lib/rustlib/src/rust/library/**/*.rs" = true;
+        };
+
+        # The other half of enableExtensionUpdateCheck above: that option only
+        # stops the CHECK. This stops the install. Both are needed, and the
+        # cost is deliberate — hand-installed project extensions stop
+        # updating themselves too, which is the same cooldown posture
+        # modules/supply-chain-hardening.nix already takes for npm/uv/pnpm/bun.
+        #
+        # A STRING, and that is not cosmetic. VS Code 1.134.0 declares this as
+        # `{ type: "string", enum: ["on", "off"], default: "on" }` and registers a
+        # migration beside it that rewrites the old boolean — `false` → `"off"`. The
+        # migration runs on EVERY start and its result can never be persisted, because
+        # settings.json is a read-only /nix/store symlink. Measured 2026-08-26 with
+        # `false` here, four seconds after launch:
+        #   [error] Unable to write file 'vscode-userdata:…/User/settings.json'
+        #           (EntryWriteLocked (FileSystemError): EACCES: permission denied)
+        # `just vscode-settings-check` is the standing check for that whole class:
+        # a value VS Code wants to rewrite is invisible until someone reads the log.
+        "extensions.autoUpdate" = "off";
+
+        "claudeCode.preferredLocation" = "sidebar";
+        "excalidraw.theme" = "auto";
+        "github.copilot.chat.claudeAgent.enabled" = true;
+        "gitlens.plusFeatures.enabled" = false;
+        "gitlens.showWhatsNewAfterUpgrades" = false;
+        "git.autofetch" = true;
+        "git.confirmSync" = false;
+        "git.enableSmartCommit" = true;
+        "git.suggestSmartCommit" = false;
+      };
     in
     {
       programs.vscode = {
@@ -94,124 +217,18 @@
 
           extensions = generalExtensions;
 
-          userSettings = {
-            # Theme
-            "workbench.colorTheme" = "Turbo Vision (based on Gerry Cyberpunk Plus)";
-            "workbench.preferredHighContrastColorTheme" = "Turbo Vision (based on Gerry Cyberpunk Plus)";
-            # Was unset until 2026-08-26, which made both installed icon themes
-            # inert. Named explicitly so the managed one is the one in effect.
-            "workbench.iconTheme" = "vscode-icons";
-
-            # Editor font: Operator Mono Lig → Maple Mono NF (OSS) → Victor Mono → Monaspace Radon
-            "editor.fontFamily" = "'Operator Mono Lig', 'Maple Mono NF', 'Victor Mono', 'Monaspace Radon', 'JetBrainsMono Nerd Font Mono', monospace";
-            "editor.fontSize" = 18;
-            "editor.fontLigatures" = true;
-            "editor.lineHeight" = 1.2;
-
-            "editor.accessibilitySupport" = "off";
-            "editor.lineNumbers" = "relative";
-
-            "notebook.lineNumbers" = "on";
-
-            # Terminal font: BerkeleyMono Nerd Font → IoskeleyMono Nerd Font (OSS) → JetBrains Mono Nerd Font
-            "terminal.integrated.fontFamily" = "'BerkeleyMono Nerd Font', 'IoskeleyMono Nerd Font', 'JetBrainsMono Nerd Font', 'Victor Mono', monospace";
-            "terminal.integrated.fontSize" = 13;
-
-            # Terminal profiles: Nix-managed shells
-            "terminal.integrated.profiles.osx" = {
-              "fish ❄️" = {
-                path = "/etc/profiles/per-user/${config.home.username}/bin/fish";
-                args = [ "-l" ];
-              };
-              "zsh ❄️" = {
-                path = "/etc/profiles/per-user/${config.home.username}/bin/zsh";
-                args = [ "-l" ];
-              };
-              "Agent (Claude)" = {
-                path = "/etc/profiles/per-user/${config.home.username}/bin/+agent-claude";
-              };
-            };
-            "terminal.integrated.defaultProfile.osx" = "fish ❄️";
-
-            # UI font hint: Nokia Sans Wide → Fira Sans (limited VS Code support)
-            "editor.inlayHints.fontFamily" = "'Nokia Sans Wide', 'Fira Sans', sans-serif";
-
-            # Editor behavior matching the IntelliJ theme
-            "editor.cursorBlinking" = "smooth";
-            "editor.cursorSmoothCaretAnimation" = "on";
-            "editor.smoothScrolling" = true;
-            "editor.renderWhitespace" = "boundary";
-            "editor.bracketPairColorization.enabled" = true;
-            "editor.guides.bracketPairs" = true;
-            "editor.guides.bracketPairsHorizontal" = "active";
-            "editor.guides.highlightActiveIndentation" = true;
-            "editor.semanticHighlighting.enabled" = true;
-
-            # Rainbow brackets & indent guides — colors scoped to the active theme
-            # See https://stackoverflow.com/a/72125627
-            #
-            # VS Code 1.134.0 marks every property in this block with "Property
-            # editorBracketPairGuide.background1 is not allowed." The values are correct and
-            # the colors ARE applied; the schema is at fault. A `[Theme]` block is validated
-            # against `{ $ref: "vscode://schemas/workbench-colors", additionalProperties: false }`,
-            # and the bundled JSON language service now follows draft-2019-09 semantics, where
-            # a `$ref` no longer contributes the `properties` annotation that
-            # `additionalProperties` consults — so every property inside the block is rejected,
-            # while the same keys one level up validate. microsoft/vscode#328165, closed for
-            # 1.135.0. Do not silence it by unscoping: that leaks these colors into every theme.
-            "workbench.colorCustomizations" = {
-              "[Turbo Vision (based on Gerry Cyberpunk Plus)]" = {
-                "editorBracketPairGuide.background1" = "#FFB86C";
-                "editorBracketPairGuide.background2" = "#FF75B5";
-                "editorBracketPairGuide.background3" = "#45A9F9";
-                "editorBracketPairGuide.background4" = "#B084EB";
-                "editorBracketPairGuide.background5" = "#E6E6E6";
-                "editorBracketPairGuide.background6" = "#19F9D8";
-                "editorBracketPairGuide.activeBackground1" = "#FFB86C";
-                "editorBracketPairGuide.activeBackground2" = "#FF75B5";
-                "editorBracketPairGuide.activeBackground3" = "#45A9F9";
-                "editorBracketPairGuide.activeBackground4" = "#B084EB";
-                "editorBracketPairGuide.activeBackground5" = "#E6E6E6";
-                "editorBracketPairGuide.activeBackground6" = "#19F9D8";
-              };
-            };
-
-            "files.autoSave" = "onFocusChange";
-
-            # Mark vendored/external source files as read-only
-            "files.readonlyInclude" = {
-              "**/.cargo/registry/src/**/*.rs" = true;
-              "**/.cargo/git/checkouts/**/*.rs" = true;
-              "**/lib/rustlib/src/rust/library/**/*.rs" = true;
-            };
-
-            # The other half of enableExtensionUpdateCheck above: that option only
-            # stops the CHECK. This stops the install. Both are needed, and the
-            # cost is deliberate — hand-installed project extensions stop
-            # updating themselves too, which is the same cooldown posture
-            # modules/supply-chain-hardening.nix already takes for npm/uv/pnpm/bun.
-            #
-            # A STRING, and that is not cosmetic. VS Code 1.134.0 declares this as
-            # `{ type: "string", enum: ["on", "off"], default: "on" }` and registers a
-            # migration beside it that rewrites the old boolean — `false` → `"off"`. The
-            # migration runs on EVERY start and its result can never be persisted, because
-            # settings.json is a read-only /nix/store symlink. Measured 2026-08-26 with
-            # `false` here, four seconds after launch:
-            #   [error] Unable to write file 'vscode-userdata:…/User/settings.json'
-            #           (EntryWriteLocked (FileSystemError): EACCES: permission denied)
-            # `just vscode-settings-check` is the standing check for that whole class:
-            # a value VS Code wants to rewrite is invisible until someone reads the log.
-            "extensions.autoUpdate" = "off";
-
-            "claudeCode.preferredLocation" = "sidebar";
-            "excalidraw.theme" = "auto";
-            "github.copilot.chat.claudeAgent.enabled" = true;
-            "gitlens.plusFeatures.enabled" = false;
-            "gitlens.showWhatsNewAfterUpgrades" = false;
-            "git.autofetch" = true;
-            "git.confirmSync" = false;
-            "git.enableSmartCommit" = true;
-            "git.suggestSmartCommit" = false;
+          # Settings Sync must not touch what Nix writes here — see the section in
+          # AGENTS.md. Generated rather than hand-listed, because a hand-listed set
+          # drifts exactly where nobody looks. Two details:
+          #   - `extensions.autoCheckUpdates` is named explicitly because home-manager
+          #     merges it in AFTER this attrset (mkVscodeModule.nix, out of
+          #     enableExtensionUpdateCheck), so attrNames cannot see it.
+          #   - `settingsSync.ignoredSettings` itself is deliberately absent: it carries
+          #     `disallowSyncIgnore`, is filtered out at runtime regardless, and listing
+          #     it would read as "Value is not accepted" against its own enum schema.
+          userSettings = managedSettings // {
+            "settingsSync.ignoredSettings" = builtins.attrNames
+              (managedSettings // { "extensions.autoCheckUpdates" = false; });
           };
         };
       };
