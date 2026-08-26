@@ -51,19 +51,77 @@
     let
       gradle-daemon-reap = pkgs.writeShellApplication {
         name = "gradle-daemon-reap";
-        runtimeInputs = [ pkgs.coreutils pkgs.findutils ];
+        runtimeInputs = [ pkgs.coreutils pkgs.findutils pkgs.perl ];
         text = ''
           threshold="''${1:-10800}"
-          now=$(date +%s)
 
-          # BSD ps prints [[dd-]hh:]mm:ss. Used only for daemons whose log we
+          # ALL timestamp arithmetic goes through perl, and that is a correctness
+          # decision rather than a style one. The obvious `date -d "$ts" +%s` is
+          # GNU-only — /bin/date answers "illegal option -- d" — so it worked here
+          # solely because coreutils sits in runtimeInputs. Its failure branch was
+          # `|| echo 0` feeding a `-gt 0` test, so the day anyone tidied that
+          # dependency away, this job would have reported "nothing to do" forever
+          # while reaping nothing: a silent no-op, the exact shape AGENTS.md warns
+          # about under "`|| fail` is where the distinction dies".
+          #
+          # perl is pinned in runtimeInputs like every other tool, and costs
+          # nothing extra — perl is already in this system's closure. It is also
+          # the repo's documented preference precisely because it behaves the same
+          # on macOS and Linux, unlike date, ps or find.
+          #
+          # Time::Local's timegm_modern is core since 5.10 and does pure UTC
+          # arithmetic; the UTC offset out of the log is applied by hand, so there
+          # is no local-time or DST case left to get wrong. Cross-checked against
+          # GNU date on ten inputs including both 2026 European DST transitions
+          # (the pairs one second apart give consecutive epochs), a leap day and a
+          # -1200 offset: identical to the second.
+
+          # Answers the only question that matters about a daemon: is a build
+          # running, and if not, how long has it been idle? One perl pass replaces
+          # grep + tail + date. Prints exactly one of:
+          #   inflight | idle <seconds> | nobuild | unparsable <timestamp>
+          daemon_log_state() {
+            perl -MTime::Local=timegm_modern -ne '
+              # Gradle brackets every build with "Command execution: started" and
+              # "... completed". Keeping only the LAST match means a build in
+              # flight is recognised however long ago it began — a long build must
+              # never be reaped just for exceeding the threshold.
+              #
+              # matches: 2026-08-26T12:10:39.684+0200 [DEBUG] [org.gradle.launcher.daemon.server.exec.LogToClient] Command execution: completed
+              if (m{^ (?<ts>\S+) \s .* Command\ execution:\ (?<what>started|completed) }x) {
+                ($T, $W) = ($+{ts}, $+{what});
+              }
+              END {
+                unless (defined $W)  { print "nobuild\n";  exit }
+                if ($W eq "started") { print "inflight\n"; exit }
+
+                # matches: 2026-08-26T12:10:39.684+0200, and the same without the
+                # fractional part or with a colon in the offset (+02:00).
+                unless ($T =~ m{
+                    ^ (?<Y>\d{4}) - (?<Mo>\d\d) - (?<D>\d\d)
+                    T (?<h>\d\d) : (?<mi>\d\d) : (?<s>\d\d)
+                      (?: \. \d+ )?
+                      (?<sign>[+-]) (?<oh>\d\d) :? (?<om>\d\d) $
+                }x) { print "unparsable $T\n"; exit }
+
+                my $off = ($+{oh} * 3600 + $+{om} * 60) * ($+{sign} eq "-" ? -1 : 1);
+                my $end = timegm_modern($+{s}, $+{mi}, $+{h}, $+{D}, $+{Mo} - 1, $+{Y}) - $off;
+                printf "idle %d\n", time - $end;
+              }
+            ' "$1"
+          }
+
+          # BSD `ps -o etime=` prints [[dd-]hh:]mm:ss and BSD ps has no `etimes`,
+          # so it has to be converted. Only reached for daemons whose log we
           # cannot find, i.e. those started with a foreign GRADLE_USER_HOME.
           etime_to_s() {
-            local t="$1" d=0 h=0 m=0 s=0 a b c
-            if [[ "$t" == *-* ]]; then d="''${t%%-*}"; t="''${t#*-}"; fi
-            IFS=: read -r a b c <<< "$t"
-            if [[ -n "''${c:-}" ]]; then h="$a"; m="$b"; s="$c"; else m="$a"; s="''${b:-0}"; fi
-            echo $(( 10#$d * 86400 + 10#$h * 3600 + 10#$m * 60 + 10#$s ))
+            perl -e '
+              # matches: 07:12 -> 432 | 04:18:18 -> 15498 | 2-03:04:05 -> 183845
+              $ARGV[0] =~ m{^ (?: (?<d>\d+) - )? (?: (?<h>\d+) : )? (?<m>\d+) : (?<s>\d+) $}x
+                or exit 1;
+              my $t = ($+{d} // 0) * 86400 + ($+{h} // 0) * 3600 + $+{m} * 60 + $+{s};
+              print $t;
+            ' "$1"
           }
 
           candidates=()
@@ -77,27 +135,33 @@
             log=$(find "$HOME/.gradle/daemon" -maxdepth 2 -name "daemon-$pid.out.log" 2>/dev/null | head -1)
 
             if [[ -n "$log" ]]; then
-              # Gradle brackets every build with `Command execution: started`
-              # and `... completed`. If the newer of the two is `started`, a
-              # build is in flight — regardless of how long ago it began. A long
-              # build must never be reaped just for exceeding the threshold.
-              last=$(grep -E 'Command execution: (started|completed)' "$log" | tail -1 || true)
-
-              if [[ "$last" == *"Command execution: started"* ]]; then
-                echo "$(date -Iseconds) pid $pid: build in flight — skipped"
-                continue
-              fi
-
-              if [[ -n "$last" ]]; then
-                since=$(date -d "''${last%% *}" +%s 2>/dev/null || echo 0)
-                [[ "$since" -gt 0 ]] || continue
-                idle=$(( now - since ))
-                why="idle $(( idle / 60 )) min since last build"
-              else
-                # Log exists but no build ever ran through it.
-                idle=$(etime_to_s "$(ps -o etime= -p "$pid" | tr -d ' ')")
-                why="up $(( idle / 60 )) min, never ran a build"
-              fi
+              # Evaluated ONCE. Calling it again inside a branch would not just
+              # waste a fork, it would race: a build starting between the two
+              # calls would be classified by the stale first answer.
+              state=$(daemon_log_state "$log")
+              case "$state" in
+                inflight)
+                  echo "$(date -Iseconds) pid $pid: build in flight — skipped"
+                  continue
+                  ;;
+                "idle "*)
+                  idle="''${state#idle }"
+                  why="idle $(( idle / 60 )) min since last build"
+                  ;;
+                nobuild)
+                  # Log exists but no build ever ran through it.
+                  idle=$(etime_to_s "$(ps -o etime= -p "$pid" | tr -d ' ')")
+                  why="up $(( idle / 60 )) min, never ran a build"
+                  ;;
+                *)
+                  # Anything else means the log said something we do not
+                  # understand. Say so and skip. The previous version had
+                  # `|| echo 0` here and a `-gt 0` test, which turned every
+                  # parse failure into an indistinguishable silent skip.
+                  echo "$(date -Iseconds) pid $pid: unreadable log state ($state) — skipped"
+                  continue
+                  ;;
+              esac
             else
               # No log under ~/.gradle: started with GRADLE_USER_HOME pointing
               # somewhere else (CLAUDE.md has agents use `mktemp -d` for
