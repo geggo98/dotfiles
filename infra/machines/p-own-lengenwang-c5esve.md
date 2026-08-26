@@ -435,6 +435,23 @@ restic's exit codes are mapped deliberately, per the resumability rule in
 and restart. A missing `.restic-env` or binary exits `2` immediately: no amount
 of waiting fixes it, and patiently retrying would hide it.
 
+**Measured afterwards: the loop is the second line of defence, not the first.**
+`/root/wan-ip-watch.sh` logs the external IP every 10 minutes, writing only on
+change, so a disconnect is *proven* rather than inferred from a broken backup.
+The night of 2026-08-23 recorded `OFFLINE` at 03:40:46 and a new address at
+03:50:01 — about nine minutes, IPv4 `79.231.192.45` → `91.44.135.196`, IPv6
+prefix `1f33:2ec` → `1f07:810a` with the EUI-64 suffix unchanged. The backup did
+not restart: attempt count stayed at 1, because restic's own per-request retries
+rode it out.
+
+That reframes the 20 August failure. It was not that restic cannot survive a
+disconnect; it was that the outage exhausted its retries *while saving the
+snapshot* (`Fatal: unable to save snapshot`), which is the one point where
+giving up ends the whole run. So the restart loop earns its keep on long or
+badly-timed outages, not on every nightly one — and without the IP log the two
+cases are indistinguishable, since a run that survives leaves no trace of what
+it survived.
+
 `Download` (241 GiB, now 356 GiB with snapshots) is deliberately not backed up —
 see the OTR section below.
 
@@ -468,10 +485,34 @@ therefore holds a **read-only** R2 credential and a Dropbox token, and nothing
 that can damage the original.
 
 The trade is that a byte-identical copy would copy damage too. Sequencing
-answers that rather than tooling: `restic check --read-data` against R2 *first*,
-then copy, then verify the destination *as a repository* from a workstation —
-`restic -r rclone:dropbox:restic-backup/<prefix> check`, which needs the
-password and deliberately does not run on the VPS.
+answers that rather than tooling — prove the source intact *before* copying.
+
+**And that proof needs no password either**, which is what makes the whole split
+work. restic names every pack file after the SHA-256 of its contents, so the
+filename verifies itself: download, hash, compare. Measured against a 16 MiB
+pack on 2026-08-26 — filename and computed digest identical. Hence:
+
+```bash
+systemctl start backup-verify-then-copy@p-own-lengenwang-c5esve
+```
+
+which hashes all ~50 800 packs and only copies if they come out clean.
+
+**Split by cost, not by what it proves.** The expensive half — reading ~840 GiB
+— runs on the VPS, where it is fast and needs no secret. Measured on the first
+run: **174 MB/s** inbound with eight parallel transfers, so about an hour rather
+than the six the single-stream 37 MB/s figure suggested; SHA-256 is nowhere near
+the bottleneck (43 % of one core, 87 % idle). The half that still needs the
+password is `restic check` **without** `--read-data`: it reads only index and
+snapshots, confirms nothing is missing and that the metadata matches the packs,
+and finishes in minutes even on a bad connection. Together that is the same
+guarantee `restic check --read-data` gives, without a laptop pulling a terabyte.
+
+The pack count is load-bearing, not decoration. The run counts the objects
+first and compares at the end; if rclone stops early, the verdict is
+**UNVOLLSTAENDIG** (exit 2) and explicitly not "clean". A check that reports
+success over half the data is worse than no check, because it retires the
+question.
 
 Note `rclone copy`, never `sync`: sync deletes whatever the source lacks, which
 is exactly wrong if the source is ever truncated.
@@ -480,7 +521,7 @@ is exactly wrong if the source is ever truncated.
 copy itself is ~$0.02 in Class B operations — *while the objects are still
 Standard*. The lifecycle rule demotes `<prefix>/data/` to Infrequent Access 30
 days after upload, and IA charges $0.01/GB to read: the same copy afterwards
-costs ~$10.30. `restic check --read-data` has the identical exposure. Phase-1
+costs ~$10.30. The pack verification reads everything too, so it has the identical exposure. Phase-1
 objects were written 2026-08-19 and turn cold on **2026-09-18**; the Filme
 objects follow at the end of September.
 
