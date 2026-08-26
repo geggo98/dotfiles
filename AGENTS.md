@@ -1296,8 +1296,13 @@ so a leftover gallery copy silently wins and the Nix pin does nothing. That is w
 uninstalls the gallery copies first, and why the check after a switch is:
 
 ```bash
-find ~/.vscode/extensions -maxdepth 1 -type l | wc -l     # expect 16
+find ~/.vscode/extensions -maxdepth 1 -type l ! -name '.*' | wc -l   # expect 16
 ```
+
+The `! -name '.*'` is load-bearing, not tidiness: `.nix-managed-extensions.json` — the
+file whose change triggers the regeneration hook — is itself a symlink, so a plain
+`-type l` counts 17 and the check fails on a correct machine. `!` rather than `-not`
+because `!` is POSIX; both were verified against `/usr/bin/find`.
 
 Use `find`, not `ls -l | grep -- '->'`. That pipeline reported **0** on a correctly
 switched machine on 2026-08-26, because the interactive `ls` here renders symlinks with
