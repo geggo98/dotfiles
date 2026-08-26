@@ -277,7 +277,7 @@ diff: build
 # Build and verify no package DELTA — which is weaker than it sounds, and the
 # gap has bitten: `nix store diff-closures` compares package names and versions,
 # so a same-name package whose *contents* changed is invisible to it. Measured
-# on the shells.nix split (c0a3eb1): the darwin-system derivation changed
+# on the shells.nix split (22cafcc): the darwin-system derivation changed
 # (7hkbppnc… -> msfspksx…) while this recipe reported "No differences". The
 # generated config.fish had the same 155 lines in a different order.
 #

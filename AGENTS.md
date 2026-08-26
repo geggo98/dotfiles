@@ -1639,11 +1639,11 @@ its own. Exit codes: `0` clean, `1` advisories found, `2` tool/network error.
    `pnpm-workspace.yaml` stay untouched; `git diff --stat infra/` must show
    `pnpm-lock.yaml` alone. Check the range against the registry *before* editing —
    `curl -fsSL https://registry.npmjs.org/<parent>/<version>` and read
-   `.dependencies`. This is the common case: `1c3d7cd` (tar, brace-expansion),
-   `7dd7121` (seven advisories at once).
+   `.dependencies`. This is the common case: `2c665a6` (tar, brace-expansion),
+   `964d3c9` (seven advisories at once).
 2. **It does not fit → bump the direct dependency** in `infra/package.json` so the
    floor is encoded where a human will see it (`^3.0.0` → `^3.252.0`). Example:
-   `7902ef9`.
+   `430370e`.
 3. **`pnpm.overrides` / `resolutions`: no.** Never used here, and rejected once on
    evidence — pinning a transitive Pulumi dependency broke the SDK at load, because
    the 1.x OTel siblings import symbols removed in core 2.x. Bump the coordinated
