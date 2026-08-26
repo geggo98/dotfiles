@@ -469,12 +469,24 @@ def openvsx_pick(namespace: str, name: str, cutoff: datetime
 
 def vsmarketplace_pick(namespace: str, name: str, cutoff: datetime
                        ) -> tuple[str, datetime, list[str]]:
-    """Same policy against the MS Marketplace gallery API (POST, flags=947 asks for
-    version metadata). Versions repeat per targetPlatform, so they are deduped."""
+    """Same policy against the MS Marketplace gallery API. Versions repeat per
+    targetPlatform, so they are deduped, and pre-releases are skipped as on Open VSX."""
+    # flags = IncludeVersions(1) | IncludeFiles(2) | IncludeCategoryAndTags(16)
+    #       | IncludeVersionProperties(32) | IncludeAssetUri(128) | IncludeStatistics(256)
+    #
+    # NOT IncludeLatestVersionOnly(512), which is what this asked for until 2026-08-26
+    # (flags=947) — and that made the walk below dead code: the response carried exactly
+    # one version, so any extension whose newest release sat inside the cooldown was
+    # reported TOO NEW even when a qualifying older version existed. Found the day
+    # [[extensions]] was first populated; ms-azuretools.vscode-containers failed on its
+    # 2.5.0 (1 day old) while 2.4.5 from 2026-05-29 was right there. Measured after the
+    # fix: 14 versions returned for that extension, 1488 for eamodio.gitlens — the whole
+    # list arrives in ONE request, unlike Open VSX which costs one request per version
+    # and is therefore capped at 40.
     payload = json.dumps({
         "filters": [{"criteria": [{"filterType": 7, "value": f"{namespace}.{name}"}],
                      "pageSize": 1, "pageNumber": 1}],
-        "flags": 947,
+        "flags": 435,
     }).encode()
     status, body = http_json(
         VSMARKETPLACE_QUERY, data=payload,
@@ -491,16 +503,30 @@ def vsmarketplace_pick(namespace: str, name: str, cutoff: datetime
     if not (ext.get("publisher") or {}).get("isDomainVerified"):
         notes.append("publisher domain NOT verified")
 
+    # Rule 4 says non-prerelease, and openvsx_pick has always honoured it via the
+    # `preRelease` field. The marketplace states it as a version PROPERTY instead, which
+    # is why IncludeVersionProperties(32) is in the flags above. Without this filter the
+    # nightly channel wins outright for anything that ships one: measured 2026-08-26,
+    # 1141 of eamodio.gitlens's 1488 listed versions are pre-releases, and the newest
+    # release build (18.3.0) sits far below them.
+    prerelease = 0
     seen: dict[str, datetime] = {}
     for v in ext.get("versions") or []:
         ver, raw = v.get("version"), v.get("lastUpdated")
-        if ver and raw and ver not in seen:
-            seen[ver] = iso(raw)
+        if not (ver and raw) or ver in seen:
+            continue
+        if any(prop.get("key") == "Microsoft.VisualStudio.Code.PreRelease"
+               for prop in (v.get("properties") or [])):
+            prerelease += 1
+            continue
+        seen[ver] = iso(raw)
+    if prerelease:
+        notes.append(f"{prerelease} pre-release version(s) skipped")
     for ver, when in sorted(seen.items(), key=lambda kv: kv[1], reverse=True):
         if when <= cutoff:
             return ver, when, notes
     raise ToolError(f"no Marketplace version of {namespace}.{name} is old enough "
-                    f"(newest {len(seen)} versions are all inside the cooldown)")
+                    f"(newest {len(seen)} release versions are all inside the cooldown)")
 
 
 def check_extension(ext_id: str, registry: str, cutoff: datetime, now: datetime
