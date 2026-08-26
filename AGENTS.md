@@ -40,6 +40,7 @@ A `justfile` provides safe, pre-approved commands that agents can run without us
 | `just audit-inputs` | Layer 1 only — fast, no npm or marketplace lookups |
 | `just audit-extensions [ids…]` | VS Code extensions: old enough **and** still published upstream |
 | `just creds-check` | Do the long-lived credentials still authenticate? (jira, confluence, bb) |
+| `just vscode-settings-check` | Has VS Code been trying to write the Nix-managed settings.json? |
 | `just diff` | Build and show package delta vs. current system |
 | `just verify-no-diff` | Build and assert no package delta (useful after refactoring) |
 | `just deps` | Show flake dependency tree |
@@ -1365,6 +1366,54 @@ directory was neither deleted nor queued, and a later rescan registered it again
 `mutableExtensionsDir = true` keeps that directory real and writable, which is what lets
 project-specific extensions be installed into it by hand. The alternative — a single
 directory symlink — would make VS Code's own `extensions.json` unwritable.
+
+#### settings.json is read-only, so anything that wants to write it loops forever
+
+`programs.vscode` renders `~/Library/Application Support/Code/User/settings.json` as a
+symlink into `/nix/store`. Every write therefore fails with `EACCES`, and nothing in the
+UI says so beyond a toast — the evidence is one line in
+`~/Library/Application Support/Code/logs/<session>/window1/renderer.log`:
+
+```
+[error] Unable to write file 'vscode-userdata:…/User/settings.json'
+        (EntryWriteLocked (FileSystemError): EACCES: permission denied)
+```
+
+**A setting whose TYPE changed upstream is the usual cause, and it is invisible in the
+value.** Measured 2026-08-26 against VS Code 1.134.0: `extensions.autoUpdate` was written
+here as `false`, which VS Code no longer accepts — it declares
+`{ type: "string", enum: ["on", "off"] }` and registers a migration beside it that rewrites
+`false` to `"off"`. That migration runs at **every** start, and its result can never be
+saved, so it runs again next time. The value was not wrong in meaning, only in type, and a
+diff of the two files showed exactly one differing key out of 41.
+
+Two things follow. Audit the whole class rather than the one key: VS Code 1.134.0 registers
+31 configuration migrations, and `extensions.autoUpdate` was the only one intersecting this
+repo's settings — worth re-checking after a major version jump, by grepping
+`registerConfigurationMigrations` in `workbench.desktop.main.js`. And use
+`just vscode-settings-check`, which reads the newest log session for exactly these write
+attempts. It deliberately reports "inconclusive" (exit 2) when that session predates the
+last switch — it compares the session name against the `lstat` mtime of the settings
+symlink, which home-manager re-creates on every activation — because "VS Code has not
+started since" must never be reported as "clean".
+
+#### The `[Theme]`-scoped colour warnings are a VS Code bug, not a bad value
+
+VS Code 1.134.0 marks **every** property inside the theme-scoped
+`workbench.colorCustomizations` block with `Property editorBracketPairGuide.background1 is
+not allowed.` The colours are applied regardless, and the colour ids are registered — the
+schema is at fault. A `[Theme]` block is validated against
+`{ $ref: "vscode://schemas/workbench-colors", additionalProperties: false }`, and the
+bundled JSON language service now follows draft-2019-09 semantics, where a `$ref` no
+longer contributes the `properties` annotation that `additionalProperties` consults (only
+`unevaluatedProperties` would). Every property in the block is therefore rejected, while
+the same keys one level up validate — top level has no `additionalProperties: false`
+anywhere in its schema chain.
+
+Upstream is [microsoft/vscode#328165](https://github.com/microsoft/vscode/issues/328165),
+closed for 1.135.0. Do not silence it by dropping the `[Theme]` scoping: that would leak
+this repo's cyberpunk bracket colours into every other theme, to fix a warning that the
+next cask update removes.
 
 ### The iTerm2 Web profile carries its DuckDuckGo settings in the URL
 

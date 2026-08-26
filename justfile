@@ -308,6 +308,81 @@ eval: _check-untracked
 show-derivation:
     nix derivation show '.#darwinConfigurations.FCX19GT9XR.system' | nix run nixpkgs#jq -- .
 
+# --- VS Code ---
+
+# That file is a read-only /nix/store symlink, so every writer fails with EACCES and
+# retries on the next start: a schema migration for a setting whose TYPE changed
+# upstream (extensions.autoUpdate went boolean -> "on"/"off"), Settings Sync pulling a
+# change from the other Mac, an extension writing a default. None of it is visible
+# outside the log, which is why this exists rather than a schema audit of the settings
+# themselves — parsing VS Code's minified bundle would go stale with every release.
+#
+# Reads the NEWEST log session only, and refuses to call a session that predates the
+# last switch clean: "VS Code has not started since" must not read as "nothing wrong".
+#
+# Has VS Code tried to write the Nix-managed settings.json? (reads the newest log)
+vscode-settings-check:
+    #!/bin/zsh
+    set -euo pipefail
+    logs="$HOME/Library/Application Support/Code/logs"
+    settings="$HOME/Library/Application Support/Code/User/settings.json"
+
+    if [[ ! -e "$settings" ]]; then
+        echo "no settings at $settings — is programs.vscode enabled for this host?" >&2
+        exit 2
+    fi
+    sessions=("$logs"/*(/N))          # zsh sorts globs; the names are timestamps
+    if (( ${#sessions} == 0 )); then
+        echo "no log sessions under $logs — VS Code has never run on this machine" >&2
+        exit 2
+    fi
+    session="${sessions[-1]}"
+
+    # home-manager re-creates the SYMLINK on every activation, so its own lstat mtime is
+    # the time of the last switch. The target's mtime is a /nix/store path and is 1970.
+    switched=$(perl -e 'print +(lstat($ARGV[0]))[9]' "$settings")
+    started=$(perl -MTime::Local=timelocal_modern -e '
+        # matches:  /…/Code/logs/20260826T183829/  ->  epoch seconds, local time
+        # (the directory name is local time, which is why this is not timegm)
+        $ARGV[0] =~ m{
+            (?<y>\d{4}) (?<mo>\d{2}) (?<d>\d{2}) T
+            (?<h>\d{2}) (?<mi>\d{2}) (?<s>\d{2})
+        }x or die "unparsable log session name: $ARGV[0]\n";
+        print timelocal_modern($+{s}, $+{mi}, $+{h}, $+{d}, $+{mo} - 1, $+{y});
+    ' "$session")
+
+    when=$(perl -e 'my @t = localtime($ARGV[0]); printf "%04d-%02d-%02d %02d:%02d:%02d",
+        $t[5]+1900, $t[4]+1, $t[3], $t[2], $t[1], $t[0]' "$started")
+
+    if (( started < switched )); then
+        echo "newest log session ${session:t} ($when) predates the last switch — VS Code" >&2
+        echo "has not started since. Inconclusive: start VS Code, then run this again." >&2
+        exit 2
+    fi
+
+    files=("$session"/window*/renderer.log(N) "$session"/userDataSync.log(N))
+    if (( ${#files} == 0 )); then
+        echo "session ${session:t} ($when) holds no renderer.log or userDataSync.log" >&2
+        exit 2
+    fi
+
+    matched=$(perl -ne 'print if m{Unable to write file .*/User/settings\.json}' "${files[@]}" || true)
+    count=$(print -r -- "$matched" | perl -ne '$n++ if /\S/; END { print $n // 0 }')
+
+    if (( count == 0 )); then
+        echo "clean: no write attempts against settings.json in session ${session:t} ($when),"
+        echo "across ${#files} log file(s). VS Code and the Nix-managed settings agree."
+        exit 0
+    fi
+
+    echo "$count write attempt(s) against the read-only settings.json in session ${session:t} ($when):" >&2
+    print -r -- "$matched" | perl -ne 'print if $. <= 3' | cut -c1-160 >&2
+    echo "" >&2
+    echo "Something wants a value the Nix config does not produce. Compare what VS Code" >&2
+    echo "would save (Settings editor -> open settings.json, it shows the pending value)" >&2
+    echo "against modules/vscode.nix, and check userDataSync.log for a Settings Sync loop." >&2
+    exit 1
+
 # --- Store maintenance ---
 
 # Deduplicate the store by hard-linking identical files (safe, reversible)

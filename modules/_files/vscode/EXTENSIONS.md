@@ -200,3 +200,9 @@ and the same holds for `ms-python.debugpy` → `ms-python.python` and
 `extensions.autoUpdate` and `extensions.autoCheckUpdates` are both off in
 `modules/vscode.nix` for exactly this reason. The cost is deliberate and worth stating:
 hand-installed project extensions stop updating themselves too.
+
+Note the two are off in different **types**: `extensions.autoCheckUpdates` is a boolean,
+`extensions.autoUpdate` is the string `"off"`. VS Code turned the latter into a
+`["on", "off"]` enum and ships a migration that rewrites a leftover `false` — which it
+then cannot save here, because settings.json is a read-only `/nix/store` symlink, so it
+retries on every start. `just vscode-settings-check` is the check for that.

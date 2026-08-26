@@ -149,6 +149,16 @@
 
             # Rainbow brackets & indent guides — colors scoped to the active theme
             # See https://stackoverflow.com/a/72125627
+            #
+            # VS Code 1.134.0 marks every property in this block with "Property
+            # editorBracketPairGuide.background1 is not allowed." The values are correct and
+            # the colors ARE applied; the schema is at fault. A `[Theme]` block is validated
+            # against `{ $ref: "vscode://schemas/workbench-colors", additionalProperties: false }`,
+            # and the bundled JSON language service now follows draft-2019-09 semantics, where
+            # a `$ref` no longer contributes the `properties` annotation that
+            # `additionalProperties` consults — so every property inside the block is rejected,
+            # while the same keys one level up validate. microsoft/vscode#328165, closed for
+            # 1.135.0. Do not silence it by unscoping: that leaks these colors into every theme.
             "workbench.colorCustomizations" = {
               "[Turbo Vision (based on Gerry Cyberpunk Plus)]" = {
                 "editorBracketPairGuide.background1" = "#FFB86C";
@@ -180,7 +190,18 @@
             # cost is deliberate — hand-installed project extensions stop
             # updating themselves too, which is the same cooldown posture
             # modules/supply-chain-hardening.nix already takes for npm/uv/pnpm/bun.
-            "extensions.autoUpdate" = false;
+            #
+            # A STRING, and that is not cosmetic. VS Code 1.134.0 declares this as
+            # `{ type: "string", enum: ["on", "off"], default: "on" }` and registers a
+            # migration beside it that rewrites the old boolean — `false` → `"off"`. The
+            # migration runs on EVERY start and its result can never be persisted, because
+            # settings.json is a read-only /nix/store symlink. Measured 2026-08-26 with
+            # `false` here, four seconds after launch:
+            #   [error] Unable to write file 'vscode-userdata:…/User/settings.json'
+            #           (EntryWriteLocked (FileSystemError): EACCES: permission denied)
+            # `just vscode-settings-check` is the standing check for that whole class:
+            # a value VS Code wants to rewrite is invisible until someone reads the log.
+            "extensions.autoUpdate" = "off";
 
             "claudeCode.preferredLocation" = "sidebar";
             "excalidraw.theme" = "auto";
