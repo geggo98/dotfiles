@@ -23,13 +23,23 @@
 #
 # What that trades away: the copy is byte-identical, so damage in the source
 # would be copied too, whereas `restic copy` would rebuild fresh packs. The
-# answer is sequencing, not tooling -- run `restic check --read-data` against R2
-# *before* copying (it is free while the objects are still in Standard), and
-# afterwards verify the destination as a repository from a workstation:
+# answer is sequencing, not tooling -- prove the source intact BEFORE copying.
 #
-#   restic -r rclone:dropbox:restic-backup/<prefix> check
+# And that proof does not need the password either. restic names every pack file
+# after the SHA-256 of its contents, so the filename verifies itself: download,
+# hash, compare. Measured against a 16 MiB pack on 2026-08-26 -- filename and
+# computed digest identical. `verify-then-copy` does exactly that and only
+# copies if it comes out clean:
 #
-# That second command needs the password and deliberately does not run here.
+#   systemctl start backup-verify-then-copy@<prefix>
+#
+# That splits the work by what it costs rather than by what it proves. The
+# expensive half -- reading ~840 GiB -- runs here, on the fast line. The half
+# that still needs the password is `restic check` WITHOUT --read-data: it reads
+# only index and snapshots, so it confirms that nothing is missing and that the
+# metadata matches, and it finishes in minutes even over a bad connection.
+# Together they are the same guarantee `restic check --read-data` gives, minus
+# the requirement to hold a terabyte-sized download on a laptop.
 #
 # COST, because the deadline is easy to miss. modules/../infra/src/backup.ts
 # demotes `<prefix>/data/` to Infrequent Access 30 days after upload, and IA
@@ -152,6 +162,82 @@
               echo "Vergleiche $src <-> $dst (Groesse, nicht Inhalt)"
               rclone check "''${common[@]}" --size-only "$src" "$dst"
               ;;
+            verify-packs)
+              # Vollstaendige Integritaetspruefung OHNE das Repository-Passwort.
+              #
+              # restic benennt jede Pack-Datei nach dem SHA-256 ihres Inhalts.
+              # Gemessen am 2026-08-26 an einem 16-MiB-Pack: Dateiname und
+              # berechneter Hash waren identisch. Also laesst sich hier pruefen,
+              # was sonst `restic check --read-data` prueft -- naemlich dass
+              # jedes Pack bitgenau das ist, was restic geschrieben hat --, und
+              # zwar auf der Maschine mit der schnellen Leitung statt auf einem
+              # Notebook, und ohne ihr das Passwort zu geben.
+              #
+              # Was das NICHT abdeckt: ob Index und Snapshots zu den Packs
+              # passen und nichts fehlt. Das prueft `restic check` OHNE
+              # --read-data, was nur Metadaten liest und deshalb auch ueber eine
+              # duenne Leitung in Minuten durchlaeuft. Die teure Haelfte hier,
+              # die billige dort.
+              #
+              # --download ist zwingend: R2 liefert ETags, keinen SHA-256, also
+              # muss rclone die Objekte tatsaechlich lesen.
+              # Erst zaehlen, wie viele Packs es GIBT. Ohne diese Zahl ist die
+              # Pruefung wertlos: bricht rclone nach der Haelfte ab, meldet der
+              # Auswerter "alle korrekt" -- ueber die Haelfte. Eine Pruefung, die
+              # bei stiller Teilabdeckung "sauber" sagt, ist schlimmer als keine.
+              echo "Zaehle Packs unter $src/data ..."
+              expected=$(rclone lsf -R --files-only "''${common[@]}" "$src/data" | wc -l)
+              echo "  $expected Packs erwartet"
+
+              # Die Hash-Liste erst vollstaendig holen, dann auswerten. Getrennt
+              # statt als Pipe, damit rclones Exit-Code eindeutig geprueft werden
+              # kann; in einer Pipe verdeckt der Auswerter ihn.
+              echo "Lese und hashe alle Packs (das ist der teure Teil) ..."
+              if ! rclone hashsum sha256 --download "''${common[@]}" \
+                "$src/data" >"$workdir/hashes.txt"; then
+                echo "ABBRUCH: rclone konnte nicht alle Packs lesen." >&2
+                echo "Die Pruefung ist damit unvollstaendig und sagt NICHTS aus." >&2
+                exit 2
+              fi
+
+              perl -sne '
+                BEGIN { $ok = 0; $bad = 0 }
+                # rclone-Zeile: "<64 hex>  00/00b52872a0d8…e659"
+                if (m{^(?<hash>[0-9a-f]{64})\s+(?<path>\S+)$}) {
+                  my ($h, $p) = ($+{hash}, $+{path});
+                  (my $name = $p) =~ s{.*/}{};
+                  if ($name eq $h) { $ok++ }
+                  else { $bad++; print "BESCHAEDIGT: $p (berechnet: $h)\n" }
+                }
+                END {
+                  my $seen = $ok + $bad;
+                  printf "\n%d von %d Packs geprueft: %d korrekt, %d beschaedigt.\n",
+                    $seen, $expected, $ok, $bad;
+                  if ($seen != $expected) {
+                    printf "UNVOLLSTAENDIG: %d Packs fehlen in der Hash-Liste.\n",
+                      $expected - $seen;
+                    exit 2;
+                  }
+                  print $bad ? "NICHT sauber -- vor dem Kopieren klaeren.\n"
+                             : "Alle Packs sind bitgenau unversehrt.\n";
+                  exit($bad ? 1 : 0);
+                }
+              ' -- -expected="$expected" <"$workdir/hashes.txt"
+              ;;
+            verify-then-copy)
+              # Beides in einem Lauf, in DIESER Reihenfolge. Eine 1:1-Kopie
+              # kopiert Schaeden mit, also muss die Quelle vorher als heil
+              # erwiesen sein -- sonst entstehen zwei gleich kaputte Kopien und
+              # der zweite Speicherort taeuscht Sicherheit vor.
+              echo "### 1/2  Integritaet der Quelle"
+              "$0" "$prefix" verify-packs || {
+                echo "ABBRUCH: Quelle nicht sauber, es wird nichts kopiert." >&2
+                exit 1
+              }
+              echo
+              echo "### 2/2  Kopie nach Dropbox"
+              exec "$0" "$prefix" copy
+              ;;
             verify-credentials)
               # Beweist die Eigenschaft, auf der das ganze Sicherheitsargument
               # dieses Moduls ruht: dass die R2-Zugangsdaten hier NICHT schreiben
@@ -186,7 +272,7 @@
               exit "$rc"
               ;;
             *)
-              echo "Unbekannter Modus: $mode (erlaubt: copy, check, verify-credentials)" >&2
+              echo "Unbekannter Modus: $mode (erlaubt: copy, check, verify-packs, verify-then-copy, verify-credentials)" >&2
               exit 2
               ;;
           esac
@@ -236,6 +322,47 @@
           RuntimeDirectory = "backup-copy";
           RuntimeDirectoryMode = "0700";
           ExecStart = "${copyScript}/bin/backup-copy-to-dropbox unused verify-credentials";
+          ProtectSystem = "strict";
+          ProtectHome = true;
+          PrivateTmp = true;
+          NoNewPrivileges = true;
+        };
+      };
+
+      # Der Weg, den man normalerweise will: Integritaet der Quelle beweisen,
+      # dann kopieren — in dieser Reihenfolge, weil eine 1:1-Kopie Schaeden
+      # mitkopiert.
+      #
+      #   systemctl start backup-verify-then-copy@p-own-lengenwang-c5esve
+      #
+      # Braucht KEIN Repository-Passwort: restic benennt Packs nach dem SHA-256
+      # ihres Inhalts, also prueft der Dateiname sich selbst. Was hier nicht
+      # geprueft wird — ob Index und Snapshots zu den Packs passen — kostet
+      # `restic check` ohne --read-data nur Metadaten und laeuft auch ueber eine
+      # schlechte Leitung in Minuten.
+      systemd.services."backup-verify-then-copy@" = {
+        description = "Verify pack integrity of %i, then copy it to Dropbox";
+        serviceConfig = {
+          Type = "oneshot";
+          RuntimeDirectory = "backup-copy";
+          RuntimeDirectoryMode = "0700";
+          ExecStart = "${copyScript}/bin/backup-copy-to-dropbox %i verify-then-copy";
+          TimeoutStartSec = "infinity";
+          ProtectSystem = "strict";
+          ProtectHome = true;
+          PrivateTmp = true;
+          NoNewPrivileges = true;
+        };
+      };
+
+      systemd.services."backup-verify-packs@" = {
+        description = "Verify every pack of %i against its SHA-256 filename";
+        serviceConfig = {
+          Type = "oneshot";
+          RuntimeDirectory = "backup-copy";
+          RuntimeDirectoryMode = "0700";
+          ExecStart = "${copyScript}/bin/backup-copy-to-dropbox %i verify-packs";
+          TimeoutStartSec = "infinity";
           ProtectSystem = "strict";
           ProtectHome = true;
           PrivateTmp = true;
