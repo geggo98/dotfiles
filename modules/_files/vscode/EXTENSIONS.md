@@ -68,7 +68,9 @@ publication — it is one line, and the decision belongs to whoever makes it.
 
 ## Project-specific — install per project, not globally (24)
 
-Put them in the project's `.vscode/extensions.json`. VS Code then offers them when the
+**All 24 were removed from the global install on 2026-08-26.** They are listed here as
+the record of what belongs where, not as what is installed. Put them in the project's
+`.vscode/extensions.json`. VS Code then offers them when the
 folder is opened, and the pinning question stays with the project that needs them:
 
 ```json
@@ -85,7 +87,7 @@ folder is opened, and the pinning question stays with the project that needs the
 | Python | `ms-python.python`, `ms-python.debugpy`, `ms-python.vscode-pylance`, `ms-python.vscode-python-envs` |
 | Go | `golang.go` |
 | Rust | `rust-lang.rust-analyzer` |
-| Web / Vue | `vue.volar`, `dbaeumer.vscode-eslint`, `esbenp.prettier-vscode`, `zenclabs.previewjs` |
+| Web / Vue | `vue.volar`, `dbaeumer.vscode-eslint`, `esbenp.prettier-vscode`, `zenclabs.previewjs`, `nicoespeon.abracadabra` |
 | Slides | `antfu.slidev` |
 | AWS | `amazonwebservices.aws-toolkit-vscode` |
 | XML | `dotjoshjohnson.xml` (Maven POMs) |
@@ -108,28 +110,39 @@ syntax highlighting only, last published 2020, no LSP.
 `ms-python.vscode-pylance` is proprietary and exists only on the marketplace — another
 reason it is not a candidate for the managed set.
 
-## Dormant at inventory time (9) — candidates for removal
+## Removed 2026-08-26 (9 dormant + the 24 above)
 
-Not acted on: it is a personal editor, and removal is a decision, not a cleanup.
+Nine extensions were dormant at inventory time. All nine are gone. Four of them were
+researched for a replacement first; the answer for three of those four was **no
+replacement needed**, which is why this table has an "instead" column rather than a list
+of new extensions to install.
 
-| Extension | Finding |
-|---|---|
-| `rubbersheep.gi` | last published **2017-05-09** |
-| `humy2833.ftp-simple` | 2021-03-09 |
-| `p42ai.refactor` | 2023-03-13 |
-| `randomfractalsinc.vscode-data-preview` | Open VSX 2020-11-29 |
-| `jrebocho.vscode-random` | 2024-08-16 |
-| `bbenoist.nix` | 2020; superseded by `jnoortheen.nix-ide` |
-| `ms-azuretools.vscode-docker` | superseded by `docker.docker` + `ms-azuretools.vscode-containers` |
-| `emmanuelbeziat.vscode-great-icons` | second icon theme |
-| `ms-vsliveshare.vsliveshare` | still published (1.1.122), unused here |
+| Removed | Finding | Instead |
+|---|---|---|
+| `rubbersheep.gi` | last commit 2017-05-22; PR #8 implementing the one open feature has sat unmerged since 2025-08-04 | `gh api /gitignore/templates/Node --jq .source`; for several templates at once `curl 'https://www.toptal.com/developers/gitignore/api/node,macos'`; for one entry the built-in `git.ignore` command |
+| `p42ai.refactor` | vendor wound down, `p42.ai` has no A record, calls a dead cloud endpoint, open bug "crashes TS language server" | the built-in TypeScript service covers 15 refactorings; `biome check --write .` / `eslint --fix .` cover the bulk rewrites; `nicoespeon.abracadabra` covers the rest — **project-specific**, listed above |
+| `randomfractalsinc.vscode-data-preview` | last functional release 2021-02-28, 69 open issues, and it bundles `xlsx@0.16.7` + `lodash@4.17.15` + `js-yaml@3.14.0` — 15 OSV advisories, 6 HIGH, in 136 MB of webview code whose whole job is parsing untrusted data files | `duckdb`: `FROM 'x.parquet' LIMIT 3`, `SUMMARIZE`, `INSTALL excel` + `read_xlsx()`, and `duckdb -ui` for the grid. Gap: Avro, where `uv run --with fastavro` covers it |
+| `jrebocho.vscode-random` | last *human* merge 2024-08-16; all six open PRs are Dependabot | VS Code's snippet variables `$UUID`, `$RANDOM`, `$RANDOM_HEX`, bound in `keybindings.json`; plus `uuidgen`, `openssl rand -hex 8`, `jot -r 3 1 100`, and `uv run --with faker` |
+| `bbenoist.nix` | 2020, syntax only | `jnoortheen.nix-ide` (managed) |
+| `ms-azuretools.vscode-docker` | superseded | `docker.docker` + `ms-azuretools.vscode-containers` (both managed) |
+| `emmanuelbeziat.vscode-great-icons` | second icon theme, and neither was active | `vscode-icons-team.vscode-icons` (managed), now named in `workbench.iconTheme` |
+| `humy2833.ftp-simple` | 2021-03-09 | — |
+| `ms-vsliveshare.vsliveshare` | still published, unused here | — |
 
-`settings.json` set no `workbench.iconTheme` at all until 2026-08-26, so **both** icon
-themes were inert. It now names `vscode-icons`, which is the managed one.
+Two candidates were considered and **rejected on evidence**, which is worth recording so
+they are not proposed again. `qcz.text-power-tools` fits functionally but its maintainer
+has not answered an issue since 2025-04-14 — the exact pattern being escaped here — and
+its fake-data engine is `"faker": "github:qcz/faker#v5.2.0-tpt-3"`, a personal fork of the
+dead faker.js pulled around npm, and therefore invisible to `pnpm audit`, to npm
+cooldowns and to `just audit`. `biomejs.biome` publishes only CalVer pre-releases, so
+under this repo's `-release` convention both registries resolve to **1.6.2**, a 2024
+build; the value is in `biome check --write .` from nixpkgs anyway.
 
-```bash
-code --uninstall-extension rubbersheep.gi     # …and so on
-```
+Two corrections to widely repeated claims, both measured against the installed
+VS Code 1.134.0 rather than assumed: there is **no** built-in `.gitignore` template
+picker — enumerating `contributes.commands` across all 97 bundled extensions yields
+exactly one match, `git.ignore` — and `$UUID` resolves through `crypto.randomUUID()`
+while `$RANDOM` is `Math.random()`, so the latter is never suitable for a secret.
 
 ## Working on the managed set
 
@@ -163,6 +176,23 @@ ls ~/.vscode/extensions | grep -E '^(docker\.docker|eamodio\.gitlens)-'  # expec
 `find`, deliberately, not `ls -l | grep -- '->'`: the latter reported 0 on a correctly
 switched machine because the interactive `ls` renders symlinks with `⇒`. A shell alias
 must not decide whether a check passes.
+
+**`code --uninstall-extension` reporting success is not proof the directory is gone.**
+Two failure modes were measured on 2026-08-26 while clearing 33 extensions. First, an
+uninstall normally only queues the directory in `.obsolete` and VS Code deletes it at its
+next start — so "uninstalled" and "removed from disk" are different states. Second, and
+worse, `jrebocho.vscode-random` reported `OK` while its directory was neither deleted nor
+queued, and a later rescan duly registered it again. Check the directory, never the exit
+code:
+
+```bash
+ls ~/.vscode/extensions | grep -E '^<publisher>\.<name>-'   # expect nothing
+```
+
+Uninstall dependents before dependencies, too: `ms-azuretools.vscode-containers` cannot
+be removed while `ms-azuretools.vscode-docker` declares it in `extensionDependencies`,
+and the same holds for `ms-python.debugpy` → `ms-python.python` and
+`vscjava.vscode-java-test` → `redhat.java`, `vscjava.vscode-java-debug`.
 
 `extensions.autoUpdate` and `extensions.autoCheckUpdates` are both off in
 `modules/vscode.nix` for exactly this reason. The cost is deliberate and worth stating:

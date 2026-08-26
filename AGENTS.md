@@ -1305,6 +1305,28 @@ switched machine on 2026-08-26, because the interactive `ls` here renders symlin
 `find -type l` depends on neither the alias nor the arrow, and every symlink at that
 depth is a Nix one: VS Code's own installs are real directories.
 
+**A planted symlink is not a loaded extension.** VS Code does not rescan its extension
+directory — `extensions.json` is the authority, and a symlink appearing beside it changes
+nothing. Measured 2026-08-26 right after a switch that planted all 16 correctly:
+`code --list-extensions` listed **none** of them; deleting `extensions.json` and
+re-running it listed all 16 at their pinned versions. home-manager ships an onChange hook
+for exactly this, gated on `package != null` — so `package = null` switches it off.
+`modules/_files/vscode/regenerate-extensions-json` replaces it, and is also on `PATH` as
+`+vscode-regen-extensions`.
+
+That script refuses rather than acting when `.obsolete` is non-empty, and the reason is
+the nastier half of the same problem: uninstalling an extension only QUEUES its directory
+for deletion, and a rescan run while the queue is full picks those directories up again.
+Because they carry a version suffix and the Nix symlinks do not, the higher version wins.
+Measured the same day: regenerating with 39 queued directories resurrected five
+uninstalled extensions and pinned GitLens to the gallery's 19.0.1 over the pinned 18.3.0.
+Only VS Code clears that queue, by starting once — which is why the script is on `PATH`
+for a human to re-run.
+
+Related, and the reason to check the directory rather than the exit code:
+`code --uninstall-extension` reported `OK` for `jrebocho.vscode-random` while its
+directory was neither deleted nor queued, and a later rescan registered it again.
+
 `mutableExtensionsDir = true` keeps that directory real and writable, which is what lets
 project-specific extensions be installed into it by hand. The alternative — a single
 directory symlink — would make VS Code's own `extensions.json` unwritable.
