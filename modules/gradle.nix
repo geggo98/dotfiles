@@ -1,8 +1,22 @@
 # User-global Gradle settings, plus the job that makes the idle timeout below
 # actually happen.
 #
-# `org.gradle.daemon.idletimeout` does not work on this machine. Measured
-# 2026-08-26 against Gradle 9.6.1, daemon PID 16611 (a work project):
+# `org.gradle.daemon.idletimeout` is unreliable on this machine — it works most
+# of the time and sometimes does not, and the times it does not are expensive.
+# Surveyed 2026-08-26 across every daemon log under ~/.gradle/daemon. Of the nine
+# daemons that actually reached the 3 h mark:
+#
+#   * 6 expired at exactly 3.00 h (Gradle 8.5, 9.4.1 twice, 9.6.1 three times)
+#   * 1 expired at 5.37 h
+#   * 2 never expired: still logging 16.12 h and 16.75 h after their last build,
+#     and both ended by hand rather than by Gradle
+#
+# Five more were shut down before three hours had passed and say nothing either
+# way. So this is not a broken setting and not a version-specific bug — the same
+# 9.6.1 appears on both sides of the tally.
+#
+# The failing case, in detail. Gradle 9.6.1, daemon PID 16611
+# (a work project):
 #
 #   * The setting is read and applied. The daemon's own log records
 #     `idleTimeout=10800000` 63 times.
@@ -29,11 +43,19 @@
 # them took this machine from load 15.8 / 0.6 % idle / 16 GB compressor /
 # 15 swapfiles to load 2.28 / 76.6 % idle / 4.5 GB compressor / 5 swapfiles.
 #
-# The root cause inside Gradle is NOT established. The daemon logs nothing at
-# all about expiration, so there is no evidence to say whether the strategy is
-# skipped, mis-evaluated, or never scheduled, and no matching upstream issue was
-# found. Treat the mechanism as open — this job enforces the outcome, it does
-# not fix Gradle.
+# The root cause inside Gradle is NOT established. A daemon that fails to expire
+# logs nothing at all about it, so there is no evidence to say whether the
+# strategy is skipped, mis-evaluated, or never scheduled, and no matching
+# upstream issue was found. That a healthy daemon logs `Marking daemon stopped
+# due to after being idle for 180 minutes` makes the silence in the other case
+# more conspicuous, not more explicable.
+#
+# Which is the argument for this job rather than against it. A timeout that
+# holds in most cases still leaves the 10 GB outcome above whenever it does not,
+# and on a 32 GB machine that is not a residual risk worth carrying. The job is
+# a safety net under an intermittent mechanism; it is not a replacement for it,
+# and it costs nothing on the days Gradle does the right thing — the log then
+# reads `no daemon idle for 180 min or more — nothing to do`.
 #
 # Why SIGTERM and not `gradle --stop`: `--stop` needs a matching Gradle
 # distribution per version (28 live under ~/.gradle/daemon here) and only sees
@@ -244,9 +266,11 @@
         # Stop idle daemons after 3 h. One daemon per project/JVM-args combo,
         # so many parallel worktrees would otherwise hold a lot of RAM.
         #
-        # Gradle does not honour this — see the module header. The
-        # gradle-daemon-reap launchd agent enforces the same 3 h instead. Keep
-        # the two numbers in step if you change either.
+        # Gradle honours this most of the time but not always — see the module
+        # header for the survey. The gradle-daemon-reap launchd agent enforces
+        # the same 3 h as a backstop. Keep the two numbers in step if you change
+        # either, or the backstop starts fighting the setting instead of
+        # covering for it.
         org.gradle.daemon.idletimeout=10800000
       '';
 
