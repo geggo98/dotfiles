@@ -777,6 +777,7 @@ Each module defines a single aspect across all relevant configuration classes (d
 | `ai-tools.nix` | AI tool packages and configuration |
 | `boundary.nix` | HashiCorp Boundary PM2-managed proxies (work host) |
 | `vault.nix` | HashiCorp Vault configuration |
+| `vscode.nix` | VS Code: the general extension set via `nix-vscode-extensions`, plus `settings.json` and the local Turbo Vision theme. Editor itself stays a Homebrew cask — see "VS Code extensions" below |
 | `overlays.nix` | Nixpkgs overlays |
 | `formatter.nix` | `nix fmt` formatter configuration |
 
@@ -1245,6 +1246,62 @@ grep -rn --include='*.nix' 'sops\.secrets\.' modules/
    (`claude-code-home-manager`, handed to the wrapper as `--plugin-dir`), so
    that one list governs both the MCP entry and the plugin-provided tools:
    they are the same mechanism, not two switches.
+
+### VS Code extensions
+
+The **general** set — useful in any repository — is pinned in `modules/vscode.nix` and
+comes from `nix-vscode-extensions`. Anything with a language toolchain behind it is
+project-specific and belongs in that project's `.vscode/extensions.json`. The full
+inventory, the per-extension reasoning and the removal candidates are in
+**`modules/_files/vscode/EXTENSIONS.md`**; what follows is only what bites.
+
+**Open VSX is not a faithful mirror, so the registry is chosen per extension.** Measured
+2026-08-26 across both: Open VSX served `christian-kohler.path-intellisense` 2.8.0 (2022)
+against the marketplace's 2.10.0, `yzhang.markdown-all-in-one` 3.6.2 against 3.6.3, and
+answered **404** for `deerawan.vscode-dash` outright. Picking one registry for everything
+pins stale versions with no error anywhere. Use the **`-release`** attribute sets, too:
+the plain `open-vsx` and `vscode-marketplace` include pre-releases, which on GitLens
+means `2026.8.251013` instead of `18.3.0`.
+
+**The input's age IS the cooldown.** `nix-vscode-extensions` carries no version strings —
+each daily revision pins whatever the registries served that day, so a revision N days
+old pins extension versions at least N days old. Hence
+`[cooldown.per_input] nix-vscode-extensions = 14` in `scripts/supply-chain.toml`, the
+extension bar rather than the 5-day input default. There are no versions to bump by
+hand; `just update` moves the whole set.
+
+`[[extensions]]` in that manifest is the separate, stricter half: it asks whether each
+extension still exists and whether the version is still listed — the withdrawal signal a
+date cannot give. Be precise about its limit: it resolves its **own** candidate version
+from the registry, not the one `nix-vscode-extensions` pins, so a clean run means "still
+healthy upstream", not "the installed version is healthy".
+
+**VS Code itself deliberately stays on the Homebrew cask**, and `programs.vscode.package`
+is `null` — a supported value, since the home-manager module gates `home.packages` on
+`cfg.package != null` and takes the `.vscode` directory name from its caller, not from
+the package. Three measurements argue against moving the editor into Nix: the cask serves
+1.134.0 where nixpkgs 26.05 has 1.119.0 and unstable 1.133.0; `vscode` is in no binary
+cache for aarch64-darwin because it is unfree; and it would therefore be built locally,
+at which point the R2 `post-build-hook` would push Microsoft's non-redistributable build
+into a world-readable bucket. The same reasoning excludes exactly one extension,
+`ms-vscode-remote.remote-containers` — the only unfree one of the candidates. A licence
+filter in the push hook is not an option: `meta.license` is eval-time data and is not
+recorded in the store.
+
+**The failure mode that looks like success.** home-manager symlinks each extension as
+`~/.vscode/extensions/<publisher>.<name>`, without a version suffix; VS Code's own
+installs carry one. Both can sit there at once, and VS Code loads the **higher version** —
+so a leftover gallery copy silently wins and the Nix pin does nothing. That is why
+`extensions.autoUpdate` and `extensions.autoCheckUpdates` are both off, why the migration
+uninstalls the gallery copies first, and why the check after a switch is:
+
+```bash
+ls -l ~/.vscode/extensions | grep -c -- '-> /nix/store'   # expect 16
+```
+
+`mutableExtensionsDir = true` keeps that directory real and writable, which is what lets
+project-specific extensions be installed into it by hand. The alternative — a single
+directory symlink — would make VS Code's own `extensions.json` unwritable.
 
 ### The iTerm2 Web profile carries its DuckDuckGo settings in the URL
 
