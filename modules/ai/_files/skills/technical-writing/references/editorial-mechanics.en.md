@@ -264,10 +264,10 @@ Decide once, record it in the glossary, and hold it. That is STE 1.11 applied to
 
 ## 9. Acronyms you use only once
 
-ISO 5.3.2 requires you to expand every acronym on first use. This adds the case it does not
-cover: if the term appears only once in the whole text, do not introduce an abbreviation at
-all. An abbreviation that is defined and never reused costs the reader an extra clause and
-saves nobody anything.
+ISO 5.3.2 has you expand an acronym on first use unless every reader already knows it. This
+adds the case it does not cover: if the term appears only once in the whole text, do not
+introduce an abbreviation at all. An abbreviation that is defined and never reused costs the
+reader an extra clause and saves nobody anything.
 
     Bad:  The scheduler uses Kernel Samepage Merging (KSM) to reduce memory use.
           (KSM never appears again)
@@ -342,10 +342,11 @@ LLM output, so this skill uses sentence case at every level. See section 5.
 lists, per section 6. `anti-tropes-instruction.md` and `signs_of_AI_writing.md` both flag the
 habit of opening every bullet with a bolded phrase.
 
-**Skipping the expansion of well-known acronyms.** Other guides let USB, HTML, URL, and FAQ
-stand unexpanded. `plain-language.en.md` requires expanding every acronym on first use, "even
-ones obvious to you", and that rule wins here. Section 9 adds only the case where the term
-appears once and needs no abbreviation at all.
+**A fixed allowlist of well-known acronyms.** Other guides name USB, HTML, URL, and FAQ as
+always safe to leave unexpanded. `plain-language.en.md` sets a reader test instead: expand
+unless every reader already knows the term. The two usually agree, and where they part the
+test wins, because who reads a text changes and a list does not. Section 9 adds the case
+neither covers, where the term appears once and needs no abbreviation at all.
 
 **A table of transition words by function.** Genuinely absent from this skill, and deliberately
 left absent. Half the entries such a table would carry -- Additionally, Moreover, Furthermore,

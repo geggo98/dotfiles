@@ -229,11 +229,13 @@ log attached or collapsed in a `<details>` block.
 Clear wording keeps the reader's attention on the problem instead of on the
 text (ISO 5.3.1).
 
-### Choose familiar words, expand every acronym (ISO 5.3.2)
+### Choose familiar words, expand unfamiliar acronyms (ISO 5.3.2)
 
-Use the words your readers use. Expand every acronym on first use, even ones
-obvious to you; new team members and cross-team reviewers read this too.
-Never use internal project jargon without a gloss or a link.
+Use the words your readers use. Expand an acronym on first use unless every
+reader already knows it, and judge that generously: new team members and
+cross-team reviewers read this too, and the PM reading the ticket does not
+necessarily know CQRS or HPA. Never use internal project jargon without a
+gloss or a link.
 
 Bad (ticket):
 > The CFE rejects the payload before the DLQ hop, probably a P1.
@@ -378,7 +380,7 @@ question with yes before submitting; every no marks a rewrite.
 4. Is the impact stated: who is affected, how badly, since when?
 5. Are acceptance criteria listed, testable, and kept in one section?
 6. Are logs and screenshots attached or collapsed, not pasted mid-text?
-7. Is every acronym expanded on first use, every internal term glossed?
+7. Is every unfamiliar acronym expanded on first use, every internal term glossed?
 
 ### PR description
 

@@ -314,9 +314,9 @@ Element meinst.
 
 ### Führe keine Abkürzung ein, die nur einmal vorkommt
 
-`plain-language.de.md` fordert, Akronyme beim ersten Vorkommen aufzulösen. Das ergänzt den
-Fall, den es nicht abdeckt: Kommt der Begriff im ganzen Text nur einmal vor, führe gar keine
-Kurzform ein. Eine definierte und nie wieder verwendete Abkürzung kostet den Leser einen
+`plain-language.de.md` fordert, Akronyme beim ersten Vorkommen aufzulösen, wenn nicht jeder
+Leser sie kennt. Das ergänzt den Fall, den es nicht abdeckt: Kommt der Begriff im ganzen Text
+nur einmal vor, führe gar keine Kurzform ein. Eine definierte und nie wieder verwendete Abkürzung kostet den Leser einen
 Einschub und spart niemandem etwas.
 
 Schlecht: "Der Scheduler nutzt Kernel Samepage Merging (KSM), um Speicher zu sparen."
@@ -386,10 +386,12 @@ und `signs_of_AI_writing.md` führt sie ohnehin als KI-Merkmal. Siehe §6.
 **Fette Listenanfänge als allgemeines Muster.** Nur für echte Begriff/Definition-Listen
 zugelassen, siehe §7.
 
-**Das Auslassen der Auflösung bekannter Akronyme.** Andere Leitfäden lassen USB, HTML, URL und
-FAQ unaufgelöst stehen. `plain-language.de.md` knüpft die Auflösung daran, ob alle Leser das
-Kürzel kennen, und diese Regel gilt weiter. §10 ergänzt nur den Fall, in dem der Begriff einmal
-vorkommt und gar keine Kurzform braucht.
+**Eine feste Liste bekannter Akronyme.** Andere Leitfäden nennen USB, HTML, URL und FAQ als
+immer unaufgelöst zulässig. `plain-language.de.md` setzt stattdessen einen Lesertest an:
+auflösen, wenn nicht jeder Leser das Kürzel kennt. Meist stimmen beide überein; wo sie
+auseinandergehen, gewinnt der Test, weil sich ändert, wer den Text liest, eine Liste aber
+nicht. §10 ergänzt den Fall, den keiner von beiden abdeckt: der Begriff kommt einmal vor und
+braucht gar keine Kurzform.
 
 **Eine Tabelle von Übergangswörtern nach Funktion.** Fehlt in diesem Skill und fehlt
 absichtlich. Die Hälfte der Einträge, die eine solche Tabelle trüge, steht in
