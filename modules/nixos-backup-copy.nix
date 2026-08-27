@@ -63,7 +63,7 @@
 
       copyScript = pkgs.writeShellApplication {
         name = "backup-copy-to-dropbox";
-        runtimeInputs = with pkgs; [ rclone coreutils ];
+        runtimeInputs = with pkgs; [ rclone coreutils perl gnugrep ];
         text = ''
           # usage: backup-copy-to-dropbox <repository-prefix> [copy|check]
           prefix="''${1:?Repository-Prefix fehlt, z. B. p-own-lengenwang-c5esve}"
@@ -192,12 +192,36 @@
               # Die Hash-Liste erst vollstaendig holen, dann auswerten. Getrennt
               # statt als Pipe, damit rclones Exit-Code eindeutig geprueft werden
               # kann; in einer Pipe verdeckt der Auswerter ihn.
-              echo "Lese und hashe alle Packs (das ist der teure Teil) ..."
-              if ! rclone hashsum sha256 --download "''${common[@]}" \
-                "$src/data" >"$workdir/hashes.txt"; then
-                echo "ABBRUCH: rclone konnte nicht alle Packs lesen." >&2
-                echo "Die Pruefung ist damit unvollstaendig und sagt NICHTS aus." >&2
-                exit 2
+              #
+              # Sie liegt im StateDirectory (/var/lib/backup-copy) und NICHT im
+              # RuntimeDirectory, weil sie den Prozess ueberleben muss. Der Lauf
+              # vom 2026-08-26 las 838 GiB in 78 Minuten und starb danach an
+              # einem `perl: command not found` -- worauf systemd das
+              # RuntimeDirectory raeumte und die ganze teure Arbeit mitnahm.
+              # Ein Fehler im billigen Teil darf den teuren nicht entwerten.
+              #
+              # Die Liste enthaelt nur Hashes und Pfade, also nichts Geheimes;
+              # sie darf auf Platte. ~50 800 Zeilen sind rund 5 MB.
+              hashfile="''${STATE_DIRECTORY:-$workdir}/hashes-$prefix.txt"
+
+              if [ -s "$hashfile" ] &&
+                [ "$(wc -l <"$hashfile")" -eq "$expected" ]; then
+                echo "Vollstaendige Hash-Liste eines frueheren Laufs gefunden"
+                echo "($expected Zeilen) -- werte sie aus, statt erneut zu lesen."
+                echo "Zum Erzwingen eines Neulesens: $hashfile loeschen."
+              else
+                echo "Lese und hashe alle Packs (das ist der teure Teil) ..."
+                # Erst unter temporaerem Namen, dann umbenennen: ein Abbruch
+                # hinterlaesst so eine offensichtliche .part-Datei statt einer
+                # unvollstaendigen Liste, die beim naechsten Lauf als fertig
+                # durchginge.
+                if ! rclone hashsum sha256 --download "''${common[@]}" \
+                  "$src/data" >"$hashfile.part"; then
+                  echo "ABBRUCH: rclone konnte nicht alle Packs lesen." >&2
+                  echo "Die Pruefung ist damit unvollstaendig und sagt NICHTS aus." >&2
+                  exit 2
+                fi
+                mv "$hashfile.part" "$hashfile"
               fi
 
               perl -sne '
@@ -222,7 +246,7 @@
                              : "Alle Packs sind bitgenau unversehrt.\n";
                   exit($bad ? 1 : 0);
                 }
-              ' -- -expected="$expected" <"$workdir/hashes.txt"
+              ' -- -expected="$expected" <"$hashfile"
               ;;
             verify-then-copy)
               # Beides in einem Lauf, in DIESER Reihenfolge. Eine 1:1-Kopie
@@ -295,6 +319,7 @@
         serviceConfig = {
           Type = "oneshot";
           RuntimeDirectory = "backup-copy";
+          StateDirectory = "backup-copy";
           RuntimeDirectoryMode = "0700";
           ExecStart = "${copyScript}/bin/backup-copy-to-dropbox %i copy";
 
@@ -320,6 +345,7 @@
         serviceConfig = {
           Type = "oneshot";
           RuntimeDirectory = "backup-copy";
+          StateDirectory = "backup-copy";
           RuntimeDirectoryMode = "0700";
           ExecStart = "${copyScript}/bin/backup-copy-to-dropbox unused verify-credentials";
           ProtectSystem = "strict";
@@ -345,6 +371,7 @@
         serviceConfig = {
           Type = "oneshot";
           RuntimeDirectory = "backup-copy";
+          StateDirectory = "backup-copy";
           RuntimeDirectoryMode = "0700";
           ExecStart = "${copyScript}/bin/backup-copy-to-dropbox %i verify-then-copy";
           TimeoutStartSec = "infinity";
@@ -360,6 +387,7 @@
         serviceConfig = {
           Type = "oneshot";
           RuntimeDirectory = "backup-copy";
+          StateDirectory = "backup-copy";
           RuntimeDirectoryMode = "0700";
           ExecStart = "${copyScript}/bin/backup-copy-to-dropbox %i verify-packs";
           TimeoutStartSec = "infinity";
@@ -375,6 +403,7 @@
         serviceConfig = {
           Type = "oneshot";
           RuntimeDirectory = "backup-copy";
+          StateDirectory = "backup-copy";
           RuntimeDirectoryMode = "0700";
           ExecStart = "${copyScript}/bin/backup-copy-to-dropbox %i check";
           TimeoutStartSec = "infinity";
