@@ -161,6 +161,24 @@ They adapt the rules to German
 (compound nouns, nominal style, Imperativ vs. Infinitiv)
 rather than translating them.
 
+See [editorial mechanics](references/editorial-mechanics.en.md)
+for the typographic layer the two standards above leave open --
+comma rules, hyphens, slashes, em dash spacing,
+heading capitalization, list and procedure formatting,
+`a` versus `an`,
+and the requirement that every example be tested.
+Its last section records which rules from other house style guides
+this skill deliberately does not follow, and why,
+so a settled question stays settled.
+
+For German text, load [Redaktionelle Mechanik](references/editorial-mechanics.de.md).
+It is an adaptation, not a translation:
+German commas follow grammar rather than style,
+the Halbgeviertstrich takes the spaces the em dash refuses,
+there is no title case,
+and `a`/`an` has no counterpart at all --
+its place is taken by the gender of English loan words.
+
 See [anti-tropes-instruction](references/anti-tropes-instruction.md)
 for specific writing patterns to avoid --
 word choice, sentence structure, tone, and formatting tropes
