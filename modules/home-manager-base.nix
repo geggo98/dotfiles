@@ -22,6 +22,9 @@ in
       hm.gradle
       hm.neovim
       hm.mcp-servers
+      # Globale Agentenregeln (difftastic, Skriptstil, PII) fuer alle drei
+      # Agenten. Eigenes Modul, weil es die Maschine beschreibt, nicht dieses Repo.
+      hm.agent-rules
       hm.ai-tools
       hm.camoufox
       hm.packages

@@ -273,7 +273,6 @@ let
         })
         mcpServerPkgs;
 
-      root = ./..;
     in
     {
       imports = [ atlassianOptions ];
@@ -326,7 +325,6 @@ let
           autoupdate = false;
           mcp = opencodeMcpServers;
         };
-        context = root + "/AGENTS.md";
       };
 
       # No `programs.codex.settings` here: that would materialize

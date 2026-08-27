@@ -1,0 +1,52 @@
+#!/bin/zsh
+# Maintain a managed rules block inside ~/.codex/AGENTS.md.
+#
+# Codex has no home-manager option for its global instructions, and the file
+# already carries hand-written content. Symlinking it into the store would
+# destroy that, so the block is merged in between markers instead — the same
+# reasoning as codex-merge-config.py next door.
+#
+# usage: codex-merge-rules <rules-file> <target>
+set -euo pipefail
+
+rules=${1:?rules file missing}
+target=${2:?target missing}
+[[ -s $rules ]] || { print -u2 "codex-merge-rules: $rules is empty or missing"; exit 1 }
+
+export MARK_BEGIN='<!-- BEGIN nix-darwin managed rules -- do not edit between the markers -->'
+export MARK_END='<!-- END nix-darwin managed rules -->'
+
+mkdir -p "${target:h}"
+[[ -f $target ]] || : > "$target"
+
+tmp=$(mktemp "${target}.XXXXXX")
+trap 'rm -f -- "$tmp"' EXIT
+
+# Strip any previous block, then normalise the tail to exactly one newline.
+# Two passes on purpose: the second removes an UNTERMINATED begin marker
+# through end of file. An interrupted run leaves exactly that, and a pattern
+# requiring both markers would leak the fragment and then append a second
+# block beside it — measured, before this pass existed.
+#
+# Markers travel through the environment so the shell never has to quote them
+# into the perl source.
+perl -0777 -pe '
+    s/^\Q$ENV{MARK_BEGIN}\E\n.*?^\Q$ENV{MARK_END}\E\n?//gms;
+    s/^\Q$ENV{MARK_BEGIN}\E\n.*\z//ms;
+    s/\n+\z//;
+' "$target" > "$tmp"
+
+# Blank line between the hand-written part and the block, but only if there IS
+# a hand-written part. Building the tail unconditionally here rather than
+# appending conditionally is what makes repeated runs byte-identical.
+{
+  [[ -s $tmp ]] && print -- "" && print -- ""
+  print -- "$MARK_BEGIN"
+  cat -- "$rules"
+  print -- "$MARK_END"
+} >> "$tmp"
+
+# Same filesystem, so the rename is atomic: an interrupted run leaves the
+# temp file rather than a half-written AGENTS.md.
+mv -- "$tmp" "$target"
+trap - EXIT
