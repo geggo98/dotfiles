@@ -405,10 +405,26 @@ change up immediately, no restart needed (measured). Two adjacent traps:
   right key is never reached. The fix is a per-host block with `IdentityFile` +
   `IdentitiesOnly`, not reordering the vaults.
 
-Until the pre-existing `stefan@FCX19GT9XR` file key is removed from
-`rootAuthorizedKeys`, a broken agent is merely an annoyance — ssh falls through
-to `~/.ssh/id_ed25519`. After that removal it is the difference between logging
-in and reaching for Tailscale SSH or the KVM console.
+**That removal has happened, so a stuck agent now costs the login.** Measured
+2026-08-27: `ssh -o IdentitiesOnly=yes -i ~/.ssh/id_ed25519
+root@87.106.149.208` answers `Permission denied (publickey)`. The remaining
+routes are the 1Password key, Tailscale SSH, and the KVM console — an earlier
+version of this passage said ssh would fall through to the file key, which was
+true when written and is not any more.
+
+**Do not treat that as a defect to route around.** Biometric guarding is the
+design: keys live in 1Password behind Touch ID (or Tailscale SSH behind a
+passkey), and the goal is one key per host, so a leaked key costs one machine
+and access can be granted individually. A key sitting on disk gives that up —
+copyable unnoticed, and no confirmation per use.
+
+So when `sign_and_send_pubkey: signing failed … communication with agent
+failed` appears, the answer is to unlock 1Password, never to add a file key or
+stretch the auto-lock — however often the same halt repeats. What *is* fair
+game is removing the need for an interactive login: run long work as a
+systemd unit on the target, and read state from somewhere reachable without it
+(the R2 repository answers "how far along is the backup" without touching the
+NAS at all).
 
 #### Getting back in when SSH is gone
 
