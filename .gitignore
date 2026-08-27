@@ -13,3 +13,6 @@ infra/node_modules/
 infra/dist/
 infra/.pulumi/
 .pre-commit-config.yaml
+
+# Persoenliche Overrides; .claude/settings.json ist versioniert
+.claude/settings.local.json

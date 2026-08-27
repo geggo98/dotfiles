@@ -42,6 +42,39 @@ git grep -n MUSTER <commit> -- <pfade>      # Inhalt statt Diff-Ausgabe
 Für Sicherheits- und Vollständigkeitsprüfungen die zweite Form bevorzugen: sie
 prüft, was im Commit steht, statt eine Ausgabeformatierung zu parsen.
 
+## Die zweite Falle in derselben Familie: textconv entschlüsselt Secrets
+
+`.gitattributes` in `~/.config/nix-darwin` enthält `*.enc.yaml diff=sopsdiffer`,
+und der Treiber ist `diff.sopsdiffer.textconv = sops -d`. **`git diff` gibt für
+SOPS-Dateien also entschlüsselten Klartext aus**, damit ein Mensch die Änderung
+lesen kann. Für ein Werkzeug ist das genau falsch herum: es liest Secrets, die im
+Commit gar nicht stehen, und schreibt sie womöglich in ein Log, ein Ticket oder
+eine Agenten-Konversation.
+
+Gemessen am 27.08.2026 an einem echten Commit, der Arbeits-Secrets zwischen
+SOPS-Dateien verschob:
+
+| Kommando | Klartext-Treffer |
+|---|---|
+| `git diff --no-ext-diff …` | **3** |
+| `git diff --no-ext-diff --no-textconv …` | **0** |
+
+Der Commit selbst enthält nur `ENC[AES256_GCM,…]`. Der Klartext entstand erst
+beim Anzeigen.
+
+**Für alles Automatisierte deshalb beide Flags:**
+
+```bash
+git diff --no-ext-diff --no-textconv --no-color <range>
+```
+
+`--no-ext-diff` macht die Ausgabe überhaupt maschinenlesbar, `--no-textconv`
+sorgt dafür, dass sie zeigt, was im Commit steht. Interaktiv beide weglassen —
+dort sind difftastic und die Entschlüsselung ja der Zweck.
+
+Dieselbe Frage stellt sich bei jedem weiteren textconv-Treiber; `git-crypt` ist
+hier ebenfalls konfiguriert. `git config --get-regexp '^diff\.' ` zeigt sie alle.
+
 ## Die allgemeine Regel dahinter
 
 **Einen Filter erst validieren, dann seinem Ergebnis glauben.** Zähle, wie viele
