@@ -719,11 +719,59 @@ so the two copies are held to one standard. The complete R2 hash list from
 2026-08-28 stays at `/var/lib/backup-copy/hashes-p-own-lengenwang-c5esve.txt`
 and is reused rather than re-read.
 
-**Still outstanding, and cheap:** `restic check --no-lock` *without*
-`--read-data` from a workstation. Filename hashing proves each pack is intact;
-it says nothing about whether index and snapshots agree with the packs and
-nothing is missing. That half reads metadata only and finishes in minutes even
-over a bad line.
+### The other half: `restic check` without `--read-data`
+
+Filename hashing proves each pack is intact. It says nothing about whether index
+and snapshots agree with the packs and nothing is missing. That is what `restic
+check` reads — metadata only, so it runs from a workstation over any line.
+
+Run on FCX19GT9XR on 2026-08-31, 3 min 11 s:
+
+```
+load indexes
+check all packs
+83 additional files were found in the repo, which likely contain duplicate data.
+This is non-critical, you can run `restic prune` to correct this.
+check snapshots, trees and blobs
+[3:11] 100.00%  2 / 2 snapshots
+no errors were found
+```
+
+**Together with the pack hashing, that is the full guarantee of `restic check
+--read-data`** — the expensive half read 838 GiB on the VPS's fast line without
+the password, the cheap half read metadata here with it. Neither machine had to
+do both.
+
+The command needs the repository and the credentials spelled out; there is no
+wrapper for it in this repo:
+
+```bash
+S=~/.config/sops-nix/secrets
+env RESTIC_REPOSITORY="s3:https://<account>.r2.cloudflarestorage.com/restic-backup/p-own-lengenwang-c5esve" \
+    RESTIC_PASSWORD_FILE="$S/restic_password" \
+    AWS_ACCESS_KEY_ID="$(cat $S/restic_r2_access_key_id)" \
+    AWS_SECRET_ACCESS_KEY="$(cat $S/restic_r2_secret_access_key)" \
+    restic check --no-lock
+```
+
+**Do not run `restic prune` on that advice.** The 83 duplicate packs are what
+the restart loop left behind: an interrupted run re-uploads the packs it was in
+the middle of, and the second copy is never referenced. They cost ~1.3 GiB and
+nothing else — while `prune` rewrites the repository and deletes data, which is
+the one operation that must not happen while this repo is the only copy of
+`Filme` outside a single unmirrored NVMe. After the NAS is rebuilt and restored,
+it is a two-minute cleanup. Not before.
+
+The two snapshots at that point:
+
+| ID | Taken | Tags | Paths | Size |
+|---|---|---|---|---|
+| `0bbb0e05` | 2026-08-19 11:53 | `migration,phase1` | `Familie`, `Musik`, `eBooks` | 38.910 GiB |
+| `e99bcafc` | 2026-08-25 05:50 | `migration,filme` | `Filme` | 968.247 GiB |
+
+1007 GiB logical against 838 GiB stored — restic's compression on material that
+is already compressed, which is about what one would expect and worth recording
+so nobody later reads the gap as a missing dataset.
 
 ## The OTR recordings, and why `Download` was not throwaway
 
