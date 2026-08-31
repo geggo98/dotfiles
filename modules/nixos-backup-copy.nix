@@ -65,7 +65,9 @@
         name = "backup-copy-to-dropbox";
         runtimeInputs = with pkgs; [ rclone coreutils perl gnugrep ];
         text = ''
-          # usage: backup-copy-to-dropbox <repository-prefix> [copy|check]
+          # usage: backup-copy-to-dropbox <prefix> [copy|check|verify-packs|verify-then-copy|verify-credentials] [r2|dropbox]
+          #        Das dritte Argument gilt nur fuer verify-packs und sagt, WELCHE
+          #        der beiden Kopien nachgerechnet wird. Vorgabe: r2.
           prefix="''${1:?Repository-Prefix fehlt, z. B. p-own-lengenwang-c5esve}"
           mode="''${2:-copy}"
 
@@ -179,30 +181,50 @@
               # duenne Leitung in Minuten durchlaeuft. Die teure Haelfte hier,
               # die billige dort.
               #
-              # --download ist zwingend: R2 liefert ETags, keinen SHA-256, also
-              # muss rclone die Objekte tatsaechlich lesen.
+              # WELCHE Kopie geprueft wird, sagt das dritte Argument. Beide
+              # Seiten tragen dieselben Dateinamen, der Beweis gilt also
+              # wortgleich fuer beide -- nur ist er fuer Dropbox der einzige,
+              # den es ueberhaupt gibt: `rclone check` vergleicht dort Name und
+              # Groesse und sagt das auch selbst ("No common hash found"), weil
+              # S3-ETag und Dropbox-content_hash verschiedene Funktionen sind.
+              # Ein Pack mit richtiger Groesse und falschem Inhalt faellt
+              # ausschliesslich hier auf.
+              vsource="''${3:-r2}"
+              case "$vsource" in
+                r2) vsrc="$src" ;;
+                dropbox) vsrc="$dst" ;;
+                *)
+                  echo "Unbekannte Quelle: $vsource (erlaubt: r2, dropbox)" >&2
+                  exit 2
+                  ;;
+              esac
+
+              statedir="''${STATE_DIRECTORY:-$workdir}"
+              # Die r2-Liste behaelt ihren Namen ohne Quellen-Suffix: die
+              # vollstaendige Liste vom 2026-08-28 liegt darunter und soll
+              # weiterhin als fertiges Ergebnis erkannt werden.
+              if [ "$vsource" = r2 ]; then
+                hashfile="$statedir/hashes-$prefix.txt"
+              else
+                hashfile="$statedir/hashes-$prefix-$vsource.txt"
+              fi
+
+              # --download ist zwingend: weder R2 noch Dropbox liefern SHA-256,
+              # also muss rclone die Objekte tatsaechlich lesen.
               # Erst zaehlen, wie viele Packs es GIBT. Ohne diese Zahl ist die
               # Pruefung wertlos: bricht rclone nach der Haelfte ab, meldet der
               # Auswerter "alle korrekt" -- ueber die Haelfte. Eine Pruefung, die
               # bei stiller Teilabdeckung "sauber" sagt, ist schlimmer als keine.
-              echo "Zaehle Packs unter $src/data ..."
-              expected=$(rclone lsf -R --files-only "''${common[@]}" "$src/data" | wc -l)
+              echo "Zaehle Packs unter $vsrc/data ..."
+              listing="$workdir/packs-$vsource.txt"
+              rclone lsf -R --files-only "''${common[@]}" "$vsrc/data" >"$listing"
+              expected=$(wc -l <"$listing")
               echo "  $expected Packs erwartet"
-
-              # Die Hash-Liste erst vollstaendig holen, dann auswerten. Getrennt
-              # statt als Pipe, damit rclones Exit-Code eindeutig geprueft werden
-              # kann; in einer Pipe verdeckt der Auswerter ihn.
-              #
-              # Sie liegt im StateDirectory (/var/lib/backup-copy) und NICHT im
-              # RuntimeDirectory, weil sie den Prozess ueberleben muss. Der Lauf
-              # vom 2026-08-26 las 838 GiB in 78 Minuten und starb danach an
-              # einem `perl: command not found` -- worauf systemd das
-              # RuntimeDirectory raeumte und die ganze teure Arbeit mitnahm.
-              # Ein Fehler im billigen Teil darf den teuren nicht entwerten.
-              #
-              # Die Liste enthaelt nur Hashes und Pfade, also nichts Geheimes;
-              # sie darf auf Platte. ~50 800 Zeilen sind rund 5 MB.
-              hashfile="''${STATE_DIRECTORY:-$workdir}/hashes-$prefix.txt"
+              if [ "$expected" -eq 0 ]; then
+                echo "ABBRUCH: unter $vsrc/data liegt kein einziges Pack." >&2
+                echo "Eine Pruefung ueber nichts meldet sonst 'alles korrekt'." >&2
+                exit 2
+              fi
 
               if [ -s "$hashfile" ] &&
                 [ "$(wc -l <"$hashfile")" -eq "$expected" ]; then
@@ -210,41 +232,127 @@
                 echo "($expected Zeilen) -- werte sie aus, statt erneut zu lesen."
                 echo "Zum Erzwingen eines Neulesens: $hashfile loeschen."
               else
-                echo "Lese und hashe alle Packs (das ist der teure Teil) ..."
-                # Erst unter temporaerem Namen, dann umbenennen: ein Abbruch
-                # hinterlaesst so eine offensichtliche .part-Datei statt einer
-                # unvollstaendigen Liste, die beim naechsten Lauf als fertig
-                # durchginge.
-                if ! rclone hashsum sha256 --download "''${common[@]}" \
-                  "$src/data" >"$hashfile.part"; then
-                  echo "ABBRUCH: rclone konnte nicht alle Packs lesen." >&2
-                  echo "Die Pruefung ist damit unvollstaendig und sagt NICHTS aus." >&2
+                # SHARD-WEISE, ein Verzeichnis data/<xx>/ auf einmal.
+                #
+                # Der Lauf gegen R2 brauchte 71 Minuten; gegen Dropbox dauert
+                # dieselbe Datenmenge Stunden, und die Gegenstelle drosselt.
+                # Ein einziger rclone-Aufruf ueber alles waere ein Vorgang ohne
+                # Wiederaufsetzpunkt: ein 429-Sturm in Stunde acht wirft acht
+                # Stunden weg. Je Shard eine Datei, atomar per mv veroeffentlicht
+                # -- damit ist "existiert und hat die erwartete Zeilenzahl" ein
+                # belastbares Praedikat, und ein erneuter Lauf holt nur den Rest.
+                sharddir="$statedir/shards-$prefix-$vsource"
+                mkdir -p "$sharddir"
+
+                # Erwartete Zeilenzahl je Shard aus DERSELBEN Auflistung -- kein
+                # zweiter Listenaufruf, und die Zahl stammt aus genau der Quelle,
+                # die gleich gelesen wird.
+                perl -lne '
+                  # rclone-lsf-Zeile:  00/00b52872a0d8...e659
+                  $n{$+{sh}}++ if m{^(?<sh>[0-9a-f]{2})/};
+                  END { print "$_\t$n{$_}" for sort keys %n }
+                ' "$listing" >"$workdir/shardcounts"
+
+                nshards=$(wc -l <"$workdir/shardcounts")
+                shard_total=$(perl -F'\t' -lane '$s += $F[1]; END { print $s + 0 }' \
+                  "$workdir/shardcounts")
+
+                # Den Filter validieren, bevor seinem Ergebnis geglaubt wird:
+                # liegt auch nur ein Pack woanders als unter data/<xx>/, liest
+                # diese Schleife stillschweigend zu wenig und meldet trotzdem
+                # "alle korrekt".
+                if [ "$shard_total" -ne "$expected" ]; then
+                  echo "ABBRUCH: $expected Packs aufgelistet, aber nur $shard_total" >&2
+                  echo "liegen unter data/<xx>/. Das Layout ist nicht das, was" >&2
+                  echo "dieser Pruefer annimmt." >&2
                   exit 2
                 fi
+
+                echo "Lese und hashe alle Packs, $nshards Shards (der teure Teil) ..."
+                read_shards=0
+                skipped=0
+                failed=0
+                index=0
+
+                while IFS=$'\t' read -r shard n; do
+                  index=$((index + 1))
+                  f="$sharddir/$shard.txt"
+                  if [ -s "$f" ] && [ "$(wc -l <"$f")" -eq "$n" ]; then
+                    skipped=$((skipped + 1))
+                    continue
+                  fi
+                  if rclone hashsum sha256 --download "''${common[@]}" \
+                      "$vsrc/data/$shard" >"$f.part" &&
+                    [ "$(wc -l <"$f.part")" -eq "$n" ]; then
+                    mv "$f.part" "$f"
+                    read_shards=$((read_shards + 1))
+                    echo "  [$index/$nshards] $shard: $n Packs gelesen"
+                  else
+                    rm -f "$f.part"
+                    failed=$((failed + 1))
+                    echo "  [$index/$nshards] $shard: FEHLER -- naechster Lauf wiederholt ihn" >&2
+                  fi
+                done <"$workdir/shardcounts"
+
+                echo
+                echo "Shards: $read_shards gelesen, $skipped schon vollstaendig, $failed fehlgeschlagen."
+                if [ "$failed" -gt 0 ]; then
+                  echo "ABBRUCH: $failed von $nshards Shards unvollstaendig." >&2
+                  echo "Die fertigen bleiben liegen; ein erneuter Lauf holt nur den Rest." >&2
+                  exit 2
+                fi
+
+                # Zu EINER Liste zusammensetzen, im Format der bisherigen:
+                # "<hash>  <shard>/<name>". Der Shard steht dort nicht zur Zier
+                # -- der Auswerter prueft, dass er zu den ersten zwei Zeichen des
+                # Hashes passt. Ein Pack im falschen Verzeichnis faende restic nie.
+                : >"$hashfile.part"
+                while IFS=$'\t' read -r shard _; do
+                  perl -sne '
+                    print "$+{hash}  $shard/$+{name}\n"
+                      if m{^(?<hash>[0-9a-f]{64})\s+(?<name>\S+)$};
+                  ' -- -shard="$shard" "$sharddir/$shard.txt" >>"$hashfile.part"
+                done <"$workdir/shardcounts"
                 mv "$hashfile.part" "$hashfile"
+
+                # Erst jetzt, wo die Gesamtliste steht, sind die Teile entbehrlich.
+                rm -rf "$sharddir"
               fi
 
+              echo "Werte die Hash-Liste aus ($vsource) ..."
               perl -sne '
-                BEGIN { $ok = 0; $bad = 0 }
-                # rclone-Zeile: "<64 hex>  00/00b52872a0d8…e659"
-                if (m{^(?<hash>[0-9a-f]{64})\s+(?<path>\S+)$}) {
-                  my ($h, $p) = ($+{hash}, $+{path});
-                  (my $name = $p) =~ s{.*/}{};
-                  if ($name eq $h) { $ok++ }
-                  else { $bad++; print "BESCHAEDIGT: $p (berechnet: $h)\n" }
+                BEGIN { $ok = 0; $bad = 0; $odd = 0 }
+                # Zeile: "<64 hex>  00/00b52872a0d8...e659"
+                if (m{^ (?<hash>[0-9a-f]{64}) \s+
+                       (?: (?<shard>[0-9a-f]{2}) / )?
+                       (?<name>[0-9a-f]{64}) $}x) {
+                  my ($h, $sh, $name) = ($+{hash}, $+{shard}, $+{name});
+                  if ($name ne $h) {
+                    $bad++;
+                    print "BESCHAEDIGT: $name (berechnet: $h)\n";
+                  } elsif (defined $sh && $sh ne substr($h, 0, 2)) {
+                    $bad++;
+                    print "FALSCH ABGELEGT: $sh/$name gehoert nach ",
+                      substr($h, 0, 2), "/\n";
+                  } else {
+                    $ok++;
+                  }
+                } else {
+                  $odd++;
+                  print "UNLESBARE ZEILE: $_";
                 }
                 END {
-                  my $seen = $ok + $bad;
-                  printf "\n%d von %d Packs geprueft: %d korrekt, %d beschaedigt.\n",
-                    $seen, $expected, $ok, $bad;
+                  my $seen = $ok + $bad + $odd;
+                  printf "\n%d von %d Packs geprueft: %d korrekt, %d beschaedigt, %d unlesbar.\n",
+                    $seen, $expected, $ok, $bad, $odd;
                   if ($seen != $expected) {
                     printf "UNVOLLSTAENDIG: %d Packs fehlen in der Hash-Liste.\n",
                       $expected - $seen;
                     exit 2;
                   }
-                  print $bad ? "NICHT sauber -- vor dem Kopieren klaeren.\n"
-                             : "Alle Packs sind bitgenau unversehrt.\n";
-                  exit($bad ? 1 : 0);
+                  print $bad + $odd ? "NICHT sauber -- klaeren, bevor darauf gebaut wird.\n"
+                                    : "Alle Packs sind bitgenau unversehrt.\n";
+                  exit($bad + $odd ? 1 : 0);
                 }
               ' -- -expected="$expected" <"$hashfile"
               ;;
@@ -296,7 +404,8 @@
               exit "$rc"
               ;;
             *)
-              echo "Unbekannter Modus: $mode (erlaubt: copy, check, verify-packs, verify-then-copy, verify-credentials)" >&2
+              echo "Unbekannter Modus: $mode (erlaubt: copy, check," >&2
+              echo "verify-packs, verify-then-copy, verify-credentials)" >&2
               exit 2
               ;;
           esac
@@ -391,6 +500,53 @@
           RuntimeDirectoryMode = "0700";
           ExecStart = "${copyScript}/bin/backup-copy-to-dropbox %i verify-packs";
           TimeoutStartSec = "infinity";
+          ProtectSystem = "strict";
+          ProtectHome = true;
+          PrivateTmp = true;
+          NoNewPrivileges = true;
+        };
+      };
+
+      # Dasselbe Verfahren gegen die ZWEITE Kopie:
+      #
+      #   systemctl start backup-verify-packs-dropbox@p-own-lengenwang-c5esve
+      #
+      # Warum das noetig ist, obwohl `backup-copy-check@` schon "0 differences"
+      # meldet: dieser Vergleich kennt nur Name und Groesse, und rclone sagt das
+      # selbst -- "No common hash found", weil S3-ETag und Dropbox-content_hash
+      # verschiedene Funktionen sind. Gemessen am 2026-08-31: 51 634 Dateien,
+      # 0 Unterschiede, in 47 Sekunden. Ein Pack mit richtiger Groesse und
+      # falschem Inhalt haette dabei nicht gestoert.
+      #
+      # Der Dateiname als SHA-256 des Inhalts ist der einzige Hash, den beide
+      # Seiten teilen. Ihn auf der Dropbox-Seite nachzurechnen heisst, ~838 GiB
+      # von dort zu lesen: Stunden, aber kostenlos (Dropbox-Egress ist frei,
+      # IONOS-Traffic unbegrenzt) und ohne das Repository-Passwort.
+      systemd.services."backup-verify-packs-dropbox@" = {
+        description = "Verify every pack of %i in Dropbox against its SHA-256 filename";
+
+        # Der Lauf dauert Stunden und die Gegenstelle drosselt. Weil die
+        # Shard-Dateien im StateDirectory ueberleben, kostet ein Abbruch nur den
+        # angefangenen Shard -- also darf systemd es selbst wiederholen, statt
+        # die Arbeit einem Menschen zurueckzugeben, der gerade kein Internet hat.
+        #
+        # Exit 1 wird ausdruecklich NICHT wiederholt: das ist ein Befund (ein
+        # beschaedigtes oder falsch abgelegtes Pack), und den behebt kein
+        # weiterer Versuch. Nur Exit 2 -- unvollstaendig gelesen -- ist der Fall,
+        # fuer den ein zweiter Anlauf ueberhaupt etwas aendert.
+        startLimitIntervalSec = 86400;
+        startLimitBurst = 8;
+
+        serviceConfig = {
+          Type = "oneshot";
+          RuntimeDirectory = "backup-copy";
+          StateDirectory = "backup-copy";
+          RuntimeDirectoryMode = "0700";
+          ExecStart = "${copyScript}/bin/backup-copy-to-dropbox %i verify-packs dropbox";
+          TimeoutStartSec = "infinity";
+          Restart = "on-failure";
+          RestartPreventExitStatus = "1";
+          RestartSec = 300;
           ProtectSystem = "strict";
           ProtectHome = true;
           PrivateTmp = true;

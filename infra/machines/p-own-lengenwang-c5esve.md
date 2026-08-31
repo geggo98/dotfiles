@@ -457,17 +457,21 @@ see the OTR section below.
 
 ### The second copy: R2 → Dropbox, driven from the VPS
 
-Prepared but **not yet runnable** — the five secrets below are declared and not
-encrypted yet, and a `nixos-deploy` before they exist fails at activation, not
-at build. That is the NixOS class's behaviour, not an oversight; see the sops
-note in `AGENTS.md`.
+**Done.** Ran 2026-08-27 23:03 → 2026-08-28 08:28 and is verified; the
+measurements are in "What the second copy actually cost" at the end of this
+section. What follows is how it is built and why.
 
-`modules/nixos-backup-copy.nix` puts rclone and two manually-started template
-units on `p-ion-berlin-xs56r6`:
+`modules/nixos-backup-copy.nix` puts rclone and five manually-started units on
+`p-ion-berlin-xs56r6`. None has a timer or a `wantedBy`: each is a decision
+someone takes, not a recurring job.
 
 ```bash
-systemctl start backup-copy-to-dropbox@p-own-lengenwang-c5esve   # ~1 TB
-systemctl start backup-copy-check@p-own-lengenwang-c5esve        # sizes only
+systemctl start backup-copy-verify-credentials                       # read yes, write no
+systemctl start backup-verify-then-copy@p-own-lengenwang-c5esve      # the normal path
+systemctl start backup-copy-to-dropbox@p-own-lengenwang-c5esve       # copy alone, ~1 TB
+systemctl start backup-copy-check@p-own-lengenwang-c5esve            # names + sizes, seconds
+systemctl start backup-verify-packs@p-own-lengenwang-c5esve          # hash R2 packs
+systemctl start backup-verify-packs-dropbox@p-own-lengenwang-c5esve  # hash Dropbox packs
 ```
 
 **Why the VPS and not a Mac.** Measured from the box on 2026-08-21: 37.0 MB/s
@@ -665,6 +669,61 @@ objects follow at the end of September.
   ran from the allow-listed address, the refused write measures the
   **permission** and not the origin — which is the whole reason that probe lives
   on the VPS rather than on a workstation.
+
+### What the second copy actually cost, and what it proves
+
+`backup-verify-then-copy@p-own-lengenwang-c5esve`, one run, exit 0:
+
+| | |
+|---|---|
+| Verify the source (R2) | 71 min — **50 836 of 50 836 packs, 0 damaged** |
+| Copy R2 → Dropbox | 8 h 14 min — **838.088 GiB, 51 634 objects**, ⌀ ~29 MiB/s |
+| Whole unit | 9 h 26 min wall, 2 h 26 min CPU, 1.6 T in / 847 G out |
+
+Not one retry, not one `too_many_requests` in the entire transfer, with
+`--tpslimit 12` and `--transfers 8`. The rate limit that the module's comments
+warn about never came near.
+
+`backup-copy-check@…` afterwards, 47 s: **0 differences, 51 634 matching
+files** — both directions, so nothing is missing in Dropbox and nothing extra
+is there.
+
+**That check is weaker than it looks, and rclone says so itself.** It logs
+`ERROR : No common hash found - not using a hash for checks` and then exits 0.
+S3 ETags and Dropbox `content_hash` are different functions, so what was
+compared is name and size. A pack of the right size holding the wrong bytes
+passes it.
+
+The only hash both sides share is the filename, because restic names a pack
+after the SHA-256 of its contents. Recomputing it on the Dropbox side is what
+`backup-verify-packs-dropbox@` does:
+
+```bash
+systemctl start backup-verify-packs-dropbox@p-own-lengenwang-c5esve
+```
+
+It reads ~838 GiB back out of Dropbox and needs no repository password. Free —
+Dropbox egress costs nothing and IONOS states unlimited traffic — but hours, so
+it is **sharded by `data/<xx>/`, one file per shard, published with `mv`**. A
+run that dies loses the shard it was in and nothing else; the next run reads
+only what is missing. Being resumable is what lets systemd retry it on its own
+(`Restart=on-failure`, `RestartSec=300`, at most 8 starts a day) instead of
+handing the work back to a person who may not have a connection.
+
+`RestartPreventExitStatus=1` is the important half of that: exit 1 means a pack
+is damaged or filed under the wrong prefix, and no further attempt fixes it.
+Only exit 2 — read incompletely — is worth repeating.
+
+The same code verifies R2 (`verify-packs` with no third argument, the default),
+so the two copies are held to one standard. The complete R2 hash list from
+2026-08-28 stays at `/var/lib/backup-copy/hashes-p-own-lengenwang-c5esve.txt`
+and is reused rather than re-read.
+
+**Still outstanding, and cheap:** `restic check --no-lock` *without*
+`--read-data` from a workstation. Filename hashing proves each pack is intact;
+it says nothing about whether index and snapshots agree with the packs and
+nothing is missing. That half reads metadata only and finishes in minutes even
+over a bad line.
 
 ## The OTR recordings, and why `Download` was not throwaway
 

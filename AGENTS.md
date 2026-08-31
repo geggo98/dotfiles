@@ -787,6 +787,7 @@ Each module defines a single aspect across all relevant configuration classes (d
 | `nixos-base.nix` | Baseline for every NixOS host: sshd, root's authorized keys, the lockout assertions, serial getty, nix settings, GC |
 | `nixos-tailscale.nix` | Tailscale with Tailscale SSH via `flake.modules.nixos.tailscale`. Answers :22 in userspace, so not sshd and not firewall-gateable — see "The IONOS VPS" |
 | `nixos-wireguard-home.nix` | WireGuard to the home FRITZ!Box via `flake.modules.nixos.wireguard-home`. Proxy-ARP addressing, so the LAN reaches the host without NAT |
+| `nixos-backup-copy.nix` | Second copy of the restic backup, R2 -> Dropbox, via `flake.modules.nixos.backup-copy`. rclone plus five manually-started units; copies ciphertext, so the VPS never holds the repository password. Verifies packs against their SHA-256 filename on either side. See `infra/machines/p-own-lengenwang-c5esve.md` |
 | `nixos-secrets.nix` | sops-nix on the **nixos** class — decrypts to `/run/secrets/` with a key generated on the host itself |
 | `misc.nix` | Key remapping, Hammerspoon, misc home config |
 | `onepassword.nix` | Generates `~/.config/1Password/ssh/agent.toml` — which vaults the SSH agent may offer keys from. Without it, personal vault only |
