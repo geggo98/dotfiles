@@ -55,6 +55,88 @@ export type Site = "berlin" | "muenchen" | "lengenwang";
  */
 export const machineZone = "0xf1a5c0.net";
 
+/** A downstream/upstream pair, in the unit the field name gives. */
+export type DsUs = { readonly ds: number; readonly us: number };
+
+/**
+ * What a site's internet uplink looks like when nothing is wrong.
+ *
+ * Recorded for the same reason as `rebindExceptions` and `Hardware.outOfBand`: it lives
+ * only in the router, no API here can read it, and a factory reset or a router swap
+ * takes it with it. The job it does is to answer "is this line degraded, or has it
+ * always looked like this?" -- which cannot be answered from a single measurement, and
+ * which gets asked exactly when nobody has time to first establish a baseline.
+ *
+ * Deliberately not modelled: anything that moves on its own -- the current sync rate,
+ * the public IP, the error counters. Those are measurements, not properties of the
+ * site, and belong in a snapshot filed with the incident.
+ *
+ * ## The Vectoring fallback profile, and why two fields below lie while it is active
+ *
+ * A Telekom VDSL2 port whose line is galvanically suspect, or whose modem does not give
+ * the MSAN a clean vectoring handshake, is switched into a *Stoerprofil*: every carrier
+ * **above 2.2 MHz is blocked**, so the faulty line cannot disturb the other vectored
+ * pairs in the bundle. 2.2 MHz is the regulatory edge of the vectoring band (BNetzA
+ * TAL-Aenderungsvereinbarung), and it happens to be the ADSL2+ band edge -- carrier 512
+ * x 4.3125 kHz = 2208.0 kHz exactly -- which is why the FRITZ!Box calls the result an
+ * "ADSL-aehnliches Profil". It is still VDSL2 profile 17a underneath, only masked.
+ *
+ * This is NOT the DLM/ASSIA rate downgrade it is routinely confused with. It keys off a
+ * line fault rather than a resync counter, and it lifts by itself once the cause is
+ * gone rather than after a stability window.
+ *
+ * How to recognise it, in order of how quickly it settles the question:
+ *
+ *   * The downstream bit allocation stops dead at carrier 512 and there is no SNR at
+ *     all above it -- not "SNR present, zero bits". Only the DSLAM can do that.
+ *   * `G.Vector` reads `aus/aus`, which cannot happen on a healthy vectored port.
+ *   * The sync rate is ~3133/79x kbit/s. Measured three times on separate days here
+ *     (3133/792, 3151/788, 3133/796), so a sync near 3.13 Mbit/s IS this profile and
+ *     not a coincidence worth investigating on its own.
+ *
+ * The mask leaves exactly one band per direction: downstream ~1682-2208 kHz, upstream
+ * ~86-300 kHz. **Do not read the dead stretch between them (300-1682 kHz) as a second
+ * fault.** It is tempting -- a gap where downstream should start looks like an in-house
+ * disturber, or like DPBO from an outdoor DSLAM. Both were ruled out here by comparing
+ * against a healthy sync, where downstream bits start at 310 kHz: a permanent
+ * suppression would still be there, and it is not. The gap is the shape of the mask.
+ *
+ * How long it stays is not fixed. Measured at this site: it lifted by itself in 1:52,
+ * 4:44 and 1:52 min when the fault was momentary, but once held for 4 h 51 min. So "it
+ * has not lifted in ten minutes" says nothing; "it has not lifted in hours" means the
+ * cause is still present -- and that is the one window in which a technician can
+ * actually measure it.
+ *
+ * **The trap:** while it is active, `attenuationDb` reads ~40/37 dB and `vectoring`
+ * reads false. Neither is a property of the line. Reading 40 dB as cable length gives
+ * roughly 1.3 km of copper and a confident, wrong diagnosis; this line measures 10/7 dB
+ * the moment the profile lifts. Trust these two fields only against a sync at the full
+ * rate. (Unresolved: 40 dB down against 37 dB up is nearly flat across a 10x frequency
+ * span, where cable loss should differ by 2-3x. That may be a narrowband display
+ * artifact, or a real series resistance at a corroded joint. Not settled here.)
+ */
+export interface Uplink {
+  readonly isp: string;
+  /** ITU-T G.993.2 profile plus the annex the band plan comes from. */
+  readonly medium: string;
+  /** `DSLAM-Datenrate Max.`: the port profile, i.e. what the tariff provisions. */
+  readonly portProfileKbits: DsUs;
+  /** `Aktuelle Datenrate` on a healthy day. */
+  readonly syncKbits: DsUs;
+  /** `Leitungskapazitaet`: the headroom the sync rate is picked from. */
+  readonly capacityKbits: DsUs;
+  readonly snrMarginDb: DsUs;
+  /** Short loop. Reads ~40/37 dB under the fallback profile -- see above before using it. */
+  readonly attenuationDb: DsUs;
+  /** `G.Vector` full in both directions. False here means the port is in a fallback profile. */
+  readonly vectoring: boolean;
+  /** `BRIDGE_TAPS.TOTAL_BTS` from `data.lua?page=dslSpectrum`. Non-zero means an open stub. */
+  readonly bridgeTaps: number;
+  /** When these numbers were last read off the router. */
+  readonly measured: string;
+  readonly note?: string;
+}
+
 /**
  * The places, and the resolver that serves each LAN.
  *
@@ -78,6 +160,26 @@ export const sites = {
     // asking for "den vollstaendigen Hostnamen". So this list stays two lines long no
     // matter how many machines and realms the scheme grows.
     rebindExceptions: ["0xf1a5c0.net", "schwetschke.dev"],
+    uplink: {
+      isp: "Telekom",
+      medium: "VDSL2 profile 17a, Annex B",
+      portProfileKbits: { ds: 110000, us: 42464 },
+      syncKbits: { ds: 109999, us: 42462 },
+      capacityKbits: { ds: 118607, us: 48366 },
+      snrMarginDb: { ds: 9, us: 10 },
+      attenuationDb: { ds: 10, us: 7 },
+      vectoring: true,
+      bridgeTaps: 0,
+      measured: "2026-08-31",
+      // The port profile used to be higher: syncs of 116800/46721 stood in the log
+      // until 2026-08-28, and 110000/42464 has been the ceiling since 2026-08-30. So a
+      // future 110 Mbit/s is the *current* healthy value, not necessarily the best this
+      // line can do -- do not read a later 116 Mbit/s as an anomaly.
+      //
+      // All six bands carry bits when healthy (US0/DS1/US1/DS2/US2/DS3, up to ~17 MHz),
+      // which is the positive form of the fallback-profile test above.
+      note: "FRITZ!Box 5690 Pro; also has an unused fibre port",
+    },
   },
   lengenwang: {
     description: "Aleutenstrasse, 87663 Lengenwang",
@@ -97,6 +199,7 @@ export const sites = {
   description: string;
   resolver: string | undefined;
   rebindExceptions?: readonly string[];
+  uplink?: Uplink;
 }>;
 
 /** Where a machine answers within one realm: `<name>.<realm>.<zone>`. */
