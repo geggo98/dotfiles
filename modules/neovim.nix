@@ -86,7 +86,21 @@ let
             style = "mocha";
           };
 
-          statusline.lualine.enable = true;
+          statusline.lualine = {
+            enable = true;
+            # nvf verschob `vim.ui.breadcrumbs.*` am 2026-08-16 hierher und
+            # loeschte das alte Modul (breadcrumbs.nix und config.nix sind weg,
+            # dropbar-nvim kam als eigenes Plugin daneben). Die Aliase in nvfs
+            # modules/extra/deprecations.nix halten den alten Pfad am Leben, aber
+            # nur mit einer Warnung -- gemessen beim Bump auf f019fe83c:
+            #   The option `vim.ui.breadcrumbs.enable' ... has been renamed to
+            #   `vim.statusline.lualine.integrations.breadcrumbs.nvim-navic.enable'
+            # Darum gleich der neue Pfad, statt auf dem Alias sitzen zu bleiben.
+            integrations.breadcrumbs = {
+              nvim-navic.enable = true;
+              navbuddy.enable = true;
+            };
+          };
 
           visuals = {
             nvim-scrollbar.enable = true;
@@ -152,10 +166,6 @@ let
             noice.enable = true;
             colorizer.enable = true;
             illuminate.enable = true;
-            breadcrumbs = {
-              enable = true;
-              navbuddy.enable = true;
-            };
             smartcolumn = {
               enable = true;
               setupOpts.custom_colorcolumn = {

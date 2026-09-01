@@ -21,7 +21,7 @@
     # upgrade, bump the tag below to the latest release from
     # https://github.com/yt-dlp/yt-dlp/releases (then `just build`).
     yt-dlp-src = {
-      url = "github:yt-dlp/yt-dlp/2026.07.04";
+      url = "github:yt-dlp/yt-dlp/2026.08.19";
       flake = false;
     };
 
@@ -79,11 +79,11 @@
     # DO NOT SANITY-CHECK THIS PIN AGAINST THE VERSION NUMBER NIX REPORTS — it lies,
     # and it lies in the alarming direction. `nix store diff-closures` prints e.g.
     # `brew: 6.0.12 -> 6.0.16` and the store path is `brew-6.0.16-patched`, both while
-    # this input is pinned to 6.0.17. That label comes from nix-homebrew's OWN default
+    # this input was pinned to 6.0.17. That label comes from nix-homebrew's OWN default
     # brew-src, not from ours; `nix-homebrew.inputs.brew-src.follows` redirects the
     # source but not the version string. Verified 2026-08-22: the built derivation's
     # only `-source` input is our tree, `gh api repos/Homebrew/brew/git/ref/tags/6.0.17`
-    # returns exactly the locked rev 4dacfe77a…, and that tree does contain
+    # returned exactly the rev 4dacfe77a… locked at the time, and that tree does contain
     # Library/Homebrew/cask/artifact/command_wrapper.rb — the class whose absence caused
     # the 6.0.9 breakage above. `brew --version` is no help either; it prints
     # "Homebrew >=4.3.0 (shallow or no git repository)".
@@ -92,7 +92,7 @@
     #   nix eval --raw .#inputs.brew-src.rev   (or read flake.lock)
     # Reading the label instead invites "fixing" a pin that was never wrong.
     brew-src = {
-      url = "github:Homebrew/brew/6.0.17";
+      url = "github:Homebrew/brew/6.0.19";
       flake = false;
     };
 
