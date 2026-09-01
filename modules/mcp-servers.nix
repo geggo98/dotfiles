@@ -281,8 +281,37 @@ let
         enable = true;
         package = llm-agents.claude-code;
         settings = {
-          # Suppress the automatic "Co-Authored-By: Claude" byline in commits/PRs.
-          includeCoAuthoredBy = false;
+          # No automatic attribution in commits or PRs.
+          #
+          # `attribution.commit = ""` replaces the deprecated `includeCoAuthoredBy`
+          # ("Deprecated: Use attribution instead" in the settings schema). The two
+          # are not additive: once `attribution` carries a `commit` or `pr` key,
+          # MkS() stops consulting `includeCoAuthoredBy` altogether, because
+          # pCs(e) = e.commit !== undefined || e.pr !== undefined. Leaving the old
+          # key beside this block would be dead config that still reads as if it did
+          # something. Same outcome either way: fCs(...) === "disabled".
+          #
+          # `sessionUrl = false` drops the "Claude-Session: https://claude.ai/code/..."
+          # trailer and the matching link in PR bodies (anthropics/claude-code#77830).
+          # That URL points straight at the account's session, so it is personal data
+          # and has no business in the history of a public repository.
+          #
+          # Measured against claude-code 2.1.233, read out of the bundle:
+          #   qMa(): if (env.CLAUDE_CODE_SUPPRESS_SESSION_ATTRIBUTION) return null;
+          #          if (settings().attribution?.sessionUrl === false) return null;
+          #   Ipt(): let e = MkS(), t = qMa(); if (!t) return e; return DkS(e, t.url)
+          # One function feeds both the trailer and the "End git commit messages with"
+          # line in the Bash tool's system prompt, so this removes the instruction as
+          # well -- but only in sessions started after the switch. The issue reports
+          # the key as ineffective; that was measured against an older version.
+          #
+          # The env var above is the equivalent gate and would work too. Deliberately
+          # not set: one source per setting, as with every other credential path here.
+          attribution = {
+            commit = "";
+            pr = "";
+            sessionUrl = false;
+          };
           # Default every session to "ultracode": xhigh reasoning effort + standing
           # dynamic-workflow orchestration. `ultracode` is a real persisted settings
           # key in claude-code (the resolver maps `settings.ultracode === true` to
