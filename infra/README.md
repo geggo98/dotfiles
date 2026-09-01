@@ -421,18 +421,46 @@ resource needs it.
 
 | Bucket | Access |
 |---|---|
-| `ufute8ee-public` | world-readable by design — inline bucket policy **and** a legacy `AllUsers` READ ACL, with no public-access-block to stop either |
+| `ufute8ee-public` | world-readable by design — a bucket policy **and** a legacy `AllUsers` READ ACL, with no public-access-block to stop either |
 | `uipecod1` | private — all four public-access-block settings on, `BucketOwnerEnforced` |
 
 Both were adopted with `pulumi import` and carry `protect: true`. The code in
-`src/index.ts` is verbatim generator output so `preview` stays at zero changes —
-that zero-diff is the only evidence the adoption was faithful, so do not
-hand-tidy properties there without checking the diff.
+`src/index.ts` **started** as verbatim generator output and has since diverged,
+so `preview` staying at zero changes is still the gate but no longer proves the
+code is what the generator wrote. Do not hand-tidy properties there without
+checking the diff.
 
-Neither bucket has versioning, and `ufute8ee-public` has no public-access-block.
-Both are deliberate omissions, not oversights: hardening is a separate change
-with its own blast radius, and folding it into the adoption would have destroyed
-the zero-diff check.
+What diverged: the generator put `grants`, `policy`, `requestPayer` and
+`serverSideEncryptionConfiguration` inline on the `Bucket` resources, and the
+provider deprecates all four — seven warnings across the two buckets. They now
+live in eight standalone resources (`BucketAcl`, `BucketPolicy`,
+`BucketServerSideEncryptionConfiguration`, `BucketRequestPaymentConfiguration`
+for `ufute8ee-public`; the latter two plus `BucketPublicAccessBlock` and
+`BucketOwnershipControls` for `uipecod1`), each adopted through a one-shot
+`import:` option — nothing created — which was removed once applied. Measured
+2026-09-01: 20 unchanged before, `8 imported, 20 unchanged` on the adoption,
+`28 unchanged` and zero deprecation warnings after.
+
+Two things that split settled, both worth not re-litigating:
+
+- **`uipecod1`'s `grants` was dropped with no replacement.** That bucket is
+  `BucketOwnerEnforced`, so ACLs are off and `PutBucketAcl` answers
+  `AccessControlListNotSupported` — an `aws.s3.BucketAcl` there could be imported
+  and then never applied. The entry was AWS echoing the owner back, not a setting
+  anyone made. Do not "restore" it.
+- **Removing a deprecated inline property changes nothing on AWS.** The code used
+  to claim Pulumi would read the absence as "delete this setting"; that was wrong,
+  and it is why the split was deferred. A bucket's prior state carries these
+  attributes whether or not the program declares them — `uipecod1` has no bucket
+  policy at all and still records `policy: ""` — and that is what the provider
+  diffs against.
+
+`uipecod1`'s public-access-block and ownership controls used to be invisible to
+Pulumi; they are managed now. `ufute8ee-public` still has neither, and that
+absence is load-bearing — either one takes the bucket offline.
+
+Neither bucket has versioning. That remains a deliberate omission, not an
+oversight: hardening is a separate change with its own blast radius.
 
 ### Not managed here
 

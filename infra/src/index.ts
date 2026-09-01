@@ -149,29 +149,54 @@ export const resticRepos = resticRepositories;
 // --- AWS S3 -----------------------------------------------------------------
 // Both buckets predate this stack and were adopted, not created:
 //   just pulumi import --file import.json --out generated.ts
-// The code below is what that generator emitted, so it matches state exactly —
-// `preview` must stay at zero changes. Do not "tidy" a property without checking
-// the diff; each one is here because the live bucket has it.
+// The code below started as that generator's output and has since diverged. The
+// generator emitted aws.s3.Bucket (not BucketV2 — provider v7 renamed the split
+// resource back) carrying `grants`/`policy`/`requestPayer`/`serverSide…` inline,
+// which it still accepts and which cost a deprecation warning apiece: seven
+// across the two buckets. Those four now live in the eight standalone resources
+// below, each adopted through a one-shot `import:` option — "8 imported, 20
+// unchanged", nothing created — which was then removed again, as the SDK asks.
+// The seven warnings are gone; `preview` reports 28 unchanged.
 //
-// Two notes on shape, since both are easy to get wrong later:
-//   * aws.s3.Bucket (not BucketV2) with inline `grants`/`policy`/`requestPayer`/
-//     `serverSide…`. Provider v7 renamed the split resource back to `Bucket` and
-//     still accepts these inline, which is what the import generator chose.
-//     `preview` emits a deprecation warning for each of them, pointing at the
-//     standalone aws.s3.BucketAcl / BucketPolicy / … resources. That migration is
-//     a deliberate future change, not a tidy-up: it means removing the property
-//     here and importing the standalone resource in the same step, or Pulumi
-//     reads the absence as "delete this setting". Leave the warnings until then.
+// `preview` must still stay at zero changes, but read that gate more narrowly
+// than before. A bucket's PRIOR STATE carries these attributes whether or not
+// the program declares them — measured: `uipecod1`, which has no bucket policy
+// at all, records `policy: ""` — and that is what the provider diffs against.
+// Zero diff therefore means "the provider wants to change nothing", not "state
+// equals the program".
+//
+// Three notes, each of which cost a measurement:
+//   * Removing a deprecated inline property does NOT read as "delete this
+//     setting". This comment said it did, and so does the body of a63ad1c; both
+//     were wrong, and the belief is why the split sat undone. Measured
+//     01.09.2026: all four dropped at once, no `import:` left anywhere, gives 28
+//     unchanged and no diff, twice in a row. Two independent reasons — the
+//     attributes are Optional+Computed in Terraform, so ProposedNew restores the
+//     prior value, and terraform-provider-aws >= 6.46.0 (vendored in plugin
+//     7.40.0) gates every deprecated write in resourceBucketUpdate behind
+//     deprecatedAttributeInRawConfig. One apply would have sufficed; the two
+//     used here bought a smaller blast radius, not correctness.
 //   * `serverSideEncryptionConfiguration: AES256` is not a decision anyone made.
 //     AWS applies SSE-S3 to every bucket by default since January 2023 and
 //     reports it back, so it appears in state whether or not it was configured.
-//   * The canonical user id in `grants` is the account owner. It is an ACL
+//   * The canonical user id in the ACL is the account owner. It is an ACL
 //     identifier, not a credential — AWS publishes it for cross-account grants.
 //
-// Adoption only. Turning on versioning, or adding the public-access-block that
-// `uipecod1` has and `ufute8ee-public` does not, are separate changes with their
-// own blast radius; mixing them in here would destroy the zero-diff gate that
-// proves the adoption itself was faithful.
+// Nor is `protect: true` the safety net it looks like here: it blocks delete and
+// replace, never update, so it would not have stopped an update that cleared a
+// setting. What it does buy is that `bucket` is ForceNew on all eight resources
+// below, so a typo becomes a replace, and protect turns that into a hard error
+// instead of a delete-then-create.
+//
+// The split changed nothing on AWS: policy and ACL are byte-identical to a
+// snapshot taken before it, and an anonymous GET against `ufute8ee-public` still
+// answers 200. Turning on versioning, or giving `ufute8ee-public` the
+// public-access-block that `uipecod1` has, remain separate changes with their own
+// blast radius.
+//
+// Finally, a counter not to chase to zero: the four "using pulumi-resource-<aws|
+// cloudflare> from $PATH at /nix/store/…" lines are Nix serving the plugins from
+// the store rather than ~/.pulumi/plugins (573f106). They stay.
 
 // Deliberately world-readable — the name says so, and two independent mechanisms
 // implement it: the bucket policy below (s3:GetObject for Principal "*") and a
@@ -181,56 +206,142 @@ export const resticRepos = resticRepositories;
 const publicBucket = new aws.s3.Bucket("ufute8ee-public", {
   bucket: "ufute8ee-public",
   bucketNamespace: "global",
-  grants: [
-    {
-      permissions: ["READ"],
-      type: "Group",
-      uri: "http://acs.amazonaws.com/groups/global/AllUsers",
-    },
-    {
-      id: "6e5cb9499f8d4de3f18ab1b95fb186d1648a034b642a45fa5cb8284a11fe8f77",
-      permissions: ["FULL_CONTROL"],
-      type: "CanonicalUser",
-    },
-  ],
-  policy: "{\"Statement\":[{\"Action\":\"s3:GetObject\",\"Effect\":\"Allow\",\"Principal\":\"*\",\"Resource\":\"arn:aws:s3:::ufute8ee-public/*\"}],\"Version\":\"2012-10-17\"}",
   region: "eu-central-1",
-  requestPayer: "BucketOwner",
-  serverSideEncryptionConfiguration: {
-    rule: {
-      applyServerSideEncryptionByDefault: {
-        sseAlgorithm: "AES256",
-      },
+}, {
+  protect: true,
+});
+
+// The four settings the bucket above used to carry inline, as the separate
+// resources the provider asks for. They were adopted, not created: each held an
+// `import:` option for exactly one `up`, and the option was removed once that
+// had run. A `create` in that first preview would have meant the read came back
+// empty, and for the ACL or the policy that is the difference between adopting
+// the bucket and briefly taking a world-readable one offline — so the gate was
+// "8 to import, 0 to create", checked before applying. A `create` appearing here
+// again would mean the state entry had been lost.
+//
+// `protect: true` on the ACL and the policy for the same reason the bucket has
+// it: those two are what make it public, so deleting either is an outage.
+const publicBucketAcl = new aws.s3.BucketAcl("ufute8ee-public-acl", {
+  bucket: publicBucket.bucket,
+  region: "eu-central-1",
+  // Written in the order GetBucketAcl returns, owner first. The underlying
+  // Terraform attribute is a set, so order carries no meaning — but matching
+  // the read avoids a diff that looks real and is not.
+  accessControlPolicy: {
+    owner: {
+      id: "6e5cb9499f8d4de3f18ab1b95fb186d1648a034b642a45fa5cb8284a11fe8f77",
     },
+    grants: [
+      {
+        grantee: {
+          id: "6e5cb9499f8d4de3f18ab1b95fb186d1648a034b642a45fa5cb8284a11fe8f77",
+          type: "CanonicalUser",
+        },
+        permission: "FULL_CONTROL",
+      },
+      {
+        grantee: {
+          type: "Group",
+          uri: "http://acs.amazonaws.com/groups/global/AllUsers",
+        },
+        permission: "READ",
+      },
+    ],
   },
 }, {
   protect: true,
 });
 
+const publicBucketPolicy = new aws.s3.BucketPolicy("ufute8ee-public-policy", {
+  bucket: publicBucket.bucket,
+  region: "eu-central-1",
+  // Byte-identical to the `policy` the bucket above used to carry inline: the two
+  // coexisted in the program for one apply, and identical text was the cheapest
+  // way to be sure they could not disagree. It is also already the
+  // canonical form — the provider normalises policy JSON by round-tripping it
+  // through a Go map, and Go marshals map keys sorted, which is exactly this
+  // ordering. AWS returns Version first; that is the same document, but it would
+  // only be normalised back to this.
+  policy: "{\"Statement\":[{\"Action\":\"s3:GetObject\",\"Effect\":\"Allow\",\"Principal\":\"*\",\"Resource\":\"arn:aws:s3:::ufute8ee-public/*\"}],\"Version\":\"2012-10-17\"}",
+}, {
+  protect: true,
+});
+
+const publicBucketEncryption = new aws.s3.BucketServerSideEncryptionConfiguration("ufute8ee-public-sse", {
+  bucket: publicBucket.bucket,
+  region: "eu-central-1",
+  rules: [{
+    applyServerSideEncryptionByDefault: {
+      sseAlgorithm: "AES256",
+    },
+  }],
+});
+
+const publicBucketRequestPayment = new aws.s3.BucketRequestPaymentConfiguration("ufute8ee-public-payer", {
+  bucket: publicBucket.bucket,
+  region: "eu-central-1",
+  payer: "BucketOwner",
+});
+
 // Private: all four public-access-block settings on, and ObjectOwnership
-// BucketOwnerEnforced (ACLs disabled entirely). Neither is imported here — they
-// are separate resources — so Pulumi will not touch them, but equally will not
-// notice if they are turned off in the console. See README, "Hosts Pulumi cannot
-// manage", for the same asymmetry stated generally.
+// BucketOwnerEnforced (ACLs disabled entirely). Both are separate resources and
+// both are adopted below, as `uipecod1-public-access-block` and
+// `uipecod1-ownership`. README, "Hosts Pulumi cannot manage", states the same
+// asymmetry generally; it still holds for what Pulumi cannot adopt at all — the
+// IONOS VPS in src/inventory.ts — but no longer for these two.
 const privateBucket = new aws.s3.Bucket("uipecod1", {
   bucket: "uipecod1",
   bucketNamespace: "global",
-  grants: [{
-    id: "6e5cb9499f8d4de3f18ab1b95fb186d1648a034b642a45fa5cb8284a11fe8f77",
-    permissions: ["FULL_CONTROL"],
-    type: "CanonicalUser",
-  }],
   region: "eu-central-1",
-  requestPayer: "BucketOwner",
-  serverSideEncryptionConfiguration: {
-    rule: {
-      applyServerSideEncryptionByDefault: {
-        sseAlgorithm: "AES256",
-      },
-    },
-  },
 }, {
   protect: true,
+});
+
+// Same split as for the public bucket, minus the ACL. `uipecod1` has
+// ObjectOwnership BucketOwnerEnforced, so ACLs are switched off entirely and
+// PutBucketAcl answers AccessControlListNotSupported — an aws.s3.BucketAcl here
+// could be imported and then never applied. The `grants` entry the import
+// generator recorded is AWS reporting the owner back, not a setting anyone made,
+// so it is dropped rather than ported.
+const privateBucketEncryption = new aws.s3.BucketServerSideEncryptionConfiguration("uipecod1-sse", {
+  bucket: privateBucket.bucket,
+  region: "eu-central-1",
+  rules: [{
+    applyServerSideEncryptionByDefault: {
+      sseAlgorithm: "AES256",
+    },
+  }],
+});
+
+const privateBucketRequestPayment = new aws.s3.BucketRequestPaymentConfiguration("uipecod1-payer", {
+  bucket: privateBucket.bucket,
+  region: "eu-central-1",
+  payer: "BucketOwner",
+});
+
+// These two are what actually make the bucket private, and until this split
+// Pulumi could not see them: it would not have touched them, but equally would
+// not have noticed them being switched off in the console. Pure adoption —
+// nothing about the live bucket changed.
+//
+// Deliberately not mirrored onto `ufute8ee-public`. Either one there takes it
+// offline; see the comment above that bucket.
+const privateBucketPublicAccessBlock = new aws.s3.BucketPublicAccessBlock("uipecod1-public-access-block", {
+  bucket: privateBucket.bucket,
+  region: "eu-central-1",
+  blockPublicAcls: true,
+  blockPublicPolicy: true,
+  ignorePublicAcls: true,
+  restrictPublicBuckets: true,
+});
+
+const privateBucketOwnership = new aws.s3.BucketOwnershipControls("uipecod1-ownership", {
+  bucket: privateBucket.bucket,
+  region: "eu-central-1",
+  rule: {
+    objectOwnership: "BucketOwnerEnforced",
+  },
 });
 
 export const s3Buckets = {
