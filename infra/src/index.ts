@@ -351,10 +351,19 @@ export const s3Buckets = {
 
 // --- Machine inventory ------------------------------------------------------
 // Not resources — see the header of ./inventory.ts for why the IONOS VPS cannot
-// be one. Exported so it reaches infra/pulumi-outputs.json, the Pulumi->Nix
-// contract in Architecture.md §6, and is therefore already present when the
-// first NixOS host configuration lands (Plan.md Phase 3).
-// Drift is checked by `just infra-verify`, not by `pulumi preview`.
+// be one. Drift is checked by `just infra-verify`, not by `pulumi preview`.
+//
+// Be honest about what this export is and is not. It was written to feed
+// infra/pulumi-outputs.json, the Pulumi->Nix contract in Architecture.md §6, so
+// the data would be in place when the first NixOS host arrived. That host landed
+// on 2026-08-17 and the contract was never built: addresses come from
+// `deployTarget` in modules/nixos-wiring.nix instead. Nothing reads this stack
+// output today — dns.ts imports ./inventory.js directly, and infra-verify.py
+// reads inventory.ts itself by type-stripping. So it publishes the inventory into
+// `pulumi stack output` for a human, and nothing more.
+//
+// The IMPORT above earns its place independently of the export, and that is the
+// part not to remove by accident: it is what makes the naming checks run.
 //
 // Importing it also runs the naming checks at the bottom of that file, so a name
 // that does not fit the scheme in ../Naming.md fails `pulumi preview` here.

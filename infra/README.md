@@ -479,9 +479,11 @@ provider and no endpoint, so `pulumi import` is not an option. The full evidence
 in [`Architecture.md` §11](./Architecture.md#11-the-ionos-vps-is-out-of-pulumis-reach--and-why);
 read it before adding an IONOS provider in the hope of adopting this server.
 
-It is recorded anyway, as hand-maintained constants in `src/inventory.ts` exported as
-a stack output, so the host appears in the inventory that `Architecture.md` §6 defines
-as the Pulumi→Nix contract rather than living only in a browser tab.
+It is recorded anyway, as hand-maintained constants in `src/inventory.ts`, so the host
+does not live only in a browser tab. They are also exported as a stack output — which
+was meant to feed the Pulumi→Nix contract in `Architecture.md` §6, and since that was
+never built, nothing consumes it; `dns.ts` and `just infra-verify` read `inventory.ts`
+itself.
 
 Because Pulumi reconciles nothing here, the drift check is separate and must be run
 deliberately:

@@ -25,10 +25,10 @@ flowchart TB
     Pulumi -->|state| PC[Pulumi Cloud<br/>Individual plan]
     Pulumi -->|provision| AWS[AWS resources]
     Pulumi -.->|future| IONOS[IONOS resources]
-    Pulumi -.->|future| Hosts[NixOS hosts]
+    Pulumi -.->|not provisioned by Pulumi| Hosts[NixOS hosts]
 
     Nix -->|configure| MAC[macOS workstations<br/>FCX19GT9XR / DKL6GDJ7X1]
-    Nix -.->|future, via colmena| Hosts
+    Nix -->|configure, via just nixos-deploy| Hosts
 
     classDef state fill:#eef,stroke:#44a
     classDef secret fill:#efe,stroke:#4a4
@@ -58,7 +58,7 @@ recipient on the infra file — no migration to a different secret store.
 | File | Recipients | Holds |
 |---|---|---|
 | `secrets/secrets.enc.yaml` (existing) | Workstation Ed25519-derived Age keys + recovery PGP | Runtime secrets consumed by sops-nix on macOS hosts: AWS credentials, third-party API keys for Home Manager, etc. |
-| `secrets/infra.enc.yaml` (new — Phase 1) | Workstation Age keys *that run Pulumi* + recovery PGP + (later) one GitHub Actions Age public key | Secrets needed *to operate* Pulumi: `PULUMI_ACCESS_TOKEN`, `IONOS_TOKEN`, eventually a deploy SSH key for colmena |
+| `secrets/infra.enc.yaml` (new — Phase 1) | Workstation Age keys *that run Pulumi* + recovery PGP + (later) one GitHub Actions Age public key | Secrets needed *to operate* Pulumi: `PULUMI_ACCESS_TOKEN`, `IONOS_TOKEN`, eventually a deploy SSH key, if fan-out deployment ever needs one |
 
 Why split:
 
@@ -152,7 +152,7 @@ and *who reads it*.
 | **Cloud-auth — federated** *(future)* | AWS role ARN + OIDC trust | not a secret — repo variable / `.github/` config | Human (one-shot, in AWS) | GHA via `aws-actions/configure-aws-credentials` |
 | **Cloud-auth — local AWS** | `aws-access-key-id`, `aws-secret-access-key` | `secrets.enc.yaml` (existing) | Human via `sops edit` | sops-nix → `~/.aws/credentials` on the laptop |
 | **App input — host runtime** | OpenAI / Atlassian / Jira tokens | `secrets.enc.yaml` (existing) | Human via `sops edit` | Home Manager modules at activation |
-| **Pulumi-generated → infra** *(Phase 2)* | colmena `deploy_key`, host `provisioning_key` | `infra.enc.yaml` | Pulumi via `command.local` running `sops set` | `pulumi` wrapper + colmena step in CI |
+| **Pulumi-generated → infra** *(Plan.md Phase 2, unbuilt)* | a shared `deploy_key`, host `provisioning_key` | `infra.enc.yaml` | Pulumi via `command.local` running `sops set` | the `pulumi` wrapper, and whatever deploys hosts |
 | **Pulumi-generated → host runtime** *(Phase 2)* | DB password that an app on a Mac needs | `secrets.enc.yaml` | Pulumi via `command.local` running `sops set` | sops-nix at `darwin-rebuild switch` |
 | **Pulumi-generated → cloud-only** | AWS Secrets Manager entries with auto-rotation | not in SOPS | AWS | Cloud apps with IAM permissions |
 
@@ -193,11 +193,16 @@ Notes:
 
 ## 6. NixOS lifecycle (forward-looking)
 
-This repo currently manages only macOS hosts via nix-darwin. When the first
-NixOS host is added (planned per the upcoming-hosts memory), we will adopt the
-following four-phase model. Pulumi and Nix belong in *different* phases of the
-lifecycle but in the same workflow; they communicate through a JSON inventory
-file committed to the repo.
+**The four-phase model below is the one this repo planned and then did not
+adopt.** It is kept because its reasoning still applies to the next host, and
+because its phase numbers are cited elsewhere — but read "what actually
+happened" underneath it before treating any of it as a description of reality.
+Note the numbering collision, too: these Phase 1–4 are the lifecycle model, not
+the phases in [`Plan.md`](./Plan.md). When citing, say which.
+
+The idea was that Pulumi and Nix belong in *different* phases of the lifecycle
+but in the same workflow, communicating through a JSON inventory file committed
+to the repo.
 
 ```mermaid
 flowchart LR
@@ -213,12 +218,33 @@ flowchart LR
 | Provisioning | rare (weeks/months) | Pulumi | Pulumi Cloud |
 | Inventory export | every `pulumi up` | `pulumi stack output --json` | Git-committed JSON |
 | Initial install | once per host | `nixos-anywhere` | NixOS generation on the host |
-| Configuration | frequent (daily) | `colmena apply` | NixOS generation on the host |
+| Configuration | frequent (daily) | *planned:* `colmena apply` — *actual:* `just nixos-deploy` | NixOS generation on the host |
 
-The inventory file (`infra/pulumi-outputs.json`) is the contract: Pulumi
-writes it; Nix modules consume it via `builtins.fromJSON`. Sensitive fields
-are filtered out (`--show-secrets=false`); generated secrets live in SOPS, not
-in the inventory.
+The inventory file (`infra/pulumi-outputs.json`) was to be the contract: Pulumi
+writes it, Nix modules consume it via `builtins.fromJSON`, sensitive fields
+filtered out with `--show-secrets=false`.
+
+**What actually happened**, with `p-ion-berlin-xs56r6` on 2026-08-17:
+
+- **Provisioning is not Pulumi's.** The VPS was ordered by hand at IONOS; Pulumi
+  manages no compute in this account. `src/inventory.ts` exists precisely because
+  those machines have no provider and no API — `pulumi preview` reconciles
+  nothing about them, which is what `just infra-verify` is for.
+- **`infra/pulumi-outputs.json` was never created.** Host addresses live in
+  `modules/nixos-wiring.nix` as `deployTarget`.
+- **Initial install did go through `nixos-anywhere`.** That phase survived
+  intact, with `--build-on remote`.
+- **Ongoing configuration is `just nixos-deploy`, not colmena.** One host at a
+  time, closure substituted from R2, and a transient rollback timer armed on the
+  target before the switch and disarmed over a second, fresh ssh connection —
+  deploy-rs' magicRollback without deploy-rs. It has fired for real. §9 compares
+  the alternatives; colmena stays the candidate if a second NixOS host lands.
+
+The contract was not merely unneeded — it carries a hazard worth recording
+before anyone revives it. **A committed JSON consumed by Nix at evaluation time
+goes stale silently**: forget to regenerate it after `pulumi up` and the next
+`nix build` reads old addresses, with no error anywhere. Any revival needs a
+single command that does both. See [`Plan.md`](./Plan.md), "Multi-host deploy".
 
 ## 7. SSH-key strategy (forward-looking)
 
@@ -227,7 +253,7 @@ When NixOS hosts arrive, three keys with cleanly separated lifecycles:
 | Key | Purpose | Created by | Becomes obsolete when |
 |---|---|---|---|
 | `provisioning_key` | Initial root login on a freshly provisioned VM | Pulumi `tls.PrivateKey` | After first `nixos-anywhere` run; not in `authorized_keys` afterwards |
-| `deploy_key` | Ongoing colmena deployments | Pulumi `tls.PrivateKey`, written to SOPS | Manually rotated |
+| `deploy_key` | Ongoing deployments | Pulumi `tls.PrivateKey`, written to SOPS | Manually rotated |
 | `user_keys` | Personal SSH from the laptop | Yubikey / 1Password SSH agent (workstation-side, *not* repo-managed) | Never automatically |
 
 Security gain: the `provisioning_key` is useless after initial install,
@@ -273,10 +299,22 @@ consumer (mobile app, browser) needs the same secrets.
 
 ### colmena vs. nixos-rebuild --target-host vs. deploy-rs
 
-`colmena` is the natural extension of the dendritic pattern (parallel
-deploys, tag selection, flake-integrated). `deploy-rs` adds magic rollback;
-worth it once a host becomes production-critical. `nixos-rebuild
---target-host` is fine for one host but doesn't scale.
+**The road taken is none of the three: `just nixos-deploy`.** One host per
+invocation, the closure substituted from R2, and a transient systemd timer armed
+on the target before the switch and disarmed over a second, fresh ssh connection
+— deploy-rs' magic rollback without deploy-rs, in about thirty lines of recipe.
+It has fired for real. Two limits are worth knowing before adopting a tool that
+replaces it: transient units do not survive a reboot, so a config that only
+breaks at boot needs the GRUB generation list instead; and if the deploying
+machine dies between switch and disarm, the target rolls back although nothing
+was wrong.
+
+The alternatives, for when a second NixOS host lands: `colmena` is the natural
+extension of the dendritic pattern (parallel deploys, tag selection,
+flake-integrated) and remains the candidate. `deploy-rs` adds magic rollback,
+which is the one property `just nixos-deploy` would otherwise lose. `nixos-rebuild
+--target-host` is fine for one host but doesn't scale — and is what we already
+have, better.
 
 ## 10. Differences from the loose reference architecture
 
@@ -332,8 +370,10 @@ independent walls, either one sufficient on its own:
 **Consequences that shape the code:**
 
 - Nothing about this host is machine-readable from outside. `infra/src/inventory.ts`
-  therefore holds hand-maintained constants, exported as a stack output so the host still
-  appears in the inventory that §6 defines as the Pulumi→Nix contract.
+  therefore holds hand-maintained constants, exported as a stack output so the host is at
+  least visible in `pulumi stack output`. That export was meant to feed the Pulumi→Nix
+  contract §6 describes; since that contract was never built, nothing reads it today —
+  `dns.ts` and `just infra-verify` both read `inventory.ts` directly.
 - `pulumi preview` reconciles none of it. `just infra-verify` supplies the missing check:
   it compares the recorded Ed25519 host key against what both addresses actually present,
   and fails on mismatch *and* on unreachability. Without it the entry is documentation
