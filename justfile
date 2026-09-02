@@ -738,9 +738,12 @@ cache-seed:
 cache-push *paths:
     NIX_CACHE_S3_URL='{{ R2_S3_URL }}' zsh modules/_files/nix-cache/nix-cache-push "$@"
 
-# Read the post-build-hook's push log. Every hook invocation leaves one line,
-# successes included — so an empty log means the hook is not running, not that
-# everything is fine. Optional argument filters, e.g. `just cache-log FAIL`.
+# Read the push log. Every hook invocation leaves one `status=queued` line and
+# every drain that did something leaves one `status=drain`/`FAIL` line, successes
+# included — so an empty log means the hook is not running, not that everything
+# is fine. `nix copy`'s own multi-line output lives in /var/log/nix-cache-drain.log
+# instead, so that it cannot break the one-line-per-record atomicity here.
+# Optional argument filters, e.g. `just cache-log FAIL`.
 cache-log filter="":
     #!/bin/zsh
     set -euo pipefail
@@ -769,6 +772,69 @@ cache-log filter="":
         1) echo "no records matching '{{ filter }}'" >&2 ;;
         *) echo "grep failed on $log (exit $rc)" >&2; exit $rc ;;
     esac
+
+# What is waiting to be pushed to R2, and how long has it been waiting? The
+# post-build-hook only ENQUEUES (see modules/nix-cache.nix); a launchd daemon
+# drains the spool every 5 minutes. If that daemon ever fails to bootstrap, the
+# queue grows in silence — this recipe is how that gets noticed. Read-only, no
+# sudo: the spool is 0755 and the file names are store paths.
+cache-queue:
+    #!/bin/zsh
+    set -euo pipefail
+    spool=/var/spool/nix-cache-push
+    log=/var/log/nix-cache-push.log
+    if [ ! -d "$spool/queue" ]; then
+        echo "$spool/queue does not exist yet — the drainer has never run." >&2
+        echo "It is created at activation, so this means no switch since the change:" >&2
+        echo "  just switch" >&2
+        exit 1
+    fi
+    # zsh globbing throughout, NO `ls | head`. Under `set -o pipefail` that
+    # pipeline returns 141 as soon as `head` closes the pipe on a listing large
+    # enough to fill the buffer — i.e. it fails precisely in the stuck-drainer
+    # case this recipe exists to diagnose. `(N)` = no match is not an error,
+    # `(:t)` = basename, `(om)` = newest first, so [-1] is the oldest.
+    queued=("$spool"/queue/*(N))
+    echo "queue: ${#queued} waiting"
+    for d in "$spool"/retry/*(N/); do
+        stuck=("$d"/*(N))
+        if [ ${#stuck} -gt 0 ]; then echo "retry/${d:t}: ${#stuck}"; fi
+    done
+    if [ ${#queued} -gt 0 ]; then
+        oldest=("$spool"/queue/*(NDom))
+        # perl, not `stat`: BSD stat wants `-f '%Sm'` and GNU stat wants
+        # `-c '%y'`, and the one on PATH here is GNU (coreutils is in the user
+        # profile) while the fallback in /usr/bin is BSD. perl reads the mtime
+        # itself and is identical on both. Caught in testing, where the BSD form
+        # printed `stat: cannot read file system information` and the raw struct.
+        when=$(perl -MPOSIX=strftime -e \
+          'print strftime("%Y-%m-%dT%H:%M:%S", localtime((stat $ARGV[0])[9]))' "${oldest[-1]}")
+        echo "oldest: ${oldest[-1]:t} ($when)"
+        echo
+        print -l ${${queued[1,20]}:t}
+        if [ ${#queued} -gt 20 ]; then echo "… and $(( ${#queued} - 20 )) more"; fi
+    fi
+    # A depth alone is not a diagnosis: the two situations this recipe is for —
+    # the LaunchDaemon failing to bootstrap, and a rollback to a generation that
+    # predates it — both show a growing number and no other symptom. So say when
+    # a drain last reported anything.
+    echo
+    if [ -r "$log" ]; then
+        last=$(perl -ne '$l = $_ if /status=(drain|FAIL|DEFER|busy|ABORT)/; END { print $l // "" }' "$log")
+        if [ -n "$last" ]; then
+            echo "last drain: $last"
+        else
+            echo "last drain: never — the daemon has not reported yet." >&2
+            echo "  sudo launchctl print system/org.nixos.nix-cache-drain | grep -E 'state|last exit'" >&2
+        fi
+    fi
+    exit 0
+
+# Drain the R2 push spool NOW instead of waiting for the 5-minute timer. Needs
+# sudo (the spool and the log are root-owned), so agents print it rather than
+# run it — same rule as `just switch` and `just daemon-restart`.
+cache-drain:
+    @echo "sudo /run/current-system/sw/bin/nix-cache-drain"
 
 # Seed R2 with a REMOTE host's closure delta, e.g. the x86_64-linux VPS. The R2
 # write credentials stay here; the server has the cache as a read-only

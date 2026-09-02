@@ -34,8 +34,11 @@
 #                          (`cfat_…`); for a token the S3 secret is its SHA-256
 #                          digest, which we derive below.
 #
-# Best-effort by design: the caller (post-build-hook) wraps this in a timeout
-# and `|| true` so a slow or unreachable R2 never fails or hangs a build.
+# The post-build-hook no longer calls this script — it only enqueues, and
+# `nix-cache-drain` invokes this out of band (see modules/nix-cache.nix). The
+# drainer wraps it in a 3600 s timeout and, on failure, moves the entry onto a
+# retry ladder rather than dropping it; nothing here blocks a build any more.
+# `just cache-seed` / `cache-push` / `cache-seed-remote` call it directly.
 set -euo pipefail
 
 s3_url="${NIX_CACHE_S3_URL:?NIX_CACHE_S3_URL is required}"
@@ -156,8 +159,14 @@ import json, os, sys
 
 limit = int(os.environ["MAX_FOD"])
 info = json.load(sys.stdin)
+# `nix path-info --json` has two shapes: an object keyed by store path (current
+# default) and an array of objects carrying "path". Accept both. Assuming the
+# object form would not fail loudly on the other one — .items() on a list raises
+# AttributeError, which under `set -euo pipefail` aborts the push with a Python
+# traceback and no indication that the FORMAT changed rather than the store.
+items = info.items() if isinstance(info, dict) else ((e["path"], e) for e in info)
 kept, dropped, saved = [], 0, 0
-for path, meta in info.items():
+for path, meta in items:
     ca = (meta or {}).get("ca") or ""
     size = (meta or {}).get("narSize") or 0
     if ca.startswith("fixed:") and size > limit:

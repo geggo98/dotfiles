@@ -46,6 +46,7 @@ A `justfile` provides safe, pre-approved commands that agents can run without us
 | `just deps` | Show flake dependency tree |
 | `just eval` | Evaluate flake outputs (fast syntax check) |
 | `just show-derivation` | Show derivation of current host build |
+| `just cache-queue` | What is still waiting to be pushed to R2, and how long has it waited? |
 | `just gc` | Collect user-level garbage (7 days) and sweep any running Linux builder |
 | `just optimise` | Deduplicate the store (hard-link identical files) |
 | `just linux-builder-up [arch]` | Start the Docker Linux builder (`x86_64` default, or `aarch64`) |
@@ -774,7 +775,7 @@ Each module defines a single aspect across all relevant configuration classes (d
 | `darwin-wiring.nix` | Defines `configurations.darwin` option and wires it to `flake.darwinConfigurations` |
 | `macos.nix` | macOS-specific defaults (dock, finder, trackpad, system preferences) via `flake.modules.darwin.macos` |
 | `determinate.nix` | Determinate Nix module settings (`nix.enable = false`) via `flake.modules.darwin.determinate` |
-| `nix-cache.nix` | Shared Cloudflare R2 Nix binary cache — substituter + signed `post-build-hook` push — via `flake.modules.darwin.nix-cache`. Also carries numtide's upstream substituter (`cache.numtide.com`), because `determinateNix.customSettings` allows only one definition of `extra-substituters`. Bucket/domain provisioned in `infra/`; details in `infra/README.md` |
+| `nix-cache.nix` | Shared Cloudflare R2 Nix binary cache — substituter, plus a `post-build-hook` that only ENQUEUES and a `nix-cache-drain` LaunchDaemon that does the signed push out of band — via `flake.modules.darwin.nix-cache`. See "The push is asynchronous, and why" below. Also carries numtide's upstream substituter (`cache.numtide.com`), because `determinateNix.customSettings` allows only one definition of `extra-substituters`. Bucket/domain provisioned in `infra/`; details in `infra/README.md` |
 | `linux-builder.nix` | Registers the Docker Linux builders with the daemon via `determinateNix.buildMachines` + an `ssh_config` alias, and installs the root-owned builder key. See "The Linux builder (Docker)" |
 | `homebrew-common.nix` | Shared Homebrew configuration via `flake.modules.darwin.homebrew` |
 | `shells.nix` | Shell configuration (Fish, Zsh, Bash) via `flake.modules.homeManager.shell` |
@@ -815,8 +816,144 @@ Host-specific secrets declarations live in **`hosts/<serial>/secrets.nix`**.
 - **Auto-import:** `import-tree ./modules` auto-discovers all module files
 - **Nix management:** Determinate Nix manages the Nix installation, not nix-darwin's built-in `nix.enable`
 - **SIP restriction:** `launchd.envVariables` is blocked by macOS System Integrity Protection. To set environment variables for GUI apps (e.g. PATH), use a `launchd.user.agents` entry that runs `/bin/launchctl setenv` at login instead
-- **launchd jobs get no shell environment:** the converse of the SIP restriction above. An agent or daemon inherits only `PATH`, `SSH_AUTH_SOCK` and the XPC keys — never what `programs.fish.interactiveShellInit`, `home.sessionVariables`, or a hand-edited rc file exports (verify with `launchctl print gui/$(id -u)/<label>`). Anything scheduled must therefore bake its inputs in at build time or receive them through `launchd.agents.<name>.config.EnvironmentVariables`, and must never fall back **silently** when one is missing. Worked example: `modules/nix-tarball-cache-repack.nix` resolves `${XDG_CACHE_HOME:-$HOME/.cache}/nix/tarball-cache-v2` exactly as Nix's `getCacheDir()` does, so exporting that variable from the shell alone would leave Nix writing to one directory while the agent repacks another — and its miss branch exits 0, which reads exactly like success. It forwards the variable when `xdg.enable` is set (the same condition home-manager uses to export it) and warns loudly, naming the variable, when the resolved directory is empty. `modules/nix-cache.nix` sidesteps the same class of bug for the root `post-build-hook` by passing `NIX_CACHE_SECRETS_DIR` and an explicit `PATH`
-- **Binary cache (R2):** both hosts share a Cloudflare R2 cache (`modules/nix-cache.nix`). Pull is a public custom-domain substituter; push is a signed `nix copy` (root `post-build-hook`, or `just cache-seed`/`cache-push`). The hook is referenced by the **stable** `/run/current-system/sw/bin` path, but Determinate's `nix-daemon` reads the hook setting only at startup and `darwin-rebuild switch` does **not** restart it — after first enabling the cache, run `just daemon-restart` (or reboot) once. Push credentials: `r2_secret_access_key` stores a Cloudflare API token (`cfat_…`) whose SHA-256 the push script derives as the S3 secret
+- **launchd jobs get no shell environment:** the converse of the SIP restriction above. An agent or daemon inherits only `PATH`, `SSH_AUTH_SOCK` and the XPC keys — never what `programs.fish.interactiveShellInit`, `home.sessionVariables`, or a hand-edited rc file exports (verify with `launchctl print gui/$(id -u)/<label>`). Anything scheduled must therefore bake its inputs in at build time or receive them through `launchd.agents.<name>.config.EnvironmentVariables`, and must never fall back **silently** when one is missing. Worked example: `modules/nix-tarball-cache-repack.nix` resolves `${XDG_CACHE_HOME:-$HOME/.cache}/nix/tarball-cache-v2` exactly as Nix's `getCacheDir()` does, so exporting that variable from the shell alone would leave Nix writing to one directory while the agent repacks another — and its miss branch exits 0, which reads exactly like success. It forwards the variable when `xdg.enable` is set (the same condition home-manager uses to export it) and warns loudly, naming the variable, when the resolved directory is empty. `modules/nix-cache.nix` sidesteps the same class of bug in the `nix-cache-drain` LaunchDaemon by baking **every** input — `NIX_CACHE_S3_URL`, `…_SECRETS_DIR`, `…_SPOOL`, `…_LOG`, `…_DRAIN_LOCK`, `…_MAX_CLOSURE_BYTES`, `…_PUSH`, `PATH` — into the wrapper at build time rather than passing them through launchd's `EnvironmentVariables`, so a manual run and the scheduled run cannot see different values; the python side reads each with `os.environ[...]`, never `.get(…, default)`, and exits 2 naming the missing one — a default would have it draining into the wrong spool while reporting success
+- **Binary cache (R2):** both hosts share a Cloudflare R2 cache (`modules/nix-cache.nix`). Pull is a public custom-domain substituter; push is a signed `nix copy` run by the **`nix-cache-drain` LaunchDaemon**, not by the build itself — the root `post-build-hook` only drops a file into `/var/spool/nix-cache-push/queue` (`just cache-seed`/`cache-push` still push synchronously, on purpose). The hook is referenced by the **stable** `/run/current-system/sw/bin` path, but Determinate's `nix-daemon` reads the hook setting only at startup and `darwin-rebuild switch` does **not** restart it — after first enabling the cache, run `just daemon-restart` (or reboot) once. Push credentials: `r2_secret_access_key` stores a Cloudflare API token (`cfat_…`) whose SHA-256 the push script derives as the S3 secret
+
+### The push is asynchronous, and why
+
+Nix runs a `post-build-hook` **synchronously, blocking its own build loop**. For a long
+time this repo's hook did the whole `nix copy` to R2 inline behind a `timeout 600`, so
+every locally built path cost up to ten minutes of wall clock before the build that
+produced it was considered finished. What that actually cost, from
+`/var/log/nix-cache-push.log`:
+
+| day | hook invocations | total hook time | worst single record |
+|---|---|---|---|
+| 2026-08-25 | 67 | 9040 s | 11 killed at `exit=124` |
+| 2026-09-02 | 322 | 8182 s (136 min) | `dur=601s` |
+
+(The 2026-09-02 row is a mid-afternoon snapshot — the log was read while the problem was
+still happening — not a full day. Across the whole log there are 13 `exit=124` records,
+10 of which name a devenv output.)
+
+**A killed push registers nothing**, and that is the part that made it unbounded: the
+`nix copy` had transferred hundreds of megabytes, the `timeout` shot it, nothing was
+recorded at the destination, and the next build of the same path paid the same 601 s
+again. It never amortised.
+
+The worst case was a devenv shell — a per-project profile rebuilt on every `direnv
+reload`, whose closure is **4.12 GB across 202 paths**, because a binary cache has to be
+referentially complete and `nix copy` therefore expands every argument to its closure.
+
+**The symptom pointed at the wrong thing.** The progress display showed
+`Downloading … from cache.nixos.org — 11m24s` and read as a slow network. Measured the
+same minute: that exact NAR is 29 MB and `curl`s in **0.69 s**; the machine had 67 MB/s
+down and 40 MB/s up, and all four substituters answered `nix-cache-info` in under 0.2 s.
+Nix simply keeps displaying the last open activity while the daemon blocks in the hook.
+**Do not diagnose a stalled Nix from its progress line** — check
+`/var/log/nix-cache-push.log` and `ps` for a `nix copy` first.
+
+So the hook now only **enqueues**: one empty file per output path in
+`/var/spool/nix-cache-push/queue`, named after the store path, and it returns in ~20 ms
+(measured; the same hook previously took 2–601 s per invocation, median a few seconds).
+`launchd.daemons.nix-cache-drain` runs
+`nix-cache-drain` every 300 s and hands **all** waiting paths to `nix-cache-push` in one
+call, so their closures deduplicate against each other instead of being re-queried per
+build.
+
+Four properties are load-bearing, and each replaces something that was broken:
+
+- **State is the file name, nothing else** (mtime = when it was queued or last tried).
+  `open(O_CREAT)` is atomic, so there is no half-written entry, and no progress file to
+  be missing exactly when a run died badly — which is the case a progress file exists
+  for. Resume is "what is still in the directory".
+- **An interrupted drain now costs only the NAR in flight.** `nix copy` asks the
+  destination what it already has, so everything uploaded before the interruption stays
+  uploaded. This is the whole reason the split fixes the problem rather than moving it.
+- **The timeout ESCALATES to SIGKILL.** A `nix copy` was measured still running minutes
+  after its `FAIL` record was written, with a second one alongside it competing for the
+  same uplink. The tempting explanation — that `timeout` had signalled only one pid — is
+  **wrong**: GNU `timeout` calls `setpgid(2)` and signals the whole group unless
+  `--foreground` is given. What actually happened is that `nix copy` took the SIGTERM and
+  did not die promptly. So the drainer sends SIGTERM, waits 30 s, then SIGKILL; the new
+  session exists so `killpg` is addressable from the drainer without signalling itself.
+  It also installs a SIGTERM handler of its own, because the push runs *outside* launchd's
+  job process group: without one, a `just switch` that reloads the daemon mid-drain would
+  orphan the running `nix copy` and `RunAtLoad` would immediately start a second one for
+  the same paths.
+- **Failures back off and are eventually given up on** — `retry/1..5` at 5 min, 15 min,
+  1 h, 4 h, 24 h, then `status=GIVEUP` (counted separately from errors: an earlier version
+  reported "0 errors" on the very run that dropped a path for good).
+
+  Each run pushes **two groups**: everything at level 0 in one `nix copy`, and exactly
+  **one** already-failed entry, alone. That split is a bug fix, not an optimisation. The
+  first version escalated the *whole run* to a single path as soon as any entry reached
+  level 2 — so one transient R2 outage collapsed the drainer to one path per 300 s, and
+  freshly built paths then queued behind a ladder that runs to 24 h: up to ~33 h in which
+  nothing new reached the cache. Isolating the poison entry costs one extra `nix copy`,
+  not the whole queue.
+
+Two filters, both of which log what they drop (**never a silent cap**):
+
+- **Per-project devenv outputs are not pushed at all** — everything whose name starts
+  `devenv-`, except the devenv package itself (`devenv`, `devenv-<version>`,
+  `devenv-wrapped-<version>`). They are rebuilt on every `direnv reload`, are specific to
+  one machine and one checkout, and the other Mac can never reuse them.
+
+  **This started as an exact list of four names and that was a disclosure bug, not a
+  tuning miss.** The four were chosen because they appeared in the timeout records —
+  wrong criterion, because the leaky outputs are *small* and therefore never timed out. A
+  `devenv-files` output is a script containing the checkout's **absolute path**, and
+  `devenv-processes-<name>` takes `<name>` verbatim from the project's own `processes.*`
+  keys, which then becomes the `StorePath:` line of a world-readable narinfo in a bucket
+  that is public by design. Measured in one store: `devenv-files` 58, `-files-cleanup`
+  60, `-git-hooks-install` 11, `-git-hooks-run` 10, `-enterShell` 6, `-container-copy` 6,
+  `-python-uv` 4, `-test` 3, `-processes-*` 3, `-flake-*` 4 — every one of them outside a
+  four-name list. **When a filter exists to keep a category out of a public place, derive
+  it from the category, never from the incidents that made you notice.**
+
+  The filter lives in the **hook**, because `nix-cache-push` is also the interactive path
+  (`just cache-push …-devenv-profile` must still do what it was told) and because a
+  filter in the drainer would let the spool accumulate entries every run discards. The
+  keep-arm is listed first because zsh takes the first matching `case` arm and
+  `devenv-wrapped-2.2.3` matches both. `rust_devenv-*` and `+mcp-devenv*` do not start
+  with `devenv-` once the hash is stripped, so they are unaffected.
+- **Closures over 64 GiB are skipped**, logged with their size
+  (`status=SKIP reason=closure-limit bytes=…`). That bound is a backstop against one
+  pathological output, deliberately **not** a cost policy, and the first attempt got this
+  wrong in a way worth recording: a 3 GiB cap looked reasonable and skipped
+  `darwin-system` (closure 24.35 GB), `home-manager-generation` (21.63 GB) and
+  `activation-<user>` (21.63 GB) — precisely the closures this shared cache exists to
+  hand to the other Mac. Their real push cost, from the log, is **2–4 seconds**, because
+  `nix copy` asks the destination first and uploads only what R2 lacks. **Closure size
+  overestimates upload cost by three orders of magnitude here**, so do not tighten this
+  number in the belief that it measures money. What bounds the genuinely expensive case
+  is the drainer's 3600 s timeout, the retry backoff and `status=GIVEUP` — those measure
+  the work instead of guessing at it. `NIX_CACHE_MAX_CLOSURE_BYTES=0` disables it.
+
+Operationally:
+
+```bash
+just cache-queue      # depth per retry level + the oldest entry (no sudo)
+just cache-log        # one line per enqueue and per drain that did something
+sudo /run/current-system/sw/bin/nix-cache-drain   # drain now (`just cache-drain` prints it)
+```
+
+`/var/log/nix-cache-drain.log` carries `nix copy`'s own multi-line output, deliberately
+apart from `/var/log/nix-cache-push.log` so that it cannot break the
+one-`printf`-per-record atomicity there.
+
+**No daemon restart is needed for any of this**, and the reason is worth keeping: the
+`post-build-hook` setting still reads exactly
+`/run/current-system/sw/bin/nix-cache-post-build-hook`. Determinate's `nix-daemon` caches
+that *string* at startup and execs it fresh per build, so changing the script's contents
+takes effect with the switch. Renaming the hook, or pointing the setting at
+`${hookScript}/bin/…`, would give that up.
+
+What the split does **not** fix: the uplink is still the uplink, so a large closure still
+takes minutes — it just takes them somewhere that nobody is waiting. If the queue is
+never empty, that is the signal, and `just cache-queue` is how it gets noticed instead of
+growing in silence.
 
 ### The public cache mirrors system closures, including non-redistributable binaries
 
