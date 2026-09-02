@@ -187,8 +187,27 @@
   # instead of compiling it, before nix.custom.conf exists. See `just bootstrap`.
   nixConfig = {
     # https://github.com/numtide/llm-agents.nix/blob/main/flake.nix
-    extra-substituters = [ "https://numtide.cachix.org" "https://devenv.cachix.org" "https://nix-cache.pub.schwetschke.dev" ];
-    extra-trusted-public-keys = [ "numtide.cachix.org-1:2ps1kLBUWjxIneOy1Ik6cQjb41X0iXVXeHigGmycPPE=" "devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw=" "nix-cache.pub.schwetschke.dev-1:R3UAHtpY90nzsAtEm3LDaWsEAHYQK6YG+i8mYxTgL10=" ];
+    # cache.numtide.com, NOT numtide.cachix.org. numtide moved llm-agents.nix to
+    # its own niks3 cache; the cachix host is still up and answers nix-cache-info
+    # with 200, but it holds nothing from this project — measured 2026-09-02, 58
+    # of this store's hashes probed against it returned 0 hits, and every
+    # llm-agents output tried (claude-code, codex, opencode, ccusage, gemini-cli,
+    # on both aarch64-darwin and x86_64-linux, at three revs) 404s. So its answer
+    # was indistinguishable from a genuine miss, and claude-code was rebuilt
+    # locally for weeks while this line claimed to prevent exactly that. The
+    # value below is what llm-agents.nix declares in its own nixConfig.
+    #
+    # Validate the same way if this is ever suspected again: probe a handful of
+    # paths you KNOW the cache should have before believing a 404.
+    #
+    # NEEDS ONE INTERACTIVE ACCEPTANCE. ~/.local/share/nix/trusted-settings.json
+    # keys consent on the EXACT string of the whole list, so changing one host
+    # invalidates the stored "yes" and a non-interactive run silently ignores the
+    # setting again ("warning: ignoring untrusted flake configuration setting").
+    # Answer the prompt once per machine, e.g. during `just build`, then check:
+    #   nix config show | grep '^substituters'   # cache.numtide.com must appear
+    extra-substituters = [ "https://cache.numtide.com" "https://devenv.cachix.org" "https://nix-cache.pub.schwetschke.dev" ];
+    extra-trusted-public-keys = [ "niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=" "devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw=" "nix-cache.pub.schwetschke.dev-1:R3UAHtpY90nzsAtEm3LDaWsEAHYQK6YG+i8mYxTgL10=" ];
   };
 
   outputs = inputs:

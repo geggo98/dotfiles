@@ -818,6 +818,60 @@ Host-specific secrets declarations live in **`hosts/<serial>/secrets.nix`**.
 - **launchd jobs get no shell environment:** the converse of the SIP restriction above. An agent or daemon inherits only `PATH`, `SSH_AUTH_SOCK` and the XPC keys — never what `programs.fish.interactiveShellInit`, `home.sessionVariables`, or a hand-edited rc file exports (verify with `launchctl print gui/$(id -u)/<label>`). Anything scheduled must therefore bake its inputs in at build time or receive them through `launchd.agents.<name>.config.EnvironmentVariables`, and must never fall back **silently** when one is missing. Worked example: `modules/nix-tarball-cache-repack.nix` resolves `${XDG_CACHE_HOME:-$HOME/.cache}/nix/tarball-cache-v2` exactly as Nix's `getCacheDir()` does, so exporting that variable from the shell alone would leave Nix writing to one directory while the agent repacks another — and its miss branch exits 0, which reads exactly like success. It forwards the variable when `xdg.enable` is set (the same condition home-manager uses to export it) and warns loudly, naming the variable, when the resolved directory is empty. `modules/nix-cache.nix` sidesteps the same class of bug for the root `post-build-hook` by passing `NIX_CACHE_SECRETS_DIR` and an explicit `PATH`
 - **Binary cache (R2):** both hosts share a Cloudflare R2 cache (`modules/nix-cache.nix`). Pull is a public custom-domain substituter; push is a signed `nix copy` (root `post-build-hook`, or `just cache-seed`/`cache-push`). The hook is referenced by the **stable** `/run/current-system/sw/bin` path, but Determinate's `nix-daemon` reads the hook setting only at startup and `darwin-rebuild switch` does **not** restart it — after first enabling the cache, run `just daemon-restart` (or reboot) once. Push credentials: `r2_secret_access_key` stores a Cloudflare API token (`cfat_…`) whose SHA-256 the push script derives as the S3 secret
 
+### The public cache mirrors system closures, including non-redistributable binaries
+
+This is by construction, not by oversight, and it is written down so nobody reads it
+as an accident and "fixes" it with something that cannot work.
+
+`nix-cache-push` filters only the **starting set** (the large-FOD filter). `nix copy`
+then expands each path to its **closure**, because a binary cache has to be
+referentially complete — the script's own comment records the error you get otherwise
+(`cannot add '…-etc' … because the reference '…-chfn.pam' is not valid`). Everything
+in those closures that R2 lacks is uploaded and re-signed with our key, whether it was
+built here or substituted from somewhere else. Measured 2026-09-02:
+`bash-5.3p15` sits in R2 while `nix path-info --json` reports `ultimate: false` and its
+two `cache.nixos.org` signatures — purely substituted here, then re-published by a
+closure push.
+
+So the bucket ends up holding whatever these systems use. Some of that is prebuilt
+vendor binaries whose licence carries **`meta.license.redistributable = false`**. Which
+ones is deliberately not written here: the mechanism is the point, and a list would be
+a pointer.
+
+**A push-side exclusion list cannot prevent it.** A home-manager-generated wrapper
+around such a package carries `allowSubstitutes = ""` and `preferLocalBuild = 1`, so it
+is always built locally on every host, and it *references* the package — dropping the
+package from the starting set just means the wrapper's closure carries it. Dropping the
+wrapper does not help either, because `home-manager-path` references the wrapper.
+Fixing a substituter so the package is fetched rather than built saves the build and
+the download, and changes nothing about this.
+
+**A licence filter cannot work, and would fail in a way that reads as success.**
+`meta.license` is eval-time data and is not recorded in the store, as the VS Code
+passage above already states. Worse, the obvious predicate is the wrong one: one of the
+flake inputs here deliberately overrides nixpkgs' unfree licence with `free = true` so
+consumers need no `allowUnfree`, so its packages evaluate as `meta.unfree = false` and
+`meta.license.free = true`, and only `meta.license.redistributable = false` expresses
+the restriction. A filter keyed on `unfree` would report clean while publishing them.
+That is a different category from VS Code, which is genuinely `meta.unfree = true`.
+
+**Deleting objects is not a fix, and has a trap of its own.** narinfo 200s are
+edge-cached for 30 days (`infra/src/index.ts`), so removing objects without purging the
+Cloudflare cache leaves a 200 narinfo pointing at a missing NAR — which turns a clean
+miss into a substitution *error*. And the next `just switch` re-pushes the current
+version anyway.
+
+The only durable change would be to stop serving the bucket publicly. Deliberately not
+done: both Macs and `p-ion-berlin-xs56r6` substitute from it, and `just bootstrap`
+depends on it being open to a machine that has no credentials yet.
+
+Decided 2026-09-02 to document rather than remove, with one piece of perspective on the
+record: the binaries this concerns are themselves served **unauthenticated** from their
+vendors' own download hosts — that is where this repo fetches them — so the question is
+redistribution, not secrecy. Weigh any future addition to this cache on that basis, and
+keep in mind that store hashes are derivable by anyone who evaluates this public flake.
+
+
 ## Coding Style & Naming Conventions
 
 - **Indentation:** 2 spaces
