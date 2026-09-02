@@ -1599,6 +1599,18 @@ Four behaviours worth knowing, each of which cost a measurement:
   `6.0.17` and `release-26.05` are both plausible either way. Each `ref` is resolved
   against the GitHub branches endpoint: branch → cooldown applies, tag → immutable, `nix
   flake update` never moved it anyway.
+- **"Immutable" says `just update` will not move it — not that it is soaked.** Skipping
+  tag pins in layer 1 is right, but it leaves the bar to whatever moves them by hand, and
+  for a long time nothing did: `just brew-bump` took `releases/latest`. Measured
+  2026-09-01, that resolved to Homebrew 6.0.21 **twelve hours** after publication, in the
+  repo whose entire update path exists to avoid being the first consumer of anything.
+  The three tag pins therefore now split into two classes. `brew-src` is scripted and
+  cooled: the recipe calls `supply-chain.py release Homebrew/brew`, which picks the newest
+  release clearing `[cooldown] inputs` and prints every candidate it declined and why —
+  a silent skip would read as "not published yet". A tag passed as an argument still
+  overrides the bar, and says so on stderr. `yt-dlp-src` and `agent-browser-src` are
+  edited by hand and have **no** gate at all; check the release date yourself before
+  bumping either.
 - **FlakeHub inputs are covered too, and yanks are honoured.** `determinate` is a semver
   *range* (`…/determinate/3`), so it re-resolves on every lock — a floating range on the
   root `nix-daemon` would defeat every cooldown in the repo. It moved 3.21.8 → 3.22.2

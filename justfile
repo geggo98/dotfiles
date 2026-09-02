@@ -214,19 +214,34 @@ creds-check *args:
 update-head:
     nix flake update
 
-# Bump the pinned Homebrew source (brew-src in flake.nix) to the latest upstream
-# release and relock. Homebrew 6 serves casks from a rolling JSON API that cannot
-# be pinned, so a stale brew eventually meets a cask DSL artifact it doesn't know
-# and `brew bundle` aborts activation — see the brew-src comment in flake.nix.
-# This is the cure for that. Optional argument pins a specific tag instead.
+# Bump the pinned Homebrew source (brew-src in flake.nix) to the newest upstream
+# release that clears the cooldown, and relock. Homebrew 6 serves casks from a
+# rolling JSON API that cannot be pinned, so a stale brew eventually meets a cask
+# DSL artifact it doesn't know and `brew bundle` aborts activation — see the
+# brew-src comment in flake.nix. This is the cure for that.
+#
+# NOT releases/latest, which is what this recipe used to take. A tag pin is
+# classified IMMUTABLE by `just update` and correctly skipped there — but that
+# left the hand-driven path with no bar at all. Measured 2026-09-01: latest was
+# Homebrew 6.0.21, published twelve hours earlier, in a repo that spends forty
+# lines justifying a five-day soak for everything else. The bar comes from
+# scripts/supply-chain.toml, so this recipe and `just audit` cannot drift apart.
+#
+# An explicit tag argument is a deliberate override and skips the bar, loudly.
+#
+# Bump brew-src to the newest release past the cooldown; a tag argument overrides.
 brew-bump tag="":
     #!/bin/zsh
     set -euo pipefail
     tag="{{ tag }}"
     if [ -z "$tag" ]; then
-        tag=$(curl -fsSL https://api.github.com/repos/Homebrew/brew/releases/latest | jq -r .tag_name)
+        # Exits 2 and prints why if nothing in the inspected window clears the bar,
+        # so `set -e` stops here rather than relocking to an empty tag.
+        tag=$(python3 scripts/supply-chain.py release Homebrew/brew)
+    else
+        echo "explicit tag $tag — cooldown deliberately bypassed" >&2
     fi
-    [ -n "$tag" ] && [ "$tag" != "null" ] || { echo "could not determine a brew tag" >&2; exit 1; }
+    [ -n "$tag" ] || { echo "could not determine a brew tag" >&2; exit 1; }
     # matches:     url = "github:Homebrew/brew/6.0.17";   ->  $+{tag} eq "6.0.17"
     current=$(perl -ne '
         if (m{^ \s* url \s* = \s* "github:Homebrew/brew/(?<tag>[^"]+)"; \s* $}x) {

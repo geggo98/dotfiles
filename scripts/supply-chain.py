@@ -899,6 +899,63 @@ def cmd_audit(args, manifest, now, token) -> int:
     return 0
 
 
+# ------------------------------------------------------- tag pins: pick a cooled release
+
+def cmd_release(args, manifest, now, token) -> int:
+    """Newest GitHub release of OWNER/REPO that clears the layer-1 cooldown.
+
+    Tag-pinned inputs are classified IMMUTABLE by layer 1 and skipped, which is
+    right — `nix flake update` never moves them. But the recipe that DOES move
+    them by hand had no bar at all: `just brew-bump` took releases/latest.
+    Measured 2026-09-01, that would have pinned Homebrew 6.0.21 twelve hours
+    after publication, in a repo whose whole update path exists to avoid being
+    the first consumer of anything.
+
+    The tag on stdout, everything else on stderr, so the caller can use $(...).
+    """
+    owner, _, repo = args.repo.partition("/")
+    if not owner or not repo:
+        raise ToolError(f"expected OWNER/REPO, got {args.repo!r}")
+
+    bar = args.days if args.days is not None else manifest["cooldown"]["inputs"]
+    cutoff = now - timedelta(days=bar)
+
+    status, data = http_json(
+        f"https://api.github.com/repos/{owner}/{repo}/releases?per_page={args.limit}",
+        token)
+    if status != 200 or not isinstance(data, list):
+        raise ToolError(f"cannot list releases for {owner}/{repo} (HTTP {status})")
+
+    # Drafts have no tag anyone can fetch; prereleases are not what a pin wants.
+    # A release with no published_at cannot be dated, so it cannot clear a bar.
+    usable = [(iso(r["published_at"]), r["tag_name"]) for r in data
+              if r.get("published_at") and r.get("tag_name")
+              and not r.get("draft") and not r.get("prerelease")]
+    usable.sort(reverse=True)
+
+    if not usable:
+        raise ToolError(f"{owner}/{repo}: no dated, published release among the "
+                        f"newest {args.limit}")
+
+    for published, tag in usable:
+        if published <= cutoff:
+            print(f"{owner}/{repo}: {tag} ({published:%Y-%m-%d}, "
+                  f"{age_days(published, now):.1f}d, {bar}d bar)", file=sys.stderr)
+            print(tag)
+            return 0
+        # Say what was declined and why. A silent skip reads as "not published yet".
+        print(f"  skipped {tag} ({published:%Y-%m-%d}, "
+              f"{age_days(published, now):.1f}d — inside the {bar}d bar)",
+              file=sys.stderr)
+
+    # Bounded search: name the bound, or an exhausted window is indistinguishable
+    # from a repo that genuinely has nothing old enough.
+    raise ToolError(f"{owner}/{repo}: none of the newest {len(usable)} releases "
+                    f"(of {args.limit} requested) clears the {bar}d bar; oldest "
+                    f"inspected is {usable[-1][1]} at "
+                    f"{age_days(usable[-1][0], now):.1f}d")
+
+
 def main() -> int:
     p = argparse.ArgumentParser(
         description="Cooldown + withdrawal gate for this flake's dependencies.",
@@ -930,6 +987,14 @@ def main() -> int:
                     choices=["open-vsx", "vscode-marketplace"],
                     help="registry for --extension (default: open-vsx)")
 
+    rel = sub.add_parser("release",
+                         help="newest GitHub release of OWNER/REPO that clears the "
+                              "layer-1 cooldown; prints the tag on stdout")
+    rel.add_argument("repo", metavar="OWNER/REPO",
+                     help="e.g. Homebrew/brew")
+    rel.add_argument("--limit", type=int, default=30, metavar="N",
+                     help="how many recent releases to inspect (default: 30)")
+
     args = p.parse_args()
     now = datetime.now(timezone.utc)
     manifest = load_manifest()
@@ -937,6 +1002,8 @@ def main() -> int:
 
     if args.command == "update":
         return cmd_update(args, manifest, now, token)
+    if args.command == "release":
+        return cmd_release(args, manifest, now, token)
     return cmd_audit(args, manifest, now, token)
 
 
