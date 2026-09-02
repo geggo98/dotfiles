@@ -48,7 +48,7 @@ A `justfile` provides safe, pre-approved commands that agents can run without us
 | `just show-derivation` | Show derivation of current host build |
 | `just cache-queue` | What is still waiting to be pushed to R2, and how long has it waited? |
 | `just gc` | Collect user-level garbage (7 days) and sweep any running Linux builder |
-| `just optimise` | Deduplicate the store (hard-link identical files) |
+| `just optimise` | Deduplicate the store by hand; `modules/nix-gc.nix` also does it weekly |
 | `just linux-builder-up [arch]` | Start the Docker Linux builder (`x86_64` default, or `aarch64`) |
 | `just linux-builder-status [arch]` | Builder state, reported system, store size against its cap |
 | `just linux-builder-probe [arch]` | Prove the daemon delegates Linux builds to the container |
@@ -118,6 +118,32 @@ nix store diff-closures /run/current-system result
 # automatically every week via modules/nix-gc.nix; this is the manual one-off.
 sudo nix-collect-garbage --delete-older-than 7d
 ```
+
+**Changing `auto-optimise-store` needs one `just daemon-restart`.** It is a daemon-side
+setting, and Determinate's `nix-daemon` reads `/etc/nix/nix.custom.conf` only at startup —
+the same trap as the `post-build-hook` string, and `darwin-rebuild switch` does not restart
+it. Measured 02.09.2026, after a switch that wrote `auto-optimise-store = false` on a
+daemon started three hours earlier: a fresh build of a derivation containing two identical
+files still yielded a single inode with `nlink=3`. **`nix config show` is not evidence** —
+the client parses the files itself and reports `false` while the daemon is still
+deduplicating. Test it the way that cannot lie:
+
+```bash
+# two identical files in one output; nlink >= 2 means the daemon is still optimising
+nix build --no-link --print-out-paths -f probe.nix   # derivation writing $out/a and $out/b
+perl -e 'printf "%s nlink=%d\n", $_, (stat)[3] for @ARGV' "$out/a" "$out/b"
+```
+
+`modules/nix-gc.nix` carries a second weekly daemon, `nix-optimise`, an hour after
+the GC. Store deduplication used to happen inline via `auto-optimise-store = true`
+and was moved off the write path because it hard-links every new file against
+`/nix/store/.links` under a global lock — measured 02.09.2026 on this machine, same
+derivation of 4000 small files, two runs each: **58.8 s / 58.0 s with it against
+14.0 s / 13.1 s without, i.e. 4.3x**, with 675_925 links already in that directory.
+The saving it produces is real and is kept (`nix-collect-garbage` reported "hard
+linking is currently saving 5.3 GiB" right after the change), it is simply
+collected weekly instead of on every store write. The cost grows with the link
+count, so re-measure rather than assume on a machine with a younger store.
 
 ### Applying the configuration
 
@@ -514,10 +540,12 @@ exiting quietly.
 **Do not copy the Macs' `nix.conf` wholesale into the container.** The two are
 not the same machine and three of the tempting settings are wrong here:
 
-- **`download-buffer-size` — leave it alone.** The Macs set 1 GiB
+- **`download-buffer-size` — leave it alone.** Neither side sets it any more; the Macs
+  did set 1 GiB
   (`modules/determinate.nix`); the container's 1 MiB is *the current upstream
   default*, and since the pause-based backpressure landed in Nix 2.33 the release
-  notes say raising it is no longer recommended. The Mac's value is the stale one.
+  notes say raising it is no longer recommended. The Mac's value was the stale one and
+  was removed on 02.09.2026 — do not reintroduce it here either.
   It is also not the cause of the slow substitution described below — that is
   per-path latency, not buffer starvation.
 - **`auto-optimise-store` — no.** Measured +48 % wall clock on the store-write

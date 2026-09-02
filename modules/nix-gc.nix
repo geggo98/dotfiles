@@ -34,6 +34,33 @@
         };
       };
 
+      # Store deduplication, moved OFF the write path. It used to happen inline
+      # via `auto-optimise-store = true`, which hard-links every new file against
+      # /nix/store/.links under a global lock — measured 02.09.2026 at 4.3x the
+      # wall clock on a 4000-file derivation, with 675_925 links already there.
+      # See the comment in modules/determinate.nix for the numbers.
+      #
+      # A SEPARATE daemon, not appended to the GC command above: nix-darwin wraps
+      # `command` as `… && exec <command>`, so a second command after `&&` would
+      # never run. An hour after the GC, so the two do not fight over the big
+      # lock; if the GC overruns, `nix store optimise` simply waits for it.
+      launchd.daemons.nix-optimise = {
+        command = "/nix/var/nix/profiles/default/bin/nix store optimise";
+        serviceConfig = {
+          RunAtLoad = false;
+          StartCalendarInterval = [
+            { Weekday = 0; Hour = 4; Minute = 0; }
+            { Weekday = 0; Hour = 16; Minute = 0; }
+          ];
+          # Deduplication is pure background work and must never compete with
+          # someone waiting on a build.
+          LowPriorityIO = true;
+          Nice = 10;
+          StandardOutPath = "/var/log/nix-gc.log";
+          StandardErrorPath = "/var/log/nix-gc.log";
+        };
+      };
+
       # This log was unrotated and had reached 1.7 MB; launchd appends to it
       # forever. macOS runs newsyslog itself and reads this directory.
       #   fields: file  mode count size(KB) when flags   (J = bzip2 the rotations)

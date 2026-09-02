@@ -123,7 +123,8 @@ chmod 0755 /build
 # NOTE ON download-buffer-size: do NOT raise it here, even though the Macs set
 # 1 GiB. 1 MiB is the current upstream default, and since the pause-based
 # backpressure landed in Nix 2.33 the release notes say raising it is no longer
-# recommended. The Mac's value is the stale one.
+# recommended. The Macs used to set 1 GiB and no longer do (removed 02.09.2026),
+# so there is nothing left here to copy — do not reintroduce it on either side.
 cat >/etc/nix/nix.conf <<EOF
 experimental-features = nix-command flakes
 build-users-group = nixbld
