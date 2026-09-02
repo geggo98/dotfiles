@@ -1,4 +1,5 @@
-# Cloudflare R2 as a shared Nix binary cache for both Darwin hosts.
+# Cloudflare R2 as a shared Nix binary cache for both Darwin hosts, plus the one
+# upstream substituter these hosts depend on (numtide's, for llm-agents.nix).
 #
 # Pull:  a public https:// substituter fronted by a Cloudflare custom domain
 #        (managed in infra/), so the root nix-daemon needs no credentials.
@@ -23,6 +24,24 @@
       # per-path in each narinfo, so zstd coexists with the existing xz content.
       s3Url = "s3://nix-cache?endpoint=81e63dbf073ca45ebf67c430beac09a4.r2.cloudflarestorage.com&region=auto&compression=zstd";
       publicUrl = "https://nix-cache.pub.schwetschke.dev";
+
+      # Upstream's cache for the llm-agents.nix inputs, listed here rather than
+      # in a module of its own for a mechanical reason: determinateNix
+      # customSettings is attrsOf (atom OR list of atom), and a LIST counts as an
+      # atom there, so a second module defining "extra-substituters" would
+      # collide instead of merging. One definition site, therefore this one.
+      #
+      # flake.nix declares the same host in nixConfig. That is not redundant and
+      # not a substitute: measured 2026-09-02, a value already present in
+      # /etc/nix/nix.custom.conf is still reported as
+      # "ignoring untrusted flake configuration setting" — nix asks per SETTING,
+      # against the whole value string, and does not filter out what is already
+      # configured. The two therefore cover different callers: this entry serves
+      # the daemon with no acceptance at all, nixConfig serves a machine that has
+      # not been switched yet. .envrc passes --accept-flake-config so direnv,
+      # which cannot answer a prompt, never blocks on the difference.
+      upstreamUrl = "https://cache.numtide.com";
+      upstreamKey = "niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=";
       publicKey = "nix-cache.pub.schwetschke.dev-1:R3UAHtpY90nzsAtEm3LDaWsEAHYQK6YG+i8mYxTgL10=";
 
       # Beside /var/log/nix-gc.log. /var/log is root:wheel drwxr-xr-x and the
@@ -138,8 +157,8 @@
     {
       # Merged with modules/determinate.nix's customSettings → /etc/nix/nix.custom.conf.
       determinateNix.customSettings = {
-        "extra-substituters" = [ publicUrl ];
-        "extra-trusted-public-keys" = [ publicKey ];
+        "extra-substituters" = [ publicUrl upstreamUrl ];
+        "extra-trusted-public-keys" = [ publicKey upstreamKey ];
 
         # Nix's default is 3600. That number is tuned for a public cache that
         # rarely gains a path you are waiting for; it is wrong for a cache we

@@ -774,7 +774,7 @@ Each module defines a single aspect across all relevant configuration classes (d
 | `darwin-wiring.nix` | Defines `configurations.darwin` option and wires it to `flake.darwinConfigurations` |
 | `macos.nix` | macOS-specific defaults (dock, finder, trackpad, system preferences) via `flake.modules.darwin.macos` |
 | `determinate.nix` | Determinate Nix module settings (`nix.enable = false`) via `flake.modules.darwin.determinate` |
-| `nix-cache.nix` | Shared Cloudflare R2 Nix binary cache — substituter + signed `post-build-hook` push — via `flake.modules.darwin.nix-cache`. Bucket/domain provisioned in `infra/`; details in `infra/README.md` |
+| `nix-cache.nix` | Shared Cloudflare R2 Nix binary cache — substituter + signed `post-build-hook` push — via `flake.modules.darwin.nix-cache`. Also carries numtide's upstream substituter (`cache.numtide.com`), because `determinateNix.customSettings` allows only one definition of `extra-substituters`. Bucket/domain provisioned in `infra/`; details in `infra/README.md` |
 | `linux-builder.nix` | Registers the Docker Linux builders with the daemon via `determinateNix.buildMachines` + an `ssh_config` alias, and installs the root-owned builder key. See "The Linux builder (Docker)" |
 | `homebrew-common.nix` | Shared Homebrew configuration via `flake.modules.darwin.homebrew` |
 | `shells.nix` | Shell configuration (Fish, Zsh, Bash) via `flake.modules.homeManager.shell` |
