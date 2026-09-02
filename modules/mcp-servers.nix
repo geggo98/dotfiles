@@ -2,10 +2,21 @@
 let
   llm-agents-pkgs = system: inputs.nixpkgs-llm-agents.packages.${system};
 
+  # TEMPORARY claude-code pin, 2.1.247 — the full reasoning is at the
+  # llm-agents-claude-code-pin input in flake.nix. Only claude-code comes from
+  # that input; opencode and codex below stay on nixpkgs-llm-agents.
+  #
+  # The version string and the rev in flake.nix belong together; the first
+  # assertion below is what keeps them together.
+  claude-code-pin-version = "2.1.247";
+  claude-code-pinned = system:
+    inputs.llm-agents-claude-code-pin.packages.${system}.claude-code;
+
   mkMcpServersModule = { config, pkgs, lib, ... }:
     let
       unstable = inputs.nixpkgs-unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system};
       llm-agents = llm-agents-pkgs pkgs.stdenv.hostPlatform.system;
+      claude-code = claude-code-pinned pkgs.stdenv.hostPlatform.system;
       dockerPkg = if builtins.hasAttr "docker-client" pkgs then pkgs."docker-client" else pkgs.docker;
 
       loadSecretsLib = builtins.readFile ./_files/shell/load-secrets.sh;
@@ -277,9 +288,44 @@ let
     {
       imports = [ atlassianOptions ];
 
+      # Both of these exist so the TEMPORARY claude-code pin (flake.nix, input
+      # llm-agents-claude-code-pin) cannot fail quietly. A pin that outlives its
+      # reason, or drifts away from the version everything documents, is the
+      # failure class this repo keeps paying for elsewhere.
+      assertions = [
+        {
+          # Tripwire against silent drift: bump the rev in flake.nix without
+          # bumping the version here and you would get a different version than
+          # the one flake.nix, this file and scripts/supply-chain.toml all name.
+          assertion = claude-code.version == claude-code-pin-version;
+          message = ''
+            llm-agents-claude-code-pin ships claude-code ${claude-code.version},
+            expected ${claude-code-pin-version}. The rev in flake.nix and this
+            version string belong together -- one was moved without the other.
+          '';
+        }
+        {
+          # The pin removes itself instead of standing there forever.
+          assertion = lib.versionOlder
+            llm-agents.claude-code.version
+            claude-code-pin-version;
+          message = ''
+            nixpkgs-llm-agents now ships claude-code
+            ${llm-agents.claude-code.version} >= ${claude-code-pin-version}, so the
+            pin has served its purpose. Remove it:
+              1. drop the llm-agents-claude-code-pin input from flake.nix
+              2. set `package = llm-agents.claude-code;` again below
+              3. drop the "claude-code (pinned)" [[packages]] entry from
+                 scripts/supply-chain.toml
+              4. drop these two assertions and the claude-code-pin-version /
+                 claude-code-pinned bindings at the top of this file
+          '';
+        }
+      ];
+
       programs.claude-code = {
         enable = true;
-        package = llm-agents.claude-code;
+        package = claude-code;
         settings = {
           # No automatic attribution in commits or PRs.
           #

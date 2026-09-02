@@ -4,6 +4,10 @@
     let
       unstable = inputs.nixpkgs-unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system};
       llm-agents = inputs.nixpkgs-llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
+      # TEMPORARY claude-code pin — see the llm-agents-claude-code-pin input in
+      # flake.nix and the assertions in modules/mcp-servers.nix.
+      claude-code-pinned =
+        inputs.llm-agents-claude-code-pin.packages.${pkgs.stdenv.hostPlatform.system}.claude-code;
       loadSecretsLib = builtins.readFile ./_files/shell/load-secrets.sh;
 
       # Bound rather than inlined below, because each is now consumed by a
@@ -71,7 +75,18 @@
 
         (pkgs.writeShellApplication {
           name = "+agent-claude";
-          runtimeInputs = [ llm-agents.claude-agent-acp ];
+          # The override is about the CLOSURE, not about behaviour. Both branches
+          # below already point at /etc/profiles/…/bin/claude — the ACP branch by
+          # exporting CLAUDE_CODE_EXECUTABLE over the `--set-default` baked into
+          # claude-agent-acp, the interactive one by exec'ing it directly — so at
+          # runtime the pinned binary was reached either way. But the store
+          # REFERENCE survives that, and without this override it drags the old
+          # claude-code into every generation: measured 2026-09-02, `nix store
+          # diff-closures` reported "claude-code: 2.1.247 added" rather than an
+          # upgrade, and `nix why-depends` traced the leftover through
+          # home-manager-path -> +agent-claude -> claude-agent-acp ->
+          # claude-code-2.1.234. That is ~222 MB of second copy per generation.
+          runtimeInputs = [ (llm-agents.claude-agent-acp.override { claude-code = claude-code-pinned; }) ];
           text = ''
             export DISABLE_AUTOUPDATER='1'
             if (( $# > 0 )) && [[ "''${1}" == "--acp" ]]; then

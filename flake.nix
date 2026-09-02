@@ -120,6 +120,72 @@
     # modules/agent-browser.nix for why that one comes from release binaries.
     nixpkgs-llm-agents.url = "github:numtide/llm-agents.nix";
 
+    # TEMPORARY PIN — claude-code 2.1.247. Consumed by modules/mcp-servers.nix.
+    #
+    # Why: an open heap-growth bug. The fix chain is 2.1.238 (subagent tool results
+    # were never released in long sessions), 2.1.243 (the runtime collects sooner as
+    # the heap grows; 40-70 MB less per session), 2.1.246 (memory grew with session
+    # length in the fullscreen/Ctrl+O transcript — every rendered row held a copy of
+    # the transcript-wide tool lookups) and 2.1.247 (unbounded growth when a hook's
+    # or background task's output file could not be written). nixpkgs-llm-agents
+    # sits on 2.1.234 and carries NONE of them.
+    #
+    # 2.1.247 was published 2026-08-26 18:02Z — 6.5 days old against the 14-day bar
+    # scripts/supply-chain.toml gives this ecosystem. So this is a deliberate
+    # undercut under AGENTS.md "Undercutting a cooldown: research first, fetch
+    # second", and the research was done while fetching nothing: the three SRI
+    # hashes in llm-agents' packages/claude-code/hashes.json at this rev match
+    # Anthropic's own manifest.json for 2.1.247 exactly (darwin-arm64, linux-arm64,
+    # linux-x64) — two independent sources; the artifact is still served (HTTP 200,
+    # 233 MB, last-modified agreeing with the npm publish time); and `latest` points
+    # at 2.1.258, i.e. 2.1.247 was superseded normally rather than withdrawn.
+    # Withdrawal here means Anthropic repointing `latest`, which llm-agents' own
+    # `versionPolicy = "follow_pointer"` really did act on for 2.1.243 on 2026-08-25.
+    # It has not happened to 2.1.247 in 6.5 days.
+    #
+    # The blast radius is deliberately ONE package: the rev sits exactly on the bump
+    # commit "claude-code: 2.1.246 -> 2.1.247" (2026-08-27 01:43Z), and only
+    # claude-code is taken from it. codex, opencode, gemini-cli, ccusage and the ACP
+    # shims stay on nixpkgs-llm-agents and stay soaked. Moving the main input
+    # instead would have pulled all of them out of the 14-day window for a bug that
+    # only affects the CLI.
+    #
+    # No `inputs.nixpkgs.follows` on purpose, and it is load-bearing. Without it the
+    # derivation is bit-identical to upstream CI's, and upstream publishes it.
+    # Measured 2026-09-02: https://cache.numtide.com serves this exact out path,
+    # hf25qcvb4a9s6lkn7gi8l38x33jxxv1g-claude-code-2.1.247 (NarSize 233074048),
+    # with Deriver xjqns9sr…-claude-code-2.1.247.drv and an niks3.numtide.com-1
+    # signature. Adding the follows moves the path to in0gm0gc…, which is 404
+    # there — it would have to be built here. Five inputDrvs change (stdenv-darwin,
+    # bash 5.3p15 -> 5.3p9, make-shell-wrapper-hook, version-check-hook and the
+    # fetchurl drv); the recipe does not, and the 233 MB fetchurl OUTPUT is
+    # content-addressed and identical either way, so the cost is the build, not the
+    # download. It also evaluates fine against nixpkgs 26.05 — the "llm-agents needs
+    # unstable" worry does not apply to this package.
+    #
+    # This only started paying off once nixConfig.extra-substituters below was
+    # corrected: it named numtide.cachix.org, which upstream has left, so the
+    # identical, publicly cached artifact was rebuilt here on every bump.
+    #
+    # What that fix does NOT change is what the R2 cache ends up mirroring, and it
+    # is worth writing down so nobody re-derives the wrong conclusion from it.
+    # home-manager's generated wrapper for this package carries allowSubstitutes=""
+    # and preferLocalBuild=1, so it is always built locally, and nix-cache-push
+    # copies CLOSURES (it must — a binary cache has to be referentially complete),
+    # so the wrapper's reference travels with it either way. Measured 2026-09-02:
+    # bash-5.3p15 sits in R2 with ultimate=false and its two cache.nixos.org
+    # signatures, i.e. purely substituted here and re-published by a closure push.
+    # The general case and its licence consequences: see "The public cache mirrors
+    # system closures" in AGENTS.md.
+    #
+    # REMOVE once nixpkgs-llm-agents itself ships >= 2.1.247 — at the earliest on
+    # 2026-09-10, when `just update` with the 14-day bar lands on a rev from
+    # 2026-08-27 or later. An assertion in modules/mcp-servers.nix breaks the build
+    # at that point and spells out the four steps, so the pin cannot go stale
+    # silently.
+    llm-agents-claude-code-pin.url =
+      "github:numtide/llm-agents.nix/aebe6cb75261fa098939e4e5b24fc5a545478dc4";
+
     # agent-browser: source of truth for both the version and the skill bodies
     # consumed by modules/agent-browser.nix. That module reads the version from
     # this input's package.json and fetches the matching prebuilt release binary,

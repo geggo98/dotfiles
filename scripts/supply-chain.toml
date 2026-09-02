@@ -71,6 +71,25 @@ attr = "claude-code"
 npm = "@anthropic-ai/claude-code"
 
 [[packages]]
+# A SECOND entry for the same npm package, deliberately, and the two standing
+# next to each other are the whole point. Since the claude-code pin (flake.nix,
+# input llm-agents-claude-code-pin, added 2026-09-02) the version installed on
+# these machines is NOT the one the entry above dates. Without these lines
+# `just audit` would keep reporting 2.1.234 as OK and would be quietly wrong
+# about what is on the machine -- the failure class AGENTS.md names under
+# "Validate the scan before believing 'no hits'". The entry above stays and keeps
+# dating what the main input ships; this one dates what is actually installed.
+#
+# Expected output up to and including 2026-09-09: TOO NEW, exit 1. That is the
+# wanted state, not a defect. It heals by itself on 2026-09-10 and this entry
+# goes away with the pin -- an assertion in modules/mcp-servers.nix breaks the
+# build when it is time.
+name = "claude-code (pinned)"
+input = "llm-agents-claude-code-pin"
+attr = "claude-code"
+npm = "@anthropic-ai/claude-code"
+
+[[packages]]
 name = "codex"
 input = "nixpkgs-llm-agents"
 attr = "codex"
