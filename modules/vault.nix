@@ -183,52 +183,63 @@
           ${homebrewPath}
           ${resolverLib}
 
-          args=( "$@" )
+          # Consume every -address/--address, in the "=" form and the
+          # space-separated one; the last occurrence wins, as in Go's flag
+          # package. The flag is REMOVED rather than rewritten in place, and
+          # that is the whole point: VAULT_ADDR below already carries the
+          # answer, while a rewritten flag left standing counts as a positional
+          # argument to Vault, which parses flags only BEFORE the positionals.
+          # Measured while it still rewrote in place:
+          #
+          #   $ +vault kv get secret/x -address=https://b.invalid:8200
+          #   Command flags must be provided before positional arguments. …
+          #   Too many arguments (expected 1, got 2)            # exit 1
+          #
+          # So the command did NOT reach the instance that was typed; it
+          # aborted. `token lookup` and `version` tolerate a surplus argument,
+          # which is why it went unnoticed. Removing the flag honours the
+          # intent wherever it stands, and Vault's positional warning never
+          # fires. Everything after `--` passes through untouched — a
+          # `-address` there belongs to the command, not to us.
+          args=()
           addr_value=""
-          addr_index=-1
-          addr_inline=0
-
-          # Scan every argument for -address/--address; the last one wins, as
-          # in Go's flag package. Vault itself only parses flags placed BEFORE
-          # the positional arguments and otherwise warns "Command flags must
-          # be provided before positional arguments" — we honour the flag
-          # wherever it stands, because VAULT_ADDR below carries the answer
-          # anyway and the typed intent is unambiguous. Vault's own warning
-          # still prints.
-          i=0
-          while [ "$i" -lt "''${#args[@]}" ]; do
-            case "''${args[i]}" in
+          addr_found=0
+          passthrough=0
+          while [ "$#" -gt 0 ]; do
+            if [ "$passthrough" -eq 1 ]; then
+              args+=( "$1" )
+              shift
+              continue
+            fi
+            case "$1" in
               --)
-                break
+                passthrough=1
+                args+=( "$1" )
+                shift
                 ;;
               -address=*|--address=*)
-                addr_value="''${args[i]#*=}"
-                addr_index="$i"
-                addr_inline=1
+                addr_value="''${1#*=}"
+                addr_found=1
+                shift
                 ;;
               -address|--address)
-                if [ $((i + 1)) -ge "''${#args[@]}" ]; then
+                if [ "$#" -lt 2 ]; then
                   echo "+vault: -address needs a value" >&2
                   exit 1
                 fi
-                i=$((i + 1))
-                addr_value="''${args[i]}"
-                addr_index="$i"
-                addr_inline=0
+                addr_value="$2"
+                addr_found=1
+                shift 2
+                ;;
+              *)
+                args+=( "$1" )
+                shift
                 ;;
             esac
-            i=$((i + 1))
           done
 
-          if [ "$addr_index" -ge 0 ]; then
+          if [ "$addr_found" -eq 1 ]; then
             vault_resolve_env "$addr_value"
-            # Rewritten in place rather than dropped: argument positions stay
-            # untouched, and flag and environment carry the same value.
-            if [ "$addr_inline" -eq 1 ]; then
-              args[addr_index]="-address=$VAULT_ENV_ADDR"
-            else
-              args[addr_index]="$VAULT_ENV_ADDR"
-            fi
           else
             # No flag, so resolve VAULT_ADDR — which makes
             # `VAULT_ADDR=prod +vault …` work too — or the default.
@@ -236,11 +247,15 @@
           fi
 
           # The whole point of this wrapper. Vault starts the external token
-          # helper with a plain os.Environ(), so the helper only ever sees
-          # VAULT_ADDR and never -address (measured: `vault token lookup
-          # -address=… ` with VAULT_ADDR unset fails with "VAULT_ADDR is not
-          # set" from the helper). Without this line a `-address=production`
-          # command would be signed with the staging token.
+          # helper with an unmodified os.Environ(), so the helper only ever
+          # sees VAULT_ADDR and never -address. Measured both ways against a
+          # host that does not resolve, so no production request was made:
+          # with VAULT_ADDR unset the helper aborts ("VAULT_ADDR is not set"),
+          # with it set the helper hands over THAT environment's token while
+          # the request goes to the -address target. Both exit 2 — the exit
+          # code does not tell them apart. Without this line a
+          # `-address=production` command would be signed with the staging
+          # token.
           export VAULT_ADDR="$VAULT_ENV_ADDR"
 
           if ! command -v vault > /dev/null; then
