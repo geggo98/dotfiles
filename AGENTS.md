@@ -811,6 +811,7 @@ Each module defines a single aspect across all relevant configuration classes (d
 | `git.nix` | Git configuration via `flake.modules.homeManager.git` |
 | `neovim.nix` | Neovim (nvf) in two variants: `homeManager.neovim` (workstation, every `languages.*` enabled) and `homeManager.neovim-server` (same editor, no language toolchains). See "Neovim: why there are two variants" |
 | `packages.nix` | Common packages via `flake.modules.homeManager.packages` |
+| `agent-rules.nix` | Global agent rules from one source to claude-code, opencode and codex (`~/.claude/rules/`, `~/.config/opencode/AGENTS.md`, `~/.codex/AGENTS.md`). Files in `modules/ai/_files/rules/` ship to every host; `my.ai.extraRules` lets an aspect module contribute one that ships only where that aspect is imported — see `modules/vault.nix` |
 | `mcp-servers.nix` | Claude Code MCP server wrappers + the deployed skill tree via `flake.modules.homeManager.mcp-servers`. `my.ai.atlassian.enable` gates the Atlassian server and the `jira`/`bitbucket-pr` skills onto the work host; `claudeMcpExclude` additionally hides a server from **Claude only** (currently `atlassian`, replaced there by the skills) |
 | `secrets.nix` | SOPS secret declarations and per-host secret merging (**home-manager only** — servers use `nixos-secrets.nix`) |
 | `nixos-wiring.nix` | Defines `configurations.nixos` (module + `deployTarget`) and wires it to `flake.nixosConfigurations` and `flake.deployTargets` |
@@ -1391,6 +1392,13 @@ arguments and otherwise warns `Command flags must be provided before positional
 arguments` — Vault's warning still prints, and the command reaches the instance
 that was typed. And a `VAULT_ADDR` that is neither a URL nor a known prefix
 aborts, where Vault itself would fail later on a URL parse error.
+
+The German-language version of this trap ships as a global agent rule,
+`modules/_files/vault/rules/vault-address.md`, contributed through
+`my.ai.extraRules` so it reaches only hosts that import `homeManager.vault` — an
+agent working in some other repository on this machine would otherwise never see
+it. What follows here is the repo-side detail that does not belong in a global
+rule.
 
 The plain `vault` binary (Homebrew, `hashicorp/tap/vault`) is deliberately **not**
 shadowed. It could not be by a package name anyway: `brew shellenv` in

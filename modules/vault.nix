@@ -320,6 +320,11 @@
         vaultLogin
       ];
 
+      # The `-address` trap is a property of this machine, not of any one
+      # repository, so it ships as a global agent rule — and it ships from
+      # here, so it only reaches hosts that actually import this aspect.
+      my.ai.extraRules = [ ./_files/vault/rules/vault-address.md ];
+
       home.file.".vault".text = ''
         token_helper = "${lib.getExe vaultTokenHelper}"
       '';
