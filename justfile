@@ -830,6 +830,36 @@ cache-queue:
     fi
     exit 0
 
+# Remove a whole category of store paths from the R2 cache. DRY RUN by default;
+# `just cache-prune devenv apply` is the one-way door. Exists because
+# nix-cache-push only ever adds, and the hook's devenv filter cannot retract what
+# it already published — see modules/_files/nix-cache/nix-cache-prune.py.
+#
+# Agents: run the dry run freely, print the `apply` form for the user. It deletes
+# from a bucket both Macs substitute from, and R2 has no versioning here.
+cache-prune category="devenv" apply="":
+    #!/bin/zsh
+    set -euo pipefail
+    # Same credential derivation as nix-cache-push: a `cfat_…` Cloudflare token
+    # becomes its SHA-256 digest, a 64-hex value is used verbatim. Never echoed.
+    d="${XDG_CONFIG_HOME:-$HOME/.config}/sops-nix/secrets"
+    for f in r2_access_key_id r2_secret_access_key; do
+        [ -r "$d/$f" ] || { echo "cannot read $d/$f" >&2; exit 2; }
+    done
+    export AWS_ACCESS_KEY_ID="$(<"$d/r2_access_key_id")"
+    v="$(<"$d/r2_secret_access_key")"
+    if [[ "$v" =~ '^[0-9a-f]{64}$' ]]; then
+        export AWS_SECRET_ACCESS_KEY="$v"
+    else
+        export AWS_SECRET_ACCESS_KEY="$(printf '%s' "$v" | shasum -a 256 | cut -d' ' -f1)"
+    fi
+    unset v
+    export AWS_ENDPOINT_URL="https://81e63dbf073ca45ebf67c430beac09a4.r2.cloudflarestorage.com"
+    export AWS_DEFAULT_REGION=auto
+    flag=""
+    [ "{{ apply }}" = "apply" ] && flag="--apply"
+    exec python3 modules/_files/nix-cache/nix-cache-prune.py "{{ category }}" ${=flag}
+
 # Drain the R2 push spool NOW instead of waiting for the 5-minute timer. Needs
 # sudo (the spool and the log are root-owned), so agents print it rather than
 # run it — same rule as `just switch` and `just daemon-restart`.

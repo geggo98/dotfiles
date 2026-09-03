@@ -47,6 +47,7 @@ A `justfile` provides safe, pre-approved commands that agents can run without us
 | `just eval` | Evaluate flake outputs (fast syntax check) |
 | `just show-derivation` | Show derivation of current host build |
 | `just cache-queue` | What is still waiting to be pushed to R2, and how long has it waited? |
+| `just cache-prune <category>` | Dry-run: what would be removed from R2. Adding `apply` deletes and is NOT agent-safe |
 | `just gc` | Collect user-level garbage (7 days) and sweep any running Linux builder |
 | `just optimise` | Deduplicate the store by hand; `modules/nix-gc.nix` also does it weekly |
 | `just linux-builder-up [arch]` | Start the Docker Linux builder (`x86_64` default, or `aarch64`) |
@@ -967,6 +968,27 @@ just cache-log        # one line per enqueue and per drain that did something
 sudo /run/current-system/sw/bin/nix-cache-drain   # drain now (`just cache-drain` prints it)
 ```
 
+**Taking something back out: `just cache-prune`.** The push side only ever adds, and a
+filter cannot retract what it already published — which mattered on 02.09.2026, when the
+devenv filter turned out to be too narrow (above). `modules/_files/nix-cache/nix-cache-prune.py`
+removes a whole *category* of store paths, dry-run by default:
+
+```bash
+just cache-prune devenv          # what would go, and why
+just cache-prune devenv apply    # the one-way door — R2 has no versioning here
+```
+
+Three properties are load-bearing and each cost a measurement. It deletes the transitive
+**upward** closure, because a binary cache must be closed under references — on the devenv
+set that pulled in 53 further objects (`tasks.json`, `nix-darwin-env`,
+`process-compose.yaml`), all of them devenv outputs without the prefix, and deleting the
+seed alone would have left 300 dangling references. It keeps any **NAR a survivor still
+points at**, since identical store paths share one `nar/<hash>` object. And it **refuses to
+start if a single narinfo could not be read** — the first version of the indexer got HTTP
+403 for all 10 769 of them because Cloudflare blocks the default `Python-urllib` user
+agent, and a script that folded that into "not found" would have reported a clean
+"nothing to prune". Counting errors separately is what caught it.
+
 `/var/log/nix-cache-drain.log` carries `nix copy`'s own multi-line output, deliberately
 apart from `/var/log/nix-cache-push.log` so that it cannot break the
 one-`printf`-per-record atomicity there.
@@ -1020,11 +1042,24 @@ consumers need no `allowUnfree`, so its packages evaluate as `meta.unfree = fals
 the restriction. A filter keyed on `unfree` would report clean while publishing them.
 That is a different category from VS Code, which is genuinely `meta.unfree = true`.
 
-**Deleting objects is not a fix, and has a trap of its own.** narinfo 200s are
-edge-cached for 30 days (`infra/src/index.ts`), so removing objects without purging the
-Cloudflare cache leaves a 200 narinfo pointing at a missing NAR — which turns a clean
-miss into a substitution *error*. And the next `just switch` re-pushes the current
-version anyway.
+**Deleting objects has a trap, but a smaller one than this section used to claim.**
+narinfo 200s are edge-cached for 30 days (`infra/src/index.ts`), so removing objects
+without purging the Cloudflare cache leaves a 200 narinfo pointing at a missing NAR for up
+to a month. What that actually does was measured on 03.09.2026, by building a local
+`file://` cache in exactly that state:
+
+```
+warning: file 'nar/….nar.xz' does not exist in binary cache
+copying path '/nix/store/…' from 'file:///…/good'...          <- fell through, exit 0
+```
+
+**Nix warns and falls back to the next substituter.** Only when the broken cache is the
+*only* source does it report `no substituter that can build it` — and at that point Nix
+builds the path locally, which for the per-project outputs this concerns is what would
+have happened anyway. So it degrades to a warning plus a rebuild, not to a broken system.
+A Cloudflare purge closes the window immediately but needs a token with Zone.Cache Purge,
+which is not on these machines. And the next `just switch` re-pushes the current version
+anyway, so deletion is only useful for something the push side now filters.
 
 The only durable change would be to stop serving the bucket publicly. Deliberately not
 done: both Macs and `p-ion-berlin-xs56r6` substitute from it, and `just bootstrap`
