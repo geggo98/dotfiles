@@ -36,6 +36,15 @@ let
       );
       extraRules = map (p: { name = baseNameOf p; path = p; }) config.my.ai.extraRules;
 
+      # Base rules are filtered to `.md`; contributed ones are not, and that gap
+      # is not cosmetic. rulesText concatenates whatever it is handed, so a
+      # `notes.txt` would reach opencode and codex while claude-code loads only
+      # markdown out of rulesDir — one rule, two agents, and no error anywhere.
+      # A contributed DIRECTORY (types.path accepts one) fails later still, on a
+      # `cp` without -r, with a message that names neither the option nor the
+      # cause.
+      nonMarkdown = lib.filter (f: !lib.hasSuffix ".md" f.name) extraRules;
+
       # Sorted so the concatenation is reproducible; readDir gives no order,
       # and a contributed rule must not depend on module merge order either.
       ruleFiles = lib.sort (a: b: a.name < b.name) (baseRules ++ extraRules);
@@ -53,9 +62,20 @@ let
 
       # A plain directory of regular files — the same shape rulesSrc had before
       # contributed rules existed, so nothing about the delivery path changes.
-      rulesDir = pkgs.runCommand "agent-global-rules-dir" { } ''
+      # escapeShellArg on both operands: spaces are harmless here (the
+      # destination is quoted, and a store path cannot contain one), but `$`,
+      # a backtick, `"` or `\` in a rule's file name would write somewhere else
+      # entirely. preferLocalBuild because asking a substituter for a `cp` costs
+      # more than doing it.
+      rulesDir = pkgs.runCommand "agent-global-rules-dir"
+        {
+          preferLocalBuild = true;
+          allowSubstitutes = false;
+        } ''
         mkdir -p "$out"
-        ${lib.concatMapStringsSep "\n" (f: ''cp ${f.path} "$out/${f.name}"'') ruleFiles}
+        ${lib.concatMapStringsSep "\n"
+          (f: ''cp ${lib.escapeShellArg f.path} "$out"/${lib.escapeShellArg f.name}'')
+          ruleFiles}
       '';
     in
     {
@@ -77,11 +97,19 @@ let
       config = {
         # `cp` would overwrite one rule with another without a word, and a rule
         # that silently disappears is the worst possible failure here.
-        assertions = [{
-          assertion = duplicateNames == [ ];
-          message = "my.ai.extraRules: duplicate rule file names: "
-            + lib.concatStringsSep ", " duplicateNames;
-        }];
+        assertions = [
+          {
+            assertion = duplicateNames == [ ];
+            message = "my.ai.extraRules: duplicate rule file names: "
+              + lib.concatStringsSep ", " duplicateNames;
+          }
+          {
+            assertion = nonMarkdown == [ ];
+            message = "my.ai.extraRules: only .md files are delivered to all three"
+              + " agents; got: "
+              + lib.concatMapStringsSep ", " (f: f.name) nonMarkdown;
+          }
+        ];
 
         # Verified against Claude Code's own docs: "Personal rules in
         # ~/.claude/rules/ apply to every project on your machine", discovered
