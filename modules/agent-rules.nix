@@ -64,11 +64,16 @@ let
 
       # A plain directory of regular files — the same shape rulesSrc had before
       # contributed rules existed, so nothing about the delivery path changes.
-      # escapeShellArg on both operands: spaces are harmless here (the
-      # destination is quoted, and a store path cannot contain one), but `$`,
-      # a backtick, `"` or `\` in a rule's file name would write somewhere else
-      # entirely. preferLocalBuild because asking a substituter for a `cp` costs
-      # more than doing it.
+      # escapeShellArg on the NAME only. It must not touch the path: the
+      # function calls `toString`, which strips a path's string context, and the
+      # derivation then no longer records the source as an input. Nix says so —
+      # "references the store path … without a proper context … unreliable and
+      # may stop working in the future" — and the warning is the only sign.
+      # Unquoted `${f.path}` is safe anyway, because a store path is limited to
+      # [a-zA-Z0-9+._?=-]. The name is the part an author chooses, and `$`, a
+      # backtick, `"` or `\` in one would write somewhere else entirely.
+      # preferLocalBuild because asking a substituter for a `cp` costs more than
+      # doing it.
       rulesDir = pkgs.runCommand "agent-global-rules-dir"
         {
           preferLocalBuild = true;
@@ -76,7 +81,7 @@ let
         } ''
         mkdir -p "$out"
         ${lib.concatMapStringsSep "\n"
-          (f: ''cp ${lib.escapeShellArg f.path} "$out"/${lib.escapeShellArg f.name}'')
+          (f: ''cp ${f.path} "$out"/${lib.escapeShellArg f.name}'')
           ruleFiles}
       '';
     in
