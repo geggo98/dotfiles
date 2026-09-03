@@ -80,7 +80,7 @@ let
         assertions = [{
           assertion = duplicateNames == [ ];
           message = "my.ai.extraRules: duplicate rule file names: "
-            + lib.concatStringsSep ", " (lib.unique duplicateNames);
+            + lib.concatStringsSep ", " duplicateNames;
         }];
 
         # Verified against Claude Code's own docs: "Personal rules in
