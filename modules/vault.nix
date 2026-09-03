@@ -171,8 +171,12 @@
       # homebrew-common.nix) and is absent from the non-interactive PATH, so
       # both wrappers put /opt/homebrew on it themselves. No recursion risk:
       # these are named `+vault*`, not `vault`.
+      #
+      # APPENDED, not prepended. `vault` lives only there, so appending still
+      # finds it — while a coreutils or similar under /opt/homebrew can no
+      # longer shadow a wrapper's pinned runtimeInputs.
       homebrewPath = ''
-        export PATH="/opt/homebrew/bin:/opt/homebrew/sbin:$PATH"
+        export PATH="$PATH:/opt/homebrew/bin:/opt/homebrew/sbin"
       '';
 
       # Runs `vault` with `-address=<environment>` resolved — full name, or any
@@ -267,9 +271,13 @@
         '';
       };
 
-      # OIDC login against one environment, resolved the same way.
+      # OIDC login against one environment, resolved the same way. A token,
+      # when one is supplied, never becomes an argv element of `vault`.
       vaultLogin = pkgs.writeShellApplication {
         name = "+vault-login";
+        # chmod pinned rather than taken from PATH: a missing one would fail
+        # AFTER a successful login, under errexit and without a word about it.
+        runtimeInputs = [ pkgs.coreutils ];
         text = ''
           ${homebrewPath}
           ${resolverLib}
@@ -277,9 +285,10 @@
           # No default environment on purpose: a login should never land in
           # the wrong instance because an argument was forgotten.
           if [ "$#" -lt 1 ]; then
-            echo "usage: +vault-login <environment> [<token>]" >&2
+            echo "usage: +vault-login <environment> [<token> | -]" >&2
             echo "       environments: ''${vault_env_names[*]}" >&2
             echo "       an unambiguous prefix is enough, e.g. '+vault-login p'" >&2
+            echo "       '-' reads the token from stdin; with no token, OIDC is used" >&2
             exit 1
           fi
 
@@ -289,6 +298,16 @@
           # default environment), which would otherwise silently redirect this
           # login to the wrong vault.
           export VAULT_ADDR="$VAULT_ENV_ADDR"
+
+          # The same guard +vault has, and here for a sharper reason: without
+          # it a missing Homebrew vault surfaces as "OIDC login failed" plus
+          # web-UI instructions, sending the reader to the Vault side where
+          # nothing is broken. From Raycast (@raycast.mode compact) only that
+          # one misleading line is even visible.
+          if ! command -v vault > /dev/null; then
+            echo "+vault-login: no 'vault' on PATH (brew install hashicorp/tap/vault)" >&2
+            exit 127
+          fi
 
           write_legacy_token() {
             if ! vault_env_wants_legacy_token "$VAULT_ENV_NAME"; then
@@ -303,29 +322,75 @@
             fi
           }
 
-          # A token passed as the second argument skips OIDC and logs in
-          # directly — useful when the OIDC flow is unavailable.
+          # Hands the token to vault on STDIN. argv is readable through `ps` by
+          # every process of this user for the lifetime of the command, so a
+          # token arriving as $2 is already exposed before this runs — hence the
+          # warning there, and the two other ways in.
+          login_with_token() {
+            printf '%s' "$1" | vault login -address "$VAULT_ADDR" -no-print -
+          }
+
+          # Reads into TOKEN_VALUE without echoing, from /dev/tty rather than
+          # stdin so it still works when stdin is a pipe. Returns 1 when there
+          # is no terminal to ask — the Raycast case.
+          TOKEN_VALUE=""
+          prompt_for_token() {
+            [ -r /dev/tty ] || return 1
+            printf 'Vault token for %s (input hidden): ' "$VAULT_ADDR" > /dev/tty
+            IFS= read -rs TOKEN_VALUE < /dev/tty || { printf '\n' > /dev/tty; return 1; }
+            printf '\n' > /dev/tty
+            [ -n "$TOKEN_VALUE" ]
+          }
+
           if [ "$#" -ge 2 ]; then
-            vault login -address "$VAULT_ADDR" -no-print "$2"
-            write_legacy_token
-            echo "Logged in to $VAULT_ADDR with the provided token."
-            exit 0
+            if [ "$2" = "-" ]; then
+              IFS= read -r TOKEN_VALUE || true
+            else
+              TOKEN_VALUE="$2"
+              echo "+vault-login: the token came in as an argv element and was" >&2
+              echo "              readable in 'ps' for the lifetime of this command." >&2
+              echo "              Prefer '+vault-login $1', which asks for it, or" >&2
+              echo "              pipe it in: ... | +vault-login $1 -" >&2
+            fi
+            if [ -z "$TOKEN_VALUE" ]; then
+              echo "+vault-login: empty token" >&2
+              exit 1
+            fi
+            if login_with_token "$TOKEN_VALUE"; then
+              write_legacy_token
+              echo "Logged in to $VAULT_ADDR with the provided token."
+              exit 0
+            fi
+            echo "+vault-login: token login against $VAULT_ADDR failed (see above)." >&2
+            exit 1
           fi
 
           if vault login -method=oidc -address "$VAULT_ADDR" -no-print; then
             write_legacy_token
-            echo "Check your web browser and finish the login there if necessary."
-          else
-            echo "" >&2
-            echo "OIDC login against VAULT_ADDR=$VAULT_ADDR failed." >&2
-            echo "Log in via the web UI to grab a token:" >&2
-            echo "  $VAULT_ADDR/ui/vault/secrets" >&2
-            echo "(the direct URL returns an Internal Server Error)." >&2
-            echo "Then pass that token directly. Prepend a space so it" >&2
-            echo "stays out of your shell history (it is short-lived anyway):" >&2
-            echo "   +vault-login $1 <token>" >&2
+            # NOT "check your web browser": -method=oidc blocks until the
+            # callback returns, so by the time this prints there is nothing
+            # left to do there.
+            echo "Logged in to $VAULT_ADDR via OIDC."
+            exit 0
+          fi
+
+          echo "" >&2
+          echo "OIDC login against VAULT_ADDR=$VAULT_ADDR failed." >&2
+          echo "Log in via the web UI to grab a token:" >&2
+          echo "  $VAULT_ADDR/ui/vault/secrets" >&2
+          echo "(the direct URL returns an Internal Server Error)." >&2
+          if prompt_for_token; then
+            if login_with_token "$TOKEN_VALUE"; then
+              write_legacy_token
+              echo "Logged in to $VAULT_ADDR with the provided token."
+              exit 0
+            fi
+            echo "+vault-login: that token did not work either (see above)." >&2
             exit 1
           fi
+          echo "Then hand it over without argv and without shell history:" >&2
+          echo "   printf %s '<token>' | +vault-login $1 -" >&2
+          exit 1
         '';
       };
     in
