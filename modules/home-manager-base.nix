@@ -3,10 +3,13 @@ let
   hm = config.flake.modules.homeManager;
 in
 {
-  # Default home-manager aspect set imported by every host. Composes the
+  # Default home-manager aspect set imported by every DARWIN host. Composes the
   # cross-cutting aspects that have no host-specific dependencies. Hosts
   # add `homeManager.secrets-<host>` and any host-only aspects (boundary,
-  # vault, tunnelblick-raycast) on top.
+  # vault, tunnelblick-raycast) on top. NOT every host: p-ion-berlin-xs56r6
+  # deliberately takes `homeManager.shell` and `neovim-server` instead, so
+  # anything reasoned about as "every host" — the agent rules in
+  # `modules/agent-rules.nix`, for one — means the two workstations.
   flake.modules.homeManager.base = {
     imports = [
       hm.shell

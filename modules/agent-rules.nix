@@ -12,7 +12,9 @@
 #
 # That gating covers the RULES layer only, and the limit is worth knowing before
 # anyone leans on it. opencode additionally receives this repo's own AGENTS.md
-# as global context on EVERY host, and AGENTS.md describes both machines.
+# as global context on every host that imports this aspect — both workstations,
+# since p-ion-berlin-xs56r6 deliberately takes `homeManager.shell` instead of
+# `homeManager.base` — and AGENTS.md describes both machines.
 # Measured 03.09.2026: `+vault` occurs 7 times in FCX19GT9XR's opencode context
 # — all of them from AGENTS.md — against 14 on DKL6GDJ7X1, where the gated rule
 # file contributes the other 7. Containment is complete for claude-code
