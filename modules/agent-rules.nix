@@ -10,6 +10,15 @@
 # through `my.ai.extraRules` and it ships exactly where that aspect is
 # imported — modules/vault.nix is the worked example.
 #
+# That gating covers the RULES layer only, and the limit is worth knowing before
+# anyone leans on it. opencode additionally receives this repo's own AGENTS.md
+# as global context on EVERY host, and AGENTS.md describes both machines.
+# Measured 03.09.2026: `+vault` occurs 7 times in FCX19GT9XR's opencode context
+# — all of them from AGENTS.md — against 14 on DKL6GDJ7X1, where the gated rule
+# file contributes the other 7. Containment is complete for claude-code
+# (rulesDir) and codex (the merged rules block), which receive rule files and
+# nothing else.
+#
 # Each agent reads a different file, so the same text is delivered three ways:
 #
 #   claude-code  ~/.claude/rules/*.md      loaded automatically in every project
