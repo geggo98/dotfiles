@@ -1384,23 +1384,47 @@ fallback, which would redirect a production command in silence.
 
 That guarantee is about *names*, not about an absent flag. `+vault` with no
 `-address` uses `VAULT_ADDR` — resolving an alias there too — and falls back to
-`staging` when it is unset, exactly as a bare `vault` does under the fish
-default. So `+vault kv get secret/x` reads staging, where the removed
-`+vault-prod` read production. What makes that a documentation matter rather
-than a hazard is that the removed commands fail loudly with `command not found`
-instead of quietly redirecting.
+`staging` when it is unset. A bare `vault` does **not** do the same: with
+`VAULT_ADDR` unset it fails at the token helper (`vault-token-helper: VAULT_ADDR
+is not set`, exit 1) rather than defaulting anywhere, so the two agree only
+inside an interactive fish, where the variable is set either way. That
+distinction matters because agents do not run interactively. So `+vault kv get
+secret/x` reads staging, where the removed `+vault-prod` read production. What
+makes that a documentation matter rather than a hazard is that the removed
+commands fail loudly with `command not found` instead of quietly redirecting.
 
-`+vault-login <environment> [<token>]` logs in the same way and takes **no**
+`+vault-login <environment> [<token> | -]` logs in the same way and takes **no**
 default environment, so a forgotten argument cannot land in the wrong instance.
-Both are generated from one `vaultEnvironments` attrset; a new instance is a line
-there plus the secret declaration.
+A token goes in on **stdin** (`… | +vault-login staging -`), or is asked for
+silently when OIDC fails; passing it as the second argument still works but puts
+it in argv, where `ps` exposes it to every process of this user for the lifetime
+of the command — so that form warns. `vault` itself never receives the token as
+an argument in any of the three paths.
+
+Both are generated from one `vaultEnvironments` attrset. A new instance costs
+**three** steps, not two: the line there, the declaration in
+`hosts/<serial>/secrets.nix`, and the encrypted value in
+`hosts/<serial>/secrets.enc.yaml` — without the last one the resolver aborts
+with `cannot read the address of …`.
+
+One consequence of the per-address token files is worth stating out loud,
+because it lives only in a Nix comment otherwise: a **staging** login also
+mirrors the fresh token into `~/.vault-token`, a plaintext token at a
+well-known path, for tools that hardcode that location. Production logins do
+not. A literal-URL login (`+vault-login https://…`) skips the mirror too,
+because it has no environment name to match.
 
 Two divergences from the real CLI, both deliberate. `+vault` honours `-address`
-wherever it stands, while Vault parses flags only *before* the positional
-arguments and otherwise warns `Command flags must be provided before positional
-arguments` — Vault's warning still prints, and the command reaches the instance
-that was typed. And a `VAULT_ADDR` that is neither a URL nor a known prefix
-aborts, where Vault itself would fail later on a URL parse error.
+wherever it stands, where Vault parses flags only *before* the positional
+arguments — the wrapper **removes** the flag before `vault` sees the command
+line, so no `Command flags must be provided before positional arguments` warning
+fires and the typed instance is reached. That removal replaced an earlier
+in-place rewrite, which was measurably broken: the rewritten flag stayed in argv
+and Vault counted it as a positional, so `+vault kv get secret/x -address=…`
+died on `Too many arguments (expected 1, got 2)` instead of reaching anything.
+`token lookup` and `version` tolerate a surplus argument, which is why it went
+unnoticed. And a `VAULT_ADDR` that is neither a URL nor a known prefix aborts,
+where Vault itself would fail later on a URL parse error.
 
 The German-language version of this trap ships as a global agent rule,
 `modules/_files/vault/rules/vault-address.md`, contributed through
