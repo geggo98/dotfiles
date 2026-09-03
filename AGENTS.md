@@ -824,7 +824,7 @@ Each module defines a single aspect across all relevant configuration classes (d
 | `aichat.nix` | AI chat tool configuration |
 | `ai-tools.nix` | AI tool packages and configuration |
 | `boundary.nix` | HashiCorp Boundary PM2-managed proxies (work host) |
-| `vault.nix` | HashiCorp Vault configuration |
+| `vault.nix` | HashiCorp Vault: the per-address token helper, plus `+vault` (resolves `-address=<environment>` by unambiguous prefix and syncs `VAULT_ADDR`, which the token helper cannot see otherwise) and `+vault-login <environment>`. See "Vault, specifically" under Secrets |
 | `vscode.nix` | VS Code: the general extension set via `nix-vscode-extensions`, plus `settings.json` and the local Turbo Vision theme. Editor itself stays a Homebrew cask — see "VS Code extensions" below |
 | `overlays.nix` | Nixpkgs overlays |
 | `formatter.nix` | `nix fmt` formatter configuration |
@@ -1359,6 +1359,44 @@ expiry — `just creds-check` probes instead. Note the two products do **not**
 share an auth scheme: Jira Cloud is Basic (email + token), while the
 self-hosted Confluence (Data Center) needs **Bearer**. Guessing wrong
 returns 401 and looks exactly like a dead credential.
+
+**Vault, specifically: `-address` never reaches the token helper.** Vault starts
+an external token helper with a plain `os.Environ()`, so the helper sees
+`VAULT_ADDR` and nothing else. `modules/vault.nix` keys its token files on
+`sha256(VAULT_ADDR)` precisely so that staging and production logins can coexist
+— which means a bare `vault … -address=<production>` in an interactive fish,
+where `VAULT_ADDR` holds the staging default, signs a production request with the
+**staging** token. Measured 2026-09-03 against Vault v1.21.1:
+
+```console
+$ env -u VAULT_ADDR vault token lookup -address=https://vault.invalid:8200
+failed to get token from token helper: "vault-token-helper: VAULT_ADDR is not set\n": exit status 1
+```
+
+That is what `+vault` is for: it resolves the `-address` value and exports
+`VAULT_ADDR` to the same address before exec'ing the real binary. Environments
+are matched by any unambiguous **prefix** of their name (`-address=p`,
+`-address=prod`, `-address=production`); an exact name wins over an otherwise
+ambiguous prefix; anything containing `://` passes through as a literal URL. An
+unknown or ambiguous name aborts and lists the candidates — never a quiet
+fallback, which would redirect a production command in silence.
+`+vault-login <environment> [<token>]` logs in the same way and takes **no**
+default environment, so a forgotten argument cannot land in the wrong instance.
+Both are generated from one `vaultEnvironments` attrset; a new instance is a line
+there plus the secret declaration.
+
+Two divergences from the real CLI, both deliberate. `+vault` honours `-address`
+wherever it stands, while Vault parses flags only *before* the positional
+arguments and otherwise warns `Command flags must be provided before positional
+arguments` — Vault's warning still prints, and the command reaches the instance
+that was typed. And a `VAULT_ADDR` that is neither a URL nor a known prefix
+aborts, where Vault itself would fail later on a URL parse error.
+
+The plain `vault` binary (Homebrew, `hashicorp/tap/vault`) is deliberately **not**
+shadowed. It could not be by a package name anyway: `brew shellenv` in
+`modules/_files/shell/promptInit.fish` moves `/opt/homebrew/bin` to the front of
+the interactive PATH, ahead of the home-manager profile (measured: positions 1
+and 43), so a Nix package called `vault` would never run.
 
 - **Location:** `secrets/secrets.enc.yaml` (global), `hosts/<serial>/secrets.enc.yaml` (per-host)
 - **Decryption keys:** SSH Ed25519 key at `~/.ssh/id_ed25519_sops_nopw` (passwordless)
