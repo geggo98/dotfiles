@@ -38,6 +38,10 @@ Ein unbekannter oder mehrdeutiger Name bricht ab und nennt die Kandidaten. Einen
 stillen Rückfall auf die Default-Umgebung gibt es bewusst nicht — er würde einen
 Produktionsbefehl unbemerkt umleiten.
 
+Das gilt für **Namen**, nicht für ein fehlendes Flag: ohne `-address` benutzt
+`+vault` das vorhandene `VAULT_ADDR` und sonst `staging`, genau wie ein blankes
+`vault`. Wer die Produktionsinstanz meint, muss sie nennen.
+
 `+vault-login` verlangt die Umgebung als erstes Argument und hat keinen Default,
 damit ein vergessenes Argument nicht in der falschen Instanz landet.
 

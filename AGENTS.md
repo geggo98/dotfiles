@@ -1381,6 +1381,15 @@ are matched by any unambiguous **prefix** of their name (`-address=p`,
 ambiguous prefix; anything containing `://` passes through as a literal URL. An
 unknown or ambiguous name aborts and lists the candidates — never a quiet
 fallback, which would redirect a production command in silence.
+
+That guarantee is about *names*, not about an absent flag. `+vault` with no
+`-address` uses `VAULT_ADDR` — resolving an alias there too — and falls back to
+`staging` when it is unset, exactly as a bare `vault` does under the fish
+default. So `+vault kv get secret/x` reads staging, where the removed
+`+vault-prod` read production. What makes that a documentation matter rather
+than a hazard is that the removed commands fail loudly with `command not found`
+instead of quietly redirecting.
+
 `+vault-login <environment> [<token>]` logs in the same way and takes **no**
 default environment, so a forgotten argument cannot land in the wrong instance.
 Both are generated from one `vaultEnvironments` attrset; a new instance is a line
