@@ -80,10 +80,19 @@ npm = "@anthropic-ai/claude-code"
 # "Validate the scan before believing 'no hits'". The entry above stays and keeps
 # dating what the main input ships; this one dates what is actually installed.
 #
-# Expected output up to and including 2026-09-09: TOO NEW, exit 1. That is the
-# wanted state, not a defect. It heals by itself on 2026-09-10 and this entry
-# goes away with the pin -- an assertion in modules/mcp-servers.nix breaks the
-# build when it is time.
+# Expected output up to and including 2026-09-15: TOO NEW, exit 1. That is the
+# wanted state, not a defect -- the pin is a deliberate cooldown undercut, and an
+# audit that reported it as clean would be hiding exactly the fact that justifies
+# the write-up in flake.nix.
+#
+# Two dates, both moved by the 2.1.247 -> 2.1.258 bump on 2026-09-03, and they
+# are close enough to be confused: this ENTRY goes quiet once 2.1.258 itself
+# turns 14 days old (published 2026-09-01 22:25Z, so from 2026-09-16), and the
+# PIN can go away once nixpkgs-llm-agents ships >= 2.1.258, i.e. once `just
+# update` with the same bar lands on a rev from 2026-09-01 23:07Z or later --
+# also 2026-09-16 at the earliest. A quiet entry is therefore not by itself
+# permission to remove the pin; the assertion in modules/mcp-servers.nix is what
+# says when, and it breaks the build rather than waiting to be noticed.
 name = "claude-code (pinned)"
 input = "llm-agents-claude-code-pin"
 attr = "claude-code"

@@ -2,13 +2,13 @@
 let
   llm-agents-pkgs = system: inputs.nixpkgs-llm-agents.packages.${system};
 
-  # TEMPORARY claude-code pin, 2.1.247 — the full reasoning is at the
+  # TEMPORARY claude-code pin, 2.1.258 — the full reasoning is at the
   # llm-agents-claude-code-pin input in flake.nix. Only claude-code comes from
   # that input; opencode and codex below stay on nixpkgs-llm-agents.
   #
   # The version string and the rev in flake.nix belong together; the first
   # assertion below is what keeps them together.
-  claude-code-pin-version = "2.1.247";
+  claude-code-pin-version = "2.1.258";
   claude-code-pinned = system:
     inputs.llm-agents-claude-code-pin.packages.${system}.claude-code;
 

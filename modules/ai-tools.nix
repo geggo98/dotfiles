@@ -81,11 +81,13 @@
           # claude-agent-acp, the interactive one by exec'ing it directly — so at
           # runtime the pinned binary was reached either way. But the store
           # REFERENCE survives that, and without this override it drags the old
-          # claude-code into every generation: measured 2026-09-02, `nix store
-          # diff-closures` reported "claude-code: 2.1.247 added" rather than an
-          # upgrade, and `nix why-depends` traced the leftover through
-          # home-manager-path -> +agent-claude -> claude-agent-acp ->
-          # claude-code-2.1.234. That is ~222 MB of second copy per generation.
+          # claude-code into every generation: measured 2026-09-02, when the pin
+          # was still 2.1.247, `nix store diff-closures` reported "claude-code:
+          # 2.1.247 added" rather than an upgrade, and `nix why-depends` traced
+          # the leftover through home-manager-path -> +agent-claude ->
+          # claude-agent-acp -> claude-code-2.1.234. That is ~222 MB of second
+          # copy per generation. The version numbers are the measurement's, not
+          # today's; the mechanism is what the override addresses.
           runtimeInputs = [ (llm-agents.claude-agent-acp.override { claude-code = claude-code-pinned; }) ];
           text = ''
             export DISABLE_AUTOUPDATER='1'
