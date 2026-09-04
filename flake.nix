@@ -112,7 +112,34 @@
     nix-index-database.inputs.nixpkgs.follows = "nixpkgs";
 
     # https://github.com/cachix/devenv
-    devenv.url = "github:cachix/devenv";
+    #
+    # PINNED TO A RELEASE TAG, not to main, and the tag is the whole point.
+    # Without a ref this input tracked the default branch, and main carries a
+    # Cargo version that has not been released: measured 2026-09-03, the
+    # deployed path was
+    #   /etc/profiles/per-user/<user>/bin/devenv -> home-manager-path
+    #     -> /nix/store/f2vgfk2j...-devenv-wrapped-2.2.3
+    # while cachix/devenv's releases end at v2.2.2 (2026-08-13). So the machines
+    # ran a "2.2.3" that exists nowhere upstream -- nothing to read release
+    # notes for, nothing to report a bug against.
+    #
+    # The cooldown cannot fix that, because it picks an AGE, not a publication.
+    # `just update-preview` on the same day:
+    #     devenv   ed3d140a9 (6.9d) -> eeced8155 (2026-08-28, 5.8d, 5d bar)
+    # -- again an arbitrary main commit, merely an older one.
+    #
+    # Cost of the pin, stated plainly: `just update` no longer moves this input
+    # at all; it lands in the "skipped -- immutable pin" class. `just devenv-bump`
+    # is the replacement and keeps the bar, because it asks
+    # `supply-chain.py release cachix/devenv` for the newest release that clears
+    # `[cooldown] inputs` instead of taking whatever is newest.
+    #
+    # Adopting v2.2.2 moved this input BACKWARDS, from a main commit of
+    # 2026-08-27 to the release of 2026-08-13. `just update` refuses to do that
+    # on its own, for good reasons written up in AGENTS.md; this was a decision
+    # by hand, and the two weeks of unreleased main are exactly what was given
+    # up.
+    devenv.url = "github:cachix/devenv/v2.2.2";
 
     # https://github.com/numtide/llm-agents.nix
     # Tracks main. Source for claude-code, codex, opencode, gemini-cli, ccusage

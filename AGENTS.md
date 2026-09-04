@@ -946,7 +946,7 @@ Two filters, both of which log what they drop (**never a silent cap**):
   (`just cache-push …-devenv-profile` must still do what it was told) and because a
   filter in the drainer would let the spool accumulate entries every run discards. The
   keep-arm is listed first because zsh takes the first matching `case` arm and
-  `devenv-wrapped-2.2.3` matches both. `rust_devenv-*` and `+mcp-devenv*` do not start
+  `devenv-wrapped-2.2.2` matches both. `rust_devenv-*` and `+mcp-devenv*` do not start
   with `devenv-` once the hash is stripped, so they are unaffected.
 - **Closures over 64 GiB are skipped**, logged with their size
   (`status=SKIP reason=closure-limit bytes=…`). That bound is a backstop against one
@@ -1937,13 +1937,21 @@ Four behaviours worth knowing, each of which cost a measurement:
   for a long time nothing did: `just brew-bump` took `releases/latest`. Measured
   2026-09-01, that resolved to Homebrew 6.0.21 **twelve hours** after publication, in the
   repo whose entire update path exists to avoid being the first consumer of anything.
-  The three tag pins therefore now split into two classes. `brew-src` is scripted and
-  cooled: the recipe calls `supply-chain.py release Homebrew/brew`, which picks the newest
-  release clearing `[cooldown] inputs` and prints every candidate it declined and why —
-  a silent skip would read as "not published yet". A tag passed as an argument still
-  overrides the bar, and says so on stderr. `yt-dlp-src` and `agent-browser-src` are
-  edited by hand and have **no** gate at all; check the release date yourself before
-  bumping either.
+  The four tag pins therefore now split into two classes. `brew-src` and `devenv` are
+  scripted and cooled: each recipe calls `supply-chain.py release <owner>/<repo>`, which
+  picks the newest release clearing `[cooldown] inputs` and prints every candidate it
+  declined and why — a silent skip would read as "not published yet". A tag passed as an
+  argument still overrides the bar, and says so on stderr. `yt-dlp-src` and
+  `agent-browser-src` are edited by hand and have **no** gate at all; check the release
+  date yourself before bumping either.
+- **`devenv` is pinned for a second reason, and it is not soak.** Its main branch carries
+  a Cargo version with no release behind it, so branch-tracking deployed a version that
+  exists nowhere upstream: measured 2026-09-03, `home-manager-path` pointed at
+  `devenv-wrapped-2.2.3` while cachix/devenv's releases ended at v2.2.2 (2026-08-13) —
+  no release notes to read, nothing to file a bug against. **A cooldown cannot fix that,
+  because it selects an age, not a publication.** The same day `just update-preview`
+  offered `ed3d140a9 → eeced8155`: another arbitrary main commit, merely an older one.
+  Adopting the tag moved the input backwards by two weeks, deliberately and by hand.
 - **FlakeHub inputs are covered too, and yanks are honoured.** `determinate` is a semver
   *range* (`…/determinate/3`), so it re-resolves on every lock — a floating range on the
   root `nix-daemon` would defeat every cooldown in the repo. It moved 3.21.8 → 3.22.2

@@ -181,7 +181,7 @@
           # ''${n#*-} strips the 32-character hash, leaving the derivation name.
           # matches:  8c7icbdn…8rpa-devenv-profile   ->   devenv-profile
           # The keep-arm must come FIRST: zsh takes the first matching arm, and
-          # `devenv-wrapped-2.2.3` matches both patterns.
+          # `devenv-wrapped-2.2.2` matches both patterns.
           case ''${n#*-} in
             (${lib.concatStringsSep "|" hookKeep}) ;;
             (${lib.concatStringsSep "|" hookFilter}) (( f++ )); continue ;;

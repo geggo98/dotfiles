@@ -270,6 +270,54 @@ brew-bump tag="":
     nix flake update brew-src
     echo "Now run: just build && just switch   (switch selects the flake attr by hardware serial)"
 
+# Twin of brew-bump above, for the same structural reason: a tag-pinned input is
+# invisible to `just update`, so without a recipe the bar is whatever a human
+# happens to remember. What differs is WHY devenv is pinned at all. Its main
+# branch carries a Cargo version with no release behind it -- measured
+# 2026-09-03, these machines deployed `devenv-wrapped-2.2.3` while upstream's
+# releases ended at v2.2.2. Tracking the branch meant running a version that
+# exists nowhere, with no release notes and nothing to file a bug against.
+#
+# A cooldown alone could not fix that: it picks an AGE, not a publication. Same
+# day, `just update-preview` offered ed3d140a9 -> eeced8155 -- another arbitrary
+# main commit, merely an older one.
+#
+# Bump devenv to the newest release past the cooldown; a tag argument overrides.
+devenv-bump tag="":
+    #!/bin/zsh
+    set -euo pipefail
+    tag="{{ tag }}"
+    if [ -z "$tag" ]; then
+        # Exits 2 and prints why if nothing in the inspected window clears the bar,
+        # so `set -e` stops here rather than relocking to an empty tag.
+        tag=$(python3 scripts/supply-chain.py release cachix/devenv)
+    else
+        echo "explicit tag $tag — cooldown deliberately bypassed" >&2
+    fi
+    [ -n "$tag" ] || { echo "could not determine a devenv tag" >&2; exit 1; }
+    # matches:     devenv.url = "github:cachix/devenv/v2.2.2";   ->  $+{tag} eq "v2.2.2"
+    current=$(perl -ne '
+        if (m{^ \s* devenv\.url \s* = \s* "github:cachix/devenv/(?<tag>[^"]+)"; \s* $}x) {
+            print $+{tag};
+            last;
+        }
+    ' flake.nix)
+    [ -n "$current" ] || { echo "no tagged devenv.url line found in flake.nix" >&2; exit 1; }
+    if [ "$tag" = "$current" ]; then
+        echo "devenv already at $tag"
+        exit 0
+    fi
+    echo "devenv: $current -> $tag"
+    # perl -i rather than sed -i, and the END block turning a non-matching
+    # pattern into a hard error: both for the reasons spelled out on brew-bump.
+    CUR="$current" NEW="$tag" perl -i -pe '
+        BEGIN { $n = 0 }
+        $n += s|\Qurl = "github:cachix/devenv/$ENV{CUR}";\E|url = "github:cachix/devenv/$ENV{NEW}";|;
+        END { die "substitution matched nothing — pattern drift in flake.nix?\n" unless $n }
+    ' flake.nix
+    nix flake update devenv
+    echo "Now run: just build && just switch   (switch selects the flake attr by hardware serial)"
+
 # Recompute the agent-browser release-binary hashes for modules/agent-browser.nix
 # after bumping the agent-browser-src tag in flake.nix. Prints the ready-to-paste
 # `assets` attrset. Example: `just agent-browser-hashes 0.34.0`
