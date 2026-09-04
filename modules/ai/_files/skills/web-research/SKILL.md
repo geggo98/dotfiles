@@ -37,7 +37,14 @@ Run before:
 | Script                                       | Purpose                          | Quick Mode | Deep Mode |
 | -------------------------------------------- | -------------------------------- | ---------- | --------- |
 | `${CLAUDE_SKILL_DIR}/scripts/perplexity_open_router_research.sh` | General-purpose quick research.  | Default    | `--deep`  |
-| `${CLAUDE_SKILL_DIR}/scripts/gemini_research.sh`                 | Deep research via Google Gemini. | `--flash`  | Default   |
+| `${CLAUDE_SKILL_DIR}/scripts/gemini_research.sh`                 | Deep research via Google Gemini. | `--flash`  | `--deep`  |
+
+The two scripts spell depth differently, and the difference matters when reading
+their output. Perplexity switches **models** (`sonar-pro` → `sonar-reasoning-pro`
+→ `sonar-deep-research`). Gemini stays on **one** model, `gemini-3.8-flash`, and
+moves its *thinking level* instead — so `--flash`, no flag and `--deep` are
+`low`, `medium` and `high` thinking on the same grounded search. Each Gemini run
+prints the model and level it used on stderr; stdout stays pure Markdown.
 
 ### Arguments
 
@@ -83,11 +90,17 @@ ${CLAUDE_SKILL_DIR}/scripts/perplexity_open_router_research.sh --deep "Evaluate 
 
 | Option                   | Description                                       |
 | ------------------------ | ------------------------------------------------- |
-| `--flash`                | Fast, shallow lookup for immediate results.       |
-| `--deep`                 | Multi-step synthesis with broader exploration.    |
+| `--flash`                | Fast, shallow lookup. Gemini: thinking level `low`. |
+| `--deep`                 | Multi-step synthesis. Gemini: thinking level `high`. |
+| *(no depth flag)*        | Gemini: thinking level `medium`, the model's own default. |
+| `--thinking-level LEVEL` | Gemini only: `low`, `medium` or `high`, explicitly. Beats `--flash`/`--deep`. `minimal` is rejected — `gemini-3.8-flash` does not accept it. |
+| `--model ID`             | Override the model. Gemini defaults to `gemini-3.8-flash`. |
 | `--timeout DURATION`     | Global execution timeout (default: `5m`). Format follows GNU coreutils (e.g. `30s`, `5m`, `1h`). |
 | `perplexity_open_router` | Breadth-first research across multiple sources.   |
 | `gemini_research`        | Depth-first synthesis for comprehensive analysis. |
+
+Passing `--flash` and `--deep` together is refused with exit 2 rather than
+silently resolved: they are two ends of one knob, not two preferences.
 
 ## 6. Fallbacks and Error Handling
 
@@ -102,19 +115,24 @@ Ensure network access and required API keys are configured.
 
 ## 8. Comparison Table
 
-| Tool       | Scope   | Depth  | Response Speed |
-| ---------- | ------- | ------ | -------------- |
-| Perplexity | Broad   | Medium | Fast           |
-| Gemini     | Focused | Deep   | Moderate       |
+| Tool       | Scope   | Depth              | Response Speed |
+| ---------- | ------- | ------------------ | -------------- |
+| Perplexity | Broad   | Medium             | Fast           |
+| Gemini     | Focused | Tunable, low..high | Scales with the thinking level |
 
 ## 9. Exit Codes
 
-| Code | Meaning                   |
-| ---- | ------------------------- |
-| 0    | Success                   |
-| 1    | Invalid arguments         |
-| 2    | Network or API failure    |
-| 3    | Unexpected agent response |
+Read off both scripts, not aspirational — they agree:
+
+| Code | Meaning                                                              |
+| ---- | -------------------------------------------------------------------- |
+| 0    | Success                                                              |
+| 1    | The request to the model failed (network, quota, model rejected it)  |
+| 2    | Usage or configuration: no prompt, no API key, contradictory or unknown flags (argparse exits 2 too) |
+
+`1` and `2` used to be listed the other way round here, beside a `3` that no
+script has ever produced. That matters for `--thinking-level`: an unsupported
+level is caught by argparse and exits **2**, before anything reaches Google.
 
 ## 10. Environment Variables
 

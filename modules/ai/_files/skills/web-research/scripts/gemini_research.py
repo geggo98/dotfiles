@@ -58,8 +58,27 @@ def build_url_map(response, max_workers: int = 5) -> Dict[str, str]:
     resolved = resolve_urls(raw_urls, max_workers=max_workers)
     return dict(zip(raw_urls, resolved))
 
-MODEL_PRO = "gemini-3.1-pro-preview"
-MODEL_FLASH = "gemini-3.1-flash-lite-preview"
+MODEL = "gemini-3.8-flash"
+
+# The depth knob is the THINKING LEVEL, not the model name. gemini-3.8-flash is
+# GA, grounds against Google Search, and accepts low/medium/high. Two models of
+# two generations (gemini-3.1-pro-preview / -flash-lite-preview) used to encode
+# the same axis, which meant two names that could age apart -- and both of them
+# had.
+#
+# `minimal` is deliberately ABSENT: this model rejects it with an error, so it
+# belongs in argparse's choices-check, where it costs nothing, rather than in a
+# request that travels to Google to be refused there.
+#
+# medium is the API's own default for Gemini 3 Flash. It is restated here so the
+# stderr line below can name the level that is actually in force instead of
+# reporting "unset" and leaving the reader to guess.
+THINKING_LEVELS = {
+    "low": types.ThinkingLevel.LOW,
+    "medium": types.ThinkingLevel.MEDIUM,
+    "high": types.ThinkingLevel.HIGH,
+}
+DEFAULT_THINKING = "medium"
 
 
 def get_api_key_from_filesystem(key_name: str) -> str:
@@ -135,18 +154,26 @@ def main():
     p.add_argument("prompt", nargs="*", help="User query to search and answer")
     p.add_argument(
         "--model",
-        default=MODEL_PRO,
-        help=f"Gemini model to use (default: {MODEL_PRO})",
+        default=MODEL,
+        help=f"Gemini model to use (default: {MODEL})",
     )
     p.add_argument(
         "--flash",
         action="store_true",
-        help=f"Use {MODEL_FLASH} for faster responses",
+        help="Shallow and fast: thinking level low",
     )
     p.add_argument(
         "--deep",
         action="store_true",
-        help=f"Use {MODEL_PRO} for deeper analysis (default)",
+        help="Deeper synthesis: thinking level high",
+    )
+    p.add_argument(
+        "--thinking-level",
+        choices=sorted(THINKING_LEVELS),
+        default=None,
+        metavar="{low,medium,high}",
+        help=f"Explicit thinking level; beats --flash/--deep "
+        f"(default: {DEFAULT_THINKING})",
     )
     p.add_argument(
         "--json",
@@ -172,6 +199,26 @@ def main():
         print("Error: provide a prompt.", file=sys.stderr)
         sys.exit(2)
 
+    # --flash and --deep are opposite ends of one knob, so asking for both is a
+    # contradiction, not a preference. The old code let --flash win silently.
+    if args.thinking_level:
+        level_name = args.thinking_level
+    elif args.flash and args.deep:
+        print(
+            "Error: --flash and --deep are opposites; pass one, "
+            "or --thinking-level to be explicit.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
+    elif args.flash:
+        level_name = "low"
+    elif args.deep:
+        level_name = "high"
+    else:
+        level_name = DEFAULT_THINKING
+
+    model = args.model
+
     # API key loading follows official SDK behavior:
     # prefers GOOGLE_API_KEY if both are set.
     api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
@@ -190,14 +237,18 @@ def main():
 
     # Enable Google Search grounding.
     grounding_tool = types.Tool(google_search=types.GoogleSearch())
-    config = types.GenerateContentConfig(tools=[grounding_tool])
+    config = types.GenerateContentConfig(
+        tools=[grounding_tool],
+        thinking_config=types.ThinkingConfig(
+            thinking_level=THINKING_LEVELS[level_name]
+        ),
+    )
 
-    if args.flash:
-        model = MODEL_FLASH
-    elif args.deep:
-        model = MODEL_PRO
-    else:
-        model = args.model
+    # stderr, never stdout: stdout is the Markdown document the skill promises,
+    # and something downstream parses it. Without this line the two knobs are
+    # indistinguishable from outside -- a --deep that quietly did not take looks
+    # exactly like one that did.
+    print(f"gemini_research: model={model} thinking_level={level_name}", file=sys.stderr)
 
     try:
         resp = client.models.generate_content(
