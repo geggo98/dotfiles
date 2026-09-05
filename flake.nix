@@ -309,12 +309,31 @@
     # Validate the same way if this is ever suspected again: probe a handful of
     # paths you KNOW the cache should have before believing a 404.
     #
-    # NEEDS ONE INTERACTIVE ACCEPTANCE. ~/.local/share/nix/trusted-settings.json
-    # keys consent on the EXACT string of the whole list, so changing one host
-    # invalidates the stored "yes" and a non-interactive run silently ignores the
-    # setting again ("warning: ignoring untrusted flake configuration setting").
-    # Answer the prompt once per machine, e.g. during `just build`, then check:
-    #   nix config show | grep '^substituters'   # cache.numtide.com must appear
+    # NEEDS ONE INTERACTIVE ACCEPTANCE, PER USER.
+    # ~/.local/share/nix/trusted-settings.json keys consent on the EXACT string
+    # of the whole list, so changing one host invalidates the stored "yes" and a
+    # non-interactive run silently ignores the setting again ("warning: ignoring
+    # untrusted flake configuration setting"). Answer the prompt once per
+    # machine, e.g. during `just build`; `just switch` checks for the stored yes
+    # and prints the exact command when it is missing.
+    #
+    # DO NOT verify with `nix config show | grep '^substituters'`. That command
+    # does not load the flake, so it prints the same list whether or not this
+    # block was ever accepted — and cache.numtide.com is in it regardless,
+    # because modules/nix-cache.nix sets it system-wide through
+    # determinateNix.customSettings. Measured 05.09.2026: consent granted and
+    # demonstrably effective, yet devenv.cachix.org absent from that output.
+    # devenv.cachix.org is the only entry here that exists NOWHERE else, so it
+    # is the one worth looking for. What actually answers the question:
+    #   nix eval --raw '.#darwinConfigurations.<serial>.system.drvPath'
+    #     -> effective when it prints no "untrusted flake configuration" warning
+    #
+    # AND `sudo darwin-rebuild` IS A DIFFERENT USER. root's consent file is
+    # /var/root/.local/share/nix/trusted-settings.json, and the prompt has no
+    # tty there, so `just switch` warns twice on EVERY run even when yours is in
+    # order. Measured the same day: 0 warnings from a user-level eval against 2
+    # from the switch beside it. Do not read the switch's warning as an
+    # unanswered prompt.
     extra-substituters = [ "https://cache.numtide.com" "https://devenv.cachix.org" "https://nix-cache.pub.schwetschke.dev" ];
     extra-trusted-public-keys = [ "niks3.numtide.com-1:DTx8wZduET09hRmMtKdQDxNNthLQETkc/yaX7M4qK0g=" "devenv.cachix.org-1:w1cLUi8dv3hnoSPGAuibQv+f9TZLr6cv/Hm9XgU50cw=" "nix-cache.pub.schwetschke.dev-1:R3UAHtpY90nzsAtEm3LDaWsEAHYQK6YG+i8mYxTgL10=" ];
   };

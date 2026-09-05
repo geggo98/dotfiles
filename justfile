@@ -66,6 +66,66 @@ switch *args:
         }
     ')
     [ -n "$serial" ] || { echo "could not determine hardware serial" >&2; exit 1; }
+
+    # THE FLAKE'S nixConfig NEEDS A ONE-TIME PER-USER "yes", and a switch can
+    # neither give it nor report on it. `sudo darwin-rebuild` runs as ROOT, whose
+    # consent lives in /var/root/.local/share/nix/trusted-settings.json and whose
+    # prompt has no tty — so a switch prints
+    #     warning: ignoring untrusted flake configuration setting 'extra-substituters'
+    # on EVERY run, and that line says nothing about whether YOUR account has
+    # consented. The two files are unrelated. Measured 05.09.2026: a user-level
+    # `nix eval` of this flake printed 0 such warnings while the same switch
+    # printed 2.
+    #
+    # What the missing user-level yes costs: `devenv.cachix.org` is silently
+    # unused on every flake command, because it exists ONLY in this flake's
+    # nixConfig — nix.custom.conf supplies cache.numtide.com and
+    # nix-cache.pub.schwetschke.dev system-wide, but not that one. It is also why
+    # `nix config show | grep '^substituters'` cannot answer the question: that
+    # command does not load the flake, so it prints the same list either way.
+    #
+    # nix keys the consent on the EXACT string of the whole list, so the expected
+    # value is DERIVED from flake.nix instead of written down a second time —
+    # changing one host invalidates the stored yes, and this check notices.
+    #
+    # matches:   extra-substituters = [ "https://a" "https://b" ];  ->  https://a https://b
+    want=$(perl -0777 -ne '
+        if (m{^ \s* extra-substituters \s* = \s* \[ (?<list>[^\]]*) \] \s* ;}mx) {
+            print join(" ", $+{list} =~ /"([^"]+)"/g);
+        }
+    ' flake.nix)
+    consent="${XDG_DATA_HOME:-$HOME/.local/share}/nix/trusted-settings.json"
+    # -s, not -f: a MISSING or EMPTY file must count as "not consented". `perl -n`
+    # over an empty file never enters its loop and exits 0, which would read
+    # exactly like a yes — the silent-pass failure AGENTS.md warns about.
+    rc=0
+    if [ -z "$want" ]; then
+        rc=4
+    elif [ -s "$consent" ]; then
+        KEY="$want" perl -MJSON::PP -0777 -ne '
+            my $j = eval { decode_json($_) } or exit 3;
+            my $k = $ENV{KEY};
+            my $m = $j->{"extra-substituters"};
+            exit($m->{$k} ? 0 : 1);
+        ' "$consent" || rc=$?
+    else
+        rc=1
+    fi
+    case $rc in
+        (0) ;;
+        (1)
+            echo "warning: this flake's extra-substituters are NOT accepted for $(id -un)." >&2
+            echo "         devenv.cachix.org is silently unused on every flake command until" >&2
+            echo "         you answer the prompt once, twice 'y':" >&2
+            echo "             nix build --no-link '.#darwinConfigurations.${serial}.system'" >&2
+            echo "         Then check that a flake command prints no 'ignoring untrusted flake" >&2
+            echo "         configuration setting' warning. The two this switch prints are ROOT'S" >&2
+            echo "         and are expected — they are not the same question." >&2
+            ;;
+        (*)
+            echo "warning: flake-config consent could not be checked (rc=$rc) — continuing." >&2
+            ;;
+    esac
     echo "→ sudo darwin-rebuild switch --flake .#${serial} $*" >&2
     sudo darwin-rebuild switch --flake ".#${serial}" "$@"
 
