@@ -88,8 +88,30 @@
       # `devenv-<version>` and `devenv-wrapped-<version>`. `rust_devenv-*` and
       # `+mcp-devenv*` do not start with `devenv-` after the hash is stripped and
       # are unaffected.
+      # THE PREFIX ALONE IS NOT ENOUGH, because a binary cache has to be
+      # referentially complete. `tasks.json`, `process-compose.yaml` and
+      # `nix-darwin-env` are devenv outputs whose names simply do not begin with
+      # `devenv-`, and they REFERENCE the filtered ones: `nix-darwin-env` lists
+      # devenv-files, -profile, -enterShell and -git-hooks-* directly, and carries
+      # 13 devenv-* in its full closure. Filtering only the referees therefore
+      # retracts nothing — `nix copy` of a surviving REFERRER drags the whole
+      # closure back into R2.
+      #
+      # Measured 05.09.2026, after a prune had removed all 13: one `direnv
+      # reload` enqueued exactly these three (their log records show
+      # `filtered=0`, while nine devenv-* the same minute show `filtered=1`), and
+      # 5 of the 13 were back AT THE ORIGIN within minutes — devenv-profile,
+      # -test, -flake-test, -flake-tasks, -flake-compat. Probed with a
+      # cache-busting query string, so Cloudflare's edge could not answer for the
+      # origin; the other 8 correctly returned 404 there while still being served
+      # as stale HITs (age 2.1-2.6 d against a 30-day edge TTL).
+      #
+      # nix-cache-prune.py names the same three and catches them through the
+      # upward reference closure. That asymmetry is why the retraction worked and
+      # the re-publication went unnoticed: prune took them out, the next `direnv
+      # reload` put them back.
       hookKeep = [ "devenv" "devenv-[0-9]*" "devenv-wrapped-*" ];
-      hookFilter = [ "devenv-*" ];
+      hookFilter = [ "devenv-*" "tasks.json" "process-compose.yaml" "nix-darwin-env" ];
 
       # A BACKSTOP against one absurd output, NOT a cost policy — and the
       # difference is the whole reason this number is so large.
