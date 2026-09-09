@@ -1,7 +1,7 @@
 ---
 name: adr-writing
 description: "Use when documenting significant architectural decisions. Creates focused ADRs explaining context, decision, and alternatives. Prevents vague documentation and implementation detail bloat. Triggers: 'create ADR', 'document decision', making technology/framework/persistence/auth choices, cross-cutting concerns."
-allowed-tools: Bash(zsh *)
+allowed-tools: Bash(zsh *) Skill(technical-writing)
 ---
 
 # ADR Writing
@@ -9,6 +9,16 @@ allowed-tools: Bash(zsh *)
 Architecture Decision Records document significant architectural choices.
 
 Core principle: Explain why you decided, not how you'll implement.
+
+> **Write the prose with `Skill(technical-writing)`, and load it before you
+> start rather than after.** An ADR is usually read once, by someone deciding
+> whether the decision concerns them — so it stands or falls on its opening,
+> which is exactly what that skill's TL;DR-first rule is for. The Y-statement
+> below is already a TL;DR by construction; it only pays off if the words
+> filling its six slots are concrete. Rewriting a finished ADR into that shape
+> afterwards is more work than writing it that way. The skill covers German and
+> English: match the language the surrounding documentation is in rather than
+> switching.
 
 ## When to Create ADRs
 
@@ -139,10 +149,11 @@ Forbidden without justification:
 - Empty or vague "accepting that" consequences
 - Prescribing exact implementation steps
 
-## Integration with Other Skills
+## Related skills
 
-- technical-writing: Apply to ADR prose
-- tracing-knowledge-lineages: Review existing ADRs before creating new ones
+- **`technical-writing`**: how to write the context, decision and consequences
+  this skill asks for. TL;DR first, German and English — see the note under
+  "ADR Writing" above.
 
 ## When Not to Use ADRs
 
