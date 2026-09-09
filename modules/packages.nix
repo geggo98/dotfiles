@@ -64,6 +64,9 @@
         inputs.devenv.packages.${pkgs.stdenv.hostPlatform.system}.devenv
         delta
         git-absorb
+        # unstable: 26.05 hat 0.10.0 (2024), 0.11 bringt `git split`, den
+        # `!`-Operator in Revsets und Auto-Tracking neuer Dateien in record/amend.
+        unstable.git-branchless
         git-machete
         git-trim
         git-credential-manager
@@ -156,6 +159,7 @@
         vips
 
         # Compression
+        brotli
         p7zip
         xz
         zstd
