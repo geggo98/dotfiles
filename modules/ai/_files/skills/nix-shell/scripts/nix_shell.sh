@@ -1,5 +1,11 @@
-#!/usr/bin/env bash
+#!/bin/zsh
 set -euo pipefail
+
+# zsh on purpose (AGENTS.md, "Script style"): SKILL.md has always invoked this file
+# as `zsh nix_shell.sh`, so the former bash shebang was never honoured. Two zsh
+# rules apply throughout: word lists are arrays, never unquoted scalars (zsh does
+# not word-split), and variable content is printed with printf, never echo (zsh's
+# echo interprets backslash escapes, which would corrupt the JSON from nix search).
 
 # Nix Shell Skill
 # Search Nix packages and run commands with packages from nixpkgs.
@@ -14,11 +20,11 @@ NIX="${NIX:-nix}"
 # --- Logging -----------------------------------------------------------
 
 log_error() {
-  echo >&2 "ERROR: $*"
+  printf '%s\n' "ERROR: $*" >&2
 }
 
 log_info() {
-  echo >&2 "INFO: $*"
+  printf '%s\n' "INFO: $*" >&2
 }
 
 # --- Prerequisites ------------------------------------------------------
@@ -77,10 +83,10 @@ cmd_search() {
   fi
 
   if [[ "$json_mode" == true ]]; then
-    echo "$output"
+    printf '%s\n' "$output"
   else
     # Format as a clean table: name  version  description
-    echo "$output" | jq -r '
+    printf '%s\n' "$output" | jq -r '
       to_entries[]
       | .value
       | [.pname, .version, .description]
@@ -158,7 +164,7 @@ cmd_locate() {
     return 0
   fi
 
-  echo "$output"
+  printf '%s\n' "$output"
 }
 
 cmd_run() {
@@ -250,15 +256,15 @@ main() {
     exit 1
   fi
 
-  local command="$1"
+  local subcommand="$1"
   shift
 
-  case "$command" in
+  case "$subcommand" in
     search) cmd_search "$@" ;;
     locate) cmd_locate "$@" ;;
     run)    cmd_run "$@" ;;
     *)
-      log_error "Unknown command: '$command'"
+      log_error "Unknown command: '$subcommand'"
       show_usage
       exit 1
       ;;
