@@ -29,7 +29,6 @@ let
       npmVersions = {
         mcp-remote = "0.1.38";
         context7-mcp = "3.2.1";
-        zai-mcp-server = "0.1.4";
       };
 
       mcp-atlassian = (pkgs.writeShellApplication {
@@ -98,40 +97,6 @@ let
           load_from_secret TRAVILY_API_KEY travily_api_key
           require_secrets TRAVILY_API_KEY
           exec npx -y "mcp-remote@${npmVersions.mcp-remote}" "https://mcp.tavily.com/mcp/?tavilyApiKey=''${TRAVILY_API_KEY}"
-        '';
-      });
-
-      mcp-zai-search = (pkgs.writeShellApplication {
-        name = "+mcp-zai-search";
-        runtimeInputs = [ pkgs.nodejs_24 ];
-        text = ''
-          ${loadSecretsLib}
-          load_from_secret Z_AI_API_KEY z_ai_api_key
-          require_secrets Z_AI_API_KEY
-          exec npx -y "mcp-remote@${npmVersions.mcp-remote}" "https://api.z.ai/api/mcp/web_search_prime/mcp" "--header" "Authorization: Bearer ''${Z_AI_API_KEY}"
-        '';
-      });
-
-      mcp-zai-vision = (pkgs.writeShellApplication {
-        name = "+mcp-zai-vision";
-        runtimeInputs = [ pkgs.nodejs_24 ];
-        text = ''
-          ${loadSecretsLib}
-          load_from_secret Z_AI_API_KEY z_ai_api_key
-          require_secrets Z_AI_API_KEY
-          export Z_AI_MODE=ZAI
-          exec npx -y "@z_ai/mcp-server@${npmVersions.zai-mcp-server}"
-        '';
-      });
-
-      mcp-zai-web-reader = (pkgs.writeShellApplication {
-        name = "+mcp-zai-web-reader";
-        runtimeInputs = [ pkgs.nodejs_24 ];
-        text = ''
-          ${loadSecretsLib}
-          load_from_secret Z_AI_API_KEY z_ai_api_key
-          require_secrets Z_AI_API_KEY
-          exec npx -y "mcp-remote@${npmVersions.mcp-remote}" "https://api.z.ai/api/mcp/web_reader/mcp" "--header" "Authorization: Bearer ''${Z_AI_API_KEY}"
         '';
       });
 
@@ -255,10 +220,30 @@ let
             auth = { kind = "bearer"; secret = "travily_api_key"; var = "TRAVILY_API_KEY"; };
           };
         };
-        zai-search = { stdio = mcp-zai-search; };
-        zai-vision = { stdio = mcp-zai-vision; };
-        zai-web-reader = { stdio = mcp-zai-web-reader; };
       } // lib.optionalAttrs atlassian { atlassian = { stdio = mcp-atlassian; }; };
+
+      # REMOVED 2026-09-10: zai-search, zai-vision, zai-web-reader.
+      #
+      # Two reasons, and the first is the one that matters. All three passed
+      # the key on the COMMAND LINE (`--header "Authorization: Bearer $KEY"`,
+      # and zai-vision via its env), so a plain `ps -Ao args` printed the z.ai
+      # token in clear text to every process of this user. That is the same
+      # class the vault rule documents, and it cannot be fixed by moving the
+      # server — only by removing it or by giving it a header helper.
+      #
+      # Second: nothing referenced them. No skill in modules/ai/_files/skills
+      # mentions zai-search, zai-vision or zai-web-reader, and web-research
+      # deliberately routes through its own gemini/perplexity scripts instead.
+      # They cost 6 processes and 236 MiB per Claude session for that.
+      #
+      # z_ai_api_key itself STAYS: modules/ai-tools.nix and the
+      # CLAUDE_API_KEY helper above still read it. Do not clean it up with them.
+      #
+      # zai-vision was the only one with no remote MCP endpoint (probed: every
+      # api.z.ai/api/mcp/<vision-ish>/mcp path returns 404), so re-adding it
+      # would mean re-adding a local node process. If the vision tools are ever
+      # wanted back, write a skill CLI like grafana/jira — a CLI reads local
+      # image files more naturally than an MCP server does anyway.
 
       mcpCmd = name: pkg: "${pkg}/bin/+mcp-${name}";
 
