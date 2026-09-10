@@ -9,7 +9,7 @@ description: >
   or when .envrc files reference `use devenv`. Trigger for ad-hoc Nix environments (`devenv -O`),
   polyrepo/monorepo setups, devenv profiles, devenv outputs, or devenv LSP/MCP. Even if the user just
   says "set up my project environment" or "I need MySQL and Java for local dev", consider this skill.
-allowed-tools: Read(references/*) mcp__devenv__search_options mcp__devenv__search_packages mcp__nixos__nix_versions mcp__nixos__nix mcp__plugin_claude-code-home-manager_nixos__nix_versions mcp__plugin_claude-code-home-manager_nixos__nix Bash(zsh *) Read
+allowed-tools: Read(references/*) Bash(+nix-query *) Bash(zsh *) Read
 ---
 
 # Devenv — Nix-Based Declarative Developer Environments
@@ -91,7 +91,8 @@ For full setup instructions with language-specific examples: read `references/se
 1. Check the version, must be 2.x: `devenv --version`
 2. Run `devenv init`
 3. Update generated files
-    - `devenv.nix`: use the devenv MCP server (`mcp__devenv__search_packages`, `mcp__devenv__search_options`) to find packages and options
+    - `devenv.nix`: use `+nix-query search <name>` to find packages, and
+      `references/options.md` for the option surface (the `nixos` skill covers the CLI)
     - `devenv.yaml`: probably no changes needed
 4. Test the configuration:
     - `devenv shell -- pwd`
@@ -221,7 +222,7 @@ in { packages = [ pkgs-duckdb.duckdb ]; }
 ```
 
 Find the commit with the nix-shell skill (`nix_shell.sh versions duckdb 1.5.3`), the
-`nixos` MCP server (`nix_versions`) or nixhub.io, and confirm that cache.nixos.org holds
+`+nix-query versions <pkg>` (the `nixos` skill) or nixhub.io, and confirm that cache.nixos.org holds
 the store path **before** pinning, otherwise Nix compiles it. Do not `overrideAttrs` the
 version instead: that always compiles locally. For the API, the `overlays` variant,
 measured costs and the traps: read `references/pinning.md`.

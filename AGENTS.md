@@ -812,7 +812,7 @@ Each module defines a single aspect across all relevant configuration classes (d
 | `neovim.nix` | Neovim (nvf) in two variants: `homeManager.neovim` (workstation, every `languages.*` enabled) and `homeManager.neovim-server` (same editor, no language toolchains). See "Neovim: why there are two variants" |
 | `packages.nix` | Common packages via `flake.modules.homeManager.packages` |
 | `agent-rules.nix` | Global agent rules from one source to claude-code, opencode and codex (`~/.claude/rules/`, `~/.config/opencode/AGENTS.md`, `~/.codex/AGENTS.md`). Files in `modules/ai/_files/rules/` ship to every host; `my.ai.extraRules` lets an aspect module contribute one that ships only where that aspect is imported — see `modules/vault.nix`. That gating covers the rules layer only: opencode also receives this repo's `AGENTS.md` on every host, so repo documentation is not host-scoped |
-| `mcp-servers.nix` | Claude Code MCP server wrappers + the deployed skill tree via `flake.modules.homeManager.mcp-servers`. `my.ai.atlassian.enable` gates the Atlassian server and the `jira`/`bitbucket-pr` skills onto the work host; `claudeMcpExclude` additionally hides a server from **Claude only** (currently `atlassian`, replaced there by the skills) |
+| `mcp-servers.nix` | MCP servers + the deployed skill tree via `flake.modules.homeManager.mcp-servers`. One `mcpServers` declaration per server (remote endpoint and/or stdio wrapper), rendered per agent by `renderFor`; remote servers cost no process because claude-code connects them lazily. Also builds `+nix-query`, the CLI that replaced the `nixos` server. `my.ai.atlassian.enable` gates the Atlassian server and the `jira`/`bitbucket-pr` skills onto the work host; `claudeMcpExclude` additionally hides a server from **Claude only** (currently `atlassian`, replaced there by the skills) |
 | `secrets.nix` | SOPS secret declarations and per-host secret merging (**home-manager only** — servers use `nixos-secrets.nix`) |
 | `nixos-wiring.nix` | Defines `configurations.nixos` (module + `deployTarget`) and wires it to `flake.nixosConfigurations` and `flake.deployTargets` |
 | `nixos-base.nix` | Baseline for every NixOS host: sshd, root's authorized keys, the lockout assertions, serial getty, nix settings, GC |
@@ -1615,10 +1615,50 @@ grep -rn --include='*.nix' 'sops\.secrets\.' modules/
 
 ### Adding an MCP Server
 
-1. Add shell wrapper and server entry in `modules/mcp-servers.nix` (follow existing patterns)
+**Prefer a remote endpoint to a local process.** `mcpServers` in
+`modules/mcp-servers.nix` declares each server as `{ stdio = <pkg>; remote = {
+url; auth; }; }` — either half may be absent — and a per-agent `agents` table
+plus one `renderFor` turns that into each agent's own shape. Adding an agent
+(antigravity, say) is one row there, not a fifth copy of the mapping.
+
+The reason the distinction matters is measured, 2026-09-10: **claude-code
+connects remote HTTP servers lazily, on first tool use, while stdio servers are
+started at session start.** Seven stdio servers cost 13 processes and 491 MiB
+RSS in *every* session — `npx -y` keeps an `npm exec` node VM alive beside each
+server, so each one cost two processes — for 0,5–1,5 s of CPU over 53 minutes.
+Nine concurrent sessions were running at the time.
+
+Before writing a stdio wrapper, POST an `initialize` at the vendor's endpoint
+and see whether it speaks streamable HTTP. Four of the seven servers here were
+literally `npx mcp-remote@0.1.38 <url>`, i.e. a stdio-to-HTTP bridge for a
+client that needs none.
+
+**Credentials never go in the config.** `remote.auth` names a *sops file*, never
+a value, so no renderer can put a secret in `/nix/store`. Each agent carries it
+its own way: claude-code via `headersHelper` (a command printing JSON headers at
+connection time — it must read the sops FILE, because claude-code runs
+plugin-sourced helpers with `scrubCredentialEnv` and an inherited variable
+arrives empty), codex via `bearer_token_env_var` loaded by `+agent-codex`.
+Passing a key as a command-line argument is what this replaced: a plain
+`ps -Ao args` printed three of them in clear text to every process of this user.
+
+`just mcp-check` probes every remote server with its real credential. It is the
+startup check that lazy connect removes. Do **not** reach for `alwaysLoad`
+instead — that also opts the server out of tool-schema deferral, putting every
+tool schema into every turn's context.
+
+**Not everything belongs in an MCP server at all.** A stateless query API is
+often better as a skill CLI: `nixos` was a server holding 15,2 MiB per session
+to answer HTTP lookups, and is now `+nix-query`, which imports the same upstream
+code (`mcp_nixos.server.nix.fn`) and reimplements none of it. See
+`modules/ai/_files/mcp-nixos/nixos-cli.py`. The same reasoning retired
+`atlassian` in favour of the `jira` and `bitbucket-pr` skills.
+
+1. Add the server entry in `modules/mcp-servers.nix` — `remote` if the endpoint
+   supports it, `stdio` (a `writeShellApplication`) otherwise
 2. Ensure secret loading logic uses `$XDG_CONFIG_HOME/sops-nix/secrets`
 3. If it needs a credential only one host declares, gate it rather than shipping a
-   server that cannot start. `mcpServerPkgs` feeds four sinks — the claude-code,
+   server that cannot start. `mcpServers` feeds four sinks — the claude-code,
    opencode and codex configs plus `home.packages` — so a second module cannot
    simply merge into it: the codex path bakes its TOML in one activation script.
    `atlassian` is the worked example: an option declared by a small imported
@@ -1631,7 +1671,7 @@ grep -rn --include='*.nix' 'sops\.secrets\.' modules/
    `modules/hosts/DKL6GDJ7X1.nix` sets `my.ai.atlassian.enable = true`; the
    default is off.
 
-   **That option is the HOST gate, not a per-agent one.** `mcpServerPkgs` feeds
+   **That option is the HOST gate, not a per-agent one.** `mcpServers` feeds
    all three agents *and* `home.packages`, so removing an entry there also takes
    the `+mcp-<name>` wrapper off `PATH`. To hide a server from a single agent,
    subtract it from that agent's own list instead — `claudeMcpExclude` does

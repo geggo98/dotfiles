@@ -4,7 +4,8 @@
 
 1. Check the version: `devenv --version` (must be 2.x)
 2. Run `devenv init` in the project directory
-3. Edit `devenv.nix` — use the devenv MCP server to search for packages and options
+3. Edit `devenv.nix` — `+nix-query search <name>` (the `nixos` skill) finds packages;
+   `references/options.md` and https://devenv.sh/reference/options/ cover the options
 4. Test: `devenv shell -- pwd`
 5. Test language tools: `devenv shell -- python --version`, `devenv shell -- node --version`, etc.
 6. Fix errors until all commands work
@@ -72,7 +73,7 @@ Test: `devenv shell -- bun --version`
 
 Notes:
 - Bun does not have a dedicated `languages.bun` module yet — use `packages` directly
-- Use `mcp__devenv__search_packages` to check for the latest bun package name
+- Use `+nix-query search bun` to check for the latest bun package name
 - For projects using both Node and Bun, enable `languages.javascript` and add bun to packages
 
 ### Scala CLI
@@ -95,7 +96,8 @@ Test: `devenv shell -- scala-cli --version && devenv shell -- scala --version`
 Notes:
 - `languages.scala.enable` provides JDK + Scala compiler
 - Add `scala-cli` separately via packages (not part of the language module)
-- Use `mcp__devenv__search_options` with query `languages.scala` to discover all options
+- See `references/options.md` for the option surface; devenv's own reference is at
+  https://devenv.sh/reference/options/
 - `stdenvNoCC` drops the C toolchain; remove it if a dependency needs JNI or Scala Native — see `references/nix-recipes.md`
 
 ### Java with Gradle

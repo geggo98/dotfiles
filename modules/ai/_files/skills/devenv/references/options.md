@@ -1,6 +1,9 @@
 # Devenv Options Reference
 
-Use `mcp__devenv__search_options` to search for options interactively.
+Full option reference: https://devenv.sh/reference/options/
+
+For nixpkgs packages referenced from `packages`, use `+nix-query search <name>`
+(the `nixos` skill).
 
 ## Common options
 

@@ -43,7 +43,7 @@ Two shortcuts, both wrappers around this API:
 
 - nix-shell skill: `nix_shell.sh versions duckdb 1.5.3` prints the flake ref, the store
   path and whether cache.nixos.org has it; `nix_shell.sh versions duckdb` lists the history.
-- MCP server `nixos`: `nix_versions {"package":"duckdb","version":"1.5.3"}` returns the
+- `+nix-query versions duckdb --pkg-version 1.5.3` (the `nixos` skill) returns the
   commit and attribute only; `nix {"action":"cache","query":"duckdb","version":"1.5.3",
   "system":"aarch64-darwin"}` returns the cache status.
 
