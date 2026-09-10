@@ -237,22 +237,23 @@ and on macOS both are needed — `stdenvNoCC` does **not** remove the Apple SDK:
 {
   stdenv = pkgs.stdenvNoCC;   # drop the C compiler toolchain
   apple.sdk = null;           # macOS: also drop the pinned Apple SDK
-  # env.CGO_ENABLED = "0";    # Go only — it does NOT auto-disable cgo here
+  # env.CGO_ENABLED = "0";    # Go: required on Linux — see the reference
 
   languages.java.enable = true;
 }
 ```
 
-Measured on aarch64-darwin: `pkgs.stdenv` closes over 1298.5 MiB, `pkgs.stdenvNoCC` over
-93.5 MiB. Default yes for JVM (Java, Kotlin, Scala, Clojure), Go without cgo, .NET, Deno,
-Elm, Terraform/OpenTofu. Not for Rust, Ruby, Crystal, Swift or Python — their devenv
-language modules pull a C toolchain in themselves. Also drop it again whenever a
-*dependency* needs cc: JNI, GraalVM `native-image`, `node-gyp`, a pip sdist, a native gem.
+Measured closure of `pkgs.stdenv` against `pkgs.stdenvNoCC`: **1298.5 -> 93.5 MiB** on
+aarch64-darwin, **394.5 -> 78.0 MiB** on x86_64-linux. Default yes for JVM (Java, Kotlin,
+Scala, Clojure), Go without cgo, .NET, Deno, Elm, Terraform/OpenTofu. Not for Rust, Ruby,
+Crystal, Swift or Python — their devenv language modules pull a C toolchain in themselves.
+Also drop it again whenever a *dependency* needs cc: JNI, GraalVM `native-image`,
+`node-gyp`, a pip sdist, a native gem.
 
-Note `apple.sdk = null` buys size with reproducibility, and that on macOS `/usr/bin/cc`
-stays reachable either way — this removes the pinned compiler, not every compiler. For the
-per-language matrix, the measured CGO trap and the rest of the traps: read
-`references/nix-recipes.md`.
+Note `apple.sdk = null` buys size with reproducibility, and that macOS keeps `/usr/bin/cc`
+reachable either way while Linux has no system compiler at all — so a cgo build can pass on
+a Mac and fail in Linux CI. For the per-language matrix, the measured CGO trap and the rest
+of the traps: read `references/nix-recipes.md`.
 
 ## Documentation links
 
