@@ -205,29 +205,94 @@ let
               in !(type == "directory" && builtins.elem rel [ "jira" "bitbucket-pr" ]);
           };
 
-      # Single source of truth for which MCP servers exist and which
-      # package provides each one. Each agent (claude-code, opencode,
-      # codex) consumes this through a small mapping function below.
-      # `atlassian` is the only conditional entry — see atlassianOptions above.
+      # THE single source of truth. One entry per MCP server.
+      #
+      #   stdio   the +mcp-<name> writeShellApplication. It is what lands on
+      #           PATH, and it is the fallback transport for every agent that
+      #           cannot (yet) speak remote.
+      #
+      #   remote  present only where the SAME server is reachable as a
+      #           streamable HTTP MCP endpoint. Measured 2026-09-10 by POSTing
+      #           `initialize` (protocol 2025-06-18) at each one.
+      #     .url   the endpoint
+      #     .auth  null                               -- no credential needed
+      #            { kind = "bearer"; secret; var; }  -- Authorization: Bearer
+      #
+      # NOTE WHAT THIS SHAPE CANNOT EXPRESS: a credential VALUE. `secret` is a
+      # sops-nix FILE NAME under $XDG_CONFIG_HOME/sops-nix/secrets, read at
+      # runtime; `var` is the env var it is loaded into. There is no field a
+      # secret can be written into, so no renderer below can leak one into
+      # /nix/store even by mistake. That is the point of the shape.
       #
       # This attrset feeds FOUR sinks: the claude-code, opencode and codex
       # configs plus home.packages below. Dropping an entry here therefore also
-      # takes `+mcp-atlassian` off PATH, which is not what we want — to hide a
-      # server from ONE agent, use that agent's own list (claudeMcpExclude).
-      mcpServerPkgs = {
-        context7 = mcp-context7;
-        devenv = mcp-devenv;
-        javadocs = mcp-javadocs;
-        nixos = mcp-nixos;
-        travily = mcp-travily;
-        zai-search = mcp-zai-search;
-        zai-vision = mcp-zai-vision;
-        zai-web-reader = mcp-zai-web-reader;
-      } // lib.optionalAttrs atlassian { atlassian = mcp-atlassian; };
+      # takes `+mcp-<name>` off PATH, which is usually not what you want — to
+      # hide a server from ONE agent, use that agent's own list
+      # (claudeMcpExclude).
+      mcpServers = {
+        context7 = {
+          stdio = mcp-context7;
+          remote = {
+            url = "https://mcp.context7.com/mcp";
+            auth = { kind = "bearer"; secret = "context7_api_key"; var = "CONTEXT7_API_KEY"; };
+          };
+        };
+        devenv = { stdio = mcp-devenv; };
+        javadocs = {
+          stdio = mcp-javadocs;
+          remote = { url = "https://www.javadocs.dev/mcp"; auth = null; };
+        };
+        nixos = { stdio = mcp-nixos; };
+        travily = {
+          stdio = mcp-travily;
+          # kind = "bearer", NOT the ?tavilyApiKey= query parameter the stdio
+          # wrapper uses: measured 2026-09-10, tavily answers 200 to an
+          # Authorization: Bearer header and 401 to no auth at all. That is the
+          # difference between a key that can live in a headersHelper and a key
+          # that would have to be baked into a URL in /nix/store.
+          remote = {
+            url = "https://mcp.tavily.com/mcp/";
+            auth = { kind = "bearer"; secret = "travily_api_key"; var = "TRAVILY_API_KEY"; };
+          };
+        };
+        zai-search = { stdio = mcp-zai-search; };
+        zai-vision = { stdio = mcp-zai-vision; };
+        zai-web-reader = { stdio = mcp-zai-web-reader; };
+      } // lib.optionalAttrs atlassian { atlassian = { stdio = mcp-atlassian; }; };
 
       mcpCmd = name: pkg: "${pkg}/bin/+mcp-${name}";
 
-      # Servers CLAUDE does not get. Every other consumer of mcpServerPkgs is
+      # Claude runs this at CONNECTION time and parses stdout as a JSON object
+      # of headers.
+      #
+      # It reads the sops FILE rather than an env var, and that is load-bearing
+      # rather than stylistic: claude-code runs headersHelpers from plugin
+      # sources with scrubCredentialEnv, so an inherited $TRAVILY_API_KEY would
+      # arrive EMPTY and we would ship an empty Bearer token — a 401 with no
+      # visible cause. Do not "simplify" this to read the variable.
+      #
+      # jq, not printf: a key containing " or \\ would otherwise produce invalid
+      # JSON. require_secrets exiting non-zero is deliberate — claude then fails
+      # the connection loudly instead of connecting anonymously.
+      mkHeadersHelper = name: auth: (pkgs.writeShellApplication {
+        name = "+mcp-headers-${name}";
+        runtimeInputs = [ pkgs.jq ];
+        text = ''
+          ${loadSecretsLib}
+          load_from_secret ${auth.var} ${auth.secret}
+          require_secrets ${auth.var}
+          jq -n --arg v "''${${auth.var}}" '{ Authorization: ("Bearer " + $v) }'
+        '';
+      });
+
+      # Deliberately NOT in home.packages: these print credentials. Same reason
+      # agent-claude-api-key-helper is not on PATH.
+      headersHelpers = lib.mapAttrs (name: s: mkHeadersHelper name s.remote.auth)
+        (lib.filterAttrs (_: s: s ? remote && s.remote.auth != null) mcpServers);
+
+      headersHelperCmd = name: "${headersHelpers.${name}}/bin/+mcp-headers-${name}";
+
+      # Servers CLAUDE does not get. Every other consumer of mcpServers is
       # unaffected: opencode and codex keep them, and `+mcp-atlassian` stays on
       # PATH for use by hand. Empty this list to hand a server back.
       #
@@ -261,28 +326,82 @@ let
       # they are the same mechanism, not two switches.
       claudeMcpExclude = [ "atlassian" "devenv" ];
 
-      claudeMcpServers = lib.mapAttrs
-        (name: pkg: {
-          type = "stdio";
-          command = mcpCmd name pkg;
-          args = [ ];
-        })
-        (builtins.removeAttrs mcpServerPkgs claudeMcpExclude);
+      # ONE row per consuming agent. Everything agent-specific lives here and
+      # nowhere else, so adding antigravity later is this row plus one
+      # `renderFor` call at its config site — not a fifth copy of the mapping.
+      #
+      #   remote     may this agent use the remote transport at all? Flipping
+      #              one of these to true is the whole migration for that agent.
+      #   authKinds  which auth kinds it can carry. A server whose auth kind is
+      #              not listed falls back to stdio for that agent rather than
+      #              silently connecting unauthenticated.
+      #
+      # Transport support, each verified against the INSTALLED binary on
+      # 2026-09-10, not taken from documentation:
+      #   claude-code 2.1.258  type/url/headers/headersHelper — bundle grep,
+      #                        counted against control tokens first so a
+      #                        vacuous zero could not pass as an answer.
+      #   codex 0.147.0        url + bearer_token_env_var — `codex mcp add
+      #                        --url … --bearer-token-env-var …` into a
+      #                        throwaway CODEX_HOME, then read config.toml.
+      #   opencode 1.18.18     type="remote" + url + headers — but whether
+      #                        {file:…} substitutes INSIDE a nested header
+      #                        string is UNVERIFIED, so it stays on stdio.
+      authKind = r: if r.auth == null then "none" else r.auth.kind;
 
-      opencodeMcpServers = lib.mapAttrs
-        (name: pkg: {
-          type = "local";
-          command = [ (mcpCmd name pkg) ];
-          enabled = true;
-        })
-        mcpServerPkgs;
+      # Built from xdg.configHome, NOT from config.sops.secrets.<n>.path.
+      # Dereferencing sops.secrets is an EVAL error on a host that does not
+      # declare the secret (AGENTS.md, "Watch for Nix-side references"), and
+      # this module reaches both workstations.
+      secretFile = n: "${config.xdg.configHome}/sops-nix/secrets/${n}";
 
-      codexMcpServers = lib.mapAttrs
-        (name: pkg: {
-          command = mcpCmd name pkg;
-          args = [ ];
-        })
-        mcpServerPkgs;
+      agents = {
+        claude = {
+          remote = false;
+          exclude = claudeMcpExclude;
+          authKinds = [ "none" "bearer" ];
+          mkRemote = name: r: { type = "http"; url = r.url; }
+            // lib.optionalAttrs (r.auth != null) { headersHelper = headersHelperCmd name; };
+          mkStdio = name: pkg: { type = "stdio"; command = mcpCmd name pkg; args = [ ]; };
+        };
+
+        opencode = {
+          # false until the {file:…}-inside-a-header question above is settled.
+          # mkRemote is already written and already correct; this word is the
+          # whole switch.
+          remote = false;
+          exclude = [ ];
+          authKinds = [ "none" "bearer" ];
+          mkRemote = _: r: { type = "remote"; url = r.url; enabled = true; }
+            // lib.optionalAttrs (r.auth != null) {
+            headers.Authorization = "Bearer {file:${secretFile r.auth.secret}}";
+          };
+          mkStdio = name: pkg: { type = "local"; command = [ (mcpCmd name pkg) ]; enabled = true; };
+        };
+
+        codex = {
+          remote = false;
+          exclude = [ ];
+          authKinds = [ "none" "bearer" ];
+          mkRemote = _: r: { url = r.url; }
+            // lib.optionalAttrs (r.auth != null) { bearer_token_env_var = r.auth.var; };
+          mkStdio = name: pkg: { command = mcpCmd name pkg; args = [ ]; };
+        };
+      };
+
+      renderFor = agent:
+        let
+          visible = builtins.removeAttrs mcpServers agent.exclude;
+          useRemote = s: agent.remote && s ? remote
+            && builtins.elem (authKind s.remote) agent.authKinds;
+        in
+        lib.mapAttrs
+          (name: s: if useRemote s then agent.mkRemote name s.remote else agent.mkStdio name s.stdio)
+          visible;
+
+      claudeMcpServers = renderFor agents.claude;
+      opencodeMcpServers = renderFor agents.opencode;
+      codexMcpServers = renderFor agents.codex;
 
     in
     {
@@ -424,7 +543,12 @@ let
             ${managedSettings} "$HOME/.codex/config.toml"
         '';
 
-      home.packages = lib.attrValues mcpServerPkgs;
+      # Every entry that still has a stdio wrapper. These stay on PATH even for
+      # servers an agent reaches remotely: they are the fallback transport for
+      # agents not yet migrated, and the way to tell "the endpoint is broken"
+      # from "our config is broken" by hand.
+      home.packages = lib.attrValues
+        (lib.mapAttrs (_: s: s.stdio) (lib.filterAttrs (_: s: s ? stdio) mcpServers));
 
       home.file.".claude/statusline-command.sh" = {
         source = ./ai/_files/statusline-command.sh;
