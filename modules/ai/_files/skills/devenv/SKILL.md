@@ -9,7 +9,7 @@ description: >
   or when .envrc files reference `use devenv`. Trigger for ad-hoc Nix environments (`devenv -O`),
   polyrepo/monorepo setups, devenv profiles, devenv outputs, or devenv LSP/MCP. Even if the user just
   says "set up my project environment" or "I need MySQL and Java for local dev", consider this skill.
-allowed-tools: Read(references/*) mcp__devenv__search_options mcp__devenv__search_packages Bash(zsh *) Read
+allowed-tools: Read(references/*) mcp__devenv__search_options mcp__devenv__search_packages mcp__nixos__nix_versions mcp__nixos__nix mcp__plugin_claude-code-home-manager_nixos__nix_versions mcp__plugin_claude-code-home-manager_nixos__nix Bash(zsh *) Read
 ---
 
 # Devenv — Nix-Based Declarative Developer Environments
@@ -199,6 +199,33 @@ Common options: `packages`, `languages.<lang>.enable`, `services.<svc>.enable`,
 
 Full reference: https://devenv.sh/reference/options/
 
+## Pinning one package to a specific version
+
+Add a **second nixpkgs input pinned to the commit that ships the version** and take only
+that package from it. `nixpkgs` itself keeps following `devenv-nixpkgs/rolling`, so every
+other package stays current, and `devenv update` never moves an input whose URL carries
+a commit:
+
+```yaml
+# devenv.yaml
+inputs:
+  nixpkgs-duckdb:
+    url: github:NixOS/nixpkgs/35d3407a3816f3b341d8cf1d60abaf2b7b8166ac   # duckdb 1.5.3
+```
+
+```nix
+# devenv.nix
+{ pkgs, inputs, ... }:
+let pkgs-duckdb = import inputs.nixpkgs-duckdb { system = pkgs.stdenv.system; };
+in { packages = [ pkgs-duckdb.duckdb ]; }
+```
+
+Find the commit with the nix-shell skill (`nix_shell.sh versions duckdb 1.5.3`), the
+`nixos` MCP server (`nix_versions`) or nixhub.io, and confirm that cache.nixos.org holds
+the store path **before** pinning, otherwise Nix compiles it. Do not `overrideAttrs` the
+version instead: that always compiles locally. For the API, the `overlays` variant,
+measured costs and the traps: read `references/pinning.md`.
+
 ## Documentation links
 
 - Getting started: https://devenv.sh/getting-started/
@@ -215,6 +242,8 @@ Full reference: https://devenv.sh/reference/options/
 - Devcontainer: https://devenv.sh/integrations/codespaces-devcontainer/
 - Migration 1.x→2.0: https://devenv.sh/guides/migrating-to-2.0/
 - MCP: https://devenv.sh/mcp/
+- Pinning inputs: https://devenv.sh/pinning/
+- Packages from another nixpkgs: https://devenv.sh/recipes/nix/
 
 ## Skill references (load on demand)
 
@@ -229,3 +258,4 @@ Full reference: https://devenv.sh/reference/options/
 | `references/git-hooks.md` | Git hooks: built-in hooks, custom hooks, Claude Code auto-format, per-language recipes |
 | `references/flakes.md` | Nix Flakes: plain flake.nix, flake-parts, feature comparison, multiple shells |
 | `references/tasks.md` | Tasks: defining, dependencies, lifecycle events, agent-friendly patterns, allowlisting |
+| `references/pinning.md` | Pin one package to a version: nixhub/devbox API, second nixpkgs input, `overlays`, cache check, measured costs, traps |

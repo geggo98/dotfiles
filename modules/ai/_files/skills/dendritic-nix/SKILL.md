@@ -346,7 +346,9 @@ Result: Feature split into sub-files without changing the aspect interface.
 See [examples](references/examples.md) for detailed patterns
 including user modules, incremental features,
 deferredModule merge semantics,
-and community sharing through Dendrix.
+community sharing through Dendrix,
+and pinning one package to an older nixpkgs commit
+while everything else keeps following `nixpkgs`.
 
 See [foundations](references/foundations.md) for the underlying
 module system and `flake-parts` mechanics —

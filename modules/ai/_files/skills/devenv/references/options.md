@@ -20,6 +20,7 @@ Use `mcp__devenv__search_options` to search for options interactively.
 | `git-hooks.hooks.<hook>` | attrset | Git hook config |
 | `devcontainer.enable` | bool | Generate `.devcontainer.json` |
 | `scripts.<name>.exec` | string | Named script |
+| `overlays` | `[overlay]` | Nixpkgs overlays applied when evaluating devenv — e.g. swap in a pinned package, see `references/pinning.md` |
 
 ## Task options
 
