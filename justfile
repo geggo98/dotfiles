@@ -265,6 +265,77 @@ creds-check *args:
     set -euo pipefail
     python3 scripts/creds-check.py "$@"
 
+# Claude connects remote MCP servers LAZILY — on first tool use, not at session
+# start. That is what makes them free (no process per session), and it is also
+# why a dead endpoint or a stale key no longer announces itself in `/mcp`: it
+# surfaces mid-task instead. This recipe is the startup check that moved out.
+#
+# Do NOT "fix" the lazy connect with alwaysLoad in mcp-servers.nix: that also
+# opts the server out of tool-schema deferral, so every tool schema lands in
+# every turn's context.
+#
+# The server list is read from the BUILT config, not typed here, so this cannot
+# drift from what the agent actually uses. Credentials go to curl in a header
+# FILE — never `-H "Authorization: …"`, which would put the key in argv where
+# any process of this user can read it. That leak is exactly what the move to
+# headersHelper removed; do not reintroduce it in the checker.
+#
+# Probe every remote MCP server: endpoint reachable, credential accepted
+mcp-check:
+    #!/bin/zsh
+    set -euo pipefail
+    # matches:       "IOPlatformSerialNumber" = "FCX19GT9XR"   ->  $+{serial}
+    serial=$(ioreg -c IOPlatformExpertDevice -d 2 | perl -ne '
+        if (/"IOPlatformSerialNumber" \s* = \s* "(?<serial>[^"]+)"/x) {
+            print $+{serial};
+            last;
+        }')
+    [ -n "$serial" ] || { echo "could not determine hardware serial" >&2; exit 1; }
+    # $USER contains a dot on this host, and an unquoted dot splits the Nix
+    # attribute path — hence the escaped quotes around it.
+    attr=".#darwinConfigurations.${serial}.config.home-manager.users.\"${USER}\".programs.claude-code.mcpServers"
+    servers=$(nix eval --json "$attr")
+
+    rc=0
+    while IFS=$'\t' read -r name url helper; do
+        [ -n "$name" ] || continue
+        hdr=$(mktemp); chmod 600 "$hdr"
+        trap 'rm -f "$hdr"' EXIT
+        if [ -n "$helper" ]; then
+            # The helper prints {"Header":"value"}; turn it into curl -H @file lines.
+            if ! "$helper" | jq -r 'to_entries[] | "\(.key): \(.value)"' > "$hdr"; then
+                printf '%-14s HELPER FAILED — cannot produce credentials\n' "$name"
+                rm -f "$hdr"; rc=1; continue
+            fi
+        fi
+        # An ARRAY, not ${hdr:+-H @"$hdr"}: zsh does not word-split unquoted
+        # parameters, so that form reaches curl as the SINGLE argument
+        # `-H @/tmp/xxx` and the header is silently never sent. Measured — it
+        # produced a 401 for tavily and, worse, a false "ok" for context7,
+        # which also answers anonymously.
+        curlargs=(-H 'Content-Type: application/json'
+                  -H 'Accept: application/json, text/event-stream')
+        [ -s "$hdr" ] && curlargs+=(-H @"$hdr")
+        code=$(curl -s -o /tmp/mcp-check-body.$$ -w '%{http_code}' -m 20 -X POST "$url" \
+            "${curlargs[@]}" \
+            -d '{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}' || echo 000)
+        tools=$(perl -0777 -ne 'print scalar(() = /"name"\s*:/g)' /tmp/mcp-check-body.$$ 2>/dev/null || echo 0)
+        if [ "$code" = "200" ] && [ "${tools:-0}" -gt 0 ]; then
+            printf '%-14s ok    HTTP %s, %s tools\n' "$name" "$code" "$tools"
+        else
+            printf '%-14s FAIL  HTTP %s\n' "$name" "$code"
+            head -c 200 /tmp/mcp-check-body.$$ >&2; echo >&2
+            rc=1
+        fi
+        rm -f "$hdr" /tmp/mcp-check-body.$$
+    done < <(printf '%s' "$servers" | jq -r '
+        to_entries[]
+        | select(.value.type == "http")
+        | [.key, .value.url, (.value.headersHelper // "")]
+        | @tsv')
+
+    exit $rc
+
 # Escape hatch: update everything to branch HEAD, cooldown BYPASSED. For the case where
 # you have decided, deliberately and with the reason written down, that you need code
 # younger than the bar — a security fix that just landed, say. `just update` is the

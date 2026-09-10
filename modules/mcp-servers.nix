@@ -342,7 +342,18 @@ let
 
       agents = {
         claude = {
-          remote = false;
+          # Remote since 2026-09-10. This is the change that removes the MCP
+          # processes: claude-code connects http servers LAZILY, on first tool
+          # use, while stdio servers are started at session start. Measured
+          # before: 13 processes / 491 MiB per session, none of them computing
+          # (0,5-1,5 s CPU over 53 min) — `npx -y` keeps an `npm exec` node VM
+          # alive next to every server, so each one cost two processes.
+          #
+          # Do NOT set alwaysLoad to make failures surface at startup again: it
+          # also opts the server out of tool-schema deferral, putting every tool
+          # schema into each turn's context. `just mcp-check` is the startup
+          # check instead.
+          remote = true;
           exclude = claudeMcpExclude;
           authKinds = [ "none" "bearer" ];
           mkRemote = name: r: { type = "http"; url = r.url; }
