@@ -376,7 +376,12 @@ let
         };
 
         codex = {
-          remote = false;
+          # Remote since 2026-09-10. Codex carries the credential as
+          # `bearer_token_env_var`, i.e. the NAME of an env var it resolves
+          # itself — no literal in ~/.codex/config.toml, which the merge script
+          # writes 0644 and which nothing rewrites when sops rotates a key.
+          # The variables are loaded by the +agent-codex wrapper.
+          remote = true;
           exclude = [ ];
           authKinds = [ "none" "bearer" ];
           mkRemote = _: r: { url = r.url; }

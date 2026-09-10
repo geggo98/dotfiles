@@ -129,6 +129,15 @@
             ${loadSecretsLib}
             load_from_secret OPENAI_API_KEY openai_api_key
             require_secrets OPENAI_API_KEY
+            # Codex reaches its remote MCP servers with `bearer_token_env_var`,
+            # which resolves from ITS OWN process environment — see
+            # modules/mcp-servers.nix. Deliberately NOT require_secrets: most
+            # codex subcommands need no MCP at all, and a missing key should
+            # cost one server, not the whole CLI. Codex's default
+            # shell_environment_policy excludes *KEY*/*TOKEN*/*SECRET*, so
+            # these are not forwarded to the shell commands codex spawns.
+            load_from_secret CONTEXT7_API_KEY context7_api_key
+            load_from_secret TRAVILY_API_KEY travily_api_key
             if (( $# > 0 )) && [[ "''${1}" == "--acp" ]]; then
               shift
               exec codex-acp "$@"
