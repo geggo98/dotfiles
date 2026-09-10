@@ -21,6 +21,8 @@ Use `mcp__devenv__search_options` to search for options interactively.
 | `devcontainer.enable` | bool | Generate `.devcontainer.json` |
 | `scripts.<name>.exec` | string | Named script |
 | `overlays` | `[overlay]` | Nixpkgs overlays applied when evaluating devenv — e.g. swap in a pinned package, see `references/pinning.md` |
+| `stdenv` | package | Stdenv for the shell; `pkgs.stdenvNoCC` drops the C compiler toolchain — see `references/nix-recipes.md` |
+| `apple.sdk` | `package` or `null` | macOS SDK added to the shell (default `pkgs.apple-sdk`); `null` falls back to the system SDK |
 
 ## Task options
 

@@ -81,6 +81,8 @@ Notes:
 # devenv.nix
 { pkgs, ... }:
 {
+  stdenv = pkgs.stdenvNoCC;   # the JVM needs no C compiler
+
   languages.scala = {
     enable = true;
   };
@@ -94,6 +96,7 @@ Notes:
 - `languages.scala.enable` provides JDK + Scala compiler
 - Add `scala-cli` separately via packages (not part of the language module)
 - Use `mcp__devenv__search_options` with query `languages.scala` to discover all options
+- `stdenvNoCC` drops the C toolchain; remove it if a dependency needs JNI or Scala Native — see `references/nix-recipes.md`
 
 ### Java with Gradle
 
@@ -101,6 +104,8 @@ Notes:
 # devenv.nix
 { pkgs, ... }:
 {
+  stdenv = pkgs.stdenvNoCC;   # the JVM needs no C compiler
+
   languages.java = {
     enable = true;
     jdk.package = pkgs.jdk21;
@@ -115,6 +120,7 @@ Notes:
 - `gradle.enable` provides the Gradle wrapper; uses the project's `gradle-wrapper.properties` if present
 - For Maven instead: `languages.java.maven.enable = true;`
 - Specify JDK version explicitly via `jdk.package` (defaults to pkgs.jdk)
+- Drop `stdenvNoCC` if a dependency needs JNI, `node-gyp` or GraalVM `native-image` — see `references/nix-recipes.md`
 
 ## Agent-friendly tasks
 

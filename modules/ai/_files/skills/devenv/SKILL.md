@@ -226,6 +226,34 @@ the store path **before** pinning, otherwise Nix compiles it. Do not `overrideAt
 version instead: that always compiles locally. For the API, the `overlays` variant,
 measured costs and the traps: read `references/pinning.md`.
 
+## Dropping the C compiler toolchain
+
+A project that never compiles C does not need one in its shell. Two independent options,
+and on macOS both are needed — `stdenvNoCC` does **not** remove the Apple SDK:
+
+```nix
+# devenv.nix
+{ pkgs, ... }:
+{
+  stdenv = pkgs.stdenvNoCC;   # drop the C compiler toolchain
+  apple.sdk = null;           # macOS: also drop the pinned Apple SDK
+  # env.CGO_ENABLED = "0";    # Go only — it does NOT auto-disable cgo here
+
+  languages.java.enable = true;
+}
+```
+
+Measured on aarch64-darwin: `pkgs.stdenv` closes over 1298.5 MiB, `pkgs.stdenvNoCC` over
+93.5 MiB. Default yes for JVM (Java, Kotlin, Scala, Clojure), Go without cgo, .NET, Deno,
+Elm, Terraform/OpenTofu. Not for Rust, Ruby, Crystal, Swift or Python — their devenv
+language modules pull a C toolchain in themselves. Also drop it again whenever a
+*dependency* needs cc: JNI, GraalVM `native-image`, `node-gyp`, a pip sdist, a native gem.
+
+Note `apple.sdk = null` buys size with reproducibility, and that on macOS `/usr/bin/cc`
+stays reachable either way — this removes the pinned compiler, not every compiler. For the
+per-language matrix, the measured CGO trap and the rest of the traps: read
+`references/nix-recipes.md`.
+
 ## Documentation links
 
 - Getting started: https://devenv.sh/getting-started/
@@ -243,7 +271,9 @@ measured costs and the traps: read `references/pinning.md`.
 - Migration 1.x→2.0: https://devenv.sh/guides/migrating-to-2.0/
 - MCP: https://devenv.sh/mcp/
 - Pinning inputs: https://devenv.sh/pinning/
-- Packages from another nixpkgs: https://devenv.sh/recipes/nix/
+- Nix recipes (other nixpkgs, skipping the C toolchain): https://devenv.sh/recipes/nix/
+- macOS / Apple SDK: https://devenv.sh/recipes/macos/
+- Cross-platform config: https://devenv.sh/recipes/cross-platform/
 
 ## Skill references (load on demand)
 
@@ -259,3 +289,4 @@ measured costs and the traps: read `references/pinning.md`.
 | `references/flakes.md` | Nix Flakes: plain flake.nix, flake-parts, feature comparison, multiple shells |
 | `references/tasks.md` | Tasks: defining, dependencies, lifecycle events, agent-friendly patterns, allowlisting |
 | `references/pinning.md` | Pin one package to a version: nixhub/devbox API, second nixpkgs input, `overlays`, cache check, measured costs, traps |
+| `references/nix-recipes.md` | Dropping the C toolchain (`stdenvNoCC`), macOS `apple.sdk`, per-language matrix, measured CGO trap |
