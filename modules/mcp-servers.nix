@@ -80,7 +80,12 @@ let
           ${loadSecretsLib}
           load_from_secret CONTEXT7_API_KEY context7_api_key
           require_secrets CONTEXT7_API_KEY
-          exec npx -y "@upstash/context7-mcp@${npmVersions.context7-mcp}" --api-key "''${CONTEXT7_API_KEY}"
+          # No --api-key: the server falls back to the variable itself
+          # (dist/index.js in 3.2.1: `cliOptions.apiKey || process.env.CONTEXT7_API_KEY`),
+          # and an argument would put the key into `ps -Ao args` for every
+          # process of this user — the class the z.ai removal below describes.
+          # Argv-free since 2026-09-11.
+          exec npx -y "@upstash/context7-mcp@${npmVersions.context7-mcp}"
         '';
       });
 
@@ -145,7 +150,20 @@ let
           ${loadSecretsLib}
           load_from_secret TRAVILY_API_KEY travily_api_key
           require_secrets TRAVILY_API_KEY
-          exec npx -y "mcp-remote@${npmVersions.mcp-remote}" "https://mcp.tavily.com/mcp/?tavilyApiKey=''${TRAVILY_API_KEY}"
+          # The key travels as a header VARIABLE, never as a value in argv.
+          # mcp-remote expands `''${VAR}` inside header values from its own
+          # environment (0.1.38, dist/chunk-65X3S4HB.js:20851:
+          # `value.replace(/\$\{([^}]+)}/g, … process.env[envVarName])`), and
+          # load_from_secret has exported the variable already. Its log names
+          # the pattern, never the value. Until 2026-09-11 the key sat in the
+          # URL (`?tavilyApiKey=…`), which `ps -Ao args` printed to every
+          # process of this user — the class the z.ai removal below describes.
+          # What ps shows now is the literal `''${TRAVILY_API_KEY}`. The Bearer
+          # form is the one claude has used at this endpoint since 2026-09-10.
+          # SC2016 is the point: the single quotes keep bash from expanding it.
+          # shellcheck disable=SC2016
+          exec npx -y "mcp-remote@${npmVersions.mcp-remote}" "https://mcp.tavily.com/mcp/" \
+            --header 'Authorization: Bearer ''${TRAVILY_API_KEY}'
         '';
       });
 
