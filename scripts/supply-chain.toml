@@ -112,6 +112,28 @@ attr = "codex"
 npm = "@openai/codex"
 
 [[packages]]
+# Second entry for codex, same construction and same reason as "claude-code (pinned)"
+# above: since the codex pin (flake.nix, input llm-agents-codex-pin, added 2026-09-11)
+# the version on these machines is not the one the entry above dates. This one dates
+# what is installed.
+#
+# npm is only the dated PROXY here — llm-agents builds codex from the GitHub tag
+# rust-v<version>, npm never enters the chain. The npm `time` entry and the GitHub
+# release were published six minutes apart, so the date is the same either way.
+#
+# Expected output up to and including 2026-09-18: TOO NEW, exit 1 — the wanted state,
+# a deliberate cooldown undercut for GPT-6-Astra. Two dates again: this ENTRY goes
+# quiet once 0.153.4 turns 14 days old (published 2026-09-04 23:31Z, so from
+# 2026-09-18 23:31Z — in practice the first run on 2026-09-19), the PIN can go once
+# nixpkgs-llm-agents ships >= 0.153.4, i.e. once
+# `just update` lands on a rev from 2026-09-05 03:20Z or later — 2026-09-19 at the
+# earliest. The assertion in modules/mcp-servers.nix says when.
+name = "codex (pinned)"
+input = "llm-agents-codex-pin"
+attr = "codex"
+npm = "@openai/codex"
+
+[[packages]]
 name = "opencode"
 input = "nixpkgs-llm-agents"
 attr = "opencode"

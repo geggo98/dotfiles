@@ -200,9 +200,11 @@
     #
     # The blast radius is deliberately ONE package: the rev sits exactly on the
     # bump commit "claude-code: 2.1.257 -> 2.1.258" (2026-09-01 23:07Z), and only
-    # claude-code is taken from it. codex, opencode, gemini-cli, ccusage and the
-    # ACP shims stay on nixpkgs-llm-agents and stay soaked. Moving the main input
-    # instead would have pulled all of them out of the 14-day window for one CLI.
+    # claude-code is taken from it. opencode, gemini-cli, antigravity-cli, ccusage
+    # and the ACP shims stay on nixpkgs-llm-agents and stay soaked (codex has a
+    # pin of its own below, since 2026-09-11, on the same terms). Moving the main
+    # input instead would have pulled all of them out of the 14-day window for
+    # one CLI.
     #
     # No `inputs.nixpkgs.follows` on purpose, and it is load-bearing. Without it
     # the derivation is bit-identical to upstream CI's, and upstream publishes it
@@ -229,6 +231,65 @@
     # stale silently.
     llm-agents-claude-code-pin.url =
       "github:numtide/llm-agents.nix/393c7dba98cf1b27f35dfab3090f17588991439e";
+
+    # TEMPORARY PIN — codex 0.153.4, for GPT-6-Astra. Consumed by
+    # modules/mcp-servers.nix (programs.codex.package) and modules/ai-tools.nix
+    # (the codex-acp override). Same construction as the claude-code pin above;
+    # what differs is written here, what is shared is not repeated.
+    #
+    # Why: GPT-6-Astra shipped 2026-09-03. Codex gained it in 0.153.1 (API config
+    # only, hidden from the picker), and 0.153.4 is the release that shows it in
+    # the bundled model picker and makes it the default when no model is set
+    # (openai/codex#42874). nixpkgs-llm-agents under its 14-day bar sits on
+    # 0.150.1 and cannot reach 0.153.4 before 2026-09-19. (The API-only catalog
+    # from 0.153.1 would arrive a day earlier via 0.153.2 — llm-agents never
+    # shipped 0.153.1 — which is not enough: the picker and the default are the
+    # point.)
+    #
+    # THE COOLDOWN UNDERCUT. 0.153.4 was released on GitHub 2026-09-04 23:25Z
+    # (the tag object itself is from 22:41Z) and published to npm at 23:31Z —
+    # 6.5 days old against the 14-day bar when pinned on 2026-09-11. Deliberate, under AGENTS.md "Undercutting a cooldown: research
+    # first, fetch second"; everything below was read from metadata before any
+    # source or binary was fetched:
+    #
+    #   the rev is exactly the bump commit "codex: 0.153.3 -> 0.153.4"
+    #     (2026-09-05 03:20Z); nothing else moved in it
+    #   GitHub release rust-v0.153.4: published, not draft, not pre-release
+    #   npm @openai/codex 0.153.4: listed, no `deprecated`, attestations present,
+    #     `latest` already at 0.154.0 — superseded normally, not pulled
+    #   OSV: 0 advisories for @openai/codex 0.153.4
+    #   no reporting of a live campaign against @openai/codex or its maintainers;
+    #     the June 2026 codexui-android token theft was a THIRD-PARTY npm package
+    #     that read ~/.codex/auth.json, not this one
+    #   cache.numtide.com answers 200 for the aarch64-darwin narinfo of
+    #     /nix/store/lxfsi3w1c480slw93f96sn2f8ybmqbvw-codex-0.153.4
+    #
+    # BE PRECISE ABOUT THE CHAIN: llm-agents builds codex FROM SOURCE — fetchFromGitHub
+    # on the tag rust-v0.153.4 plus a cargoHash — so npm is not in the supply chain
+    # at all; the npm entry in scripts/supply-chain.toml is only a dated proxy for
+    # the release. The narinfo hit says upstream CI produced the same derivation
+    # and it is served from their cache, so this costs a download, not a Rust build.
+    #
+    # WHY 0.153.4 AND NOT 0.154.0. 0.154.0 (2026-09-09 22:40Z) is `latest` and
+    # about a day and a half old at the time of pinning; a version that IS
+    # `latest` cannot yet show the withdrawn signal, and it has a quarter of the
+    # soak. 0.153.4 is also exactly the requirement, not more.
+    #
+    # No `inputs.nixpkgs.follows`, for the reason given at the claude-code pin:
+    # the follows would move the out path off the one upstream caches.
+    #
+    # The blast radius is deliberately ONE package: only codex is taken from this
+    # rev. codex-acp stays on nixpkgs-llm-agents and is `override`n to use this
+    # codex, otherwise its baked-in CODEX_PATH would drag the old 0.150.1 into
+    # every generation as a second copy — the same leak the claude-agent-acp
+    # override in modules/ai-tools.nix exists for.
+    #
+    # REMOVE once nixpkgs-llm-agents itself ships >= 0.153.4 — at the earliest on
+    # 2026-09-19, when `just update` with the 14-day bar lands on a rev from
+    # 2026-09-05 03:20Z or later. An assertion in modules/mcp-servers.nix breaks
+    # the build at that point and spells out the steps.
+    llm-agents-codex-pin.url =
+      "github:numtide/llm-agents.nix/6d96d0808d372e8ec9b12a3ac4002d54b4175bd8";
 
     # agent-browser: source of truth for both the version and the skill bodies
     # consumed by modules/agent-browser.nix. That module reads the version from

@@ -8,6 +8,9 @@
       # flake.nix and the assertions in modules/mcp-servers.nix.
       claude-code-pinned =
         inputs.llm-agents-claude-code-pin.packages.${pkgs.stdenv.hostPlatform.system}.claude-code;
+      # TEMPORARY codex pin — see the llm-agents-codex-pin input in flake.nix.
+      codex-pinned =
+        inputs.llm-agents-codex-pin.packages.${pkgs.stdenv.hostPlatform.system}.codex;
       loadSecretsLib = builtins.readFile ./_files/shell/load-secrets.sh;
 
       # Bound rather than inlined below, because each is now consumed by a
@@ -124,7 +127,12 @@
         })
         (pkgs.writeShellApplication {
           name = "+agent-codex";
-          runtimeInputs = [ llm-agents.codex-acp ];
+          # Same closure argument as the claude-agent-acp override above:
+          # codex-acp bakes `CODEX_PATH ${lib.getExe codex}` into its wrapper, so
+          # without the override the main input's codex (0.150.1 at the time of
+          # the pin) would ride along as a second copy in every generation.
+          # `exec codex` below reaches the pinned one through the profile.
+          runtimeInputs = [ (llm-agents.codex-acp.override { codex = codex-pinned; }) ];
           text = ''
             ${loadSecretsLib}
             load_from_secret OPENAI_API_KEY openai_api_key

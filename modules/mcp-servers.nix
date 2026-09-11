@@ -4,7 +4,8 @@ let
 
   # TEMPORARY claude-code pin, 2.1.258 — the full reasoning is at the
   # llm-agents-claude-code-pin input in flake.nix. Only claude-code comes from
-  # that input; opencode and codex below stay on nixpkgs-llm-agents.
+  # that input; opencode below stays on nixpkgs-llm-agents (codex has a pin of
+  # its own, next block).
   #
   # The version string and the rev in flake.nix belong together; the first
   # assertion below is what keeps them together.
@@ -12,11 +13,21 @@ let
   claude-code-pinned = system:
     inputs.llm-agents-claude-code-pin.packages.${system}.claude-code;
 
+  # TEMPORARY codex pin, 0.153.4 — the reasoning is at the llm-agents-codex-pin
+  # input in flake.nix. Only codex comes from that input; codex-acp stays on
+  # nixpkgs-llm-agents and is overridden to use this codex in modules/ai-tools.nix.
+  # Same pairing rule as above: version string and rev belong together, the
+  # assertion below enforces it.
+  codex-pin-version = "0.153.4";
+  codex-pinned = system:
+    inputs.llm-agents-codex-pin.packages.${system}.codex;
+
   mkMcpServersModule = { config, pkgs, lib, ... }:
     let
       unstable = inputs.nixpkgs-unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system};
       llm-agents = llm-agents-pkgs pkgs.stdenv.hostPlatform.system;
       claude-code = claude-code-pinned pkgs.stdenv.hostPlatform.system;
+      codex = codex-pinned pkgs.stdenv.hostPlatform.system;
       dockerPkg = if builtins.hasAttr "docker-client" pkgs then pkgs."docker-client" else pkgs.docker;
 
       loadSecretsLib = builtins.readFile ./_files/shell/load-secrets.sh;
@@ -445,10 +456,12 @@ let
     {
       imports = [ atlassianOptions ];
 
-      # Both of these exist so the TEMPORARY claude-code pin (flake.nix, input
-      # llm-agents-claude-code-pin) cannot fail quietly. A pin that outlives its
-      # reason, or drifts away from the version everything documents, is the
-      # failure class this repo keeps paying for elsewhere.
+      # These exist so the TEMPORARY pins (flake.nix, inputs
+      # llm-agents-claude-code-pin and llm-agents-codex-pin) cannot fail quietly.
+      # A pin that outlives its reason, or drifts away from the version everything
+      # documents, is the failure class this repo keeps paying for elsewhere.
+      # One pair per pin: rev matches the documented version, and the pin
+      # removes itself once the main input catches up.
       assertions = [
         {
           # Tripwire against silent drift: bump the rev in flake.nix without
@@ -476,6 +489,31 @@ let
                  scripts/supply-chain.toml
               4. drop these two assertions and the claude-code-pin-version /
                  claude-code-pinned bindings at the top of this file
+          '';
+        }
+        {
+          assertion = codex.version == codex-pin-version;
+          message = ''
+            llm-agents-codex-pin ships codex ${codex.version}, expected
+            ${codex-pin-version}. The rev in flake.nix and this version string
+            belong together -- one was moved without the other.
+          '';
+        }
+        {
+          assertion = lib.versionOlder
+            llm-agents.codex.version
+            codex-pin-version;
+          message = ''
+            nixpkgs-llm-agents now ships codex ${llm-agents.codex.version} >=
+            ${codex-pin-version}, so the pin has served its purpose. Remove it:
+              1. drop the llm-agents-codex-pin input from flake.nix
+              2. set `package = llm-agents.codex;` again below
+              3. in modules/ai-tools.nix, drop the codex-pinned binding and the
+                 `.override { codex = … }` on codex-acp in +agent-codex
+              4. drop the "codex (pinned)" [[packages]] entry from
+                 scripts/supply-chain.toml
+              5. drop these two assertions and the codex-pin-version /
+                 codex-pinned bindings at the top of this file
           '';
         }
       ];
@@ -566,7 +604,7 @@ let
       # writable file by the `codexConfig` activation script below.
       programs.codex = {
         enable = true;
-        package = llm-agents.codex;
+        package = codex;
       };
 
       home.activation.codexConfig =
