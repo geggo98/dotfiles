@@ -142,9 +142,10 @@
     devenv.url = "github:cachix/devenv/v2.2.2";
 
     # https://github.com/numtide/llm-agents.nix
-    # Tracks main. Source for claude-code, codex, opencode, gemini-cli, ccusage
-    # and the ACP shims. Deliberately *not* the source for agent-browser — see
-    # modules/agent-browser.nix for why that one comes from release binaries.
+    # Tracks main. Source for claude-code, codex, opencode, gemini-cli,
+    # antigravity-cli, ccusage and the ACP shims. Deliberately *not* the source
+    # for agent-browser — see modules/agent-browser.nix for why that one comes
+    # from release binaries.
     nixpkgs-llm-agents.url = "github:numtide/llm-agents.nix";
 
     # TEMPORARY PIN — claude-code 2.1.258. Consumed by modules/mcp-servers.nix.

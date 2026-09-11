@@ -159,6 +159,37 @@
             exec gemini "$@"
           '';
         })
+        (pkgs.writeShellApplication {
+          name = "+agent-antigravity";
+          # Google's Antigravity CLI (`agy`), from llm-agents.nix. A prebuilt
+          # binary off Google Cloud Storage, not npm -- which is why it is dated
+          # against its GitHub releases in scripts/supply-chain.toml rather than
+          # a registry. Licence is `unfree` there; like every other closure it
+          # ends up in the R2 cache, see "The public cache mirrors system
+          # closures" in AGENTS.md.
+          runtimeInputs = [ llm-agents.antigravity-cli ];
+          text = ''
+            # The binary carries a statically linked self-updater that runs in
+            # the background on ordinary invocations. It cannot write into
+            # /nix/store and must not try; this is the documented opt-out
+            # (antigravity.google/docs/cli/troubleshooting). Should an old run
+            # ever leave the updater wedged, the lock it holds is
+            # ~/.gemini/antigravity-cli/updater/update.lock.
+            export AGY_CLI_DISABLE_AUTO_UPDATE=true
+            ${loadSecretsLib}
+            # Deliberately NOT require_secrets, unlike +agent-gemini: the default
+            # sign-in is the Google account held in the macOS keychain, and per
+            # the docs GEMINI_API_KEY is only consulted once
+            # ~/.gemini/antigravity-cli/settings.json carries
+            # `"modelProvider": "gemini"`. Loading it keeps that headless route
+            # one settings key away without forcing the key on interactive use.
+            # settings.json stays unmanaged -- agy writes to it.
+            load_from_secret GEMINI_API_KEY gemini_api_key
+            # No `--acp` branch: neither the docs, the changelog nor llm-agents
+            # know an ACP mode or an antigravity-acp shim (checked 2026-09-11).
+            exec agy "$@"
+          '';
+        })
       ];
 
       launchd.agents.ollama = {

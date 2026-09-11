@@ -36,8 +36,8 @@ A `justfile` provides safe, pre-approved commands that agents can run without us
 | `just update-preview` | Show what `just update` would do, without touching `flake.lock` |
 | `just update-input <input>` | Update a single flake input, still honouring the cooldown |
 | `just update-head` | Update everything to branch HEAD — **cooldown bypassed**, deliberate use only |
-| `just audit` | Cooldown + withdrawal audit: input ages, npm package ages, VS Code extensions |
-| `just audit-inputs` | Layer 1 only — fast, no npm or marketplace lookups |
+| `just audit` | Cooldown + withdrawal audit: input ages, tracked-package ages (npm / GitHub releases), VS Code extensions |
+| `just audit-inputs` | Layer 1 only — fast, no npm, GitHub-release or marketplace lookups |
 | `just audit-extensions [ids…]` | VS Code extensions: old enough **and** still published upstream |
 | `just creds-check` | Do the long-lived credentials still authenticate? (jira, confluence, bb) |
 | `just vscode-settings-check` | Has VS Code been trying to write the Nix-managed settings.json? |
@@ -2033,6 +2033,16 @@ Layer 2 exists because **an input's age bounds its contents only from below, and
 loosely.** Measured with `nixpkgs-llm-agents` at 5.2 days old, the npm packages inside
 it were claude-code 7.9 d, opencode 9.6 d, gemini-cli 10.8 d, ccusage 7.1 d — every one
 still inside the 14-day npm bar. Hence the per-input override raising that input to 14.
+
+Each `[[packages]]` entry names the one place it is dated against: `npm = "<package>"`,
+or `github = "<owner>/<repo>"` for a vendor binary that never touches a registry —
+`antigravity-cli` is a tarball off Google Cloud Storage, and its GitHub release tagged
+with the bare version is the only dated, listed record of what was published. A release
+that vanishes reads as WITHDRAWN, like an npm version missing from the `time` map; an
+entry naming neither — or both — is FAILED, never silently dated against whichever key
+the code looks at first. **Mind what the date proves**:
+for codex the npm entry is only a proxy — llm-agents builds it from the GitHub tag
+`rust-v<version>`, npm never enters that chain.
 
 Two traps in layer 3, both found by testing rather than reading docs:
 

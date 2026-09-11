@@ -63,6 +63,13 @@ inputs = []
 # claude-code's drv carries `src = /nix/store/…-claude` with empty inputDrvs, a bare
 # store path with no deriver and no URL. So this mapping is hand-maintained out of
 # necessity, not laziness. An entry that stops resolving is reported, never skipped.
+#
+# Each entry names ONE place to date it against: `npm = "<package>"` for anything that
+# is published there, `github = "<owner>/<repo>"` for a vendor binary that never
+# touches a registry (the GitHub release tagged with the bare version string is then
+# the record of what was published, and a release that vanishes reads as WITHDRAWN).
+# An entry naming neither — or both — is reported as FAILED rather than silently
+# dated against whichever key the code happens to look at first.
 
 [[packages]]
 name = "claude-code"
@@ -121,6 +128,17 @@ name = "ccusage"
 input = "nixpkgs-llm-agents"
 attr = "ccusage"
 npm = "ccusage"
+
+[[packages]]
+# Google's Antigravity CLI is a tarball off Google Cloud Storage, so there is no npm
+# entry to date it against; llm-agents' own updater reads a vendor manifest that
+# carries a version and a hash but no date. google-antigravity/antigravity-cli tags
+# every release with the bare version (`1.1.22`, no `v`), and that is what is looked
+# up here. Consumed by +agent-antigravity in modules/ai-tools.nix.
+name = "antigravity-cli"
+input = "nixpkgs-llm-agents"
+attr = "antigravity-cli"
+github = "google-antigravity/antigravity-cli"
 
 # ---------------------------------------------------------------------------------
 # Layer 3 — VS Code extensions.

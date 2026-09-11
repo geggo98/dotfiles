@@ -35,7 +35,8 @@ version that was pulled yesterday is still "old enough" tomorrow. So every layer
 checks presence as well as age:
 
     layer 1  FlakeHub `yanked_at`; a git rev that no longer resolves
-    layer 2  npm `unpublished` / a version missing from the registry's `time` map
+    layer 2  npm `unpublished` / a version missing from the registry's `time` map;
+             a GitHub release that 404s, or has become a draft or pre-release
     layer 3  a VS Code extension that 404s, is deprecated, or whose chosen version has
              been removed from `allVersions` while the extension itself survives
 
@@ -44,8 +45,9 @@ comfortably old enough at 15 days, and yanked on 2026-08-17.
 
 THREE LAYERS.
     1 flake inputs      github branches, github tags, FlakeHub semver ranges
-    2 tracked packages  a hand-kept list dated against npm; a flake input's age bounds
-                        its contents only from below, and loosely
+    2 tracked packages  a hand-kept list dated against npm or GitHub releases; a
+                        flake input's age bounds its contents only from below,
+                        and loosely
     3 VS Code extensions  Open VSX / MS Marketplace, cooldown + still-exists
 
 MECHANISM (layer 1). `nix flake lock --override-input <name> github:<o>/<r>/<rev>`
@@ -382,6 +384,42 @@ def npm_version_status(pkg: str, version: str) -> tuple[datetime | None, str | N
     if not raw:
         return None, (f"version {version} is absent from the npm registry — withdrawn, "
                       f"or never published under this name")
+    return iso(raw), None
+
+
+def github_release_status(repo: str, version: str, token: str | None
+                          ) -> tuple[datetime | None, str | None]:
+    """(published_at, problem) for the GitHub release tagged exactly `version`.
+
+    For packages that never touch a registry — antigravity-cli is a tarball off
+    Google Cloud Storage — the vendor's GitHub releases are the only dated, listed
+    record of what was published. The tag is the bare version string: no `v`
+    guessing, because a wrong guess would report a real release as withdrawn.
+
+    Same caveat as npm's `time` map: `published_at` is set by the party being
+    audited, so this dates the release, it does not vouch for it.
+    """
+    status, rel = http_json(f"{GITHUB_API}/repos/{repo}/releases/tags/"
+                            f"{urllib.parse.quote(version)}", token)
+    if status in (404, 410) or not isinstance(rel, dict):
+        # GitHub answers 404 alike for a missing release, a deleted repository and
+        # one turned private. One extra request, on the failure path only, keeps
+        # the diagnostic from sending someone to look for a tag in a repository
+        # that is not there.
+        repo_status, _ = http_json(f"{GITHUB_API}/repos/{repo}", token)
+        if repo_status in (404, 410):
+            return None, (f"repository github.com/{repo} no longer resolves "
+                          f"(HTTP {repo_status}) — deleted, renamed without redirect, "
+                          f"or private")
+        return None, (f"no release under tag {version} on github.com/{repo} — "
+                      f"withdrawn, or never published under this name")
+    if rel.get("draft"):
+        return None, f"release {version} on github.com/{repo} is a DRAFT"
+    if rel.get("prerelease"):
+        return None, f"release {version} on github.com/{repo} is flagged pre-release"
+    raw = rel.get("published_at")
+    if not raw:
+        return None, f"release {version} on github.com/{repo} carries no published_at"
     return iso(raw), None
 
 
@@ -851,8 +889,25 @@ def cmd_audit(args, manifest, now, token) -> int:
                              f"{p['input']}.{p['attr']} did not evaluate — renamed or "
                              f"removed upstream"))
                 continue
+            # Exactly one registry per entry, named explicitly. Neither is a
+            # manifest bug; BOTH is the subtler one — an if/elif would date it
+            # against whichever key comes first and never consult the other, so a
+            # withdrawn release on the ignored side would read as `ok`. Either
+            # shape surfaces as FAILED, not as a package that quietly stops being
+            # audited.
+            named = [k for k in ("npm", "github") if k in p]
+            if len(named) != 1:
+                rows.append((FAILED, name, f"{ver}: manifest entry must name exactly "
+                                           f"one of `npm` or `github` to date it "
+                                           f"against (found: {', '.join(named) or 'neither'})"))
+                continue
             try:
-                when, problem = npm_version_status(p["npm"], ver)
+                if named == ["npm"]:
+                    source = f"npm {p['npm']}"
+                    when, problem = npm_version_status(p["npm"], ver)
+                else:
+                    source = f"github {p['github']}"
+                    when, problem = github_release_status(p["github"], ver, token)
             except ToolError as e:
                 rows.append((FAILED, name, f"{ver}: {e}"))
                 continue
@@ -862,8 +917,8 @@ def cmd_audit(args, manifest, now, token) -> int:
             age = age_days(when, now)
             cat = OK if when <= cutoff else TOO_NEW
             rows.append((cat, name, f"{ver} ({when:%Y-%m-%d}, {age:.1f}d, "
-                                    f"{pkg_days}d bar) via npm {p['npm']}"))
-        c = render("layer 2 — tracked packages (dated against npm)", rows)
+                                    f"{pkg_days}d bar) via {source}"))
+        c = render("layer 2 — tracked packages (dated against their registry)", rows)
         findings += sum(c.get(k, 0) for k in FINDING_CATEGORIES)
         errors += c.get(FAILED, 0)
 
@@ -978,7 +1033,7 @@ def main() -> int:
 
     au = sub.add_parser("audit", help="report-only across all three layers")
     au.add_argument("--inputs-only", action="store_true",
-                    help="layer 1 only (no npm or marketplace lookups)")
+                    help="layer 1 only (no npm, GitHub-release or marketplace lookups)")
     au.add_argument("--extensions-only", action="store_true",
                     help="layer 3 only")
     au.add_argument("--extension", action="append", default=[], metavar="ID",

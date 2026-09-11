@@ -226,13 +226,13 @@ update-input input:
 # Three layers: flake inputs, tracked npm packages (an input's age bounds its contents
 # only from below, and loosely), and VS Code extensions. Exit 1 on findings, 2 on error.
 #
-# Audit every layer: input ages, npm package ages, extension ages + withdrawals
+# Audit every layer: input ages, tracked-package ages (npm / GitHub releases), extension ages + withdrawals
 audit *args:
     #!/bin/zsh
     set -euo pipefail
     python3 scripts/supply-chain.py audit "$@"
 
-# Fast path — layer 1 only, no npm or marketplace lookups
+# Fast path — layer 1 only, no npm, GitHub-release or marketplace lookups
 audit-inputs:
     #!/bin/zsh
     set -euo pipefail
