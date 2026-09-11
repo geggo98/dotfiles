@@ -300,30 +300,43 @@
     # Pinned by tag, not rev: github archive URLs are ambiguous when a repo has a
     # branch and tag of the same name (llm-agents hit this in 62903bf).
     #
-    # HELD AT 0.33.2 (2026-08-02), NOT 0.34.0 (2026-08-11) — deliberate. This is a tag
-    # pin, so `just update`'s cooldown does not move it and the choice is made here by
-    # hand. 0.34.0 is 11 days old and would clear the repo's 5-day bar; 0.33.2 is 20
-    # days old, is patch-level on the 0.33 minor already trusted here, and carries the
-    # identical asset names — so the bump needs only the four hashes below, no
-    # structural change to modules/agent-browser.nix.
+    # AT 0.36.0 (2026-09-01), NOT 0.37.x (both 2026-09-08). This is a tag pin, so
+    # `just update`'s cooldown does not move it and the bar is applied here by hand:
+    # `supply-chain.py release vercel-labs/agent-browser` picked 0.36.0 at 10.6 days
+    # and declined 0.37.0/0.37.1 at 3.1-3.8 days. Asset names are unchanged since
+    # 0.33.x, so the bump was the tag plus the four hashes in
+    # modules/agent-browser.nix, cross-checked against the sha256 digests GitHub
+    # records on the release assets.
     #
-    # THE OPEN ISSUE, and why bumping further would not address it:
-    # vercel-labs/agent-browser#1679 — the CLI auto-discovers a project-local
-    # `agent-browser.json` from its working directory and honours `executablePath` and
-    # `plugins` from it. A repository that merely *contains* such a file therefore runs
-    # code as you the moment you invoke agent-browser inside that checkout. The fix,
-    # PR #1702, is unmerged and is NOT in 0.34.0 either, so this is not a reason to
-    # prefer the newer tag. It is also not a regression: the same exposure exists at
+    # THE OPEN ISSUE, unchanged: vercel-labs/agent-browser#1679 — the CLI
+    # auto-discovers a project-local `agent-browser.json` from its working directory
+    # and honours `executablePath` and `plugins` from it. A repository that merely
+    # *contains* such a file therefore runs code as you the moment you invoke
+    # agent-browser inside that checkout. The fix, PR #1702, was still open on
+    # 2026-09-11 and is in none of 0.34.0..0.37.1; the exposure is the same as at
     # 0.33.0, which this repo shipped before.
     #   -> Until #1702 lands, do not run agent-browser with cwd inside an untrusted
     #      checkout. Re-read the issue before the next bump.
     #
-    # BEHAVIOUR CHANGE that arrives with this bump: 0.33.1 gave the daemon a default
-    # 1-hour idle timeout (#1605), after which it closes the browser and exits. Set
-    # AGENT_BROWSER_IDLE_TIMEOUT_MS=0 to restore the old always-persist daemon if a
-    # long-running skill workflow depends on it.
+    # WHAT ARRIVED between 0.33.2 and 0.36.0, in the order it matters here:
+    #   0.36.0  experimental WebMCP, ON by default for locally managed Chrome: a page
+    #           can advertise tools and the agent can invoke them. Left at the upstream
+    #           default on purpose — those tools run in the page's own JavaScript,
+    #           which the agent can already drive by clicking, so nothing new
+    #           executes on this machine. Opt out per call with `--no-webmcp` or
+    #           AGENT_BROWSER_NO_WEBMCP; skill-data gains `webmcp-gen`.
+    #   0.35.2  dashboard origin validation hardened against DNS rebinding and
+    #           cross-origin requests (#1738).
+    #   0.35.0  `--ca-cert` for a private proxy CA on Linux; skill-data gains
+    #           `protected-vercel-deployments`.
+    #   0.34.0  named sessions on a shared Chrome remember their CDP target; the
+    #           skill guidance now wants a named `--session` before the first
+    #           command (#1589).
+    #   0.33.1  the daemon has a default 1-hour idle timeout (#1605) after which it
+    #           closes the browser and exits; AGENT_BROWSER_IDLE_TIMEOUT_MS=0 restores
+    #           the always-persist daemon for a long-running skill workflow.
     agent-browser-src = {
-      url = "github:vercel-labs/agent-browser/v0.33.2";
+      url = "github:vercel-labs/agent-browser/v0.36.0";
       flake = false;
     };
 

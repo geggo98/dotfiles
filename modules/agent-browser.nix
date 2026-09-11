@@ -25,10 +25,10 @@ let
   # which in turn keeps the "never rewrite the binary" rule below intact on Linux.
   # Recompute after a version bump with `just agent-browser-hashes <version>`.
   assets = {
-    aarch64-darwin = { asset = "agent-browser-darwin-arm64"; hash = "sha256-y7UXkCvKo7emOE/Z8l3SdNo98rtqO6nD6FgG14ITwms="; };
-    x86_64-darwin = { asset = "agent-browser-darwin-x64"; hash = "sha256-prscEBJPYkqbH9Duyr93RHfNtxDjVS+4Q/H39mS48yY="; };
-    x86_64-linux = { asset = "agent-browser-linux-musl-x64"; hash = "sha256-yn5liRWP2Sdol+xmNnEFcEohX5Wx30xKuxkyRNAmDto="; };
-    aarch64-linux = { asset = "agent-browser-linux-musl-arm64"; hash = "sha256-7sfQon4yuWpPm5+90MBw0FjltOqhvWvh//6SYyHF0Bw="; };
+    aarch64-darwin = { asset = "agent-browser-darwin-arm64"; hash = "sha256-shBqs52wg457F3L38m92BRjeVtCQUxUMVvnd3xWvmX0="; };
+    x86_64-darwin = { asset = "agent-browser-darwin-x64"; hash = "sha256-RdmsBhp9cuYer/kFMm4uGTZfTa2xIULqLy122EaJxwg="; };
+    x86_64-linux = { asset = "agent-browser-linux-musl-x64"; hash = "sha256-ogzCpSAqSPWCA3KAPe281fVW3/eolCHxsPJhKWKxBxg="; };
+    aarch64-linux = { asset = "agent-browser-linux-musl-arm64"; hash = "sha256-HKfgA8nLGF8XT8geUaYJ2yfHfjv+AKDt/2Boj4zRT4g="; };
   };
 in
 {
