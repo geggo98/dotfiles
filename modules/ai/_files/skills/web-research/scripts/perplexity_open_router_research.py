@@ -2,7 +2,9 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#   "openai>=2.29.0",
+#   # <3: PyPI is at 3.x since mid-2026; the major is a separate migration with
+#   #   real calls, not a re-lock. See the commit that added the ceiling.
+#   "openai>=2.29.0,<3",
 # ]
 # [tool.uv]
 # exclude-newer = "30 days"

@@ -2,7 +2,9 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#   "google-genai>=1.68.0",
+#   # <2: PyPI is at 2.x since mid-2026; the major is a separate migration with
+#   #   real calls, not a re-lock. See the commit that added the ceiling.
+#   "google-genai>=1.68.0,<2",
 #   "requests>=2.31.0",
 # ]
 # [tool.uv]

@@ -2,17 +2,24 @@
 # /// script
 # requires-python = ">=3.12"
 # dependencies = [
-#   "browser-use[cli]>=0.12.7",
+#   # >=0.12.7: the CVE-driven floor (litellm supply chain gone in 0.12.5;
+#   #   pillow/pypdf/aiohttp transitive fixes in 0.12.7).
+#   # <0.13: 0.13.3 (2026-07-01) removed `browser_use.skill_cli`, the module this
+#   #   script runs and whose subcommands SKILL.md is written against, in favour
+#   #   of a Browser-Harness CLI ("The old preset subcommands are gone"). Moving
+#   #   past 0.13 is a rewrite of the skill, not a re-lock. The ceiling belongs
+#   #   here, in the spec, where a re-lock can see it.
+#   "browser-use[cli]>=0.12.7,<0.13",
 # ]
 # [tool.uv]
 # exclude-newer = "30 days"
-# # Per-package cooldown overrides for CVE-driven bump to browser-use >=0.12.7
-# # (litellm supply-chain removed in 0.12.5; pillow/pypdf/aiohttp transitive CVE
-# # fixes land in 0.12.7). The date is set to "yesterday at bump time" — that's
-# # enough to let the lock pick up 0.12.7 today, while ensuring future re-locks
-# # don't silently bypass the global 30-day cooldown for these packages. Bump
-# # the date again the next time a CVE forces an early upgrade.
-# exclude-newer-package = { "browser-use" = "2026-05-21", "pillow" = "2026-05-21", "pypdf" = "2026-05-21", "aiohttp" = "2026-05-21" }
+# # No exclude-newer-package overrides. The ones that undercut the cooldown for
+# # the 0.12.7 bump (dated 2026-05-21) were CEILINGS, not floors: they kept
+# # browser-use/pillow/pypdf/aiohttp at May 2026 on every later re-lock, and with
+# # them the 0.12.8 fix that restricts the skill daemon's unix socket to its
+# # owner (browser-use/browser-use#4870). If a CVE ever forces an undercut
+# # again, add the override with that day's date and REMOVE it at the next
+# # re-lock, once the global 30-day bar covers the version on its own.
 # ///
 
 # Hint: Lock dependencies with `uv lock --script ...`
