@@ -1,4 +1,4 @@
-# Global agent rules: one source, three agents.
+# Global agent rules: one source, four agents (five, counting gemini-cli).
 #
 # These rules describe the MACHINE, not this repository — the difftastic trap
 # below is set by modules/git.nix into ~/.config/git/config and therefore
@@ -21,11 +21,13 @@
 # (rulesDir) and codex (the merged rules block), which receive rule files and
 # nothing else.
 #
-# Each agent reads a different file, so the same text is delivered three ways:
+# Each agent reads a different file, so the same text is delivered four ways:
 #
 #   claude-code  ~/.claude/rules/*.md      loaded automatically in every project
 #   opencode     ~/.config/opencode/AGENTS.md   via programs.opencode.context
 #   codex        ~/.codex/AGENTS.md        merged block, file stays writable
+#   antigravity  ~/.gemini/GEMINI.md       merged block; gemini-cli reads the
+#                                          same file, so it gets the rules too
 { ... }:
 let
   mkAgentRulesModule = { config, pkgs, lib, ... }:
@@ -112,8 +114,8 @@ let
           }
           {
             assertion = nonMarkdown == [ ];
-            message = "my.ai.extraRules: only .md files are delivered to all three"
-              + " agents; got: "
+            message = "my.ai.extraRules: only .md files are delivered to every"
+              + " agent; got: "
               + lib.concatMapStringsSep ", " (f: f.name) nonMarkdown;
           }
         ];
@@ -137,8 +139,21 @@ let
         programs.opencode.context = builtins.readFile (root + "/AGENTS.md") + "\n\n" + rulesText;
 
         home.activation.codexRules = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
-          run ${pkgs.zsh}/bin/zsh ${./ai/_files/codex-merge-rules} \
+          run ${pkgs.zsh}/bin/zsh ${./ai/_files/merge-rules-block} \
             ${rulesFile} "$HOME/.codex/AGENTS.md"
+        '';
+
+        # antigravity (agy) and gemini-cli share this file. The agy migration
+        # guide names it as the global rules file the CLI "automatically
+        # consults"; gemini-cli reads it as its global context and appends
+        # `/memory add` entries below the block, which is why it must stay a
+        # regular file — same reasoning as codex above. agy's own skills and
+        # MCP servers live in a plugin under ~/.gemini/config/ instead
+        # (modules/mcp-servers.nix); a rules/AGENTS.md inside that plugin
+        # would be the fallback if agy ever stopped reading this file.
+        home.activation.geminiRules = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+          run ${pkgs.zsh}/bin/zsh ${./ai/_files/merge-rules-block} \
+            ${rulesFile} "$HOME/.gemini/GEMINI.md"
         '';
       };
     };

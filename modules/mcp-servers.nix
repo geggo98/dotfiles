@@ -256,11 +256,11 @@ let
       # secret can be written into, so no renderer below can leak one into
       # /nix/store even by mistake. That is the point of the shape.
       #
-      # This attrset feeds FOUR sinks: the claude-code, opencode and codex
-      # configs plus home.packages below. Dropping an entry here therefore also
-      # takes `+mcp-<name>` off PATH, which is usually not what you want — to
-      # hide a server from ONE agent, use that agent's own list
-      # (claudeMcpExclude).
+      # This attrset feeds FIVE sinks: the claude-code, opencode, codex and
+      # antigravity configs plus home.packages below. Dropping an entry here
+      # therefore also takes `+mcp-<name>` off PATH, which is usually not what
+      # you want — to hide a server from ONE agent, use that agent's own list
+      # (claudeMcpExclude, which antigravity's row shares).
       mcpServers = {
         context7 = {
           stdio = mcp-context7;
@@ -343,8 +343,9 @@ let
 
       headersHelperCmd = name: "${headersHelpers.${name}}/bin/+mcp-headers-${name}";
 
-      # Servers CLAUDE does not get. Every other consumer of mcpServers is
-      # unaffected: opencode and codex keep them, and `+mcp-atlassian` stays on
+      # Servers CLAUDE does not get — and, since 2026-09-11, antigravity
+      # neither, for the same two reasons (both start stdio servers per
+      # session). opencode and codex keep them, and `+mcp-atlassian` stays on
       # PATH for use by hand. Empty this list to hand a server back.
       #
       # atlassian, since 2026-08-25: the `jira` and `bitbucket-pr` skills cover
@@ -369,7 +370,8 @@ let
       #
       # To hand it back when the issue closes: delete "devenv" below. Nothing
       # else changes — opencode and codex keep the server either way, and
-      # `+mcp-devenv` stays on PATH.
+      # `+mcp-devenv` stays on PATH. antigravity's row reuses this list, so it
+      # gets the server back at the same moment.
       #
       # home-manager renders programs.claude-code.mcpServers into a generated
       # plugin (`claude-code-home-manager`, passed as --plugin-dir), so this
@@ -378,8 +380,10 @@ let
       claudeMcpExclude = [ "atlassian" "devenv" ];
 
       # ONE row per consuming agent. Everything agent-specific lives here and
-      # nowhere else, so adding antigravity later is this row plus one
-      # `renderFor` call at its config site — not a fifth copy of the mapping.
+      # nowhere else, so adding an agent is its row plus one `renderFor` call
+      # at its config site — not a fifth copy of the mapping. antigravity
+      # (2026-09-11) is the worked example: the row below, and three
+      # home.file entries at the bottom of this module.
       #
       #   remote     may this agent use the remote transport at all? Flipping
       #              one of these to true is the whole migration for that agent.
@@ -454,6 +458,31 @@ let
             // lib.optionalAttrs (r.auth != null) { bearer_token_env_var = r.auth.var; };
           mkStdio = name: pkg: { command = mcpCmd name pkg; args = [ ]; };
         };
+
+        antigravity = {
+          # Remote only for servers WITHOUT a credential. Measured 2026-09-11
+          # against agy 1.1.22 in a scratch HOME — `agy mcp add --header
+          # "Authorization: Bearer TOKEN" api https://…` and `agy mcp add
+          # --env FOO=bar fs -- npx …` — and read back from the file it wrote:
+          # a remote server is `serverUrl` + `headers` with the token as a
+          # LITERAL, a stdio one is `command`/`args`/`env`, both carry
+          # `disabled`. No headers helper, no env-var NAME, no `''${VAR}`
+          # interpolation anywhere in the binary. A literal would land in
+          # /nix/store, so "bearer" is absent from authKinds and renderFor
+          # routes context7 and travily through their stdio wrappers, which
+          # read the sops file per start — the opencode shape. The price is
+          # one node process per server and session; the alternative, a file
+          # rendered at activation from the sops files, is a second plaintext
+          # copy that goes stale on rotation.
+          #
+          # `url`/`httpUrl` are documented as unsupported legacy keys; only
+          # `serverUrl` is read.
+          remote = true;
+          exclude = claudeMcpExclude;
+          authKinds = [ "none" ];
+          mkRemote = _: r: { serverUrl = r.url; };
+          mkStdio = name: pkg: { command = mcpCmd name pkg; args = [ ]; };
+        };
       };
 
       renderFor = agent:
@@ -469,6 +498,7 @@ let
       claudeMcpServers = renderFor agents.claude;
       opencodeMcpServers = renderFor agents.opencode;
       codexMcpServers = renderFor agents.codex;
+      antigravityMcpServers = renderFor agents.antigravity;
 
     in
     {
@@ -649,6 +679,37 @@ let
       };
 
       home.file.".agents/skills" = {
+        source = skillsDir;
+        recursive = true;
+      };
+
+      # Antigravity (agy): skills and MCP servers as ONE plugin under its
+      # global customization root. Verified against the installed 1.1.22 on
+      # 2026-09-11 — the built-in `agy-customizations` skill and the binary's
+      # own strings say `~/.gemini/config/`; the online docs still name
+      # `~/.gemini/antigravity-cli/{skills,plugins}/`, which is the layout
+      # BEFORE the migration agy logged on first start here
+      # (`migrate.go: … from AppDataDir ~/.gemini/antigravity-cli`).
+      #
+      # A plugin rather than the root's own `skills/` + `mcp_config.json`:
+      # the root's mcp_config.json is what `agy mcp add` writes, so managing it
+      # would mean a merge script like codex-merge-config.py; the plugin is one
+      # namespace of store symlinks, `agy plugin disable nix-darwin` is the off
+      # switch and `agy plugin validate <dir>` the check (a scratch plugin with
+      # symlinked SKILL.md files validated: "skills: 2 processed, mcpServers:
+      # 2 processed"). Note `agy mcp list` shows only the root file's servers;
+      # plugin servers appear in the TUI's /mcp.
+      #
+      # Rules are NOT here: they go to ~/.gemini/GEMINI.md via agent-rules.nix,
+      # the file gemini-cli reads too. skillsDir already carries the atlassian
+      # filter, so the two hosts get the same set as claude.
+      home.file.".gemini/config/plugins/nix-darwin/plugin.json".text =
+        builtins.toJSON { name = "nix-darwin"; };
+      home.file.".gemini/config/plugins/nix-darwin/mcp_config.json".source =
+        (pkgs.formats.json { }).generate "antigravity-mcp-config.json" {
+          mcpServers = antigravityMcpServers;
+        };
+      home.file.".gemini/config/plugins/nix-darwin/skills" = {
         source = skillsDir;
         recursive = true;
       };

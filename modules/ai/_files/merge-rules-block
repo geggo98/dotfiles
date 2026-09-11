@@ -1,17 +1,23 @@
 #!/bin/zsh
-# Maintain a managed rules block inside ~/.codex/AGENTS.md.
+# Maintain a managed rules block inside a writable agent instructions file.
 #
-# Codex has no home-manager option for its global instructions, and the file
-# already carries hand-written content. Symlinking it into the store would
-# destroy that, so the block is merged in between markers instead — the same
-# reasoning as codex-merge-config.py next door.
+# Two callers, both in modules/agent-rules.nix:
+#   codex                     ~/.codex/AGENTS.md
+#   antigravity + gemini-cli  ~/.gemini/GEMINI.md
 #
-# usage: codex-merge-rules <rules-file> <target>
+# Neither agent has a home-manager option for its global instructions, and
+# both files carry content the agent writes itself (hand-written notes,
+# gemini-cli's `/memory add` appending "## Gemini Added Memories"). Symlinking
+# them into the store would destroy that, so the block is merged in between
+# markers instead — the same reasoning as codex-merge-config.py next door.
+# Everything outside the markers survives byte for byte.
+#
+# usage: merge-rules-block <rules-file> <target>
 set -euo pipefail
 
 rules=${1:?rules file missing}
 target=${2:?target missing}
-[[ -s $rules ]] || { print -u2 "codex-merge-rules: $rules is empty or missing"; exit 1 }
+[[ -s $rules ]] || { print -u2 "merge-rules-block: $rules is empty or missing"; exit 1 }
 
 export MARK_BEGIN='<!-- BEGIN nix-darwin managed rules -- do not edit between the markers -->'
 export MARK_END='<!-- END nix-darwin managed rules -->'

@@ -192,6 +192,14 @@
             # `"modelProvider": "gemini"`. Loading it keeps that headless route
             # one settings key away without forcing the key on interactive use.
             # settings.json stays unmanaged -- agy writes to it.
+            #
+            # What IS managed lives elsewhere, at agy's global customization
+            # root ~/.gemini/config/ (not ~/.gemini/antigravity-cli/, which is
+            # the pre-migration layout the online docs still show): the skills
+            # and MCP servers as the plugin ~/.gemini/config/plugins/nix-darwin
+            # (modules/mcp-servers.nix), the global rules as a managed block
+            # in ~/.gemini/GEMINI.md (modules/agent-rules.nix), which
+            # +agent-gemini reads as well.
             load_from_secret GEMINI_API_KEY gemini_api_key
             # No `--acp` branch: neither the docs, the changelog nor llm-agents
             # know an ACP mode or an antigravity-acp shim (checked 2026-09-11).

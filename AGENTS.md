@@ -811,8 +811,8 @@ Each module defines a single aspect across all relevant configuration classes (d
 | `git.nix` | Git configuration via `flake.modules.homeManager.git` |
 | `neovim.nix` | Neovim (nvf) in two variants: `homeManager.neovim` (workstation, every `languages.*` enabled) and `homeManager.neovim-server` (same editor, no language toolchains). See "Neovim: why there are two variants" |
 | `packages.nix` | Common packages via `flake.modules.homeManager.packages` |
-| `agent-rules.nix` | Global agent rules from one source to claude-code, opencode and codex (`~/.claude/rules/`, `~/.config/opencode/AGENTS.md`, `~/.codex/AGENTS.md`). Files in `modules/ai/_files/rules/` ship to every host; `my.ai.extraRules` lets an aspect module contribute one that ships only where that aspect is imported — see `modules/vault.nix`. That gating covers the rules layer only: opencode also receives this repo's `AGENTS.md` on every host, so repo documentation is not host-scoped |
-| `mcp-servers.nix` | MCP servers + the deployed skill tree via `flake.modules.homeManager.mcp-servers`. One `mcpServers` declaration per server (remote endpoint and/or stdio wrapper), rendered per agent by `renderFor`; remote servers cost no process because claude-code connects them lazily. Also builds `+nix-query`, the CLI that replaced the `nixos` server. `my.ai.atlassian.enable` gates the Atlassian server and the `jira`/`bitbucket-pr` skills onto the work host; `claudeMcpExclude` additionally hides a server from **Claude only** (currently `atlassian`, replaced there by the skills) |
+| `agent-rules.nix` | Global agent rules from one source to claude-code, opencode, codex and antigravity (`~/.claude/rules/`, `~/.config/opencode/AGENTS.md`, `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md` — the last one is read by gemini-cli as well). Files in `modules/ai/_files/rules/` ship to every host; `my.ai.extraRules` lets an aspect module contribute one that ships only where that aspect is imported — see `modules/vault.nix`. That gating covers the rules layer only: opencode also receives this repo's `AGENTS.md` on every host, so repo documentation is not host-scoped |
+| `mcp-servers.nix` | MCP servers + the deployed skill tree via `flake.modules.homeManager.mcp-servers`. One `mcpServers` declaration per server (remote endpoint and/or stdio wrapper), rendered per agent by `renderFor`; remote servers cost no process because claude-code connects them lazily. Also builds `+nix-query`, the CLI that replaced the `nixos` server. `my.ai.atlassian.enable` gates the Atlassian server and the `jira`/`bitbucket-pr` skills onto the work host; `claudeMcpExclude` additionally hides a server from **claude-code and antigravity only** (currently `atlassian`, replaced there by the skills, and `devenv`). Antigravity gets skills and servers as the plugin `~/.gemini/config/plugins/nix-darwin` — see "Antigravity CLI" under "Adding an MCP Server" |
 | `secrets.nix` | SOPS secret declarations and per-host secret merging (**home-manager only** — servers use `nixos-secrets.nix`) |
 | `nixos-wiring.nix` | Defines `configurations.nixos` (module + `deployTarget`) and wires it to `flake.nixosConfigurations` and `flake.deployTargets` |
 | `nixos-base.nix` | Baseline for every NixOS host: sshd, root's authorized keys, the lockout assertions, serial getty, nix settings, GC |
@@ -1618,8 +1618,9 @@ grep -rn --include='*.nix' 'sops\.secrets\.' modules/
 **Prefer a remote endpoint to a local process.** `mcpServers` in
 `modules/mcp-servers.nix` declares each server as `{ stdio = <pkg>; remote = {
 url; auth; }; }` — either half may be absent — and a per-agent `agents` table
-plus one `renderFor` turns that into each agent's own shape. Adding an agent
-(antigravity, say) is one row there, not a fifth copy of the mapping.
+plus one `renderFor` turns that into each agent's own shape. Adding an agent is
+one row there, not a fifth copy of the mapping — antigravity (2026-09-11) is the
+fourth row and the worked example, see below.
 
 The reason the distinction matters is measured, 2026-09-10: **claude-code
 connects remote HTTP servers lazily, on first tool use, while stdio servers are
@@ -1641,6 +1642,40 @@ plugin-sourced helpers with `scrubCredentialEnv` and an inherited variable
 arrives empty), codex via `bearer_token_env_var` loaded by `+agent-codex`.
 Passing a key as a command-line argument is what this replaced: a plain
 `ps -Ao args` printed three of them in clear text to every process of this user.
+The stdio wrappers are held to the same bar since 2026-09-11: `+mcp-context7`
+lets the server fall back to `CONTEXT7_API_KEY` from its environment, and
+`+mcp-travily` passes `--header 'Authorization: Bearer ${TRAVILY_API_KEY}'` in
+single quotes, which mcp-remote 0.1.38 expands itself — `ps` shows the pattern,
+never the value. Measured on both by a real tool call with the probe's own
+process tree checked against the secret. Two things that measurement also
+turned up: **restrict such a check to your own process tree and never print
+argv lines** — other sessions' servers run on the same machine, and their
+command lines are exactly what must not land in a transcript — and MCP server
+processes from older sessions outlive the session that started them, so a
+wrapper fix only protects new starts.
+
+**Antigravity CLI (`agy`) reads a different layout, and the online docs lag
+the binary.** Verified against the installed 1.1.22 on 2026-09-11: the global
+customization root is `~/.gemini/config/` (the built-in `agy-customizations`
+skill and the binary's strings both say so; `/docs/cli/plugins` still names
+`~/.gemini/antigravity-cli/{skills,plugins}/`, the pre-migration layout that
+agy logged migrating away from on first start here). Skills and MCP servers go
+in as ONE plugin, `~/.gemini/config/plugins/nix-darwin/{plugin.json,skills/,mcp_config.json}`,
+three `home.file` entries at the bottom of `modules/mcp-servers.nix`. Rules
+go to `~/.gemini/GEMINI.md` as a managed block (`modules/agent-rules.nix`),
+because gemini-cli appends `/memory add` entries to the same file. Its
+`mcp_config.json` schema, read back from what `agy mcp add` wrote in a scratch
+HOME: a remote server is `serverUrl` + `headers` with the token as a
+**literal** (`url`/`httpUrl` are documented as unsupported), a stdio one is
+`command`/`args`/`env` — no headers helper, no env-var name, no `${VAR}`
+interpolation. A literal would land in the store, so the antigravity row has
+`authKinds = [ "none" ]`: javadocs is remote, context7 and travily go through
+their stdio wrappers, exactly opencode's shape. `agy plugin validate <dir>`
+checks a plugin directory (store symlinks are fine — a scratch plugin with
+symlinked `SKILL.md` files validated); `agy mcp list` shows only the root
+file's servers, plugin servers appear in the TUI's `/mcp`; `agy plugin disable
+nix-darwin` is the off switch. `~/.gemini/antigravity-cli/settings.json` stays
+unmanaged — agy writes to it.
 
 `just mcp-check` probes every remote server with its real credential. It is the
 startup check that lazy connect removes. Do **not** reach for `alwaysLoad`
@@ -1658,8 +1693,8 @@ code (`mcp_nixos.server.nix.fn`) and reimplements none of it. See
    supports it, `stdio` (a `writeShellApplication`) otherwise
 2. Ensure secret loading logic uses `$XDG_CONFIG_HOME/sops-nix/secrets`
 3. If it needs a credential only one host declares, gate it rather than shipping a
-   server that cannot start. `mcpServers` feeds four sinks — the claude-code,
-   opencode and codex configs plus `home.packages` — so a second module cannot
+   server that cannot start. `mcpServers` feeds five sinks — the claude-code,
+   opencode, codex and antigravity configs plus `home.packages` — so a second module cannot
    simply merge into it: the codex path bakes its TOML in one activation script.
    `atlassian` is the worked example: an option declared by a small imported
    module (`imports` may sit beside bare config attributes, `options` may not),
@@ -1672,10 +1707,11 @@ code (`mcp_nixos.server.nix.fn`) and reimplements none of it. See
    default is off.
 
    **That option is the HOST gate, not a per-agent one.** `mcpServers` feeds
-   all three agents *and* `home.packages`, so removing an entry there also takes
+   all four agents *and* `home.packages`, so removing an entry there also takes
    the `+mcp-<name>` wrapper off `PATH`. To hide a server from a single agent,
    subtract it from that agent's own list instead — `claudeMcpExclude` does
-   exactly that for claude-code. And note home-manager renders
+   exactly that for claude-code, and antigravity's row reuses the same list.
+   And note home-manager renders
    `programs.claude-code.mcpServers` into a *generated plugin*
    (`claude-code-home-manager`, handed to the wrapper as `--plugin-dir`), so
    that one list governs both the MCP entry and the plugin-provided tools:
