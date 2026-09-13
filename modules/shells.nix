@@ -150,6 +150,7 @@
         };
       };
       shellAbbrs = {
+        "+vimtutor" = "nvim +Tutor";
         # forgit abbreviations
         "+git-add-interactive" = "git forgit add";
         "+git-checkout-branch" = "git forgit checkout_branch";

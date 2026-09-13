@@ -73,8 +73,8 @@ let
 
       settings = {
         vim = {
-          viAlias = true;
-          vimAlias = true;
+          viAlias = false;
+          vimAlias = false;
 
           clipboard = {
             registers = [ "unnamedplus" ];
