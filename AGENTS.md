@@ -30,6 +30,7 @@ A `justfile` provides safe, pre-approved commands that agents can run without us
 | `just build` | Build current host configuration without applying |
 | `just build-host <host>` | Build a specific host (e.g. `just build-host DKL6GDJ7X1`) |
 | `just check` | Run `nix flake check` |
+| `just ai-check` | Isolated AI aspect composition, exports, closure and Codex migration tests |
 | `just fmt` | Format all Nix files with `nixpkgs-fmt` |
 | `just fmt-check` | Check formatting without modifying files |
 | `just update` | Update all flake inputs, never to code younger than the cooldown |
@@ -811,8 +812,10 @@ Each module defines a single aspect across all relevant configuration classes (d
 | `git.nix` | Git configuration via `flake.modules.homeManager.git` |
 | `neovim.nix` | Neovim (nvf) in two variants: `homeManager.neovim` (workstation, every `languages.*` enabled) and `homeManager.neovim-server` (same editor, no language toolchains). See "Neovim: why there are two variants" |
 | `packages.nix` | Common packages via `flake.modules.homeManager.packages` |
-| `agent-rules.nix` | Global agent rules from one source to claude-code, opencode, codex and antigravity (`~/.claude/rules/`, `~/.config/opencode/AGENTS.md`, `~/.codex/AGENTS.md`, `~/.gemini/GEMINI.md` — the last one is read by gemini-cli as well). Files in `modules/ai/_files/rules/` ship to every host; `my.ai.extraRules` lets an aspect module contribute one that ships only where that aspect is imported — see `modules/vault.nix`. That gating covers the rules layer only: opencode also receives this repo's `AGENTS.md` on every host, so repo documentation is not host-scoped |
-| `mcp-servers.nix` | MCP servers + the deployed skill tree via `flake.modules.homeManager.mcp-servers`. One `mcpServers` declaration per server (remote endpoint and/or stdio wrapper), rendered per agent by `renderFor`; remote servers cost no process because claude-code connects them lazily. Also builds `+nix-query`, the CLI that replaced the `nixos` server. `my.ai.atlassian.enable` gates the Atlassian server and the `jira`/`bitbucket-pr` skills onto the work host; `claudeMcpExclude` additionally hides a server from **claude-code and antigravity only** (currently `atlassian`, replaced there by the skills, and `devenv`). Antigravity gets skills and servers as the plugin `~/.gemini/config/plugins/nix-darwin` — see "Antigravity CLI" under "Adding an MCP Server" |
+| `agents.nix` | Nix-managed agent packages, settings, version assertions and `+agent-*` wrappers |
+| `agent-content.nix` | Standalone skills and global rules, including the host-specific Atlassian skill filter |
+| `mcp-servers.nix` / `mcp-clients.nix` | Shared MCP catalog and wrappers; client renderers and portable exports |
+| `agent-integration.nix` | Delivers content/MCP to enabled Nix agents and removes owned entries when disabled |
 | `secrets.nix` | SOPS secret declarations and per-host secret merging (**home-manager only** — servers use `nixos-secrets.nix`) |
 | `nixos-wiring.nix` | Defines `configurations.nixos` (module + `deployTarget`) and wires it to `flake.nixosConfigurations` and `flake.deployTargets` |
 | `nixos-base.nix` | Baseline for every NixOS host: sshd, root's authorized keys, the lockout assertions, serial getty, nix settings, GC |
@@ -1615,12 +1618,13 @@ grep -rn --include='*.nix' 'sops\.secrets\.' modules/
 
 ### Adding an MCP Server
 
-**Prefer a remote endpoint to a local process.** `mcpServers` in
+**Prefer a remote endpoint to a local process.** `my.ai.mcp.servers` in
 `modules/mcp-servers.nix` declares each server as `{ stdio = <pkg>; remote = {
-url; auth; }; }` — either half may be absent — and a per-agent `agents` table
-plus one `renderFor` turns that into each agent's own shape. Adding an agent is
-one row there, not a fifth copy of the mapping — antigravity (2026-09-11) is the
-fourth row and the worked example, see below.
+url; auth; }; }`. `stdio` is required for portable exports; `remote` defaults to
+`null`. `modules/mcp-clients.nix` renders the catalog into each client's shape,
+and `modules/agent-integration.nix` installs it only for enabled Nix agents.
+The catalog is an `attrsOf submodule` option: another aspect can add a server
+through `my.ai.mcp.servers.<name>` without duplicating the client mappings.
 
 The reason the distinction matters is measured, 2026-09-10: **claude-code
 connects remote HTTP servers lazily, on first tool use, while stdio servers are
@@ -1661,8 +1665,8 @@ skill and the binary's strings both say so; `/docs/cli/plugins` still names
 `~/.gemini/antigravity-cli/{skills,plugins}/`, the pre-migration layout that
 agy logged migrating away from on first start here). Skills and MCP servers go
 in as ONE plugin, `~/.gemini/config/plugins/nix-darwin/{plugin.json,skills/,mcp_config.json}`,
-three `home.file` entries at the bottom of `modules/mcp-servers.nix`. Rules
-go to `~/.gemini/GEMINI.md` as a managed block (`modules/agent-rules.nix`),
+the `home.file` entries in `modules/agent-integration.nix`. Rules
+go to `~/.gemini/GEMINI.md` as a managed block (`modules/agent-integration.nix`),
 because gemini-cli appends `/memory add` entries to the same file. Its
 `mcp_config.json` schema, read back from what `agy mcp add` wrote in a scratch
 HOME: a remote server is `serverUrl` + `headers` with the token as a
@@ -1689,33 +1693,81 @@ code (`mcp_nixos.server.nix.fn`) and reimplements none of it. See
 `modules/ai/_files/mcp-nixos/nixos-cli.py`. The same reasoning retired
 `atlassian` in favour of the `jira` and `bitbucket-pr` skills.
 
-1. Add the server entry in `modules/mcp-servers.nix` — `remote` if the endpoint
-   supports it, `stdio` (a `writeShellApplication`) otherwise
-2. Ensure secret loading logic uses `$XDG_CONFIG_HOME/sops-nix/secrets`
-3. If it needs a credential only one host declares, gate it rather than shipping a
-   server that cannot start. `mcpServers` feeds five sinks — the claude-code,
-   opencode, codex and antigravity configs plus `home.packages` — so a second module cannot
-   simply merge into it: the codex path bakes its TOML in one activation script.
-   `atlassian` is the worked example: an option declared by a small imported
-   module (`imports` may sit beside bare config attributes, `options` may not),
-   `lib.optionalAttrs` on the package set, and `builtins.path` with a `filter`
-   dropping the matching skill directories. Use `builtins.path`, **not**
-   `lib.cleanSourceWith` — the latter returns an attrset carrying `outPath`,
-   which `programs.claude-code.skills` rejects with a message naming
-   `_isLibCleanSourceWith` rather than the mistake.
-   `modules/hosts/DKL6GDJ7X1.nix` sets `my.ai.atlassian.enable = true`; the
-   default is off.
+1. Add the server entry through `my.ai.mcp.servers`, with a `stdio` wrapper and,
+   where supported, a `remote` endpoint.
+2. Load credentials at runtime from `$XDG_CONFIG_HOME/sops-nix/secrets`.
+3. Gate host-specific servers with their feature option. `my.ai.atlassian.enable`
+   remains the host gate for Atlassian MCP and the Jira/Bitbucket skills.
+4. Use `my.ai.mcp.clients.<name>.exclude` to hide servers from a client without
+   removing their wrappers. Claude and Antigravity exclude `atlassian` and
+   `devenv` by default. `programs.claude-code.mcpServers` feeds Home Manager's
+   generated plugin, so removing an entry removes its plugin tools too.
 
-   **That option is the HOST gate, not a per-agent one.** `mcpServers` feeds
-   all four agents *and* `home.packages`, so removing an entry there also takes
-   the `+mcp-<name>` wrapper off `PATH`. To hide a server from a single agent,
-   subtract it from that agent's own list instead — `claudeMcpExclude` does
-   exactly that for claude-code, and antigravity's row reuses the same list.
-   And note home-manager renders
-   `programs.claude-code.mcpServers` into a *generated plugin*
-   (`claude-code-home-manager`, handed to the wrapper as `--plugin-dir`), so
-   that one list governs both the MCP entry and the plugin-provided tools:
-   they are the same mechanism, not two switches.
+### Independent AI aspects
+
+Home Manager can import `homeManager.agents`, `agent-content`, `mcp-servers`
+and `agent-integration` independently through `config.flake.modules`.
+They import a shared, inert `ai-options` schema; none enables another aspect.
+The workstation base imports all four and enables agents, content and MCP to
+preserve the existing defaults. `ai-tools` separately provides general tools
+such as `llm`, Ollama and `+nix-query`.
+
+| Option | Default outside the workstation base | Effect |
+|---|---|---|
+| `my.ai.agents.enable` | `false` | Agent packages, settings and wrappers |
+| `my.ai.agents.<name>.enable` | `true` | Select individual agents within that global gate |
+| `my.ai.content.enable` | `false` | Skills and rules exported under `$XDG_CONFIG_HOME/ai/content/` |
+| `my.ai.mcp.enable` | `false` | MCP wrappers, exports and integration |
+| `my.ai.mcp.clients.<name>.enable` | `true` | MCP integration for this Nix agent; does not suppress explicit exports |
+| `my.ai.mcp.clients.<name>.exclude` | Client-specific | Server names excluded from integration and exports |
+| `my.ai.mcp.exports` | `[ ]` | Portable client formats under `$XDG_CONFIG_HOME/ai/mcp/` |
+
+Agent names: `claude`, `codex`, `opencode`, `gemini`, `antigravity`.
+MCP client/export names are the same except `gemini`, which has no adapter here.
+The workstation base uses `lib.mkDefault`, so a host can override it directly:
+
+```nix
+# Keep agents and skills, but remove Nix-managed MCP integration and wrappers.
+my.ai.mcp.enable = false;
+
+# Or keep MCP for other agents and disable only Codex's integration.
+my.ai.mcp.clients.codex.enable = false;
+```
+
+For standalone MCP, import only `homeManager.mcp-servers` and set:
+
+```nix
+my.ai.mcp = {
+  enable = true;
+  exports = [ "claude" "codex" "opencode" "antigravity" ];
+};
+```
+
+Exports are `claude.json`, `codex.toml`, `opencode.json` and `antigravity.json`.
+They use public HTTP endpoints directly and authenticated servers through stdio
+wrappers that load their own credentials. They require no agent installation or
+agent wrapper, but still require the referenced runtime secret files.
+Bind these exports in the external client yourself; Nix does not overwrite its
+configuration. Native Nix-agent transport choices stay unchanged.
+
+Content-only users import `homeManager.agent-content` and enable
+`my.ai.content.enable`. Neutral exports contain `skills/`, `rules/` and
+`rules.md`. The integration aspect additionally delivers these to enabled agents
+through their existing paths. Worktrunk plugins and Claude-based commit generation
+are gated by the corresponding agent; Worktrunk itself remains independent.
+
+**Keep the integration aspect imported when disabling previously managed agents.**
+Its activation hooks remove managed rules blocks and owned Codex MCP entries.
+Codex keeps a writable config; the ownership journal lives at
+`$XDG_STATE_HOME/nix-darwin/codex-mcp.json`. First migration reads the previous
+Home Manager generation's generated MCP table. Only owned entries are updated
+or removed; personal entries and other settings survive. A modified owned entry
+or conflicting name fails before writing. Rename the personal entry or restore
+the managed definition, then retry. A pending journal makes interrupted updates
+recoverable; do not delete it to silence a conflict.
+
+`just ai-check` tests isolated combinations, portable exports, transitive package
+closures and writable-config migrations without live credentials or activation.
 
 ### VS Code extensions
 

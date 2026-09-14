@@ -166,6 +166,10 @@ daemon-restart:
 check: _check-untracked
     nix flake check
 
+# Isolated AI aspect composition, exports and Codex migration tests
+ai-check: _check-untracked
+    nix build --no-link .#checks.aarch64-darwin.ai-composition
+
 # Format all Nix files
 fmt:
     nix run nixpkgs#nixpkgs-fmt -- $(find . -name '*.nix' -not -path './_*')

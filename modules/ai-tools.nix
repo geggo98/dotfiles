@@ -4,13 +4,52 @@
     let
       unstable = inputs.nixpkgs-unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system};
       llm-agents = inputs.nixpkgs-llm-agents.packages.${pkgs.stdenv.hostPlatform.system};
-      # TEMPORARY claude-code pin — see the llm-agents-claude-code-pin input in
-      # flake.nix and the assertions in modules/mcp-servers.nix.
-      claude-code-pinned =
-        inputs.llm-agents-claude-code-pin.packages.${pkgs.stdenv.hostPlatform.system}.claude-code;
-      # TEMPORARY codex pin — see the llm-agents-codex-pin input in flake.nix.
-      codex-pinned =
-        inputs.llm-agents-codex-pin.packages.${pkgs.stdenv.hostPlatform.system}.codex;
+      # The nixos queries as a CLI instead of an MCP server, since 2026-09-10.
+      #
+      # mcp-nixos is a stateless aggregator over public HTTP APIs
+      # (search.nixos.org, NixHub, FlakeHub, Noogle, wiki, nix.dev). Run as an
+      # MCP server it held one resident process per agent session — measured
+      # 15,2 MiB in each of nine concurrent Claude sessions — and computed
+      # nothing in between. As a CLI it costs nothing between calls.
+      #
+      # nixos-cli.py reimplements NOTHING: mcp_nixos.server.nix and
+      # .nix_versions are FastMCP tool objects whose coroutine is reachable at
+      # `.fn`, so the CLI parses arguments and calls upstream. That keeps ~3300
+      # lines of data-source logic upstream where it belongs — and makes this a
+      # dependency on an INTERNAL API. The smoke test in the skill's tests/ is
+      # what turns an upstream rename into a build failure instead of a runtime
+      # one.
+      #
+      # Reuse the interpreter and sys.path bootstrap that mcp-nixos's OWN
+      # entrypoint already carries, rather than building a python env around it.
+      #
+      # The obvious `python3.withPackages [ (toPythonModule mcp-nixos) ]` was
+      # tried and rejected on measurement: mcp-nixos is a buildPythonApplication,
+      # so converting it forces an UNCACHED source rebuild — test suite included,
+      # minutes of it — of a package cache.nixos.org already serves as a signed
+      # binary (verified: narinfo HTTP 200, `ultimate: false`). That cost would
+      # recur on both Macs at every nixpkgs-unstable bump, for nothing.
+      #
+      # The `case` guard is what keeps this honest: if a future mcp-nixos stops
+      # putting its bootstrap on line 3, the BUILD fails with a message naming
+      # the cause, instead of shipping a +nix-query that cannot import anything.
+      nixos-cli = pkgs.runCommand "+nix-query" { } ''
+        src=${unstable.mcp-nixos}/bin/.mcp-nixos-wrapped
+        shebang=$(head -n1 "$src")
+        bootstrap=$(sed -n '3p' "$src")
+        case "$bootstrap" in
+          *addsitedir*) ;;
+          *) echo "mcp-nixos entrypoint no longer carries its sys.path bootstrap on line 3" >&2
+             exit 1 ;;
+        esac
+        mkdir -p $out/bin
+        {
+          printf '%s\n' "$shebang" "$bootstrap"
+          cat ${./ai/_files/mcp-nixos/nixos-cli.py}
+        } > $out/bin/+nix-query
+        chmod +x $out/bin/+nix-query
+      '';
+
       loadSecretsLib = builtins.readFile ./_files/shell/load-secrets.sh;
 
       # Bound rather than inlined below, because each is now consumed by a
@@ -76,136 +115,7 @@
         llm-agents.ccusage
         pkgs.tmux # required by the tmux skill for headless interactive sessions
 
-        (pkgs.writeShellApplication {
-          name = "+agent-claude";
-          # The override is about the CLOSURE, not about behaviour. Both branches
-          # below already point at /etc/profiles/…/bin/claude — the ACP branch by
-          # exporting CLAUDE_CODE_EXECUTABLE over the `--set-default` baked into
-          # claude-agent-acp, the interactive one by exec'ing it directly — so at
-          # runtime the pinned binary was reached either way. But the store
-          # REFERENCE survives that, and without this override it drags the old
-          # claude-code into every generation: measured 2026-09-02, when the pin
-          # was still 2.1.247, `nix store diff-closures` reported "claude-code:
-          # 2.1.247 added" rather than an upgrade, and `nix why-depends` traced
-          # the leftover through home-manager-path -> +agent-claude ->
-          # claude-agent-acp -> claude-code-2.1.234. That is ~222 MB of second
-          # copy per generation. The version numbers are the measurement's, not
-          # today's; the mechanism is what the override addresses.
-          runtimeInputs = [ (llm-agents.claude-agent-acp.override { claude-code = claude-code-pinned; }) ];
-          text = ''
-            export DISABLE_AUTOUPDATER='1'
-            if (( $# > 0 )) && [[ "''${1}" == "--acp" ]]; then
-              export CLAUDE_CODE_EXECUTABLE="/etc/profiles/per-user/''${USER}/bin/claude"
-              shift
-              exec claude-agent-acp --thinking-display summarized "$@"
-            fi
-            # Enables Claude Code's full-screen TUI mode
-            # (https://code.claude.com/docs/en/fullscreen). The name CLAUDE_CODE_NO_FLICKER
-            # is misleading: it unlocks the full-screen TUI, not merely "no flicker".
-            # Interactive mode only — intentionally NOT set for ACP.
-            export CLAUDE_CODE_NO_FLICKER=1
-            exec "/etc/profiles/per-user/''${USER}/bin/claude" --thinking-display summarized "$@"
-          '';
-        })
-        (pkgs.writeShellApplication {
-          name = "+agent-opencode";
-          runtimeInputs = [ ];
-          text = ''
-            export DISABLE_AUTOUPDATER='1'
-            ${loadSecretsLib}
-            load_from_secret GEMINI_API_KEY      gemini_api_key
-            load_from_secret OPENAI_API_KEY      openai_api_key
-            load_from_secret OPENROUTER_API_KEY  openrouter_api_key
-            load_from_secret Z_AI_API_KEY        z_ai_api_key
-            require_secrets GEMINI_API_KEY OPENAI_API_KEY OPENROUTER_API_KEY Z_AI_API_KEY
-            if (( $# > 0 )) && [[ "''${1}" == "--acp" ]]; then
-              shift
-              exec "/etc/profiles/per-user/''${USER}/bin/opencode" acp "$@"
-            fi
-            exec "/etc/profiles/per-user/''${USER}/bin/opencode" "$@"
-          '';
-        })
-        (pkgs.writeShellApplication {
-          name = "+agent-codex";
-          # Same closure argument as the claude-agent-acp override above:
-          # codex-acp bakes `CODEX_PATH ${lib.getExe codex}` into its wrapper, so
-          # without the override the main input's codex (0.150.1 at the time of
-          # the pin) would ride along as a second copy in every generation.
-          # `exec codex` below reaches the pinned one through the profile.
-          runtimeInputs = [ (llm-agents.codex-acp.override { codex = codex-pinned; }) ];
-          text = ''
-            ${loadSecretsLib}
-            load_from_secret OPENAI_API_KEY openai_api_key
-            require_secrets OPENAI_API_KEY
-            # Codex reaches its remote MCP servers with `bearer_token_env_var`,
-            # which resolves from ITS OWN process environment — see
-            # modules/mcp-servers.nix. Deliberately NOT require_secrets: most
-            # codex subcommands need no MCP at all, and a missing key should
-            # cost one server, not the whole CLI. Codex's default
-            # shell_environment_policy excludes *KEY*/*TOKEN*/*SECRET*, so
-            # these are not forwarded to the shell commands codex spawns.
-            load_from_secret CONTEXT7_API_KEY context7_api_key
-            load_from_secret TRAVILY_API_KEY travily_api_key
-            if (( $# > 0 )) && [[ "''${1}" == "--acp" ]]; then
-              shift
-              exec codex-acp "$@"
-            fi
-            exec codex "$@"
-          '';
-        })
-        (pkgs.writeShellApplication {
-          name = "+agent-gemini";
-          runtimeInputs = [ llm-agents.gemini-cli ];
-          text = ''
-            ${loadSecretsLib}
-            load_from_secret GEMINI_API_KEY gemini_api_key
-            require_secrets GEMINI_API_KEY
-            if (( $# > 0 )) && [[ "''${1}" == "--acp" ]]; then
-              shift
-              exec gemini --experimental-acp "$@"
-            fi
-            exec gemini "$@"
-          '';
-        })
-        (pkgs.writeShellApplication {
-          name = "+agent-antigravity";
-          # Google's Antigravity CLI (`agy`), from llm-agents.nix. A prebuilt
-          # binary off Google Cloud Storage, not npm -- which is why it is dated
-          # against its GitHub releases in scripts/supply-chain.toml rather than
-          # a registry. Licence is `unfree` there; like every other closure it
-          # ends up in the R2 cache, see "The public cache mirrors system
-          # closures" in AGENTS.md.
-          runtimeInputs = [ llm-agents.antigravity-cli ];
-          text = ''
-            # The binary carries a statically linked self-updater that runs in
-            # the background on ordinary invocations. It cannot write into
-            # /nix/store and must not try; this is the documented opt-out
-            # (antigravity.google/docs/cli/troubleshooting). Should an old run
-            # ever leave the updater wedged, the lock it holds is
-            # ~/.gemini/antigravity-cli/updater/update.lock.
-            export AGY_CLI_DISABLE_AUTO_UPDATE=true
-            ${loadSecretsLib}
-            # Deliberately NOT require_secrets, unlike +agent-gemini: the default
-            # sign-in is the Google account held in the macOS keychain, and per
-            # the docs GEMINI_API_KEY is only consulted once
-            # ~/.gemini/antigravity-cli/settings.json carries
-            # `"modelProvider": "gemini"`. Loading it keeps that headless route
-            # one settings key away without forcing the key on interactive use.
-            # settings.json stays unmanaged -- agy writes to it.
-            #
-            # What IS managed lives elsewhere, at agy's global customization
-            # root ~/.gemini/config/ (not ~/.gemini/antigravity-cli/, which is
-            # the pre-migration layout the online docs still show): the skills
-            # and MCP servers as the plugin ~/.gemini/config/plugins/nix-darwin
-            # (modules/mcp-servers.nix), the global rules as a managed block
-            # in ~/.gemini/GEMINI.md (modules/agent-rules.nix), which
-            # +agent-gemini reads as well.
-            load_from_secret GEMINI_API_KEY gemini_api_key
-            # No `--acp` branch: neither the docs, the changelog nor llm-agents
-            # know an ACP mode or an antigravity-acp shim (checked 2026-09-11).
-            exec agy "$@"
-          '';
-        })
+        nixos-cli
       ];
 
       launchd.agents.ollama = {

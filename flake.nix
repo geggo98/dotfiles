@@ -148,7 +148,7 @@
     # from release binaries.
     nixpkgs-llm-agents.url = "github:numtide/llm-agents.nix";
 
-    # TEMPORARY PIN — claude-code 2.1.258. Consumed by modules/mcp-servers.nix.
+    # TEMPORARY PIN — claude-code 2.1.258. Consumed by modules/agents.nix.
     #
     # Why: nixpkgs-llm-agents sits on 2.1.234, which cannot talk to Fable 5.1 and
     # carries none of the heap-growth fixes this pin was originally taken for.
@@ -226,14 +226,14 @@
     #
     # REMOVE once nixpkgs-llm-agents itself ships >= 2.1.258 — at the earliest on
     # 2026-09-15, when `just update` with the 14-day bar lands on a rev from
-    # 2026-09-01 23:07Z or later. An assertion in modules/mcp-servers.nix breaks
+    # 2026-09-01 23:07Z or later. An assertion in modules/agents.nix breaks
     # the build at that point and spells out the four steps, so the pin cannot go
     # stale silently.
     llm-agents-claude-code-pin.url =
       "github:numtide/llm-agents.nix/393c7dba98cf1b27f35dfab3090f17588991439e";
 
     # TEMPORARY PIN — codex 0.153.4, for GPT-6-Astra. Consumed by
-    # modules/mcp-servers.nix (programs.codex.package) and modules/ai-tools.nix
+    # modules/agents.nix (programs.codex.package) and modules/agents.nix
     # (the codex-acp override). Same construction as the claude-code pin above;
     # what differs is written here, what is shared is not repeated.
     #
@@ -282,11 +282,11 @@
     # rev. codex-acp stays on nixpkgs-llm-agents and is `override`n to use this
     # codex, otherwise its baked-in CODEX_PATH would drag the old 0.150.1 into
     # every generation as a second copy — the same leak the claude-agent-acp
-    # override in modules/ai-tools.nix exists for.
+    # override in modules/agents.nix exists for.
     #
     # REMOVE once nixpkgs-llm-agents itself ships >= 0.153.4 — at the earliest on
     # 2026-09-19, when `just update` with the 14-day bar lands on a rev from
-    # 2026-09-05 03:20Z or later. An assertion in modules/mcp-servers.nix breaks
+    # 2026-09-05 03:20Z or later. An assertion in modules/agents.nix breaks
     # the build at that point and spells out the steps.
     llm-agents-codex-pin.url =
       "github:numtide/llm-agents.nix/6d96d0808d372e8ec9b12a3ac4002d54b4175bd8";

@@ -1,4 +1,4 @@
-{ config, ... }:
+{ config, lib, ... }:
 let
   hm = config.flake.modules.homeManager;
 in
@@ -9,8 +9,14 @@ in
   # vault, tunnelblick-raycast) on top. NOT every host: p-ion-berlin-xs56r6
   # deliberately takes `homeManager.shell` and `neovim-server` instead, so
   # anything reasoned about as "every host" — the agent rules in
-  # `modules/agent-rules.nix`, for one — means the two workstations.
+  # `modules/agent-content.nix`, for one — means the two workstations.
   flake.modules.homeManager.base = {
+    # Preserve workstation defaults; the individual aspects default to off.
+    my.ai = {
+      agents.enable = lib.mkDefault true;
+      content.enable = lib.mkDefault true;
+      mcp.enable = lib.mkDefault true;
+    };
     imports = [
       hm.shell
       # Split from `shell` so that aspect can be imported by hosts without
@@ -24,10 +30,10 @@ in
       hm.onepassword
       hm.gradle
       hm.neovim
+      hm.agents
+      hm.agent-content
       hm.mcp-servers
-      # Globale Agentenregeln (difftastic, Skriptstil, PII) fuer alle drei
-      # Agenten. Eigenes Modul, weil es die Maschine beschreibt, nicht dieses Repo.
-      hm.agent-rules
+      hm.agent-integration
       hm.ai-tools
       hm.camoufox
       hm.packages

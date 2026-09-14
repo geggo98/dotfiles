@@ -1,7 +1,7 @@
 #!/bin/zsh
 # Maintain a managed rules block inside a writable agent instructions file.
 #
-# Two callers, both in modules/agent-rules.nix:
+# Two callers, both in modules/agent-integration.nix:
 #   codex                     ~/.codex/AGENTS.md
 #   antigravity + gemini-cli  ~/.gemini/GEMINI.md
 #
@@ -13,14 +13,31 @@
 # Everything outside the markers survives byte for byte.
 #
 # usage: merge-rules-block <rules-file> <target>
+#        merge-rules-block --remove <target>
 set -euo pipefail
 
 rules=${1:?rules file missing}
 target=${2:?target missing}
-[[ -s $rules ]] || { print -u2 "merge-rules-block: $rules is empty or missing"; exit 1 }
+[[ $rules == --remove || -s $rules ]] || { print -u2 "merge-rules-block: $rules is empty or missing"; exit 1 }
 
 export MARK_BEGIN='<!-- BEGIN nix-darwin managed rules -- do not edit between the markers -->'
 export MARK_END='<!-- END nix-darwin managed rules -->'
+
+if [[ $rules == --remove ]]; then
+  [[ -f $target ]] || exit 0
+  perl -0777 -e 'exit(index(<>,$ENV{MARK_BEGIN}) < 0 ? 1 : 0)' "$target" || exit 0
+  tmp=$(mktemp "${target}.XXXXXX")
+  trap 'rm -f -- "$tmp"' EXIT
+  # Remove only complete blocks; retain all bytes outside the markers.
+  # An unterminated marker is ambiguous, so fail rather than discard user text.
+  perl -0777 -pe '
+    s/^\Q$ENV{MARK_BEGIN}\E\n.*?^\Q$ENV{MARK_END}\E\n?//gms;
+    die "merge-rules-block: unterminated managed block\n" if /\Q$ENV{MARK_BEGIN}\E/;
+  ' "$target" > "$tmp"
+  mv -- "$tmp" "$target"
+  trap - EXIT
+  exit 0
+fi
 
 mkdir -p "${target:h}"
 [[ -f $target ]] || : > "$target"

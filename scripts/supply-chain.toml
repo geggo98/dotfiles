@@ -98,7 +98,7 @@ npm = "@anthropic-ai/claude-code"
 # PIN can go away once nixpkgs-llm-agents ships >= 2.1.258, i.e. once `just
 # update` with the same bar lands on a rev from 2026-09-01 23:07Z or later --
 # also 2026-09-16 at the earliest. A quiet entry is therefore not by itself
-# permission to remove the pin; the assertion in modules/mcp-servers.nix is what
+# permission to remove the pin; the assertion in modules/agents.nix is what
 # says when, and it breaks the build rather than waiting to be noticed.
 name = "claude-code (pinned)"
 input = "llm-agents-claude-code-pin"
@@ -127,7 +127,7 @@ npm = "@openai/codex"
 # 2026-09-18 23:31Z — in practice the first run on 2026-09-19), the PIN can go once
 # nixpkgs-llm-agents ships >= 0.153.4, i.e. once
 # `just update` lands on a rev from 2026-09-05 03:20Z or later — 2026-09-19 at the
-# earliest. The assertion in modules/mcp-servers.nix says when.
+# earliest. The assertion in modules/agents.nix says when.
 name = "codex (pinned)"
 input = "llm-agents-codex-pin"
 attr = "codex"
@@ -156,7 +156,7 @@ npm = "ccusage"
 # entry to date it against; llm-agents' own updater reads a vendor manifest that
 # carries a version and a hash but no date. google-antigravity/antigravity-cli tags
 # every release with the bare version (`1.1.22`, no `v`), and that is what is looked
-# up here. Consumed by +agent-antigravity in modules/ai-tools.nix.
+# up here. Consumed by +agent-antigravity in modules/agents.nix.
 name = "antigravity-cli"
 input = "nixpkgs-llm-agents"
 attr = "antigravity-cli"
