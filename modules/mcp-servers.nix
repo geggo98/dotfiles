@@ -570,6 +570,8 @@ let
         enable = true;
         package = claude-code;
         settings = {
+          # Opus for planning, Sonnet for execution.
+          model = "opusplan";
           # No automatic attribution in commits or PRs.
           #
           # `attribution.commit = ""` replaces the deprecated `includeCoAuthoredBy`
