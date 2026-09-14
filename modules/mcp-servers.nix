@@ -100,6 +100,9 @@ in
 
       devenvPkg = inputs.devenv.packages.${pkgs.stdenv.hostPlatform.system}.devenv;
 
+      # Requires devenv.nix in the working directory. Otherwise the MCP server
+      # exits during startup and clients may report it as failed.
+      # Example error: File devenv.nix does not exist.
       mcp-devenv = (pkgs.writeShellApplication {
         name = "+mcp-devenv";
         runtimeInputs = [ devenvPkg ];
