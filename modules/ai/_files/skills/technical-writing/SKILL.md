@@ -61,6 +61,37 @@ Don't separate subject from verb or verb from object unnecessarily.
 Place emphatic words at sentence end:
 "Although improvements occurred, crime increased" not "Crime increased, although improvements occurred."
 
+# Quantities and Ratios
+
+For quantity statements such as "x of y" or "x von y",
+keep both counts and immediately add their ratio in parentheses.
+Calculate x / y before rounding.
+Choose a decimal fraction, percentage, per mille, or basis points
+according to the domain; default to percentages when no convention applies.
+Use two significant figures by default, adjusting precision when needed
+to preserve a meaningful distinction.
+Percent means x / y × 100, per mille × 1,000, and basis points × 10,000.
+
+Mark approximations explicitly:
+"about", "approximately", "just under", "just over", "more than", "less than";
+in German, "ca.", "rund", "knapp", "gut", "mehr als", "weniger als".
+Directional wording must agree with the unrounded value:
+"knapp" / "just under" means below the stated value,
+"gut" / "just over" means above it.
+Exact ratios may be stated exactly without an approximation marker.
+
+Examples (use the number formatting of the surrounding language):
+
+- Decimal fraction: "34 von 456 (ca. 0,075)".
+- Percentage: "34 von 456 (ca. 7,5 %)" or "34 von 456 (mehr als 7 %)".
+- Per mille: "3 von 2 000 (ca. 1,5 ‰)".
+- Basis points: "3 of 20,000 (about 1.5 basis points)".
+- Exact: "1 of 4 (25%)".
+
+Do not invent a ratio when a count is unknown;
+for a zero denominator, state that the ratio is undefined.
+Do not rewrite verbatim quotations or machine-readable data to add ratios.
+
 # Omit Needless Words
 
 Eliminate verbose constructions:
