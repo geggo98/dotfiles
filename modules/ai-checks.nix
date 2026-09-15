@@ -49,7 +49,7 @@ in
         agents.enable = true;
         agents.codex.enable = false;
       };
-      statusLineHooks = pkgs.writeText "codex-status-line-hooks.json" (builtins.toJSON (
+      codexLeafHooks = pkgs.writeText "codex-leaf-hooks.json" (builtins.toJSON (
         map
           (home: {
             enabled = home.config.programs.codex.enable;
@@ -68,6 +68,9 @@ in
         (noAgents allOff.config && noAgentWrappers allOff.config && noMcpWrappers allOff.config)
         (noMcp allOff.config && noMcp agentsOnly.config && noMcpWrappers agentsOnly.config)
         (agentsOnly.config.programs.claude-code.settings.model == "opusplan")
+        (agentsOnly.config.my.ai.agents.codex.model == "gpt-5.6-terra")
+        (agentsOnly.config.my.ai.agents.codex.reasoningEffort == "medium")
+        (agentsOnly.config.my.ai.agents.codex.planReasoningEffort == "xhigh")
         (noAgents mcpOnly.config && noAgentWrappers mcpOnly.config)
         (!(mcpOnly.config.home.file ? ".claude/settings.json"))
         (!(mcpOnly.config.home.activation ? codexConfig))
@@ -109,7 +112,7 @@ in
           patchShebangs _files/skills/devenv/scripts/devenv-tools.sh
           python3 tests/test_devenv_tools.py
           python3 tests/test_codex_config.py
-          python3 - ${statusLineHooks} <<'PY'
+          python3 - ${codexLeafHooks} <<'PY'
           import json, re, sys, tomllib
           for case in json.load(open(sys.argv[1])):
               # Matches the generated /nix/store/...-codex-managed-settings argument.
@@ -124,8 +127,14 @@ in
                       "context-used", "five-hour-limit", "weekly-limit", "branch-changes",
                       "task-progress", "thread-title",
                   ], items
+                  assert settings.get("model") == "gpt-5.6-terra", settings.get("model")
+                  assert settings.get("model_reasoning_effort") == "medium", settings.get("model_reasoning_effort")
+                  assert settings.get("plan_mode_reasoning_effort") == "xhigh", settings.get("plan_mode_reasoning_effort")
               else:
                   assert items is None, items
+                  assert settings.get("model") is None, settings.get("model")
+                  assert settings.get("model_reasoning_effort") is None, settings.get("model_reasoning_effort")
+                  assert settings.get("plan_mode_reasoning_effort") is None, settings.get("plan_mode_reasoning_effort")
           PY
           python3 tests/test_rules.py
           python3 ${./ai/_tests/check_exports.py} \

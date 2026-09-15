@@ -27,6 +27,21 @@
             internal = true;
             description = "Runtime environment contributed by agent integrations.";
           };
+          model = mkOption {
+            type = types.nullOr types.str;
+            default = "gpt-5.6-terra";
+            description = "Default model merged into Codex's writable config.toml; null leaves the key unmanaged and gives back a previously owned value.";
+          };
+          reasoningEffort = mkOption {
+            type = types.nullOr types.str;
+            default = "medium";
+            description = "model_reasoning_effort for Codex's default (execute) mode; null leaves it unmanaged.";
+          };
+          planReasoningEffort = mkOption {
+            type = types.nullOr types.str;
+            default = "xhigh";
+            description = "plan_mode_reasoning_effort for Codex's Plan mode (Shift+Tab); null leaves it unmanaged.";
+          };
         });
 
         content = {

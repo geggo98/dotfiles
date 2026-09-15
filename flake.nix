@@ -240,7 +240,11 @@
     # Why: GPT-6-Astra shipped 2026-09-03. Codex gained it in 0.153.1 (API config
     # only, hidden from the picker), and 0.153.4 is the release that shows it in
     # the bundled model picker and makes it the default when no model is set
-    # (openai/codex#42874). nixpkgs-llm-agents under its 14-day bar sits on
+    # (openai/codex#42874). "No model is set" no longer describes this repo —
+    # modules/agent-integration.nix now pins `model = "gpt-5.6-terra"` via
+    # my.ai.agents.codex.model — but the picker still needs 0.153.4 to list
+    # GPT-6-Astra at all, which is reason enough on its own to keep the pin.
+    # nixpkgs-llm-agents under its 14-day bar sits on
     # 0.150.1 and cannot reach 0.153.4 before 2026-09-19. (The API-only catalog
     # from 0.153.1 would arrive a day earlier via 0.153.2 — llm-agents never
     # shipped 0.153.1 — which is not enough: the picker and the default are the

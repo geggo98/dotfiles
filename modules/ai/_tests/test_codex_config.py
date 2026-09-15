@@ -26,10 +26,17 @@ class MergeTests(unittest.TestCase):
         self.old = {"url": "https://docs.example.org/mcp"}
         self.new = {"url": "https://docs.example.org/mcp/v2"}
 
-    def desired(self, servers, status_line=None):
+    def desired(self, servers, status_line=None, model=None,
+                reasoning_effort=None, plan_reasoning_effort=None):
         managed = {"mcp_servers": servers}
         if status_line is not None:
             managed["tui"] = {"status_line": status_line}
+        if model is not None:
+            managed["model"] = model
+        if reasoning_effort is not None:
+            managed["model_reasoning_effort"] = reasoning_effort
+        if plan_reasoning_effort is not None:
+            managed["plan_mode_reasoning_effort"] = plan_reasoning_effort
         self.managed.write_text(tomli_w.dumps(managed))
 
     def run_merge(self):
@@ -272,6 +279,138 @@ class MergeTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.run_merge()
         self.assertEqual(self.state.read_text(), "not json")
+
+    # -- Scalar leaves (model, and by construction model_reasoning_effort /
+    # plan_mode_reasoning_effort): same LEAVES mechanism as status_line above,
+    # exercised through "model" as the representative leaf.
+
+    def test_model_install_update_override_and_disable(self):
+        personal = {"model_reasoning_effort": "medium",
+                    "projects": {"/example": {"trust_level": "trusted"}}}
+        self.target.write_text(tomli_w.dumps(personal))
+        # Existing MCP-only version-1 journal needs no separate migration.
+        self.state.write_text(json.dumps({"version": 1, "owned": {}}))
+        self.desired({}, model="gpt-5.6-terra")
+        self.run_merge()
+        expected = {**personal, "model": "gpt-5.6-terra"}
+        self.assertEqual(merger.load_toml(self.target), expected)
+        first = self.target.read_bytes()
+        self.run_merge()
+        self.assertEqual(self.target.read_bytes(), first)
+        self.target.write_text(tomli_w.dumps({**expected, "model": "picked-by-codex"}))
+        self.run_merge()
+        self.assertEqual(merger.load_toml(self.target), expected)
+        self.desired({})
+        self.run_merge()
+        self.assertEqual(merger.load_toml(self.target), personal)
+        self.assertIsNone(json.loads(self.state.read_text())["owned_model"])
+
+    def test_model_disable_preserves_personal_edits(self):
+        self.desired({}, model="gpt-5.6-terra")
+        self.run_merge()
+        personal = {"model": "gpt-6-astra"}
+        self.target.write_text(tomli_w.dumps(personal))
+        self.desired({})
+        self.run_merge()
+        self.assertEqual(merger.load_toml(self.target), personal)
+        self.assertIsNone(json.loads(self.state.read_text())["owned_model"])
+
+    def test_model_overwrites_preexisting_value_without_conflict(self):
+        # The real state of a machine that has used Codex's own /model picker
+        # before this leaf was ever Nix-managed: unlike mcp_servers, this must
+        # not raise -- the whole point is that activation replaces it.
+        self.target.write_text(tomli_w.dumps({
+            "model": "gpt-6-astra", "model_reasoning_effort": "medium",
+        }))
+        self.state.write_text(json.dumps({"version": 1, "owned": {}, "owned_status_line": None}))
+        self.desired({}, model="gpt-5.6-terra")
+        self.run_merge()
+        self.assertEqual(merger.load_toml(self.target), {
+            "model": "gpt-5.6-terra", "model_reasoning_effort": "medium",
+        })
+        self.assertEqual(json.loads(self.state.read_text())["owned_model"], "gpt-5.6-terra")
+
+    def test_model_disable_leaves_empty_config(self):
+        self.desired({}, model="gpt-5.6-terra")
+        self.run_merge()
+        self.assertEqual(merger.load_toml(self.target), {"model": "gpt-5.6-terra"})
+        self.desired({})
+        self.run_merge()
+        self.assertEqual(merger.load_toml(self.target), {})
+        self.assertTrue(self.target.exists())
+
+    def test_model_interruption_then_disable(self):
+        for fail_at in (1, 2, 3):
+            with self.subTest(fail_at=fail_at):
+                self.target.unlink(missing_ok=True)
+                self.state.unlink(missing_ok=True)
+                self.desired({}, model="gpt-5.6-terra")
+                self.run_merge()
+                self.desired({}, model="gpt-6-astra")
+                atomic = merger.atomic_write
+                calls = 0
+
+                def interrupt(*args, **kwargs):
+                    nonlocal calls
+                    calls += 1
+                    if calls == fail_at:
+                        raise OSError("simulated interruption")
+                    return atomic(*args, **kwargs)
+
+                with patch.object(merger, "atomic_write", side_effect=interrupt):
+                    with self.assertRaises(OSError):
+                        self.run_merge()
+                self.desired({})
+                self.run_merge()
+                self.assertEqual(merger.load_toml(self.target), {})
+
+    def test_invalid_model_journal_fails_before_writing(self):
+        self.desired({}, model="gpt-5.6-terra")
+        for state in (
+            {"version": 1, "owned": {}, "owned_model": 5},
+            {"version": 1, "owned": {}, "pending_model": ["a"]},
+        ):
+            with self.subTest(state=state):
+                self.target.write_text(tomli_w.dumps({}))
+                self.state.write_text(json.dumps(state))
+                before = self.target.read_bytes(), self.state.read_bytes()
+                with self.assertRaises(ValueError):
+                    self.run_merge()
+                self.assertEqual((self.target.read_bytes(), self.state.read_bytes()), before)
+
+    def test_non_string_personal_model_is_replaced_not_rejected(self):
+        self.target.write_text(tomli_w.dumps({"model": 42}))
+        self.desired({}, model="gpt-5.6-terra")
+        self.run_merge()
+        self.assertEqual(merger.load_toml(self.target), {"model": "gpt-5.6-terra"})
+
+        self.target.write_text(tomli_w.dumps({"model": 42}))
+        self.state.write_text(json.dumps({"version": 1, "owned": {}}))
+        self.desired({})
+        self.run_merge()
+        self.assertEqual(merger.load_toml(self.target), {"model": 42})
+
+    def test_model_and_status_line_are_managed_independently(self):
+        self.desired({}, status_line=["run-state"], model="gpt-5.6-terra")
+        self.run_merge()
+        self.assertEqual(merger.load_toml(self.target), {
+            "model": "gpt-5.6-terra", "tui": {"status_line": ["run-state"]},
+        })
+        self.desired({}, status_line=["run-state"])
+        self.run_merge()
+        self.assertEqual(merger.load_toml(self.target), {"tui": {"status_line": ["run-state"]}})
+        journal = json.loads(self.state.read_text())
+        self.assertIsNone(journal["owned_model"])
+        self.assertEqual(journal["owned_status_line"], ["run-state"])
+
+    def test_model_does_not_bypass_mcp_conflict(self):
+        self.target.write_text(tomli_w.dumps({"mcp_servers": {"docs": self.old}}))
+        before = self.target.read_bytes()
+        self.desired({"docs": self.new}, model="gpt-5.6-terra")
+        with self.assertRaisesRegex(ValueError, "conflicts"):
+            self.run_merge()
+        self.assertEqual(self.target.read_bytes(), before)
+        self.assertFalse(self.state.exists())
 
 
 if __name__ == "__main__":

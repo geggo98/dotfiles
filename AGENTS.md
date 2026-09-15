@@ -1719,6 +1719,9 @@ such as `llm`, Ollama and `+nix-query`.
 |---|---|---|
 | `my.ai.agents.enable` | `false` | Agent packages, settings and wrappers |
 | `my.ai.agents.<name>.enable` | `true` | Select individual agents within that global gate |
+| `my.ai.agents.codex.model` | `"gpt-5.6-terra"` | Default model merged into Codex's writable config.toml; `null` leaves it unmanaged |
+| `my.ai.agents.codex.reasoningEffort` | `"medium"` | `model_reasoning_effort` for Codex's default (execute) mode |
+| `my.ai.agents.codex.planReasoningEffort` | `"xhigh"` | `plan_mode_reasoning_effort` for Codex's Plan mode (`Shift+Tab`) |
 | `my.ai.content.enable` | `false` | Skills and rules exported under `$XDG_CONFIG_HOME/ai/content/` |
 | `my.ai.mcp.enable` | `false` | MCP wrappers, exports and integration |
 | `my.ai.mcp.clients.<name>.enable` | `true` | MCP integration for this Nix agent; does not suppress explicit exports |
@@ -1769,6 +1772,16 @@ or removed; personal entries and other settings survive. A modified owned entry
 or conflicting name fails before writing. Rename the personal entry or restore
 the managed definition, then retry. A pending journal makes interrupted updates
 recoverable; do not delete it to silence a conflict.
+
+A small table of scalar leaves — `tui.status_line`, `model`,
+`model_reasoning_effort`, `plan_mode_reasoning_effort` — is instead
+authoritative: activation sets each one every run while it is managed, wins
+over a later `/model` or `/statusline` edit made in between, and on disable
+removes it only if the file still holds the value this script last wrote (a
+differing value, e.g. a fresh interactive choice, is left standing). This is
+deliberately not the `mcp_servers` conflict semantics: a pre-existing `model`
+is replaced without error, because the whole point is to override whatever
+Codex's own picker last wrote, not to detect and reject it.
 
 `just ai-check` tests isolated combinations, portable exports, transitive package
 closures and writable-config migrations without live credentials or activation.

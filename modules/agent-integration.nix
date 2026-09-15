@@ -13,10 +13,12 @@ in
       content = ai.content.artifacts;
       codexMcp = mcpFor "codex";
       python = pkgs.python3.withPackages (ps: [ ps.tomli-w ]);
-      managedSettings = (pkgs.formats.toml { }).generate "codex-managed-settings" {
+      managedSettings = (pkgs.formats.toml { }).generate "codex-managed-settings" ({
         mcp_servers = codexMcp;
         # Native Codex CLI fields, in display order. Activation is authoritative
-        # for this leaf; /statusline edits last until the next activation.
+        # for these leaves; a later /model or /statusline edit lasts only until
+        # the next activation. See modules/ai/_files/codex-merge-config.py's
+        # LEAVES table for how the merge treats them.
         tui = lib.optionalAttrs (enabled "codex") {
           status_line = [
             "run-state"
@@ -31,7 +33,22 @@ in
             "thread-title"
           ];
         };
-      };
+      }
+      # These are scalars, unlike `tui`: an empty attrset can stand in for "not
+      # managed", but there is no empty form of a string, so each is appended
+      # conditionally on the outer attrset instead of nested inside a single
+      # `enabled "codex"` block. Getting this wrong would make a fully disabled
+      # Codex integration still emit e.g. `model = null`, defeating the merge
+      # script's no-op guard and starting to write into a home it shouldn't touch.
+      // lib.optionalAttrs (enabled "codex" && ai.agents.codex.model != null) {
+        model = ai.agents.codex.model;
+      }
+      // lib.optionalAttrs (enabled "codex" && ai.agents.codex.reasoningEffort != null) {
+        model_reasoning_effort = ai.agents.codex.reasoningEffort;
+      }
+      // lib.optionalAttrs (enabled "codex" && ai.agents.codex.planReasoningEffort != null) {
+        plan_mode_reasoning_effort = ai.agents.codex.planReasoningEffort;
+      });
       ruleActivation = target: active:
         lib.hm.dag.entryAfter [ "writeBoundary" ] (
           if active then ''
