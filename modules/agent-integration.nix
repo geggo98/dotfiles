@@ -15,6 +15,22 @@ in
       python = pkgs.python3.withPackages (ps: [ ps.tomli-w ]);
       managedSettings = (pkgs.formats.toml { }).generate "codex-managed-settings" {
         mcp_servers = codexMcp;
+        # Native Codex CLI fields, in display order. Activation is authoritative
+        # for this leaf; /statusline edits last until the next activation.
+        tui = lib.optionalAttrs (enabled "codex") {
+          status_line = [
+            "run-state"
+            "model-with-reasoning"
+            "current-dir"
+            "git-branch"
+            "context-used"
+            "five-hour-limit"
+            "weekly-limit"
+            "branch-changes"
+            "task-progress"
+            "thread-title"
+          ];
+        };
       };
       ruleActivation = target: active:
         lib.hm.dag.entryAfter [ "writeBoundary" ] (

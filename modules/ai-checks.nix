@@ -41,6 +41,17 @@ in
         agents.claude.enable = false;
         mcp.enable = true;
       };
+      withoutCodex = makeHome allAspects {
+        agents.enable = true;
+        agents.codex.enable = false;
+      };
+      statusLineHooks = pkgs.writeText "codex-status-line-hooks.json" (builtins.toJSON (
+        map
+          (home: {
+            enabled = home.config.programs.codex.enable;
+            hook = home.config.home.activation.codexConfig.data;
+          }) [ agentsOnly withoutCodexMcp full allOff withoutCodex ]
+      ));
       noAgents = c: !c.programs.claude-code.enable && !c.programs.codex.enable && !c.programs.opencode.enable;
       noMcp = c: c.programs.claude-code.mcpServers == { }
         && !(c.programs.opencode.settings ? mcp)
@@ -86,6 +97,24 @@ in
           # The source tests use the same relative layout as the repository.
           cp ${./ai/_files/merge-rules-block} _files/merge-rules-block
           python3 tests/test_codex_config.py
+          python3 - ${statusLineHooks} <<'PY'
+          import json, re, sys, tomllib
+          for case in json.load(open(sys.argv[1])):
+              # Matches the generated /nix/store/...-codex-managed-settings argument.
+              path = re.search(r"/nix/store/[^\s]+-codex-managed-settings", case["hook"])
+              assert path, "managed settings missing from activation"
+              with open(path.group(), "rb") as stream:
+                  settings = tomllib.load(stream)
+              items = settings.get("tui", {}).get("status_line")
+              if case["enabled"]:
+                  assert items == [
+                      "run-state", "model-with-reasoning", "current-dir", "git-branch",
+                      "context-used", "five-hour-limit", "weekly-limit", "branch-changes",
+                      "task-progress", "thread-title",
+                  ], items
+              else:
+                  assert items is None, items
+          PY
           python3 tests/test_rules.py
           python3 ${./ai/_tests/check_exports.py} \
             ${exports."ai/mcp/claude.json".source} \

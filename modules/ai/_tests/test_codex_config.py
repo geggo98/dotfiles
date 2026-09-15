@@ -26,11 +26,95 @@ class MergeTests(unittest.TestCase):
         self.old = {"url": "https://docs.example.org/mcp"}
         self.new = {"url": "https://docs.example.org/mcp/v2"}
 
-    def desired(self, servers):
-        self.managed.write_text(tomli_w.dumps({"mcp_servers": servers}))
+    def desired(self, servers, status_line=None):
+        managed = {"mcp_servers": servers}
+        if status_line is not None:
+            managed["tui"] = {"status_line": status_line}
+        self.managed.write_text(tomli_w.dumps(managed))
 
     def run_merge(self):
         merger.merge(self.managed, self.target, self.state)
+
+    def test_status_line_install_update_override_and_disable(self):
+        personal = {"model": "example", "tui": {"theme": "example"},
+                    "projects": {"/example": {"trust_level": "trusted"}}}
+        self.target.write_text(tomli_w.dumps(personal))
+        # Existing MCP-only version-1 journal needs no separate migration.
+        self.state.write_text(json.dumps({"version": 1, "owned": {}}))
+        for status_line in (["run-state"], ["model-with-reasoning"], []):
+            self.desired({}, status_line)
+            self.run_merge()
+            expected = {**personal, "tui": {**personal["tui"], "status_line": status_line}}
+            self.assertEqual(merger.load_toml(self.target), expected)
+            first = self.target.read_bytes()
+            self.run_merge()
+            self.assertEqual(self.target.read_bytes(), first)
+            expected["tui"]["status_line"] = ["current-dir"]
+            self.target.write_text(tomli_w.dumps(expected))
+            self.run_merge()
+            self.assertEqual(self.target.read_bytes(), first)
+        self.desired({})
+        self.run_merge()
+        self.assertEqual(merger.load_toml(self.target), personal)
+        self.assertIsNone(json.loads(self.state.read_text())["owned_status_line"])
+
+    def test_status_line_disable_preserves_personal_edits(self):
+        self.desired({}, ["run-state"])
+        self.run_merge()
+        personal = {"tui": {"status_line": ["current-dir"]}}
+        self.target.write_text(tomli_w.dumps(personal))
+        self.desired({})
+        self.run_merge()
+        self.assertEqual(merger.load_toml(self.target), personal)
+        self.assertIsNone(json.loads(self.state.read_text())["owned_status_line"])
+
+    def test_status_line_interruption_then_disable(self):
+        for fail_at in (1, 2, 3):
+            with self.subTest(fail_at=fail_at):
+                self.target.unlink(missing_ok=True)
+                self.state.unlink(missing_ok=True)
+                self.desired({}, ["run-state"])
+                self.run_merge()
+                self.desired({}, ["current-dir"])
+                atomic = merger.atomic_write
+                calls = 0
+
+                def interrupt(*args, **kwargs):
+                    nonlocal calls
+                    calls += 1
+                    if calls == fail_at:
+                        raise OSError("simulated interruption")
+                    return atomic(*args, **kwargs)
+
+                with patch.object(merger, "atomic_write", side_effect=interrupt):
+                    with self.assertRaises(OSError):
+                        self.run_merge()
+                self.desired({})
+                self.run_merge()
+                self.assertEqual(merger.load_toml(self.target), {})
+
+    def test_status_line_does_not_bypass_mcp_conflict(self):
+        self.target.write_text(tomli_w.dumps({"mcp_servers": {"docs": self.old}}))
+        before = self.target.read_bytes()
+        self.desired({"docs": self.new}, ["run-state"])
+        with self.assertRaisesRegex(ValueError, "conflicts"):
+            self.run_merge()
+        self.assertEqual(self.target.read_bytes(), before)
+        self.assertFalse(self.state.exists())
+
+    def test_invalid_tui_or_status_journal_fails_before_writing(self):
+        self.desired({}, ["run-state"])
+        for config, state in (
+            ({"tui": "invalid"}, {"version": 1, "owned": {}}),
+            ({}, {"version": 1, "owned": {}, "owned_status_line": "invalid"}),
+        ):
+            with self.subTest(config=config, state=state):
+                self.target.write_text(tomli_w.dumps(config))
+                self.state.write_text(json.dumps(state))
+                before = self.target.read_bytes(), self.state.read_bytes()
+                with self.assertRaises(ValueError):
+                    self.run_merge()
+                self.assertEqual((self.target.read_bytes(), self.state.read_bytes()), before)
 
     def test_install_update_disable_preserves_personal_settings(self):
         personal = {"model": "example-model", "projects": {"/example": {"trust_level": "trusted"}},
