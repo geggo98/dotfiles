@@ -9,7 +9,7 @@ description: >
   or when .envrc files reference `use devenv`. Trigger for ad-hoc Nix environments (`devenv -O`),
   polyrepo/monorepo setups, devenv profiles, devenv outputs, or devenv LSP/MCP. Even if the user just
   says "set up my project environment" or "I need MySQL and Java for local dev", consider this skill.
-allowed-tools: Read(references/*) Bash(+nix-query *) Bash(zsh *) Read
+allowed-tools: Read(references/*) Bash(+nix-query *) Bash(${CLAUDE_SKILL_DIR}/scripts/devenv-tools.sh *) Bash(./scripts/devenv-tools.sh *) Bash(zsh *) Read
 ---
 
 # Devenv — Nix-Based Declarative Developer Environments
@@ -83,6 +83,49 @@ devenv info                           # Show environment info
 devenv update                         # Update inputs from devenv.yaml
 devenv container <name> --docker-run  # Build & run container
 ```
+
+## On-demand tools (MCP replacement)
+
+The persistent devenv MCP is disabled for all managed agents while
+[devenv#3065](https://github.com/cachix/devenv/issues/3065) remains unresolved.
+Use this skill's executable **Zsh** helper directly, never with `bash`:
+
+```sh
+"${CLAUDE_SKILL_DIR}/scripts/devenv-tools.sh" search_options languages.python
+"${CLAUDE_SKILL_DIR}/scripts/devenv-tools.sh" list_processes
+"${CLAUDE_SKILL_DIR}/scripts/devenv-tools.sh" get_process_logs example 100
+```
+
+For agents without `CLAUDE_SKILL_DIR`, use the absolute path of this loaded
+skill's `scripts/devenv-tools.sh`. Keep the working directory at the devenv
+project root; do not change into the skill directory to run the helper.
+`Bash(...)` in the frontmatter names the agent's command tool, not the interpreter.
+
+| Helper command | Native devenv command |
+|---|---|
+| `search_packages QUERY` | `search QUERY` |
+| `search_options QUERY` | `search QUERY` |
+| `list_processes` | `processes list` |
+| `get_process_status NAME` | `processes status NAME` |
+| `get_process_logs NAME [LINES]` | `processes logs NAME --lines LINES` (default 100) |
+| `start_process NAME` | `processes start NAME` |
+| `stop_process NAME` | `processes stop NAME` |
+| `restart_process NAME` | `processes restart NAME` |
+
+Both search aliases return the CLI's combined package and option search, with
+native search semantics and output, not MCP JSON. Output and exit codes pass
+through unchanged. Named start may start the process manager and dependencies;
+these requested services remain running after the CLI exits. Stop/restart also
+change project processes, so use them only within the requested task.
+
+The helper prefers the full CLI installed in the user's Nix profile over PATH,
+which may contain a restricted flake wrapper. Set `DEVENV_BIN=/absolute/path/to/devenv`
+to select another full CLI; an invalid override fails without fallback. No
+MCP process is started. CLI evaluation may still use substantial memory during
+a call. Missing project configuration is a CLI error, not an empty search result.
+
+To reactivate the persistent server after verifying an upstream fix, set
+`my.ai.mcp.servers.devenv.enable = true` in the Nix configuration.
 
 ## Setup
 

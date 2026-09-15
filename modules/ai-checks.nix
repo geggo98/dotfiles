@@ -103,6 +103,11 @@ in
           cp ${./ai/_files/codex-merge-config.py} _files/codex-merge-config.py
           # The source tests use the same relative layout as the repository.
           cp ${./ai/_files/merge-rules-block} _files/merge-rules-block
+          mkdir -p _files/skills/devenv/scripts
+          cp ${./ai/_files/skills/devenv/scripts/devenv-tools.sh} _files/skills/devenv/scripts/devenv-tools.sh
+          chmod +x _files/skills/devenv/scripts/devenv-tools.sh
+          patchShebangs _files/skills/devenv/scripts/devenv-tools.sh
+          python3 tests/test_devenv_tools.py
           python3 tests/test_codex_config.py
           python3 - ${statusLineHooks} <<'PY'
           import json, re, sys, tomllib

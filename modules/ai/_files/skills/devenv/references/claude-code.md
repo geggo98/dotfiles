@@ -175,16 +175,17 @@ Specialized AI assistants with their own context window and tool restrictions.
 
 ## MCP servers
 
-Configure MCP servers for additional context:
+The persistent devenv MCP is temporarily disabled across managed agents because
+of [devenv#3065](https://github.com/cachix/devenv/issues/3065). Use the
+[skill helper](../SKILL.md#on-demand-tools-mcp-replacement) for its eight operations.
+Do not add a project-local `devenv mcp` entry: that would start another persistent
+server despite the global exclusion.
+
+Other MCP servers can still be configured for additional context:
 
 ```nix
 {
   claude.code.mcpServers = {
-    devenv = {
-      type = "stdio";
-      command = "devenv";
-      args = [ "mcp" ];
-    };
     # Example: filesystem MCP
     filesystem = {
       type = "stdio";
