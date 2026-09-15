@@ -55,9 +55,8 @@
             };
             exclude = mkOption {
               type = types.listOf types.str;
-              # Skills replace Atlassian here. Devenv remains excluded because
-              # its resident MCP process retains excessive memory (devenv#3065).
-              default = lib.optionals (builtins.elem name [ "claude" "antigravity" ]) [ "atlassian" "devenv" ];
+              # Skills replace Atlassian for these clients.
+              default = lib.optionals (builtins.elem name [ "claude" "antigravity" ]) [ "atlassian" ];
               description = "Server names omitted from this client's integration and exports.";
             };
           });
@@ -71,6 +70,11 @@
             description = "Shared MCP catalog. Credentials are runtime secret-file references, never values.";
             type = types.attrsOf (types.submodule {
               options = {
+                enable = mkOption {
+                  type = types.bool;
+                  default = true;
+                  description = "Expose this server to clients and exports; keep its wrapper installed when disabled.";
+                };
                 stdio = mkOption { type = types.package; };
                 remote = mkOption {
                   default = null;

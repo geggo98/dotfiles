@@ -35,6 +35,19 @@ class MergeTests(unittest.TestCase):
     def run_merge(self):
         merger.merge(self.managed, self.target, self.state)
 
+    def test_disable_devenv_preserves_other_servers_and_personal_settings(self):
+        devenv = {"command": "/example/bin/+mcp-devenv", "args": []}
+        personal = {"url": "https://personal.example.org/mcp"}
+        self.target.write_text(tomli_w.dumps({"model": "example", "mcp_servers": {"personal": personal}}))
+        self.desired({"devenv": devenv, "docs": self.old})
+        self.run_merge()
+        self.desired({"docs": self.old})
+        self.run_merge()
+        self.assertEqual(merger.load_toml(self.target), {
+            "model": "example", "mcp_servers": {"personal": personal, "docs": self.old},
+        })
+        self.assertNotIn("devenv", json.loads(self.state.read_text())["owned"])
+
     def test_status_line_install_update_override_and_disable(self):
         personal = {"model": "example", "tui": {"theme": "example"},
                     "projects": {"/example": {"trust_level": "trusted"}}}

@@ -138,7 +138,13 @@ in
             auth = { kind = "bearer"; secret = "context7_api_key"; var = "CONTEXT7_API_KEY"; };
           };
         };
-        devenv = { stdio = mcp-devenv; };
+        devenv = {
+          stdio = mcp-devenv;
+          # Temporary: https://github.com/cachix/devenv/issues/3065
+          # Keep the wrapper for later reactivation; the skill uses direct CLI calls.
+          # Set my.ai.mcp.servers.devenv.enable = true once the fix is verified.
+          enable = lib.mkDefault false;
+        };
         javadocs = {
           stdio = mcp-javadocs;
           remote = { url = "https://www.javadocs.dev/mcp"; auth = null; };

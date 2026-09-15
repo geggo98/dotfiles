@@ -145,7 +145,7 @@ in
 
       renderFor = agent:
         let
-          visible = builtins.removeAttrs mcpServers agent.exclude;
+          visible = lib.filterAttrs (_: s: s.enable) (builtins.removeAttrs mcpServers agent.exclude);
           useRemote = s: agent.remote && s.remote != null
             && builtins.elem (authKind s.remote) agent.authKinds;
         in

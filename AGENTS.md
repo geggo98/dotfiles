@@ -1698,10 +1698,13 @@ code (`mcp_nixos.server.nix.fn`) and reimplements none of it. See
 2. Load credentials at runtime from `$XDG_CONFIG_HOME/sops-nix/secrets`.
 3. Gate host-specific servers with their feature option. `my.ai.atlassian.enable`
    remains the host gate for Atlassian MCP and the Jira/Bitbucket skills.
-4. Use `my.ai.mcp.clients.<name>.exclude` to hide servers from a client without
-   removing their wrappers. Claude and Antigravity exclude `atlassian` and
-   `devenv` by default. `programs.claude-code.mcpServers` feeds Home Manager's
-   generated plugin, so removing an entry removes its plugin tools too.
+4. Use `my.ai.mcp.clients.<name>.exclude` to hide servers from one client.
+   Claude and Antigravity exclude `atlassian` by default. Set
+   `my.ai.mcp.servers.<name>.enable = false` to exclude a server from every
+   client and export while retaining its wrapper. Devenv is disabled centrally
+   until devenv#3065 is fixed; its skill supplies direct CLI calls instead.
+   `programs.claude-code.mcpServers` feeds Home Manager's generated plugin,
+   so removing an entry removes its plugin tools too.
 
 ### Independent AI aspects
 
@@ -1720,6 +1723,7 @@ such as `llm`, Ollama and `+nix-query`.
 | `my.ai.mcp.enable` | `false` | MCP wrappers, exports and integration |
 | `my.ai.mcp.clients.<name>.enable` | `true` | MCP integration for this Nix agent; does not suppress explicit exports |
 | `my.ai.mcp.clients.<name>.exclude` | Client-specific | Server names excluded from integration and exports |
+| `my.ai.mcp.servers.<name>.enable` | `true` (devenv: `false`) | Expose server to clients and exports; retain wrapper when disabled |
 | `my.ai.mcp.exports` | `[ ]` | Portable client formats under `$XDG_CONFIG_HOME/ai/mcp/` |
 
 Agent names: `claude`, `codex`, `opencode`, `gemini`, `antigravity`.

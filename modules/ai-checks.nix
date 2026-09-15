@@ -24,6 +24,10 @@ in
         mcp.enable = true;
         mcp.exports = [ "claude" "codex" "opencode" "antigravity" ];
       };
+      devenvReenabled = makeHome [ hm.mcp-servers ] {
+        mcp.enable = true;
+        mcp.servers.devenv.enable = true;
+      };
       contentOnly = makeHome [ hm.agent-content ] { content.enable = true; };
       full = makeHome allAspects {
         agents.enable = true;
@@ -70,6 +74,9 @@ in
         (noAgents contentOnly.config && noAgentWrappers contentOnly.config && noMcpWrappers contentOnly.config)
         (contentOnly.config.xdg.configFile ? "ai/content/skills")
         (!(contentOnly.config.home.file ? ".agents/skills"))
+        (builtins.all (client: !(client ? devenv)) (lib.attrValues full.config.my.ai.mcp.rendered))
+        (builtins.all (client: client ? devenv) (lib.attrValues devenvReenabled.config.my.ai.mcp.rendered))
+        (builtins.elem "+mcp-devenv" (names mcpOnly.config))
         (full.config.my.ai.mcp.rendered.claude ? context7)
         (!(full.config.my.ai.mcp.rendered.claude ? atlassian))
         (full.config.my.ai.mcp.rendered.codex ? atlassian)

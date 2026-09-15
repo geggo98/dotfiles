@@ -24,8 +24,7 @@ assert "url" in claude["javadocs"]
 assert "url" in codex["javadocs"]
 assert "url" in opencode["javadocs"]
 assert "serverUrl" in agy["javadocs"]
-assert "devenv" not in claude and "devenv" not in agy
-assert "devenv" in codex and "devenv" in opencode
+assert all("devenv" not in client for client in (claude, codex, opencode, agy))
 assert "generation" not in tomllib.loads(wt.read_text()).get("commit", {})
 for path in (mcp_closure, off_closure):
     paths = path.read_text().splitlines()
