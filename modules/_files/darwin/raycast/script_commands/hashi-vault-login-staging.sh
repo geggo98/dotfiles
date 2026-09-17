@@ -7,7 +7,7 @@
 
 # Optional parameters:
 # @raycast.icon ./images/hashi-vault.png
-# @raycast.packageName Hashi Vault
+# @raycast.packageName Hashi Vault (KFZ)
 
 # Documentation:
 # @raycast.author stefan.schwetschke
