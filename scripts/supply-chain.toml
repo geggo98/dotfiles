@@ -202,10 +202,6 @@ github = "google-antigravity/antigravity-cli"
 # withdrawal signal, and those are what a date cannot give you.
 
 [[extensions]]
-id = "bierner.markdown-mermaid"
-registry = "open-vsx"
-
-[[extensions]]
 id = "bmalehorn.vscode-fish"
 registry = "open-vsx"
 

@@ -38,8 +38,20 @@
         # -- Markdown, docs, diagrams ------------------------------------
         ovsx.davidanson.vscode-markdownlint
         vsmp.yzhang.markdown-all-in-one # Open VSX is stuck on 3.6.2 (2024-01)
-        ovsx.bierner.markdown-mermaid
         ovsx.jebbs.plantuml
+        # vstirbu is the "Mermaid Chart" extension: standalone .mmd preview
+        # PLUS its own markdown.markdownItPlugins + markdown.previewScripts
+        # for the built-in Markdown preview. Do NOT also add
+        # bierner.markdown-mermaid for that second role — both extensions
+        # unconditionally inject a mermaid-rendering script into the SAME
+        # preview webview, and neither offers a setting to disable just that
+        # part. Measured 2026-09-17: with both installed, mermaid fences in
+        # Markdown preview failed with a self-nesting "No diagram type
+        # detected … for text: No diagram type detected … for text:" —
+        # the second script re-rendering the first script's already-failed
+        # output. bierner contributes no commands/languages of its own, so
+        # it added nothing vstirbu didn't already cover; removing it fixed
+        # the preview with no loss of function.
         vsmp.vstirbu.vscode-mermaid-preview # Open VSX is stuck on 1.6.3 (2022-06)
         vsmp.pomdtr.excalidraw-editor # Open VSX is stuck on 3.9.0
 

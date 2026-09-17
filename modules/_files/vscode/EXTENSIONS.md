@@ -10,14 +10,14 @@ project-specific and belongs in that project's `.vscode/extensions.json`. This s
 the one `scripts/supply-chain.toml` writes down: *"Nix manages the default extension
 set; further extensions go in each project's `.vscode` metadata."*
 
-## Managed by Nix (18)
+## Managed by Nix (17)
 
 Declared in `modules/vscode.nix`, audited by `just audit-extensions`, cooled down by the
 age of the `nix-vscode-extensions` input.
 
 | Group | Extensions |
 |---|---|
-| Markdown, docs, diagrams | `davidanson.vscode-markdownlint`, `yzhang.markdown-all-in-one`, `bierner.markdown-mermaid`, `jebbs.plantuml`, `vstirbu.vscode-mermaid-preview`, `pomdtr.excalidraw-editor` |
+| Markdown, docs, diagrams | `davidanson.vscode-markdownlint`, `yzhang.markdown-all-in-one`, `jebbs.plantuml`, `vstirbu.vscode-mermaid-preview`, `pomdtr.excalidraw-editor` |
 | Containers, Kubernetes | `docker.docker`, `ms-azuretools.vscode-containers`, `ms-kubernetes-tools.vscode-kubernetes-tools` |
 | Git | `eamodio.gitlens` |
 | This repo's own languages | `jnoortheen.nix-ide`, `redhat.vscode-yaml`, `bmalehorn.vscode-fish` |
@@ -39,7 +39,7 @@ versions without any error. Measured 2026-08-26 against both registries:
 | `ms-azuretools.vscode-containers` | 2.4.5 | 2.5.0 | marketplace |
 | `deerawan.vscode-dash` | **404** | 2.4.0 | marketplace |
 | `vstirbu.vscode-mermaid-preview` (measured 2026-09-17) | 1.6.3 (2022-06) | 2.1.2 (2025-07) | marketplace |
-| the other twelve | current | — | open-vsx |
+| the other eleven | current | — | open-vsx |
 
 Two more facts from the same measurement:
 
@@ -66,6 +66,26 @@ write; leave alone what something else writes back.
 Install these three by hand. To take `remote-containers` under Nix anyway, add
 `vsmp.ms-vscode-remote.remote-containers` in `modules/vscode.nix` and accept the
 publication — it is one line, and the decision belongs to whoever makes it.
+
+### Rejected on evidence: `bierner.markdown-mermaid`
+
+Briefly managed alongside `vstirbu.vscode-mermaid-preview` on 2026-09-17, then removed
+the same day. Both extensions unconditionally contribute `markdown.markdownItPlugins`
+**and** `markdown.previewScripts` — each injects its own mermaid-rendering script into
+VS Code's built-in Markdown preview webview, and neither ships a setting to disable just
+that part. With both installed, a `mermaid` fence in Markdown preview failed with a
+self-nesting error: `No diagram type detected matching given configuration for text: No
+diagram type detected matching given configuration for text:` — the second script
+re-rendering the first script's already-failed output as if it were the diagram source.
+Standalone `.mmd` files kept previewing fine throughout, because that path uses vstirbu's
+own custom editor command, not the shared webview.
+
+`bierner.markdown-mermaid`'s `package.json` declares no `commands`, `languages`, or
+`customEditors` — its only contribution is that same markdown-preview hook — so it added
+nothing `vstirbu.vscode-mermaid-preview` didn't already provide (verified: vstirbu ships
+its own `mermaid-c4Diagram.tmLanguage.json` grammar, so C4 diagram support was never the
+gap). Removing it fixed the preview with no loss of function. Do not re-add it alongside
+vstirbu for this reason, even though it is otherwise a reasonable, lightweight extension.
 
 ## Project-specific — install per project, not globally (24)
 
@@ -170,12 +190,12 @@ because VS Code loads the higher version and the gallery copy carries a version 
 in its directory name while the Nix one does not. The pin then exists and does nothing.
 
 ```bash
-find ~/.vscode/extensions -maxdepth 1 -type l ! -name '.*' | wc -l   # expect 18
+find ~/.vscode/extensions -maxdepth 1 -type l ! -name '.*' | wc -l   # expect 17
 ls ~/.vscode/extensions | grep -E '^(docker\.docker|eamodio\.gitlens)-'  # expect nothing
 ```
 
 `! -name '.*'` excludes `.nix-managed-extensions.json`, the hook's trigger file, which is
-a symlink too — without it the count is 19 and the check fails on a healthy machine.
+a symlink too — without it the count is 18 and the check fails on a healthy machine.
 
 `find`, deliberately, not `ls -l | grep -- '->'`: the latter reported 0 on a correctly
 switched machine because the interactive `ls` renders symlinks with `⇒`. A shell alias
