@@ -38,7 +38,9 @@
         # -- Markdown, docs, diagrams ------------------------------------
         ovsx.davidanson.vscode-markdownlint
         vsmp.yzhang.markdown-all-in-one # Open VSX is stuck on 3.6.2 (2024-01)
+        ovsx.bierner.markdown-mermaid
         ovsx.jebbs.plantuml
+        vsmp.vstirbu.vscode-mermaid-preview # Open VSX is stuck on 1.6.3 (2022-06)
         vsmp.pomdtr.excalidraw-editor # Open VSX is stuck on 3.9.0
 
         # -- Containers and Kubernetes -----------------------------------

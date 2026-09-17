@@ -10,14 +10,14 @@ project-specific and belongs in that project's `.vscode/extensions.json`. This s
 the one `scripts/supply-chain.toml` writes down: *"Nix manages the default extension
 set; further extensions go in each project's `.vscode` metadata."*
 
-## Managed by Nix (16)
+## Managed by Nix (18)
 
 Declared in `modules/vscode.nix`, audited by `just audit-extensions`, cooled down by the
 age of the `nix-vscode-extensions` input.
 
 | Group | Extensions |
 |---|---|
-| Markdown, docs, diagrams | `davidanson.vscode-markdownlint`, `yzhang.markdown-all-in-one`, `jebbs.plantuml`, `pomdtr.excalidraw-editor` |
+| Markdown, docs, diagrams | `davidanson.vscode-markdownlint`, `yzhang.markdown-all-in-one`, `bierner.markdown-mermaid`, `jebbs.plantuml`, `vstirbu.vscode-mermaid-preview`, `pomdtr.excalidraw-editor` |
 | Containers, Kubernetes | `docker.docker`, `ms-azuretools.vscode-containers`, `ms-kubernetes-tools.vscode-kubernetes-tools` |
 | Git | `eamodio.gitlens` |
 | This repo's own languages | `jnoortheen.nix-ide`, `redhat.vscode-yaml`, `bmalehorn.vscode-fish` |
@@ -38,7 +38,8 @@ versions without any error. Measured 2026-08-26 against both registries:
 | `pomdtr.excalidraw-editor` | 3.9.0 | 3.9.3 | marketplace |
 | `ms-azuretools.vscode-containers` | 2.4.5 | 2.5.0 | marketplace |
 | `deerawan.vscode-dash` | **404** | 2.4.0 | marketplace |
-| the other eleven | current | — | open-vsx |
+| `vstirbu.vscode-mermaid-preview` (measured 2026-09-17) | 1.6.3 (2022-06) | 2.1.2 (2025-07) | marketplace |
+| the other twelve | current | — | open-vsx |
 
 Two more facts from the same measurement:
 
@@ -169,12 +170,12 @@ because VS Code loads the higher version and the gallery copy carries a version 
 in its directory name while the Nix one does not. The pin then exists and does nothing.
 
 ```bash
-find ~/.vscode/extensions -maxdepth 1 -type l ! -name '.*' | wc -l   # expect 16
+find ~/.vscode/extensions -maxdepth 1 -type l ! -name '.*' | wc -l   # expect 18
 ls ~/.vscode/extensions | grep -E '^(docker\.docker|eamodio\.gitlens)-'  # expect nothing
 ```
 
 `! -name '.*'` excludes `.nix-managed-extensions.json`, the hook's trigger file, which is
-a symlink too — without it the count is 17 and the check fails on a healthy machine.
+a symlink too — without it the count is 19 and the check fails on a healthy machine.
 
 `find`, deliberately, not `ls -l | grep -- '->'`: the latter reported 0 on a correctly
 switched machine because the interactive `ls` renders symlinks with `⇒`. A shell alias

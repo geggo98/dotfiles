@@ -202,6 +202,10 @@ github = "google-antigravity/antigravity-cli"
 # withdrawal signal, and those are what a date cannot give you.
 
 [[extensions]]
+id = "bierner.markdown-mermaid"
+registry = "open-vsx"
+
+[[extensions]]
 id = "bmalehorn.vscode-fish"
 registry = "open-vsx"
 
@@ -264,6 +268,10 @@ registry = "open-vsx"
 [[extensions]]
 id = "vscode-icons-team.vscode-icons"
 registry = "open-vsx"
+
+[[extensions]]
+id = "vstirbu.vscode-mermaid-preview"
+registry = "vscode-marketplace"      # Open VSX is stuck on 1.6.3 (2022-06)
 
 [[extensions]]
 id = "yzhang.markdown-all-in-one"
