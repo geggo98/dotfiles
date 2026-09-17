@@ -38,8 +38,11 @@ versions without any error. Measured 2026-08-26 against both registries:
 | `pomdtr.excalidraw-editor` | 3.9.0 | 3.9.3 | marketplace |
 | `ms-azuretools.vscode-containers` | 2.4.5 | 2.5.0 | marketplace |
 | `deerawan.vscode-dash` | **404** | 2.4.0 | marketplace |
-| `vstirbu.vscode-mermaid-preview` (measured 2026-09-17) | 1.6.3 (2022-06) | 2.1.2 (2025-07) | marketplace |
+| `vstirbu.vscode-mermaid-preview` (measured 2026-09-17) | 1.6.3 (2022-06) | 2.2.0 (2026-09-04)¹ | marketplace |
 | the other twelve | current | — | open-vsx |
+
+¹ `nix-vscode-extensions` pinned 2.1.2 at first; 2.2.0 needed a deliberate cooldown
+override to fix a real bug — see "root cause was a vstirbu bug" below.
 
 Two more facts from the same measurement:
 
@@ -67,36 +70,62 @@ Install these three by hand. To take `remote-containers` under Nix anyway, add
 `vsmp.ms-vscode-remote.remote-containers` in `modules/vscode.nix` and accept the
 publication — it is one line, and the decision belongs to whoever makes it.
 
-### `bierner.markdown-mermaid` + `vstirbu.vscode-mermaid-preview` conflict — and the fix
+### `bierner.markdown-mermaid` + `vstirbu.vscode-mermaid-preview` conflict — root cause was a vstirbu bug, not a config gap
 
 Both extensions unconditionally contribute `markdown.markdownItPlugins` **and**
 `markdown.previewScripts` — each injects its own mermaid-rendering script into VS Code's
 built-in Markdown preview webview, and neither ships a documented setting to disable just
-that part. Measured 2026-09-17, with both installed and no workaround: a `mermaid` fence
-in Markdown preview failed with a self-nesting error — `No diagram type detected matching
-given configuration for text: No diagram type detected matching given configuration for
-text:` — the second script re-rendering the first script's already-failed output as if it
-were the diagram source. Standalone `.mmd` files kept previewing fine throughout, because
-that path uses vstirbu's own custom editor command, not the shared webview.
+that part. Measured 2026-09-17, with both installed (vstirbu at 2.1.2, the version
+`nix-vscode-extensions` pinned as of 2026-08-28): a `mermaid` fence in Markdown preview
+failed with a self-nesting error — `No diagram type detected matching given configuration
+for text: No diagram type detected matching given configuration for text:` — the second
+script re-rendering the first script's already-failed output as if it were the diagram
+source. Standalone `.mmd` files kept previewing fine throughout (vstirbu's own custom
+editor command, not the shared webview).
 
 Removing `bierner.markdown-mermaid` outright (its `package.json` declares no `commands`,
 `languages`, or `customEditors` — only that same preview hook) killed the conflict but
-also killed the rendering: with `vstirbu.vscode-mermaid-preview` alone, mermaid fences
-rendered **nothing** anywhere in a real multi-diagram document — no error either.
-vstirbu's own markdown-it integration does not work in isolation (its
-`package.json` separately declares a malformed `activationEvents: ["onLanguage"]`, missing
-a language id, and an `enabledApiProposals` entry VS Code rejects outright as
-nonexistent — signs of a not-fully-polished 2.1.2 release).
+also killed the rendering: with `vstirbu.vscode-mermaid-preview` 2.1.2 alone, mermaid
+fences rendered **nothing** anywhere in a real multi-diagram document — no error either.
+Its own markdown-it integration did not work in isolation, consistent with two other
+signs of a not-fully-polished release found in the same `package.json`: a malformed
+`activationEvents: ["onLanguage"]` (missing a language id) and an `enabledApiProposals`
+entry VS Code rejects outright as nonexistent. Setting the undocumented
+`mermaid.languages = []` (absent from `contributes.configuration`; read straight out of
+vstirbu's minified `out/extension.js`, where `extendMarkdownIt` gates which fenced-code
+languages it claims via `getConfiguration("mermaid").get("languages", ["mermaid"])`) made
+no observable difference against either failure mode.
 
-The fix that keeps both extensions **and** working previews: `mermaid.languages = []` in
-`managedSettings` (`modules/vscode.nix`). It is undocumented — absent from vstirbu's
-`contributes.configuration` — found by reading its minified `out/extension.js` directly:
-`extendMarkdownIt` gates which fenced-code languages it claims via
-`getConfiguration("mermaid").get("languages", ["mermaid"])`. Emptying that list stops
-vstirbu from also hooking the preview webview, leaving `bierner.markdown-mermaid` as the
-sole renderer there. Being undocumented, it can break silently on a future vstirbu
-release (ignored key, renamed namespace) — if mermaid fences in Markdown preview error or
-go blank again after a `nix-vscode-extensions` bump, re-check this first.
+**The actual fix was a version bump.** vstirbu 2.2.0 (2026-09-04) re-focused the extension
+on "free, local diagram previewing" — cloud/AI/account features moved to a separate
+`MermaidChart.vscode-mermaid-chart` extension — and its changelog explicitly lists
+"Mermaid rendering in Markdown preview" as a still-supported feature post-split. Confirmed
+working here. No `nix-vscode-extensions` revision old enough to clear the 14-day extension
+cooldown (`[cooldown.per_input]` in `scripts/supply-chain.toml`) carried 2.2.0 as of
+2026-09-17, so the cooldown was deliberately overridden — see "Undercutting a cooldown" in
+`AGENTS.md` — with the research it requires done first:
+
+- The extension's repo transferred to the `Mermaid-Chart` GitHub org (the creators of
+  mermaid.js itself, matching the changelog's own "now maintained by the creators of
+  Mermaid.js"): 10 years old, 241 stars, not archived, continuously active, no security
+  advisories, no security-labeled issues.
+- The marketplace publisher carries the verified badge.
+- The **oldest** `nix-vscode-extensions` revision that carries 2.2.0 was used —
+  `41316674b7aaf38b1f9b2415ba153db82ea092cf` (2026-09-08), not the freshest available —
+  specifically to minimize how much every other pinned extension in this file drifts.
+  Diffing that revision's full registry caches against every id in `generalExtensions`
+  found exactly one other change: `eamodio.gitlens` 19.0.0 → 19.1.0 (Open VSX; GitKraken,
+  no advisories, released 2026-09-01) — an accepted side effect, not chosen independently.
+- `nix flake lock --override-input nix-vscode-extensions
+  github:nix-community/nix-vscode-extensions/41316674b…` writes the explicit rev; `original`
+  in `flake.lock` stays plain branch-tracking, so a routine `just update` later still
+  advances normally once a properly-cooled revision overtakes this one.
+
+`bierner.markdown-mermaid` and `mermaid.languages = []` both stay in `modules/vscode.nix`
+for now — the verified-working combination includes both, and neither has been re-tested
+for necessity against vstirbu 2.2.0 alone. If a future `nix-vscode-extensions` bump moves
+vstirbu again and the self-nesting error or a blank preview returns, re-read this section
+before assuming a new bug.
 
 ## Project-specific — install per project, not globally (24)
 

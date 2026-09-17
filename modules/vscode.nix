@@ -39,28 +39,50 @@
         ovsx.davidanson.vscode-markdownlint
         vsmp.yzhang.markdown-all-in-one # Open VSX is stuck on 3.6.2 (2024-01)
         ovsx.jebbs.plantuml
-        # vstirbu is the "Mermaid Chart" extension: standalone .mmd preview,
-        # cloud/AI diagram editing, PLUS its own markdown.markdownItPlugins +
-        # markdown.previewScripts for the built-in Markdown preview — the
-        # same preview role bierner.markdown-mermaid provides. With BOTH
-        # installed, both extensions unconditionally inject a
-        # mermaid-rendering script into the SAME preview webview, and
-        # mermaid fences failed with a self-nesting "No diagram type
-        # detected … for text: No diagram type detected … for text:"
-        # (measured 2026-09-17) — the second script re-rendering the first
-        # script's already-failed output. With bierner removed and vstirbu
-        # alone, mermaid fences rendered NOTHING anywhere in a real document
-        # (no error either) — vstirbu's own markdown-it integration does not
-        # work in isolation, consistent with its manifest's malformed
-        # `activationEvents: ["onLanguage"]` (missing a language id).
+        # vstirbu's markdown.markdownItPlugins + markdown.previewScripts (the
+        # built-in Markdown preview integration) and bierner.markdown-mermaid
+        # both claim the same preview webview. Root cause, not a config gap:
+        # vstirbu 2.1.2 — the version `nix-vscode-extensions` pinned as of
+        # 2026-08-28 — predates the vendor splitting cloud/AI/account
+        # features into a separate "Mermaid Chart" extension
+        # (MermaidChart.vscode-mermaid-chart) and still carried that cruft,
+        # including a malformed `activationEvents: ["onLanguage"]` (missing a
+        # language id) and an API-proposal declaration VS Code rejects
+        # outright. Measured 2026-09-17: with bierner + vstirbu 2.1.2,
+        # mermaid fences self-nested a "No diagram type detected … for
+        # text: No diagram type detected … for text:" error (the second
+        # script re-rendering the first script's already-failed output);
+        # with vstirbu 2.1.2 alone, fences rendered NOTHING anywhere (no
+        # error either); setting `mermaid.languages = []` below — an
+        # undocumented key read straight out of vstirbu's minified
+        # `out/extension.js` — changed nothing in either combination.
         #
-        # Fix: suppress vstirbu's preview hook via `mermaid.languages = []`
-        # below (undocumented — not in its `contributes.configuration`, read
-        # straight out of its minified out/extension.js: `getConfiguration
-        # ("mermaid").get("languages", ["mermaid"])` gates which fence
-        # languages its extendMarkdownIt claims) and let bierner alone
-        # render the preview. Both extensions still contribute their own
-        # non-conflicting features (jebbs' PlantUML is independent of both).
+        # Fix: vstirbu 2.2.0 (2026-09-04) explicitly re-focused on "free,
+        # local diagram previewing" and lists "Mermaid rendering in Markdown
+        # preview" as a still-supported feature post-split — confirmed
+        # working here. `nix-vscode-extensions` had no revision old enough to
+        # clear its 14-day extension cooldown (scripts/supply-chain.toml)
+        # that also carried 2.2.0, so the cooldown was deliberately
+        # overridden per AGENTS.md's "Undercutting a cooldown" protocol:
+        # `nix flake lock --override-input nix-vscode-extensions
+        # github:nix-community/nix-vscode-extensions/41316674b…` — the
+        # OLDEST revision (2026-09-08) that carries it, chosen specifically
+        # to minimize drift in every other pinned extension. Verified before
+        # overriding: repo transferred to the Mermaid-Chart org (creators of
+        # mermaid.js itself), verified marketplace publisher, no GitHub
+        # security advisories, no security-labeled issues, 10-year-old repo
+        # with continuous activity. Diffing the two `nix-vscode-extensions`
+        # revisions' full registry caches against every extension in this
+        # file's managed set found exactly one other change:
+        # `eamodio.gitlens` 19.0.0 → 19.1.0 (Open VSX; GitKraken, no
+        # advisories, released 2026-09-01) — accepted as the unavoidable
+        # side effect of moving the whole dated snapshot, not chosen
+        # independently.
+        #
+        # `mermaid.languages = []` and bierner.markdown-mermaid stay for now
+        # because the verified-working combination includes both — neither
+        # has been re-tested for necessity against 2.2.0 alone. Revisit once
+        # there is a reason to simplify.
         vsmp.vstirbu.vscode-mermaid-preview # Open VSX is stuck on 1.6.3 (2022-06)
         ovsx.bierner.markdown-mermaid
         vsmp.pomdtr.excalidraw-editor # Open VSX is stuck on 3.9.0
@@ -201,17 +223,17 @@
         # Undocumented — not in vstirbu.vscode-mermaid-preview's
         # `contributes.configuration`, so it won't appear in the Settings UI
         # and VS Code may flag it as an unknown setting. Its
-        # `extendMarkdownIt` reads it directly via
-        # `getConfiguration("mermaid").get("languages", ["mermaid"])` to
-        # decide which fenced-code languages its Markdown-preview script
-        # claims. Emptying it stops vstirbu from also hooking the preview
-        # webview, so bierner.markdown-mermaid (see the comment by
-        # vstirbu.vscode-mermaid-preview above) is the only one rendering
-        # there — the two extensions otherwise inject competing render
-        # scripts into the SAME webview. Experimental as of 2026-09-17: if a
-        # future vstirbu release ignores this (or renames the key), the
-        # symptom returns — self-nesting "No diagram type detected" errors,
-        # or a Markdown preview with no diagrams and no errors at all.
+        # `extendMarkdownIt` reads it via `getConfiguration("mermaid").get
+        # ("languages", ["mermaid"])` to decide which fenced-code languages
+        # its own Markdown-preview integration claims. Intent: stop vstirbu
+        # from also hooking the preview webview bierner.markdown-mermaid
+        # renders into (see the comment by vstirbu.vscode-mermaid-preview
+        # above for why both are installed). NOT verified to do that,
+        # though — it made no observable difference against the vstirbu
+        # 2.1.2 bug that comment describes (same failure with or without
+        # it), and hasn't been re-tested since the fix (vstirbu 2.2.0). Left
+        # in because the verified-working combination includes it; revisit
+        # together with whether bierner is still needed at all.
         "mermaid.languages" = [ ];
 
         "claudeCode.preferredLocation" = "sidebar";
