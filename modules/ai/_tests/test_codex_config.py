@@ -27,7 +27,8 @@ class MergeTests(unittest.TestCase):
         self.new = {"url": "https://docs.example.org/mcp/v2"}
 
     def desired(self, servers, status_line=None, model=None,
-                reasoning_effort=None, plan_reasoning_effort=None):
+                reasoning_effort=None, plan_reasoning_effort=None,
+                reasoning_effort_override=None):
         managed = {"mcp_servers": servers}
         if status_line is not None:
             managed["tui"] = {"status_line": status_line}
@@ -37,6 +38,10 @@ class MergeTests(unittest.TestCase):
             managed["model_reasoning_effort"] = reasoning_effort
         if plan_reasoning_effort is not None:
             managed["plan_mode_reasoning_effort"] = plan_reasoning_effort
+        # `is not None`, never truthiness: False is a value this option
+        # manages, and the whole default depends on it being written.
+        if reasoning_effort_override is not None:
+            managed["features"] = {"reasoning_effort_override": reasoning_effort_override}
         self.managed.write_text(tomli_w.dumps(managed))
 
     def run_merge(self):
@@ -411,6 +416,97 @@ class MergeTests(unittest.TestCase):
             self.run_merge()
         self.assertEqual(self.target.read_bytes(), before)
         self.assertFalse(self.state.exists())
+
+    # -- Boolean leaf (features.reasoning_effort_override): a depth-2 leaf like
+    # status_line, but with False as a MANAGED value rather than "unmanaged".
+    # Every guard in the merge tests `is not None`; a truthiness test anywhere
+    # would silently degrade the default to unmanaged, and these pin that.
+
+    def test_reasoning_effort_override_install_update_override_and_disable(self):
+        # [features] with personal siblings is the real shape on this machine.
+        personal = {"model": "example", "features": {"memories": True},
+                    "projects": {"/example": {"trust_level": "trusted"}}}
+        self.target.write_text(tomli_w.dumps(personal))
+        # Existing MCP-only version-1 journal needs no separate migration.
+        self.state.write_text(json.dumps({"version": 1, "owned": {}}))
+        for value in (False, True, False):
+            self.desired({}, reasoning_effort_override=value)
+            self.run_merge()
+            expected = {**personal, "features": {
+                **personal["features"], "reasoning_effort_override": value}}
+            self.assertEqual(merger.load_toml(self.target), expected)
+            first = self.target.read_bytes()
+            self.run_merge()
+            self.assertEqual(self.target.read_bytes(), first)
+            expected["features"]["reasoning_effort_override"] = not value
+            self.target.write_text(tomli_w.dumps(expected))
+            self.run_merge()
+            self.assertEqual(self.target.read_bytes(), first)
+        self.desired({})
+        self.run_merge()
+        # Personal [features] keys survive; only our key is retracted.
+        self.assertEqual(merger.load_toml(self.target), personal)
+        self.assertIsNone(
+            json.loads(self.state.read_text())["owned_reasoning_effort_override"])
+
+    def test_reasoning_effort_override_disable_prunes_empty_features_table(self):
+        # Round trip through an otherwise absent [features]: a typo in the
+        # LEAVES path tuple fails here and nowhere else.
+        self.desired({}, reasoning_effort_override=False)
+        self.run_merge()
+        self.assertEqual(merger.load_toml(self.target),
+                          {"features": {"reasoning_effort_override": False}})
+        self.desired({})
+        self.run_merge()
+        self.assertEqual(merger.load_toml(self.target), {})
+        self.assertTrue(self.target.exists())
+
+    def test_reasoning_effort_override_false_is_managed_not_unmanaged(self):
+        # The shipped default is False. It must overwrite a pre-existing True
+        # without conflict and be journalled as owned, exactly like a string.
+        self.target.write_text(tomli_w.dumps({"features": {"reasoning_effort_override": True}}))
+        self.state.write_text(json.dumps({"version": 1, "owned": {}, "owned_status_line": None}))
+        self.desired({}, reasoning_effort_override=False)
+        self.run_merge()
+        self.assertIs(
+            merger.load_toml(self.target)["features"]["reasoning_effort_override"], False)
+        self.assertIs(
+            json.loads(self.state.read_text())["owned_reasoning_effort_override"], False)
+
+    def test_reasoning_effort_override_disable_preserves_personal_edits(self):
+        self.desired({}, reasoning_effort_override=False)
+        self.run_merge()
+        personal = {"features": {"reasoning_effort_override": True}}
+        self.target.write_text(tomli_w.dumps(personal))
+        self.desired({})
+        self.run_merge()
+        self.assertEqual(merger.load_toml(self.target), personal)
+        self.assertIsNone(
+            json.loads(self.state.read_text())["owned_reasoning_effort_override"])
+
+    def test_invalid_reasoning_effort_override_journal_fails_before_writing(self):
+        # 1 and "true" are what a lazy isinstance(v, (bool, int)) would admit.
+        self.desired({}, reasoning_effort_override=False)
+        for state in (
+            {"version": 1, "owned": {}, "owned_reasoning_effort_override": 1},
+            {"version": 1, "owned": {}, "pending_reasoning_effort_override": "true"},
+        ):
+            with self.subTest(state=state):
+                self.target.write_text(tomli_w.dumps({}))
+                self.state.write_text(json.dumps(state))
+                before = self.target.read_bytes(), self.state.read_bytes()
+                with self.assertRaises(ValueError):
+                    self.run_merge()
+                self.assertEqual((self.target.read_bytes(), self.state.read_bytes()), before)
+
+    def test_non_bool_personal_override_is_replaced_not_rejected(self):
+        # The on-disk config is never type-validated by design; the leaf still
+        # overwrites authoritatively whatever type it finds.
+        self.target.write_text(tomli_w.dumps({"features": {"reasoning_effort_override": "yes"}}))
+        self.desired({}, reasoning_effort_override=False)
+        self.run_merge()
+        self.assertEqual(merger.load_toml(self.target),
+                          {"features": {"reasoning_effort_override": False}})
 
 
 if __name__ == "__main__":

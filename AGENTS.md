@@ -1719,9 +1719,10 @@ such as `llm`, Ollama and `+nix-query`.
 |---|---|---|
 | `my.ai.agents.enable` | `false` | Agent packages, settings and wrappers |
 | `my.ai.agents.<name>.enable` | `true` | Select individual agents within that global gate |
-| `my.ai.agents.codex.model` | `"gpt-5.6-terra"` | Default model merged into Codex's writable config.toml; `null` leaves it unmanaged |
+| `my.ai.agents.codex.model` | `"gpt-5.6-sol"` | Default model merged into Codex's writable config.toml; `null` leaves it unmanaged |
 | `my.ai.agents.codex.reasoningEffort` | `"medium"` | `model_reasoning_effort` for Codex's default (execute) mode |
-| `my.ai.agents.codex.planReasoningEffort` | `"xhigh"` | `plan_mode_reasoning_effort` for Codex's Plan mode (`Shift+Tab`) |
+| `my.ai.agents.codex.planReasoningEffort` | `"xhigh"` | `plan_mode_reasoning_effort` for Codex's Plan mode (`Shift+Tab`); CLI only — Codex Desktop ignores it ([openai/codex#18712](https://github.com/openai/codex/issues/18712)) |
+| `my.ai.agents.codex.reasoningEffortOverride` | `false` | Upstream `[features] reasoning_effort_override`; off on purpose — from codex 0.154.0 it makes Plan mode's effort change emit a `configuration_update` that `gpt-5.6-luna/terra/sol` reject with HTTP 400 ([openai/codex#44751](https://github.com/openai/codex/issues/44751)) |
 | `my.ai.content.enable` | `false` | Skills and rules exported under `$XDG_CONFIG_HOME/ai/content/` |
 | `my.ai.mcp.enable` | `false` | MCP wrappers, exports and integration |
 | `my.ai.mcp.clients.<name>.enable` | `true` | MCP integration for this Nix agent; does not suppress explicit exports |
@@ -1773,15 +1774,20 @@ or conflicting name fails before writing. Rename the personal entry or restore
 the managed definition, then retry. A pending journal makes interrupted updates
 recoverable; do not delete it to silence a conflict.
 
-A small table of scalar leaves — `tui.status_line`, `model`,
-`model_reasoning_effort`, `plan_mode_reasoning_effort` — is instead
+A small table of owned leaves — `tui.status_line` (a list), `model`,
+`model_reasoning_effort`, `plan_mode_reasoning_effort` (strings), and
+`features.reasoning_effort_override` (a boolean) — is instead
 authoritative: activation sets each one every run while it is managed, wins
 over a later `/model` or `/statusline` edit made in between, and on disable
 removes it only if the file still holds the value this script last wrote (a
 differing value, e.g. a fresh interactive choice, is left standing). This is
 deliberately not the `mcp_servers` conflict semantics: a pre-existing `model`
 is replaced without error, because the whole point is to override whatever
-Codex's own picker last wrote, not to detect and reject it.
+Codex's own picker last wrote, not to detect and reject it. `false` is a
+managed value like any other, not "unmanaged" — only `null` on the Nix side
+leaves a leaf alone. A leaf inside a table (`[tui]`, `[features]`) takes its
+parent with it on disable only when that table would be left empty, so
+personal `[features]` keys survive.
 
 `just ai-check` tests isolated combinations, portable exports, transitive package
 closures and writable-config migrations without live credentials or activation.

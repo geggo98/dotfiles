@@ -33,6 +33,13 @@ in
             "thread-title"
           ];
         };
+        # Managed like `tui` and unlike the scalars below: a table has an empty
+        # form, so one conditional attrset covers "not managed". Why it is pinned
+        # to false, and the upstream bug, are at my.ai.agents.codex.reasoningEffortOverride
+        # in modules/ai-options.nix.
+        features = lib.optionalAttrs
+          (enabled "codex" && ai.agents.codex.reasoningEffortOverride != null)
+          { reasoning_effort_override = ai.agents.codex.reasoningEffortOverride; };
       }
       # These are scalars, unlike `tui`: an empty attrset can stand in for "not
       # managed", but there is no empty form of a string, so each is appended

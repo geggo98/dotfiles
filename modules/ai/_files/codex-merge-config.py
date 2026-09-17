@@ -5,8 +5,9 @@ config.toml.
 The Nix activation supplies the interpreter and tomli-w dependency. The state
 file records previous values, not just names: a user edit to an mcp_servers
 entry causes a conflict rather than being overwritten. Each leaf in LEAVES
-(the TUI status line, the default model, and its two reasoning-effort fields)
-is authoritative instead: set every activation while managed; on disable,
+(the TUI status line, the default model, its two reasoning-effort fields, and
+the reasoning_effort_override feature flag) is authoritative instead: set
+every activation while managed; on disable,
 removed only if the file still holds the value this script last wrote, so an
 interactive change (Codex's own /model or /statusline) made after that is left
 alone rather than reported as a conflict. A pending snapshot makes a two-file
@@ -131,6 +132,11 @@ LEAVES = (
     ("model", ("model",), lambda v: isinstance(v, str)),
     ("reasoning_effort", ("model_reasoning_effort",), lambda v: isinstance(v, str)),
     ("plan_reasoning_effort", ("plan_mode_reasoning_effort",), lambda v: isinstance(v, str)),
+    # isinstance(v, bool) is exact in the direction that matters here: it
+    # rejects a JSON 1/0 in the journal, even though the reverse
+    # (isinstance(True, int)) would be true. Do NOT relax it to (bool, int).
+    ("reasoning_effort_override", ("features", "reasoning_effort_override"),
+     lambda v: isinstance(v, bool)),
 )
 # Only "model" gets a stderr line when it silently replaces a value it does
 # not already own: Codex's own /model picker writes that key on every
@@ -168,8 +174,10 @@ def set_leaf(result, path, value):
     with dict(...) before it is changed, and only then written back.
 
     Depth 1 (model, both reasoning fields) targets the root directly and
-    never removes it. Depth 2 ([tui].status_line) prunes the parent table
-    once it becomes empty -- the existing behavior for [tui].
+    never removes it. Depth 2 ([tui].status_line,
+    [features].reasoning_effort_override) prunes the parent table once it
+    becomes empty -- and only then: a real ~/.codex/config.toml keeps its own
+    keys in [features] (memories, js_repl, ...), which must survive a disable.
     """
     node = result
     for key in path[:-1]:

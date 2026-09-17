@@ -68,9 +68,10 @@ in
         (noAgents allOff.config && noAgentWrappers allOff.config && noMcpWrappers allOff.config)
         (noMcp allOff.config && noMcp agentsOnly.config && noMcpWrappers agentsOnly.config)
         (agentsOnly.config.programs.claude-code.settings.model == "opusplan")
-        (agentsOnly.config.my.ai.agents.codex.model == "gpt-5.6-terra")
+        (agentsOnly.config.my.ai.agents.codex.model == "gpt-5.6-sol")
         (agentsOnly.config.my.ai.agents.codex.reasoningEffort == "medium")
         (agentsOnly.config.my.ai.agents.codex.planReasoningEffort == "xhigh")
+        (agentsOnly.config.my.ai.agents.codex.reasoningEffortOverride == false)
         (noAgents mcpOnly.config && noAgentWrappers mcpOnly.config)
         (!(mcpOnly.config.home.file ? ".claude/settings.json"))
         (!(mcpOnly.config.home.activation ? codexConfig))
@@ -121,20 +122,23 @@ in
               with open(path.group(), "rb") as stream:
                   settings = tomllib.load(stream)
               items = settings.get("tui", {}).get("status_line")
+              override = settings.get("features", {}).get("reasoning_effort_override")
               if case["enabled"]:
                   assert items == [
                       "run-state", "model-with-reasoning", "current-dir", "git-branch",
                       "context-used", "five-hour-limit", "weekly-limit", "branch-changes",
                       "task-progress", "thread-title",
                   ], items
-                  assert settings.get("model") == "gpt-5.6-terra", settings.get("model")
+                  assert settings.get("model") == "gpt-5.6-sol", settings.get("model")
                   assert settings.get("model_reasoning_effort") == "medium", settings.get("model_reasoning_effort")
                   assert settings.get("plan_mode_reasoning_effort") == "xhigh", settings.get("plan_mode_reasoning_effort")
+                  assert override is False, override
               else:
                   assert items is None, items
                   assert settings.get("model") is None, settings.get("model")
                   assert settings.get("model_reasoning_effort") is None, settings.get("model_reasoning_effort")
                   assert settings.get("plan_mode_reasoning_effort") is None, settings.get("plan_mode_reasoning_effort")
+                  assert override is None, override
           PY
           python3 tests/test_rules.py
           python3 ${./ai/_tests/check_exports.py} \

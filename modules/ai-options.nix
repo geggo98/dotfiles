@@ -29,7 +29,7 @@
           };
           model = mkOption {
             type = types.nullOr types.str;
-            default = "gpt-5.6-terra";
+            default = "gpt-5.6-sol";
             description = "Default model merged into Codex's writable config.toml; null leaves the key unmanaged and gives back a previously owned value.";
           };
           reasoningEffort = mkOption {
@@ -37,10 +37,37 @@
             default = "medium";
             description = "model_reasoning_effort for Codex's default (execute) mode; null leaves it unmanaged.";
           };
+          # CLI only: Codex Desktop enters Plan mode without applying this and
+          # keeps model_reasoning_effort instead. Open upstream bug:
+          # https://github.com/openai/codex/issues/18712
           planReasoningEffort = mkOption {
             type = types.nullOr types.str;
             default = "xhigh";
             description = "plan_mode_reasoning_effort for Codex's Plan mode (Shift+Tab); null leaves it unmanaged.";
+          };
+          # Upstream feature flag, managed and deliberately OFF.
+          #
+          # openai/codex added `[features] reasoning_effort_override` in PR #43110,
+          # first shipped in 0.154.0 (2026-09-09); it is still Stage::UnderDevelopment
+          # and default-off upstream. With it enabled, codex appends a
+          # `configuration_update` history item whenever the resolved reasoning
+          # effort changes mid-session -- which entering Plan mode ALWAYS does here,
+          # because planReasoningEffort ("xhigh") differs from reasoningEffort
+          # ("medium"). gpt-5.6-luna, -terra and -sol then answer HTTP 400 on every
+          # following turn; only gpt-6-astra tolerates the item. Open, unfixed as of
+          # 2026-09-17, and `false` is the issue's own stated workaround:
+          # https://github.com/openai/codex/issues/44751
+          #
+          # Inert on the currently pinned codex 0.153.4 (modules/agents.nix, input
+          # llm-agents-codex-pin): that build has no such flag, and Features is a
+          # flattened BTreeMap<String,bool>, so the key parses and is only logged as
+          # "unknown feature key in config" under RUST_LOG=warn. Written now so the
+          # flag is already off on the day the pin advances past 0.154.0 rather than
+          # after the first 400.
+          reasoningEffortOverride = mkOption {
+            type = types.nullOr types.bool;
+            default = false;
+            description = "Upstream [features] reasoning_effort_override in Codex's writable config.toml; null leaves the key unmanaged and gives back a previously owned value.";
           };
         });
 
