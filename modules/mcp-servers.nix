@@ -145,6 +145,18 @@ in
           # Set my.ai.mcp.servers.devenv.enable = true once the fix is verified.
           enable = lib.mkDefault false;
         };
+        # Complemented, not replaced, by modules/devdocs.nix's offline
+        # `+devdocs` (openjdk~25 plus Kotlin/Groovy/Scala/Spring
+        # Boot/Clojure among its 39 docs): this MCP is the only source for
+        # an arbitrary third-party Maven artifact's javadoc, which devdocs
+        # cannot serve at all. It also fails/times out repeatedly in
+        # practice (the reason devdocs.nix exists), and the `devdocs` skill
+        # tells an agent to try +devdocs first for anything the JDK itself
+        # covers. Revisit removing this entry only if DevDocs' openjdk
+        # coverage is verified sufficient for the symbols people actually
+        # ask about AND a replacement source for third-party GAV coordinates
+        # exists -- until then this stays, the same self-removing-comment
+        # style as the pin assertions in modules/agents.nix.
         javadocs = {
           stdio = mcp-javadocs;
           remote = { url = "https://www.javadocs.dev/mcp"; auth = null; };

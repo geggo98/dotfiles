@@ -268,3 +268,26 @@ registry = "open-vsx"
 [[extensions]]
 id = "yzhang.markdown-all-in-one"
 registry = "vscode-marketplace"      # Open VSX is stuck on 3.6.2 (2024-01)
+
+# ---------------------------------------------------------------------------------
+# modules/devdocs.nix's 39 DevDocs (freeCodeCamp/devdocs) tarballs are
+# DELIBERATELY not a fourth layer here.
+#
+# All three layers above resolve a version against a source with BOTH a
+# publication timestamp AND a withdrawal signal (FlakeHub/GitHub commit dates
+# plus `yanked_at`; npm's `time` map plus `unpublished`; a marketplace's
+# per-version listing plus 404/deprecated). DevDocs offers neither:
+# https://devdocs.io/docs.json carries exactly one `mtime` per slug, the
+# timestamp of the only build that exists -- there is no version history to
+# walk, and "is this version still listed" (layer 3's decisive check, the one
+# that caught determinate 3.22.0 comfortably old enough at 15 days but yanked)
+# is structurally meaningless when a doc is always its own current build. An
+# entry here would report clean unconditionally, which is exactly the failure
+# class this file's own header warns about: a filter that cannot structurally
+# find anything reads the same as a clean result.
+#
+# The control that actually applies is the hash pin itself (docs.lock.json's
+# content cannot change between two `just devdocs-lock` runs without the pin
+# breaking) plus the fact that relocking is a deliberate, git-reviewed action,
+# never something `just update`/`just audit` walks automatically. Revisit only
+# if DevDocs ever publishes a real version history or a build checksum feed.

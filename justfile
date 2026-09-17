@@ -468,6 +468,40 @@ agent-browser-hashes version:
         printf '    %-14s = { asset = "%s"; hash = "%s"; };\n' "$sys" "$asset" "$hash"
     done
 
+# --- DevDocs offline index (modules/devdocs.nix) ---
+
+# Re-resolve every family in modules/_files/devdocs/families.nix to its newest
+# published slug, prefetch its tarball hash, and rewrite docs.lock.json.
+#
+# INCREMENTAL: a family whose newest slug AND upstream mtime are unchanged is
+# skipped without a download or a prefetch call. A no-op re-run touches only
+# the lock's own `generated` timestamp and exits 0 -- verified: a full run
+# against an up-to-date lock reports "0 relocked, 39 unchanged".
+#
+# mtime, not just the slug, is the staleness signal: DevDocs rebuilds a doc in
+# place and downloads.devdocs.io serves ONLY the current tarball per slug --
+# no version history. When mtime moves, the OLD bytes are gone and the pinned
+# hash stops fetching. `just devdocs-list` is the only early warning for that.
+#
+# Optional arguments restrict the run, e.g. `just devdocs-lock openjdk go`.
+# `--prune` additionally drops lock entries no longer declared in families.nix.
+devdocs-lock *args:
+    #!/bin/zsh
+    set -euo pipefail
+    python3 modules/_files/devdocs/lock.py "$@"
+
+# What is pinned, what upstream currently serves, and whether any family has
+# moved since the last lock. Read-only: one HTTP request, no downloads.
+devdocs-list:
+    #!/bin/zsh
+    set -euo pipefail
+    python3 modules/_files/devdocs/lock.py --report
+
+# Hermetic pipeline test: synthetic tarball -> build-index.py -> +devdocs,
+# no network, isolated from the real 39-doc dataset.
+devdocs-check: _check-untracked
+    nix build --no-link .#checks.aarch64-darwin.devdocs
+
 # Show what would change between current system and new build
 diff: build
     nix store diff-closures /run/current-system ./result

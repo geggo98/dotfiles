@@ -7,6 +7,8 @@ result
 *.local.*
 .devenv
 .direnv/
+__pycache__/
+*.py[cod]
 
 # Pulumi infra
 infra/node_modules/

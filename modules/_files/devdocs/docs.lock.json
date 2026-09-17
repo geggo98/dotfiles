@@ -1,0 +1,280 @@
+{
+ "docs": {
+  "bash": {
+   "db_size": 958336,
+   "hash": "sha256-R7HlPw00MHhrXLDsBZNFWq9EqZHHp0HIOwxESTIHO2c=",
+   "mtime": 1784459519,
+   "release": "5.3",
+   "slug": "bash"
+  },
+  "bun": {
+   "db_size": 2619648,
+   "hash": "sha256-NURbVuhm3UOOHjRNAFwhbKDfSVQtNOGISrt9R62z/4U=",
+   "mtime": 1788070436,
+   "release": "1.4.0",
+   "slug": "bun"
+  },
+  "clojure": {
+   "db_size": 613733,
+   "hash": "sha256-W0f0vP8Kgzq/VsghRt65f6d/gBEDWvwqVX5tBXQGCM0=",
+   "mtime": 1654203215,
+   "release": "1.11",
+   "slug": "clojure~1.11"
+  },
+  "css": {
+   "db_size": 15878611,
+   "hash": "sha256-SVRWt6chB8yFuH2NdfLexhpjyV7x/lI/1CCm9t3U5BU=",
+   "mtime": 1789389022,
+   "release": "",
+   "slug": "css"
+  },
+  "deno": {
+   "db_size": 25167850,
+   "hash": "sha256-cH3bPVhs6xWqNhlobvgvn3cyEQZ63wS0Y6lE5X4l4Wk=",
+   "mtime": 1789303852,
+   "release": "2.9.6",
+   "slug": "deno~2"
+  },
+  "docker": {
+   "db_size": 4328150,
+   "hash": "sha256-+QaSNgXQtvEcLbwuZh4QiqGBxdQ6WoIPzqetivRgeJw=",
+   "mtime": 1654206621,
+   "release": "20.10.16",
+   "slug": "docker"
+  },
+  "dom": {
+   "db_size": 65693540,
+   "hash": "sha256-LtcO+qjggV1BpNeLcv0BQCqWKlzJB405ArcPRMT0bG8=",
+   "mtime": 1789388430,
+   "release": "",
+   "slug": "dom"
+  },
+  "duckdb": {
+   "db_size": 5058825,
+   "hash": "sha256-ptJ84UC65K1FZetcLW5sT9SsMYwrxJW226dV/LgdZOo=",
+   "mtime": 1732369732,
+   "release": "1.1.3",
+   "slug": "duckdb"
+  },
+  "fish": {
+   "db_size": 900272,
+   "hash": "sha256-vYClX2TpwEQMlzPINc1N6owqRJLqyJa2IH+BJQtN4r8=",
+   "mtime": 1789314186,
+   "release": "4.9.3",
+   "slug": "fish~4.9"
+  },
+  "git": {
+   "db_size": 6243606,
+   "hash": "sha256-qXh0HqMMMTjKAaMx3/6u5G/7+8lPhr/16BVA2wdDumQ=",
+   "mtime": 1786797905,
+   "release": "2.55.0",
+   "slug": "git"
+  },
+  "go": {
+   "db_size": 4973652,
+   "hash": "sha256-+utlxxWz8Q+W6fo1/2l6LxFj7Lv47Vjd3qe9dCarE8s=",
+   "mtime": 1787318362,
+   "release": "1.27.0",
+   "slug": "go"
+  },
+  "groovy": {
+   "db_size": 32832765,
+   "hash": "sha256-RdFuJsfRQpIK+RF86HllC92qtyMr6DG7hKvctRt3MOI=",
+   "mtime": 1646154540,
+   "release": "4.0.0",
+   "slug": "groovy~4.0"
+  },
+  "hammerspoon": {
+   "db_size": 2813010,
+   "hash": "sha256-kfSxZ8gY/QNSq3RlZabrzhnMUjX+ZJJ95icJ0sjrl/Q=",
+   "mtime": 1705093380,
+   "release": "0.9.100",
+   "slug": "hammerspoon"
+  },
+  "html": {
+   "db_size": 5529381,
+   "hash": "sha256-0ZY0u06FZmB/J+D2Fvhidd0QMcs2M93m03gApwF29oI=",
+   "mtime": 1779812338,
+   "release": "",
+   "slug": "html"
+  },
+  "http": {
+   "db_size": 7047986,
+   "hash": "sha256-g/GjHVbwjXsKhuiKCIANKdrlgQWrEe73gfDhwz9xy3g=",
+   "mtime": 1782060535,
+   "release": "",
+   "slug": "http"
+  },
+  "javascript": {
+   "db_size": 12370828,
+   "hash": "sha256-/uH8RkNdYSXA01hiNP915IaS//qzUDaYEFAwrX3HPag=",
+   "mtime": 1789388556,
+   "release": "",
+   "slug": "javascript"
+  },
+  "jq": {
+   "db_size": 311991,
+   "hash": "sha256-8wXRSGKRF+qXMT7FMxiNNsyD3cMqgXS1iDWxEIKG5/k=",
+   "mtime": 1782016232,
+   "release": "1.8",
+   "slug": "jq"
+  },
+  "kotlin": {
+   "db_size": 81586953,
+   "hash": "sha256-A9KaFXdRk9JFdPwSoFIDm+d4oAnGv976nZadpM9gI8o=",
+   "mtime": 1789307258,
+   "release": "2.4.20",
+   "slug": "kotlin~2"
+  },
+  "kubectl": {
+   "db_size": 339453,
+   "hash": "sha256-O+NM899j2mfE0xWiNiT7JDy8A41qz3z9MkY3eM/2YsM=",
+   "mtime": 1786796047,
+   "release": "1.36.3",
+   "slug": "kubectl"
+  },
+  "kubernetes": {
+   "db_size": 1302728,
+   "hash": "sha256-tSTG73GJgVUCGuT4eWJHeDz8Im1dpDFrJYPBHIsKuf0=",
+   "mtime": 1786796086,
+   "release": "1.36.3",
+   "slug": "kubernetes"
+  },
+  "man": {
+   "db_size": 143221084,
+   "hash": "sha256-oWhib97KCe3QhdL8eNj/wGNVXBhuT/eAA6yh7grCLsA=",
+   "mtime": 1724181421,
+   "release": "",
+   "slug": "man"
+  },
+  "nix": {
+   "db_size": 364680,
+   "hash": "sha256-zcEAtWcno9QnF7gwKiak/MfhGbJUD/sVHut4Lb7lUys=",
+   "mtime": 1662466530,
+   "release": "2.11.0",
+   "slug": "nix"
+  },
+  "node": {
+   "db_size": 6856259,
+   "hash": "sha256-oI7+ARatw+UwOekxvUzChnUsfstzY4JhxRaWAmKM9gE=",
+   "mtime": 1782016594,
+   "release": "26.3.1",
+   "slug": "node"
+  },
+  "openjdk": {
+   "db_size": 119600497,
+   "hash": "sha256-Le0BOb5Kfr5NfBvu1CRCM+jCemixfonCuF3B9celfWI=",
+   "mtime": 1760880786,
+   "release": "25",
+   "slug": "openjdk~25"
+  },
+  "playwright": {
+   "db_size": 3805652,
+   "hash": "sha256-yWoNaLJ5eP9Bk5wR5kBTs3lh1yeF/dDsaN9rXFw3rYY=",
+   "mtime": 1789304484,
+   "release": "1.63.0",
+   "slug": "playwright"
+  },
+  "postgresql": {
+   "db_size": 8601364,
+   "hash": "sha256-UKRDQkMEaVaxSNhLGCtdi+mKzy2su3t0rW0bBVPwerU=",
+   "mtime": 1789393426,
+   "release": "18.6",
+   "slug": "postgresql~18"
+  },
+  "python": {
+   "db_size": 20817803,
+   "hash": "sha256-LIY0P3qtEeiJSUvKPB+A/qelrTRpLJPqWApIF2oMY1M=",
+   "mtime": 1788075102,
+   "release": "3.14.7",
+   "slug": "python~3.14"
+  },
+  "react": {
+   "db_size": 8928641,
+   "hash": "sha256-/jrHK3bBwXdZRl28DM1luTz1/bP7H7T2ZegO7F2WGLQ=",
+   "mtime": 1760541508,
+   "release": "19.2",
+   "slug": "react"
+  },
+  "redis": {
+   "db_size": 1922342,
+   "hash": "sha256-3IGlrpsbo550DVwZuRApDPGJ5hv3ZfSbHoNjvSGmeYQ=",
+   "mtime": 1681332415,
+   "release": "7.0.10",
+   "slug": "redis"
+  },
+  "rust": {
+   "db_size": 70119547,
+   "hash": "sha256-O+IYOeOzxQH/Cl3fKPpXTn1EfN9rbUSKRyu9GlgonjQ=",
+   "mtime": 1788067804,
+   "release": "1.98.0",
+   "slug": "rust"
+  },
+  "scala": {
+   "db_size": 4654456,
+   "hash": "sha256-/a3KczHeKJxI/5WxqftaaSdk4pOop0wUSGwktGqXW94=",
+   "mtime": 1789312019,
+   "release": "3.8.4",
+   "slug": "scala~3"
+  },
+  "spring_boot": {
+   "db_size": 3425508,
+   "hash": "sha256-7Xzvf1vuvbuUjHI1ZT9CO4IAg2rYuoph/XiWOXnsYls=",
+   "mtime": 1693728240,
+   "release": "3.1.3",
+   "slug": "spring_boot"
+  },
+  "sqlite": {
+   "db_size": 16360463,
+   "hash": "sha256-5UYmu1VO2/YkrbhfEj6/Z9hJlKEpcEhWmugsiehSxPw=",
+   "mtime": 1776193128,
+   "release": "3.53.0",
+   "slug": "sqlite"
+  },
+  "svg": {
+   "db_size": 2786506,
+   "hash": "sha256-3RHBxbWV8toGO4QtRkk1qWErVxrDCsIDfoqERvN4r/o=",
+   "mtime": 1757951824,
+   "release": "",
+   "slug": "svg"
+  },
+  "terraform": {
+   "db_size": 82510148,
+   "hash": "sha256-t02wxEOKVpPnV0mzGCoOikyXhRzLz6iutaciUM7K7r4=",
+   "mtime": 1786795186,
+   "release": "1.15.8",
+   "slug": "terraform"
+  },
+  "typescript": {
+   "db_size": 2011449,
+   "hash": "sha256-nexgpoUI5FsdLce9x2qeQV/gtWOb9BLj1WLxF1YeM6I=",
+   "mtime": 1776883901,
+   "release": "6.0.3",
+   "slug": "typescript"
+  },
+  "vue": {
+   "db_size": 1529280,
+   "hash": "sha256-+0QBQdS45DVp23TQmtrhVFypmmzTF9hh5ELnR0HORu4=",
+   "mtime": 1786781078,
+   "release": "3.5.41",
+   "slug": "vue~3"
+  },
+  "web_extensions": {
+   "db_size": 10416340,
+   "hash": "sha256-CXRAgArZIOhlOBUXK9I65aSFqOOKmLZaBaKoIM+31U8=",
+   "mtime": 1682341648,
+   "release": "",
+   "slug": "web_extensions"
+  },
+  "zsh": {
+   "db_size": 1724019,
+   "hash": "sha256-UNqZgn6AR/hBIx0iSIrilEa4Ck1dEolhNmwtdSiD/9I=",
+   "mtime": 1751052545,
+   "release": "5.9.0",
+   "slug": "zsh"
+  }
+ },
+ "generated": "2026-09-17T17:27:42+0200",
+ "manifest_url": "https://devdocs.io/docs.json",
+ "schema": 1
+}

@@ -42,6 +42,9 @@ A `justfile` provides safe, pre-approved commands that agents can run without us
 | `just audit-extensions [ids…]` | VS Code extensions: old enough **and** still published upstream |
 | `just creds-check` | Do the long-lived credentials still authenticate? (jira, confluence, bb) |
 | `just vscode-settings-check` | Has VS Code been trying to write the Nix-managed settings.json? |
+| `just devdocs-list` | DevDocs offline index: what's pinned vs. what upstream serves now — one HTTP request, no downloads |
+| `just devdocs-lock [families…]` | Re-resolve families to their newest slug and rewrite `docs.lock.json` — incremental (a family whose slug and upstream `mtime` are unchanged is skipped), but a first/full run can pull up to ~787 MB |
+| `just devdocs-check` | Hermetic pipeline test for `modules/devdocs.nix` (synthetic tarball, no network) |
 | `just diff` | Build and show package delta vs. current system |
 | `just verify-no-diff` | Build and assert no package delta (useful after refactoring) |
 | `just deps` | Show flake dependency tree |
@@ -816,6 +819,7 @@ Each module defines a single aspect across all relevant configuration classes (d
 | `agent-content.nix` | Standalone skills and global rules, including the host-specific Atlassian skill filter |
 | `mcp-servers.nix` / `mcp-clients.nix` | Shared MCP catalog and wrappers; client renderers and portable exports |
 | `agent-integration.nix` | Delivers content/MCP to enabled Nix agents and removes owned entries when disabled |
+| `devdocs.nix` | Offline DevDocs lookup: the `+devdocs` CLI plus 39 per-doc SQLite indices built at Nix build time from `modules/_files/devdocs/docs.lock.json`. Own namespace (`my.devdocs`, not `my.ai.*`) — see "DevDocs offline index" below |
 | `secrets.nix` | SOPS secret declarations and per-host secret merging (**home-manager only** — servers use `nixos-secrets.nix`) |
 | `nixos-wiring.nix` | Defines `configurations.nixos` (module + `deployTarget`) and wires it to `flake.nixosConfigurations` and `flake.deployTargets` |
 | `nixos-base.nix` | Baseline for every NixOS host: sshd, root's authorized keys, the lockout assertions, serial getty, nix settings, GC |
@@ -1705,6 +1709,59 @@ code (`mcp_nixos.server.nix.fn`) and reimplements none of it. See
    until devenv#3065 is fixed; its skill supplies direct CLI calls instead.
    `programs.claude-code.mcpServers` feeds Home Manager's generated plugin,
    so removing an entry removes its plugin tools too.
+
+### DevDocs offline index
+
+`modules/devdocs.nix` builds an offline [DevDocs](https://github.com/freeCodeCamp/devdocs)
+lookup (`+devdocs`) from 39 doc families declared in `modules/_files/devdocs/families.nix`,
+resolved and hash-pinned in the checked-in `modules/_files/devdocs/docs.lock.json`. It exists
+because the `javadocs` MCP server (`modules/mcp-servers.nix`) fails/times out repeatedly —
+this **complements** it, it does not replace it: DevDocs covers the JDK's own API plus
+Kotlin, Groovy, Scala, Spring Boot and Clojure, but no arbitrary third-party Maven artifact,
+which stays the MCP server's job.
+
+**Own namespace, `my.devdocs`, deliberately not `my.ai.devdocs`.** `ai-options.nix`'s
+`key = "nix-darwin-ai-options"` exists because four AI aspects read each other's settings;
+devdocs reads none of theirs and none of them reads devdocs — it only sits near the AI
+tooling because its skill lives under `modules/ai/_files/skills/devdocs/`, which
+`agent-content.nix` already picks up with no registration needed.
+
+**Compression: zlib with a per-doc trained preset dictionary, not zstd/brotli.** Measured
+against real OpenJDK/CSS/man pages: DevDocs' redundancy is almost entirely CROSS-page
+boilerplate (navigation, headers, repeated CSS classes), which no per-blob-independent
+codec can see regardless of algorithm — zlib alone compresses at 0.182, zstd alone at
+0.173, but zlib **with** a trained 32 KiB preset dictionary (`zlib.compressobj(...,
+zdict=...)`, a stdlib feature since Python 3.3) reaches 0.117, nearly matching zstd+dict's
+0.093 for zero runtime dependencies. The dictionary is trained by the `zstd` CLI
+(`zstd --train -r <dir>`) purely as a **build-time tool** — no zstd runtime library is ever
+loaded, at build time or by `+devdocs` itself. Full measurement in `build-index.py`'s module
+docstring. `-r <directory>`, not a directory listing expanded on the command line: passing
+~12,600 individual file paths (the `man` doc) blew `ARG_MAX` inside the Nix build sandbox
+even though the identical approach succeeded in an interactive shell — the sandbox's larger
+`PATH`-like environment eats into the same combined argv+envp budget.
+
+**Bump ritual** (family → newest slug, mirrors `agent-browser-hashes`'s `nix store
+prefetch-file` pattern):
+
+```bash
+just devdocs-list           # what's pinned vs. what upstream serves — no download
+just devdocs-lock           # re-resolve every family, prefetch hashes, rewrite the lock
+just devdocs-lock openjdk   # or just one/a few families
+just devdocs-check          # hermetic pipeline test before relying on the result
+```
+
+**`downloads.devdocs.io` is not content-addressed and upstream rebuilds a doc in place** —
+unlike every other pinned artifact in this repo (GitHub release assets, npm tarballs,
+Camoufox zips), the pinned hash can stop fetching once upstream moves on, because the old
+bytes are simply gone. `docs.lock.json`'s `mtime` field is the only warning signal
+(`just devdocs-list` diffs it against upstream); R2 is what makes a stale lock harmless in
+practice — once a doc is built and pushed there, a machine substituting from the cache never
+touches `downloads.devdocs.io` at all.
+
+**`documents.devdocs.io` needs a real User-Agent for `--online` fetches.** Cloudflare returns
+403 to Python's default `Python-urllib/…` UA on some (not all) paths while `curl` with no UA
+at all gets 200 — the same class of block `nix-cache-prune.py` already documents against
+narinfo fetches. `devdocs-cli.py`'s `fetch_online()` sets `User-Agent: Mozilla/5.0`.
 
 ### Independent AI aspects
 

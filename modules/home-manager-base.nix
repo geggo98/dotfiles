@@ -17,6 +17,7 @@ in
       content.enable = lib.mkDefault true;
       mcp.enable = lib.mkDefault true;
     };
+    my.devdocs.enable = lib.mkDefault true;
     imports = [
       hm.shell
       # Split from `shell` so that aspect can be imported by hosts without
@@ -30,6 +31,7 @@ in
       hm.onepassword
       hm.gradle
       hm.neovim
+      hm.devdocs
       hm.agents
       hm.agent-content
       hm.mcp-servers
