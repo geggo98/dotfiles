@@ -17,7 +17,14 @@ power unit as a factory line), are described by the author in
 
 ## Local changes
 
-None yet — this commit vendors the skill unchanged, byte-for-byte.
+- `scripts/smoke.mjs` (plain Node + an unpinned `playwright` resolved from the
+  tested project's `node_modules`) was replaced with `scripts/smoke.ts` +
+  `scripts/smoke.sh`, a deno port pinned the same way as
+  `../slidev/scripts/check-slide-overflow.{sh,ts,lock}` — deployed skill files
+  live read-only in `/nix/store`, so a script cannot `npm install` next to
+  itself. Behavior is unchanged (verified against the template: same eight
+  stations, same PASS); the CWD-relative `createRequire` fallback for locating
+  `playwright` is gone because nothing needs it anymore.
 
 ## Re-syncing with upstream
 
@@ -33,4 +40,7 @@ diff -ru */skills/isometric-explainer/assets \
 `assets/template/` should diff clean or near-clean (it is meant to stay
 byte-identical). `SKILL.md` and `references/` will differ everywhere once
 local changes land here — read the upstream diff for *new* rules or fixed
-bugs, and fold those in by hand rather than overwriting the local file.
+bugs, and fold those in by hand rather than overwriting the local file. If
+upstream's `scripts/smoke.mjs` changed behavior (not just style), port the
+change into `scripts/smoke.ts` by hand; there is no automated diff for it
+since the local file is a different language.

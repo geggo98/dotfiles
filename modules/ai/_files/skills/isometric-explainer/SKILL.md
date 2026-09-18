@@ -16,6 +16,11 @@ description: >-
   (use artifact-diagramming); a slide deck; a game with win conditions and
   scoring; a 3D scene needing WebGL, Three.js or real perspective; a UI mockup.
 license: MIT
+allowed-tools: >-
+  Read(references/*)
+  Bash(./scripts/smoke.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/smoke.sh *)
+  Bash(zsh *) Bash(deno *) Bash(node *) Bash(python3 *)
+  Read
 ---
 
 # Isometric explainers
@@ -87,7 +92,7 @@ Copy the working template, then replace the domain:
 
 ```bash
 cp -r <skill-dir>/assets/template my-explainer
-cd my-explainer && python -m http.server 8000
+cd my-explainer && python3 -m http.server 8000
 ```
 
 The template is **PacketPost**, a complete small explainer of what a web request
@@ -109,19 +114,20 @@ clean-looking page. Always run this before reporting done:
 for f in js/*.js; do node --check "$f" || echo "FAIL $f"; done
 
 # console errors, every station, and a screenshot. Needs a served URL.
-python -m http.server 8000 &
-node "$SKILL_DIR/scripts/smoke.mjs" http://localhost:8000/
+python3 -m http.server 8000 &
+zsh "${CLAUDE_SKILL_DIR}/scripts/smoke.sh" http://localhost:8000/
 ```
 
-`$SKILL_DIR` is wherever this skill is installed — use `${CLAUDE_SKILL_DIR}`, or
-just copy `scripts/smoke.mjs` into the project next to `index.html`.
+`${CLAUDE_SKILL_DIR}` is wherever this skill is installed.
 
-`scripts/smoke.mjs` loads the page in headless Chromium, fails on any console
-error or page error, steps the vehicle through every station, and writes a
-screenshot. **Look at the screenshot.** Occlusion, label collisions and plates
-landing on empty ground do not raise errors.
+`scripts/smoke.sh` (a deno script, pinned the same way as the sibling `slidev`
+skill's overflow checker — see `../slidev/scripts/check-slide-overflow.sh`)
+loads the page in headless Chromium, fails on any console error/warning or
+page error, steps the vehicle through every station, and writes a screenshot.
+**Look at the screenshot.** Occlusion, label collisions and plates landing on
+empty ground do not raise errors.
 
-If Playwright is unavailable, say so plainly and tell the user to open
+If `deno` is unavailable, say so plainly and tell the user to open
 `index.html` — do not report a template as working on `node --check` alone.
 
 ## References

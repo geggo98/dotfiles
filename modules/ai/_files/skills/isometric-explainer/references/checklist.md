@@ -97,7 +97,7 @@ actually shipped.
 
 - [ ] `for f in js/*.js; do node --check "$f"; done` passes — a loop, because
       `node --check` only checks its first argument.
-- [ ] `scripts/smoke.mjs` reports zero console errors and zero page errors.
+- [ ] `scripts/smoke.sh` reports zero console errors and zero page errors.
 - [ ] The smoke test reaches every station and finishes the run.
 - [ ] **The screenshot has been looked at.** Occlusion and label collisions raise
       no errors.
