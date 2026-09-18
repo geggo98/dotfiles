@@ -483,22 +483,36 @@ agent-browser-hashes version:
 # no version history. When mtime moves, the OLD bytes are gone and the pinned
 # hash stops fetching. `just devdocs-list` is the only early warning for that.
 #
+# Also re-resolves modules/_files/devdocs/sources.nix (Maven javadoc for
+# Apache Commons/JUnit 5/Groovy/Spring, the Gradle docs archive, Valkey's
+# command reference) into the same lock file's "sources" object. Those are a
+# STRICTLY BETTER pinning story than DevDocs' own tarballs: Maven Central and
+# services.gradle.org are immutable once published, so a stale lock entry
+# there simply falls behind, it never stops fetching outright. Restrict to
+# one population with `--kind {devdocs,mavenJavadoc,javadocUrl,redisCommands}`.
+#
 # Optional arguments restrict the run, e.g. `just devdocs-lock openjdk go`.
-# `--prune` additionally drops lock entries no longer declared in families.nix.
+# `--prune` additionally drops lock entries no longer declared in either file.
 devdocs-lock *args:
     #!/bin/zsh
     set -euo pipefail
     python3 modules/_files/devdocs/lock.py "$@"
 
-# What is pinned, what upstream currently serves, and whether any family has
-# moved since the last lock. Read-only: one HTTP request, no downloads.
+# What is pinned, what upstream currently serves, and whether any family or
+# source has moved since the last lock. Read-only: HTTP requests only
+# (Maven's maven-metadata.xml, Gradle's version endpoint, GitHub's commits
+# API for Valkey), no downloads -- but note Maven Central's own
+# <release>/<latest> are NOT trusted here either: they have been measured
+# pointing at milestone/RC builds, so the reported "upstream" version is
+# always the newest STABLE one matching each source's `track` prefix.
 devdocs-list:
     #!/bin/zsh
     set -euo pipefail
     python3 modules/_files/devdocs/lock.py --report
 
-# Hermetic pipeline test: synthetic tarball -> build-index.py -> +devdocs,
-# no network, isolated from the real 39-doc dataset.
+# Hermetic pipeline test: synthetic fixtures (a DevDocs tarball, a javadoc
+# tree, a Valkey-doc-shaped tree) through all three builders -> +devdocs, no
+# network, isolated from the real ~80-doc dataset.
 devdocs-check: _check-untracked
     nix build --no-link .#checks.aarch64-darwin.devdocs
 

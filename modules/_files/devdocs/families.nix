@@ -72,4 +72,10 @@
   "man" # Linux man pages — not a duplicate of macOS `man`, which serves BSD pages
   "nix"
   "hammerspoon"
+
+  # --- Added 2026-09-18: hides under a non-obvious slug ---
+  "browser_support_tables" # "Can I use" (caniuse.com); CC-BY-4.0. This IS the
+  # caniuse-db data devdocs.io already carries, just not under the name
+  # "caniuse" -- the slug alone made it look absent. Zeal/Dash's own CanIUse
+  # docset (a 2017 snapshot) would be nine years staler than this.
 ]

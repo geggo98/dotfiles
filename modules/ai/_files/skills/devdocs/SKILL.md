@@ -1,6 +1,6 @@
 ---
 name: devdocs
-description: Offline API reference from a local DevDocs (freeCodeCamp) index — the JDK's own javadoc plus Kotlin, Groovy, Scala, Spring Boot, Clojure, and ~35 other docs (Rust, Go, Python, TypeScript, Node, Deno, Bun, CSS, Web APIs, React, Vue, Playwright, PostgreSQL, SQLite, DuckDB, Redis, Docker, Kubernetes, Terraform, Git, shells, jq, man pages, Hammerspoon). Use whenever a class, method, function, option or signature from any of these comes up — even when you think you know the answer, your training data lags every one of them. NOT for nixpkgs packages, NixOS/home-manager/nix-darwin options or /nix/store paths — use the `nixos` skill for those. Anchor-scoped, so one member costs ~200 tokens instead of a whole page. Prefer this over the `javadocs` MCP for the JDK itself (that MCP is remote, flaky, and only useful for third-party Maven artifacts this index does not carry), over context7 for exact signatures, and over WebSearch for anything the installed docs cover.
+description: Offline API reference from a local index — DevDocs (freeCodeCamp) for the JDK's own javadoc plus Kotlin, Groovy (GDK), Scala, Spring Boot's reference guide, Clojure, "Can I use" (as `browser_support_tables`), and ~35 other docs (Rust, Go, Python, TypeScript, Node, Deno, Bun, CSS, Web APIs, React, Vue, Playwright, PostgreSQL, MariaDB, SQLite, DuckDB, Docker, Kubernetes, Terraform, Git, shells, jq, man pages, Hammerspoon) — PLUS javadoc built straight from Maven Central for Apache Commons (~20 components: Lang3, IO, Collections4, Text, Codec, CSV, Compress, CLI, Net, Pool2, DBCP2, Configuration2, Validator, BeanUtils, Exec, VFS2, JEXL3, FileUpload, Numbers, RNG, Statistics), JUnit 5 (Jupiter/Platform), Groovy's own Java API (`groovy-api`, distinct from the GDK docs above), and Spring (Framework, Boot 4.x, Security, Data) — plus Gradle's own javadoc and Valkey's command reference (`valkey-commands`, a maintained Redis-compatible fork). Use whenever a class, method, function, command or signature from any of these comes up — even when you think you know the answer, your training data lags every one of them. NOT for nixpkgs packages, NixOS/home-manager/nix-darwin options or /nix/store paths — use the `nixos` skill for those. Anchor-scoped, so one member costs ~200 tokens instead of a whole page. Prefer this over the `javadocs` MCP for the JDK/Commons/JUnit/Spring (that MCP is remote and flaky; this index is offline and pinned), over context7 for exact signatures, and over WebSearch for anything the installed docs cover.
 allowed-tools: Bash(+devdocs *) Read
 dependencies: "+devdocs (installed by modules/devdocs.nix, my.devdocs.enable); doc databases live in /nix/store — no network, no API key"
 ---
@@ -32,6 +32,13 @@ already know and it works — but anchors contain `(`, `)`, `,`, `<`, `>`, so
 ```bash
 +devdocs show 'java.util.stream.Collectors#groupingBy(java.util.function.Function)'
 ```
+
+The Maven-Central-sourced docs (Commons, JUnit 5, Groovy's `groovy-api`,
+Spring, Gradle) are real javadoc too, so the same path-suffix resolution
+applies — just without OpenJDK's module prefix: `org/junit/jupiter/api/
+assertions`, not `java.base/java/util/list`. A nested class keeps its dot
+(`org/springframework/web/client/restclient.builder` for `RestClient.
+Builder`), so both `RestClient.Builder` and the fully-qualified form resolve.
 
 ## Commands
 
@@ -67,7 +74,7 @@ the fast way to learn the exact anchor before calling `show`.
 | Question | Tool |
 |---|---|
 | Signature/behaviour from any doc `+devdocs docs` lists | **`+devdocs`** — offline, anchor-scoped, first choice |
-| Javadoc for a third-party Maven artifact (not the JDK itself), or its source | `javadocs` MCP — the only source for arbitrary GAV coordinates. Remote and prone to timeouts; check whether devdocs already covers the JDK part first |
+| Javadoc for a third-party Maven artifact NOT in `+devdocs docs` | `javadocs` MCP — the only source for arbitrary GAV coordinates. Remote and prone to timeouts; check `+devdocs docs` first (JDK, Commons, JUnit 5, Groovy, Spring, Gradle are all offline here) |
 | "How do I wire up X", version-specific framework guides | `context7` |
 | Release notes, behaviour newer than the installed release | `WebSearch`/`tavily` — `+devdocs docs` prints the release and how old it is |
 | nixpkgs, NixOS/home-manager/darwin options, flakes, /nix/store | the `nixos` skill, not this one |

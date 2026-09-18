@@ -14,8 +14,13 @@ import tempfile
 
 sys.path.insert(0, os.path.dirname(__file__))
 import devdocs_fixture  # noqa: E402
+import javadoc_fixture  # noqa: E402
+import redis_fixture  # noqa: E402
 
-BUILD_INDEX = os.path.join(os.path.dirname(__file__), "..", "..", "_files", "devdocs", "build-index.py")
+_DEVDOCS_DIR = os.path.join(os.path.dirname(__file__), "..", "..", "_files", "devdocs")
+BUILD_INDEX = os.path.join(_DEVDOCS_DIR, "build-index.py")
+BUILD_JAVADOC_INDEX = os.path.join(_DEVDOCS_DIR, "build-javadoc-index.py")
+BUILD_REDIS_INDEX = os.path.join(_DEVDOCS_DIR, "build-redis-index.py")
 
 
 def run(cli, ddir, *args, env_extra=None, expect_ok=True):
@@ -31,17 +36,35 @@ def run(cli, ddir, *args, env_extra=None, expect_ok=True):
     return p
 
 
+def run_builder(*args):
+    p = subprocess.run([sys.executable, *args], capture_output=True, text=True, timeout=60)
+    if p.returncode != 0:
+        raise AssertionError(f"{args} exited {p.returncode}\nstdout: {p.stdout}\nstderr: {p.stderr}")
+    return p
+
+
 def setup():
     tmp = tempfile.mkdtemp(prefix="devdocs-test-")
-    fixture_dir = os.path.join(tmp, "fixture")
-    tarball = devdocs_fixture.build(fixture_dir)
     ddir = os.path.join(tmp, "installed")
     os.makedirs(ddir)
-    subprocess.run(
-        [sys.executable, BUILD_INDEX, "--tarball", tarball, "--slug", "fixture~1",
-         "--family", "fixture", "--sqlite", os.path.join(ddir, "fixture-1.sqlite")],
-        check=True, capture_output=True, text=True,
-    )
+
+    fixture_dir = os.path.join(tmp, "fixture")
+    tarball = devdocs_fixture.build(fixture_dir)
+    run_builder(BUILD_INDEX, "--tarball", tarball, "--slug", "fixture~1",
+                "--family", "fixture", "--sqlite", os.path.join(ddir, "fixture-1.sqlite"))
+
+    javadoc_dir = javadoc_fixture.build(os.path.join(tmp, "javadoc"))
+    run_builder(BUILD_JAVADOC_INDEX, "--archive", javadoc_dir, "--slug", "fixture-javadoc",
+                "--family", "fixture-javadoc", "--release", "1.0", "--license", "Apache-2.0",
+                "--source-url", "file://fixture", "--sqlite", os.path.join(ddir, "fixture-javadoc.sqlite"),
+                "--licenses-out", os.path.join(tmp, "javadoc-licenses"))
+
+    redis_dir = redis_fixture.build(os.path.join(tmp, "redis"))
+    run_builder(BUILD_REDIS_INDEX, "--tree", redis_dir, "--slug", "fixture-redis",
+                "--family", "fixture-redis", "--commit", "deadbeef1234", "--license", "CC-BY-SA-4.0",
+                "--source-url", "file://fixture", "--sqlite", os.path.join(ddir, "fixture-redis.sqlite"),
+                "--licenses-out", os.path.join(tmp, "redis-licenses"))
+
     with open(os.path.join(ddir, "catalog.json"), "w") as f:
         json.dump({"fixture~1": {"name": "Fixture", "release": "1.0"},
                    "rust": {"name": "Rust", "release": "1.0"}}, f)
@@ -155,10 +178,21 @@ def test_offline_stays_offline(cli, ddir):
     assert search_online.returncode == 3, "search --online must fail loud, DevDocs has no search API"
 
 
+def _round_trip_one_db(path):
+    import sqlite3
+    import zlib
+    conn = sqlite3.connect(path)
+    zdict = conn.execute("SELECT value FROM meta WHERE key='zdict'").fetchone()[0]
+    for p, blob, raw_bytes in conn.execute("SELECT path, html, raw_bytes FROM pages"):
+        d = zlib.decompressobj(-15, zdict)
+        out = d.decompress(blob) + d.flush()
+        assert len(out) == raw_bytes, f"{path}:{p}: decompressed length does not match raw_bytes"
+    conn.close()
+
+
 def test_builder_round_trip(ddir):
     conn_path = os.path.join(ddir, "fixture-1.sqlite")
     import sqlite3
-    import zlib
     conn = sqlite3.connect(conn_path)
     entry_count = int(dict(conn.execute("SELECT key, value FROM meta"))["entry_count"])
     real_entries = conn.execute("SELECT count(*) FROM entries").fetchone()[0]
@@ -167,11 +201,108 @@ def test_builder_round_trip(ddir):
         "meta.entry_count must equal rows actually inserted plus rows skipped, "
         "or a silently dropped entry would go unnoticed"
     )
-    zdict = conn.execute("SELECT value FROM meta WHERE key='zdict'").fetchone()[0]
-    for path, blob, raw_bytes in conn.execute("SELECT path, html, raw_bytes FROM pages"):
-        d = zlib.decompressobj(-15, zdict)
-        out = d.decompress(blob) + d.flush()
-        assert len(out) == raw_bytes, f"{path}: decompressed length does not match raw_bytes"
+    conn.close()
+    for name in ("fixture-1.sqlite", "fixture-javadoc.sqlite", "fixture-redis.sqlite"):
+        _round_trip_one_db(os.path.join(ddir, name))
+
+
+# --------------------------------------------------------------------------
+# build-javadoc-index.py: the Maven-javadoc / Gradle-docs source kind
+# --------------------------------------------------------------------------
+
+def test_javadoc_anchor_is_percent_decoded(cli, ddir):
+    # {"l": "Widget()", "u": "%3Cinit%3E()"} must resolve as "<init>()",
+    # matching the real id="&lt;init&gt;()" HTMLParser hands back already
+    # char-reference-unescaped -- see javadoc_index.member_anchor.
+    out = run(cli, ddir, "show", "fx.Widget#<init>()", "--doc", "fixture-javadoc").stdout
+    assert "Creates a new Widget" in out
+
+
+def test_javadoc_u_field_wins_over_l(cli, ddir):
+    # The real anchor is the fully-qualified "u" form; "l" (simple types) is
+    # only ever a display label.
+    out = run(cli, ddir, "show", "fx.Widget#spin(int,java.lang.String)", "--doc", "fixture-javadoc").stdout
+    assert "Spins the widget" in out
+    search = run(cli, ddir, "search", "spin", "--doc", "fixture-javadoc").stdout
+    assert "spin(int,java.lang.String)" in search, "the stored ref must use the u-form anchor, not the l-form"
+
+
+def test_javadoc_nested_class_resolves_by_name(cli, ddir):
+    # A nested class ("Widget.Spinner") is itself a page-defining entry; the
+    # CLI's dotted-guess-split preprocessor must not pre-empt this by
+    # treating it as (class=Widget, member=Spinner) before resolve_head ever
+    # gets the whole ref.
+    bare = run(cli, ddir, "show", "Widget.Spinner", "--doc", "fixture-javadoc")
+    assert bare.returncode == 0
+    fqn = run(cli, ddir, "show", "fx.Widget.Spinner#go()", "--doc", "fixture-javadoc")
+    assert fqn.returncode == 0
+    assert "Starts the nested spinner" in fqn.stdout
+
+
+def test_javadoc_member_kind_derived(cli, ddir):
+    # Member kind comes from the ENCLOSING <section id="...-detail">, not
+    # the per-member <section class="detail"> (whose class is always the
+    # literal string "detail").
+    types_out = run(cli, ddir, "types", "fixture-javadoc").stdout
+    for kind in ("Method", "Constructor", "Enum Constant"):
+        assert kind in types_out, f"{kind} missing from types output: {types_out}"
+    filtered = run(cli, ddir, "search", "spin", "--doc", "fixture-javadoc", "--type", "Method").stdout
+    assert "spin" in filtered
+
+
+def test_javadoc_missing_anchor_is_recorded_not_fatal(cli, ddir):
+    import sqlite3
+    conn = sqlite3.connect(os.path.join(ddir, "fixture-javadoc.sqlite"))
+    missing = json.loads(dict(conn.execute("SELECT key, value FROM meta"))["missing_anchors"])
+    assert len(missing) == 1 and missing[0].endswith("#ghost()"), missing
+    hit = conn.execute("SELECT 1 FROM entries WHERE anchor='ghost()'").fetchone()
+    conn.close()
+    assert hit is None, "an entry with no matching HTML anchor must not be inserted"
+
+
+def test_javadoc_without_search_index_fails_loudly():
+    tmp = tempfile.mkdtemp(prefix="devdocs-test-badjavadoc-")
+    bad_dir = os.path.join(tmp, "javadoc-bad")
+    javadoc_fixture.build(bad_dir, with_member_index=False)
+    p = subprocess.run(
+        [sys.executable, BUILD_JAVADOC_INDEX, "--archive", bad_dir, "--slug", "bad",
+         "--family", "bad", "--license", "Apache-2.0", "--source-url", "file://bad",
+         "--sqlite", os.path.join(tmp, "bad.sqlite"),
+         "--licenses-out", os.path.join(tmp, "bad-licenses")],
+        capture_output=True, text=True, timeout=30,
+    )
+    assert p.returncode != 0, "a javadoc build with no member-search-index.js must fail, not emit an empty doc"
+    assert "member-search-index" in p.stderr or "member-search-index" in p.stdout
+
+
+def test_javadoc_page_is_main_only(cli, ddir):
+    out = run(cli, ddir, "page", "fixture-javadoc", "fx/widget").stdout
+    assert "navigation chrome" not in out
+    assert "footer chrome" not in out
+
+
+# --------------------------------------------------------------------------
+# build-redis-index.py: the Valkey/Redis commands source kind
+# --------------------------------------------------------------------------
+
+def test_redis_flat_doc_round_trip(cli, ddir):
+    out = run(cli, ddir, "show", "GET", "--doc", "fixture-redis").stdout
+    assert "Get the value of" in out
+    assert "nil" in out
+
+
+def test_redis_multi_hyphen_subcommand_name(cli, ddir):
+    # "client-no-evict.md" must become "CLIENT NO-EVICT", not "CLIENT NO
+    # EVICT" -- only the FIRST hyphen is the command/subcommand boundary.
+    out = run(cli, ddir, "show", "CLIENT NO-EVICT", "--doc", "fixture-redis").stdout
+    assert "eviction mode" in out
+    assert "```" in out or "CLIENT NO-EVICT on" in out, "fenced example block did not render"
+
+
+def test_redis_topic_frontmatter_parsed(cli, ddir):
+    out = run(cli, ddir, "show", "Introduction", "--doc", "fixture-redis").stdout
+    assert "title: Introduction" not in out, "raw front matter leaked into the rendered body"
+    assert "linking to" in out
 
 
 def main():
@@ -187,6 +318,16 @@ def main():
         (test_output_plumbing, (cli, ddir)),
         (test_offline_stays_offline, (cli, ddir)),
         (test_builder_round_trip, (ddir,)),
+        (test_javadoc_anchor_is_percent_decoded, (cli, ddir)),
+        (test_javadoc_u_field_wins_over_l, (cli, ddir)),
+        (test_javadoc_nested_class_resolves_by_name, (cli, ddir)),
+        (test_javadoc_member_kind_derived, (cli, ddir)),
+        (test_javadoc_missing_anchor_is_recorded_not_fatal, (cli, ddir)),
+        (test_javadoc_without_search_index_fails_loudly, ()),
+        (test_javadoc_page_is_main_only, (cli, ddir)),
+        (test_redis_flat_doc_round_trip, (cli, ddir)),
+        (test_redis_multi_hyphen_subcommand_name, (cli, ddir)),
+        (test_redis_topic_frontmatter_parsed, (cli, ddir)),
     ]
     failed = 0
     for fn, fn_args in tests:

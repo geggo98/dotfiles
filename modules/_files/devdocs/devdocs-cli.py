@@ -209,6 +209,40 @@ def suffix_candidates(conn, norm):
     return out
 
 
+def dotted_to_path(head):
+    """"org.junit.jupiter.api.MethodOrderer.Alphanumeric" ->
+    "org/junit/jupiter/api/methodorderer.alphanumeric". A naive "replace
+    every dot with a slash" (the original rule here) mangles any FQN whose
+    tail names a NESTED class -- javadoc always keeps the nested-class dot
+    in the HTML filename itself (MethodOrderer.Alphanumeric.html, never
+    methodorderer/alphanumeric.html), so "java.util.Map.Entry" must become
+    "java/util/map.entry", not "java/util/map/entry".
+
+    Distinguishing "this dot separates packages" from "this dot chains into
+    a nested type" needs the ORIGINAL case of `head` (package segments are
+    conventionally lowercase, type names start uppercase) -- which is why
+    this takes `head`, not the already-lowercased `hl` every other rule
+    below uses, and lowercases only its own result. Once the first
+    uppercase-starting segment is seen, every dot from there on is assumed
+    to chain into a further nested type and is left alone; the separator
+    immediately BEFORE that first uppercase segment is still the
+    package/type boundary and becomes a slash.
+
+    A path with no uppercase-starting segment at all (an ordinary package,
+    e.g. "java.util.regex") degrades to the same "all dots become slashes"
+    behavior this replaced."""
+    segs = head.strip().split(".")
+    if len(segs) < 2:
+        return head.strip().lower()
+    out = [segs[0]]
+    in_type = segs[0][:1].isupper()
+    for seg in segs[1:]:
+        out.append(("." if in_type else "/") + seg)
+        if not in_type and seg[:1].isupper():
+            in_type = True
+    return "".join(out).lower()
+
+
 def resolve_head(conn, head):
     """Returns a list of (page_id, path) candidates for the page-ish part of
     a ref, trying progressively looser matches and stopping at the first
@@ -229,9 +263,10 @@ def resolve_head(conn, head):
     if hits:
         return hits
 
-    # 3. path suffix, dots rewritten to slashes (java.util.List -> java/util/list)
+    # 3. path suffix, dots rewritten to slashes at package boundaries only
+    # (java.util.List -> java/util/list; java.util.Map.Entry -> java/util/map.entry)
     if "." in hl:
-        dotted = normalize_suffix(hl.replace(".", "/"))
+        dotted = normalize_suffix(dotted_to_path(head))
         hits = suffix_candidates(conn, dotted)
         if hits:
             return hits
@@ -740,22 +775,52 @@ def cmd_types(args):
 
 
 def _search_one_doc(conn, slug, query, type_filter, limit):
+    """Three-tier ranking (exact > prefix > substring), same result order as
+    a plain per-row scan, but the exact/prefix tiers now run as indexed SQL
+    against entries_nlower instead of a full unindexed Python pass over every
+    entry in the doc. Doc count roughly doubled with the addition of the
+    Maven/Gradle/Valkey sources (~39 -> ~80 dbs, ~230k -> ~410k entries), so a
+    full scan per doc on every `search` call stopped being free. The
+    substring tier still needs a full scan -- no index can serve an
+    unanchored LIKE '%x%' -- so it is skipped entirely once the first two
+    tiers already satisfy --limit, which is the common case for anyone
+    searching a real term."""
     ql = query.lower()
-    rows = conn.execute(
-        "SELECT e.name, e.nlower, p.path, e.anchor, e.type FROM entries e "
-        "JOIN pages p ON p.id = e.page_id"
+    type_sql = " AND e.type = ?" if type_filter else ""
+    type_params = (type_filter,) if type_filter else ()
+
+    exact = conn.execute(
+        "SELECT e.name, p.path, e.anchor, e.type FROM entries e "
+        "JOIN pages p ON p.id = e.page_id WHERE e.nlower = ?" + type_sql,
+        (ql, *type_params),
     ).fetchall()
-    exact, prefix, sub = [], [], []
-    for name, nlower, path, anchor, typ in rows:
-        if type_filter and (typ or "") != type_filter:
-            continue
-        if nlower == ql:
-            exact.append((name, path, anchor, typ))
-        elif nlower.startswith(ql):
-            prefix.append((name, path, anchor, typ))
-        elif ql in nlower:
-            sub.append((name, path, anchor, typ))
-    ranked = exact + prefix + sub
+
+    prefix = []
+    if not limit or len(exact) < limit:
+        # nlower is already lowercase, and GLOB is case-sensitive, so this is
+        # exactly a prefix match served by the entries_nlower index -- the
+        # same trick suffix_candidates() already uses for rpath above.
+        prefix = conn.execute(
+            "SELECT e.name, p.path, e.anchor, e.type FROM entries e "
+            "JOIN pages p ON p.id = e.page_id "
+            "WHERE e.nlower GLOB ? AND e.nlower != ?" + type_sql,
+            (ql + "*", ql, *type_params),
+        ).fetchall()
+
+    sub = []
+    if not limit or len(exact) + len(prefix) < limit:
+        rows = conn.execute(
+            "SELECT e.name, e.nlower, p.path, e.anchor, e.type FROM entries e "
+            "JOIN pages p ON p.id = e.page_id" + (" WHERE e.type = ?" if type_filter else ""),
+            type_params,
+        ).fetchall()
+        for name, nlower, path, anchor, typ in rows:
+            if nlower == ql or nlower.startswith(ql):
+                continue  # already covered by the exact/prefix tiers above
+            if ql in nlower:
+                sub.append((name, path, anchor, typ))
+
+    ranked = list(exact) + list(prefix) + sub
     return [(slug, *r) for r in ranked[:limit]] if limit else [(slug, *r) for r in ranked]
 
 
@@ -887,9 +952,31 @@ def cmd_show(args):
 
     head, frag = split_ref(args.ref)
     if frag is None:
-        guess = guess_dotted_split(args.ref)
-        if guess:
-            head, frag = guess
+        # A ref with no '#' may itself BE a whole page/entry name --
+        # "MethodOrderer.Alphanumeric" and "Map.Entry" are nested classes,
+        # each its own page, and must not be pre-emptively split into
+        # (class, member) by guess_dotted_split before that is even tried:
+        # nested-class names have exactly the shape guess_dotted_split looks
+        # for (a dotted tail whose last segment starts uppercase), so it
+        # would otherwise always win. Probe the whole ref first; only fall
+        # back to the dotted-guess split when nothing resolves it whole.
+        whole_resolves = False
+        for slug in wanted:
+            probe = open_doc(docs[slug])
+            try:
+                if resolve_head(probe, head):
+                    whole_resolves = True
+                    break
+                hl = head.strip().lower()
+                if probe.execute("SELECT 1 FROM entries WHERE nlower=? LIMIT 1", (hl,)).fetchone():
+                    whole_resolves = True  # the flat-doc shape, e.g. the Nix manual
+                    break
+            finally:
+                probe.close()
+        if not whole_resolves:
+            guess = guess_dotted_split(args.ref)
+            if guess:
+                head, frag = guess
 
     all_matches = []  # (slug, conn, page_id, path, anchor_or_None, name, type)
     conns = []
