@@ -25,6 +25,19 @@ power unit as a factory line), are described by the author in
   itself. Behavior is unchanged (verified against the template: same eight
   stations, same PASS); the CWD-relative `createRequire` fallback for locating
   `playwright` is gone because nothing needs it anymore.
+- `SKILL.md` and `references/narration.md` gained pointers to the sibling
+  `Skill(technical-writing)` and `Skill(slidev)` skills and to the
+  (not-vendored) `text-to-3d-asset` skill by the same author, a `## Where this
+  came from` section, and the `metadata:` block above. A close read against
+  `Skill(technical-writing)` found the upstream prose already at a high bar —
+  no AI-writing tells, no needless words, active voice throughout — so beyond
+  those additions the only other change is fixing two now-stale
+  `scripts/smoke.mjs` mentions to `scripts/smoke.sh`
+  (`references/checklist.md`) and one tightened sentence
+  (`references/isometric-drawing.md`, "shed represents" → "shed stands for").
+  The `description:` frontmatter field (it controls auto-triggering) and
+  everything under `assets/template/` are untouched, byte-for-byte from
+  upstream.
 
 ## Re-syncing with upstream
 
@@ -38,8 +51,8 @@ diff -ru */skills/isometric-explainer/assets \
 ```
 
 `assets/template/` should diff clean or near-clean (it is meant to stay
-byte-identical). `SKILL.md` and `references/` will differ everywhere once
-local changes land here — read the upstream diff for *new* rules or fixed
+byte-identical). `SKILL.md` and `references/` will differ everywhere because
+of the local additions above — read the upstream diff for *new* rules or fixed
 bugs, and fold those in by hand rather than overwriting the local file. If
 upstream's `scripts/smoke.mjs` changed behavior (not just style), port the
 change into `scripts/smoke.ts` by hand; there is no automated diff for it

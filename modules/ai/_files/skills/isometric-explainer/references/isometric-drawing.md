@@ -84,7 +84,7 @@ hides the road point at `(mx, by)` when half its footprint exceeds its setback:
 
 A 6×3.4 shed needs `(6 + 3.4) / 2 = 4.7` grid units of clearance from the road.
 Put it 2.4 units back and the thing the reader is watching vanishes behind it
-exactly when it arrives at the station that shed represents.
+exactly when it reaches the station that shed stands for.
 
 This is why big halls stand well back, why an oven sits further off the line than
 its neighbours, and why props near the road are filtered by

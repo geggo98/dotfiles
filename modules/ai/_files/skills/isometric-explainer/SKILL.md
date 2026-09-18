@@ -20,7 +20,13 @@ allowed-tools: >-
   Read(references/*)
   Bash(./scripts/smoke.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/smoke.sh *)
   Bash(zsh *) Bash(deno *) Bash(node *) Bash(python3 *)
+  Skill(technical-writing) Skill(slidev)
   Read
+metadata:
+  based-on: "https://github.com/LaurentiuGabriel/learnscape/tree/main/skills/isometric-explainer"
+  upstream-commit: "5c8af77808ba11bff6f4b46297dc45514247c4a5"
+  vendored-at: "2026-09-18"
+  upstream-license: MIT
 ---
 
 # Isometric explainers
@@ -54,7 +60,7 @@ saver with captions.
 3. **Publish a fidelity ledger.** Say exactly what is computed, what is scaled
    down, what is assumed, and what is faked — in the About modal *and* the
    README. Half the educational value is the reader knowing which numbers to
-   trust. See `references/fidelity.md`.
+   trust. Write it with `Skill(technical-writing)`. See `references/fidelity.md`.
 4. **Pace it for reading, not watching.** The first visit to a station stops for
    as long as its write-up takes to read. Later visits get a beat. The reader
    never has to pause to keep up. See `references/pacing.md`.
@@ -62,6 +68,20 @@ saver with captions.
    `<script>` tags in order, no build step, no network calls. It opens from
    `file://`, it works offline, it deploys to any static host, and it is still
    readable in five years.
+
+## When this is the wrong tool
+
+Two related requests want a different skill:
+
+- The answer is a talk, not a place. Reach for `Skill(slidev)` instead. The two
+  pair well: a finished explainer embeds into a slide deck as an iframe or a
+  link, so a talk can open on the slide and let the explainer run live.
+- The answer is a game asset — a textured mesh for an engine, not a teaching
+  aid. The same author's
+  [text-to-3d-asset](https://github.com/LaurentiuGabriel/unreal-game-assets-creation-skill)
+  skill turns a prompt or a photo into a textured GLB/FBX through a local
+  Fooocus + Hunyuan3D-2 + Blender pipeline. It is not vendored here: it needs
+  Windows and an NVIDIA GPU, and ships with no license.
 
 ## Layout
 
@@ -160,3 +180,17 @@ Each of these cost someone an afternoon. The references explain them properly.
   must never cut a first read short.
 - What the reader has already read survives a reset. Nobody wants to re-read the
   tour because they pressed the wrong button.
+
+## Where this came from
+
+This skill generalizes two live explainers by the same author: TokenTown (a
+transformer laid out as a city) and EngineWorks (an F1 power unit as a factory
+line). The method is described in
+[How I use LLMs to learn complex topics](https://laurentiugabriel.github.io/blog/articles/how-i-use-llms-to-learn/)
+(Laurentiu Raducu, 2026-08-09): build a knowledge base with the model, have the
+model check it for accuracy, render it as a low-poly, Rollercoaster-Tycoon-style
+simulation, then deploy it as a static site. The five rules above are what turn
+that last step into teaching rather than mere animation.
+
+Vendored from [learnscape](https://github.com/LaurentiuGabriel/learnscape) — see
+`UPSTREAM.md` in this directory for the exact commit and license.

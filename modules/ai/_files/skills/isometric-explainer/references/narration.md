@@ -1,7 +1,8 @@
 # Narration
 
 The copy is half the product. The animation earns attention; the writing spends
-it. A beautiful explainer with vague captions teaches nothing.
+it. A beautiful explainer with vague captions teaches nothing. Write it with
+`Skill(technical-writing)`.
 
 ## Three fields per district
 
