@@ -1,0 +1,204 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>PacketPost: What a Web Request Actually Costs</title>
+<meta name="description" content="An isometric town that runs one HTTP request in real time: DNS, the TCP handshake, TLS, a CDN edge, the origin, the database and TCP slow start — with the whole latency waterfall computed live." />
+<link rel="stylesheet" href="css/styles.css" />
+</head>
+<body>
+
+<canvas id="stage"></canvas>
+<div id="tooltip" class="tooltip" hidden></div>
+
+<header class="topbar">
+  <div class="brand">
+    <div class="logo" aria-hidden="true"></div>
+    <div class="brand-text">
+      <h1>PacketPost</h1>
+      <p>One web request, laid out as a town, with the milliseconds shown</p>
+    </div>
+  </div>
+  <div class="top-actions">
+    <button id="btn-about" class="ghost">About &amp; accuracy</button>
+    <button id="btn-panel" class="ghost" aria-expanded="true">Hide panel</button>
+  </div>
+</header>
+
+<div class="hud" id="hud">
+  <div class="hud-item"><span class="hud-k">Stage</span><span class="hud-v" id="hud-phase">idle</span></div>
+  <div class="hud-item"><span class="hud-k">Request</span><span class="hud-v" id="hud-trip">1 / 3</span></div>
+  <div class="hud-item"><span class="hud-k">Spent</span><span class="hud-v" id="hud-elapsed">0 ms</span></div>
+  <div class="hud-item"><span class="hud-k">Caches</span><span class="hud-v" id="hud-state">cold</span></div>
+  <div class="hud-note" id="hud-note"></div>
+</div>
+
+<div class="zoomer" id="zoomer">
+  <button id="zoom-in" title="Zoom in" aria-label="Zoom in">+</button>
+  <button id="zoom-out" title="Zoom out" aria-label="Zoom out">−</button>
+  <button id="zoom-fit" title="Show the whole town (or double-click the map)" aria-label="Fit whole town">⤢</button>
+</div>
+
+<aside class="inspector" id="inspector">
+  <button class="sheet-handle" id="sheet-handle" aria-expanded="false" aria-controls="inspector">
+    <span class="grip" aria-hidden="true"></span>
+    <span class="sheet-label">Details</span>
+  </button>
+
+  <div class="stage-card">
+    <div class="eyebrow">
+      <span class="chip" id="stage-chip">idle</span>
+      <span class="tag" id="stage-tag"></span>
+    </div>
+    <h2 id="stage-name">Press Run to send a request</h2>
+    <p class="lede" id="stage-short">A van leaves the browser desk carrying nothing but a URL, and comes back with a page.</p>
+    <p class="muted" id="stage-body"></p>
+    <div class="dwell" id="dwell" hidden>
+      <i id="dwell-bar"></i>
+      <span id="dwell-hint">reading stop: press <kbd>Space</kbd> to hold it here</span>
+    </div>
+  </div>
+
+  <section class="sec">
+    <h3>Where the time goes <span class="hint" id="wf-hint">projected</span></h3>
+    <div class="bars" id="wf-list"></div>
+    <p class="fine">Solid bars have been paid for by the van that is on the road now.
+       Faded bars are still ahead of it. A dash means that stage costs nothing on this request.</p>
+  </section>
+
+  <section class="sec">
+    <h3>This request</h3>
+    <div class="stats">
+      <div class="stat"><span class="k">First byte</span><b id="sum-ttfb">—</b></div>
+      <div class="stat"><span class="k">Complete</span><b id="sum-total">—</b></div>
+      <div class="stat"><span class="k">Round trips</span><b id="sum-rt">—</b></div>
+      <div class="stat"><span class="k">Slow-start rounds</span><b id="sum-rounds">—</b></div>
+    </div>
+    <p class="fine" id="sum-note"></p>
+  </section>
+
+  <section class="sec">
+    <h3>Stations <span class="hint">click to fly there</span></h3>
+    <div class="chips" id="district-chips"></div>
+  </section>
+</aside>
+
+<footer class="dock" id="dock">
+  <div class="dock-row">
+    <div class="group transport">
+      <button id="btn-play" class="icon" title="Play / pause (space)"><span id="play-glyph">❚❚</span></button>
+      <button id="btn-step" class="icon" title="Next stage (S)">⇥</button>
+      <button id="btn-reset" class="icon" title="Reset and replay the slow tour (R)">⟲</button>
+    </div>
+
+    <button id="btn-run" class="primary">Run</button>
+    <button id="btn-tune" class="icon" title="Show settings" aria-expanded="false" aria-controls="dock-tune">⚙</button>
+
+    <div class="dock-tune" id="dock-tune">
+      <label class="field slider">
+        <span>Speed <b id="v-speed">1.0×</b></span>
+        <input id="speed" type="range" min="0.4" max="8" step="0.05" value="1" />
+      </label>
+
+      <label class="field slider">
+        <span>Round trip <b id="v-rtt">60 ms</b></span>
+        <input id="rtt" type="range" min="5" max="300" step="5" value="60" />
+      </label>
+
+      <label class="field slider">
+        <span>Bandwidth <b id="v-mbps">25 Mbps</b></span>
+        <input id="mbps" type="range" min="1" max="200" step="1" value="25" />
+      </label>
+
+      <label class="field slider">
+        <span>Page size <b id="v-payload">350 KB</b></span>
+        <input id="payload" type="range" min="5" max="2000" step="5" value="350" />
+      </label>
+
+      <label class="field slider">
+        <span>Server work <b id="v-server">40 ms</b></span>
+        <input id="server" type="range" min="0" max="400" step="5" value="40" />
+      </label>
+
+      <label class="field slider">
+        <span>DB queries <b id="v-dbq">6</b></span>
+        <input id="dbq" type="range" min="0" max="40" step="1" value="6" />
+      </label>
+
+      <div class="group toggles">
+        <label class="toggle"><input id="tls13" type="checkbox" checked /><span>TLS 1.3</span></label>
+        <label class="toggle"><input id="edgehit" type="checkbox" /><span>Cache hit</span></label>
+        <label class="toggle"><input id="follow" type="checkbox" checked /><span>Follow</span></label>
+        <label class="toggle"><input id="labels" type="checkbox" checked /><span>Labels</span></label>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<div class="modal" id="about" hidden>
+  <div class="modal-card">
+    <button class="modal-close" id="about-close" aria-label="Close">×</button>
+    <h2>What this is</h2>
+    <p>PacketPost is an isometric town where every station is one stage of a single web request.
+       A van leaves the browser desk with nothing but a URL: it gets an address at the
+       Name Registry, a connection at the Handshake Yard and keys at the Certificate Vault,
+       asks the Edge Depot for the page, and — only if the depot does not already have it —
+       drives inland to the Origin Works and the Records Hall. Then it comes home over the
+       elevated Return Road, which is where the bytes are actually transferred.</p>
+    <p>The gauge on the van's flank is the millisecond budget it has spent so far. The crates
+       in the bed are the bytes it is carrying. Both are read straight out of the model.</p>
+
+    <h2>How much of it is real</h2>
+    <p><strong>Genuinely computed, live, in your browser:</strong> the whole waterfall.
+       DNS, TCP and TLS are charged in round trips at whatever latency you dial in; TLS 1.3
+       costs one round trip and 1.2 costs two; the origin leg is charged at twice the edge
+       distance; database time is queries × per-query cost; and the response transfer is the
+       larger of the time the pipe needs for the bytes and the time TCP slow start needs to
+       open the congestion window, starting from a ten-segment initial window and doubling
+       each round. Time to first byte, the completion time, the round-trip count and the
+       latency-bound / bandwidth-bound verdict all fall out of that arithmetic. It is all in
+       <code>js/model.js</code>, about 120 lines.</p>
+    <p><strong>Assumed:</strong> that the resolver sits as far away as the server; that the
+       origin sits twice as far as the edge; that headers cost 800 bytes compressed; that one
+       connection carries everything (a real page opens several and fetches dozens of files
+       over them).</p>
+    <p><strong>Indicative:</strong> parse and paint, which depends far more on the page than
+       on the network and is the one bar here that is a guess.</p>
+    <p><strong>Scenery:</strong> the buildings, the trees and the traffic paint. They are
+       there so the mechanism has somewhere to happen. Treat the town as an illustration and
+       the numbers on the panel as the lesson.</p>
+
+    <h2>Pacing</h2>
+    <p>The first time the van reaches a station it stops for long enough to read that
+       station's write-up — between 9 and 26 seconds, depending on how much there is to say —
+       and a progress bar under the panel text shows how much of the stop is left. Once every
+       station has been explained there is nothing new to read, so the town runs at a
+       watchable pace instead of a readable one. <b>Space</b> holds any stop indefinitely,
+       <b>S</b> steps one station at a time, and the Speed slider scales everything, reading
+       stops included. <b>Reset</b> (⟲) replays the slow tour; <b>Run</b> keeps what you have
+       already read.</p>
+    <p>Three requests run in a row on purpose. The second and third are dramatically cheaper,
+       and nothing about the network changed between them — DNS, the connection and the edge
+       cache are simply warm. That gap is the single most useful thing on this page.</p>
+
+    <h2>Controls</h2>
+    <ul>
+      <li><b>Space</b> play / pause · <b>S</b> advance one station · <b>R</b> reset and replay the tour · <b>F</b> follow camera · <b>L</b> labels</li>
+      <li>Drag to pan, scroll to zoom, click any station for its write-up.</li>
+      <li>The view starts close on the van and rides with it. The <b>⤢</b> button on the left,
+          or a double-click on the map, pulls back to the whole town.</li>
+    </ul>
+    <p class="fine">Built from the isometric-explainer skill. All code and copy original.</p>
+  </div>
+</div>
+
+<script src="js/iso.js"></script>
+<script src="js/model.js"></script>
+<script src="js/world.js"></script>
+<script src="js/sim.js"></script>
+<script src="js/render.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/main.js"></script>
+</body>
+</html>

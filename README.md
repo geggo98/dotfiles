@@ -30,3 +30,9 @@ killall rcmd; plutil -insert appKeyAssignments.0 -string '{"app":{"path":"\\/Sys
 # dotfiles
 Dotfiles for Codespaces
 
+# Third-party content
+
+This repo is CC0. One exception: `modules/ai/_files/skills/isometric-explainer/`
+is vendored from a third party under MIT — see the `LICENSE` and `UPSTREAM.md`
+in that directory. The CC0 grant above does not extend to it.
+
