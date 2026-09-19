@@ -23,6 +23,7 @@ result.
 """
 import argparse
 import glob
+import hashlib
 import html
 import json
 import os
@@ -774,6 +775,213 @@ def cmd_types(args):
         print(f"{n}\t{c}")
 
 
+# --------------------------------------------------------------------------
+# Content search: FTS5 over a per-entry description SNIPPET, so a query can
+# match WORDING rather than only entry names. Opt-in via `search --content`
+# -- never changes the default name-only tier's behaviour, latency, or
+# exit-code contract.
+#
+# The snippet is deliberately NOT produced via the full page_html ->
+# extract_anchor_html -> render_markdown pipeline `show` uses. That was the
+# first implementation and it was measured, for real, to be catastrophic:
+# extract_anchor_html re-parses a page's ENTIRE html from byte 0 for every
+# single call, and some real pages carry 200+ entries (measured: openjdk's
+# busiest page has 245) -- so a doc's build cost scales as
+# O(entries_per_page * page_size), not O(page_size). Measured on the real
+# index: `man` (mostly single-entry pages) 12.4s, `gradle` 36.75s, and
+# `openjdk~25` (49,730 entries, up to 245 sharing one page) did not finish
+# in 90s. A synthetic/regex-based prototype used during design had missed
+# this entirely by never exercising a page with many entries.
+#
+# The fix: locate the anchor's `id="..."`/`name="..."` attribute in the raw
+# HTML with a plain string search (HTML-escaping the anchor first -- e.g.
+# "<init>()" appears in real markup as `id="&lt;init&gt;()"`, measured
+# against openjdk's own HTML) and take a small FIXED-SIZE window from there,
+# then strip tags with a cheap regex. This bounds cost to O(1) per entry
+# regardless of page size or how many entries share a page -- the same
+# property build-index.py's zdict training already relies on for size, now
+# applied to time. It trades exact section-boundary precision (what `show`
+# gives you) for a "good enough to search on" snippet; `show` still renders
+# the precise, correct text for whatever `search --content` finds.
+#
+# A vector/embedding tier (sqlite-vector + a local model) was evaluated and
+# rejected FOR NOW with measured numbers -- see devdocs.nix's module
+# docstring. This FTS5 tier is what that measurement concluded was
+# sufficient: it already resolves the query that motivated the evaluation
+# ("all trim and strip functions") across languages, at ~200MB for the full
+# corpus instead of 147MB-1.2GB, with zero new runtime dependency and (after
+# the O(1)-per-entry fix above) a 25.5s full-corpus cold build.
+# --------------------------------------------------------------------------
+
+_SNIPPET_TAG_RE = re.compile(r"(?is)<(script|style)[^>]*>.*?</\1>|<[^>]+>")
+_SNIPPET_WS_RE = re.compile(r"\s+")
+_SNIPPET_WINDOW = 1200  # raw HTML chars scanned per entry after the anchor
+_SNIPPET_MAX_LEN = 400  # rendered chars kept per entry
+
+
+def _snippet_text(fragment):
+    stripped = _SNIPPET_TAG_RE.sub(" ", fragment)
+    return html.unescape(_SNIPPET_WS_RE.sub(" ", stripped)).strip()[:_SNIPPET_MAX_LEN]
+
+
+def _entry_snippet(html_text, anchor):
+    """O(1) per call: a plain string search plus a fixed-size slice, never a
+    full-document parse. Tries the anchor HTML-escaped first (the common
+    real-markup case, e.g. "&lt;init&gt;()"), then literally, before falling
+    back to a bounded prefix of the page -- still cheap, never "no
+    description" just because an anchor's exact spelling didn't match."""
+    if anchor:
+        for needle in (f'id="{html.escape(anchor, quote=True)}"',
+                       f'name="{html.escape(anchor, quote=True)}"',
+                       f'id="{anchor}"', f'name="{anchor}"'):
+            i = html_text.find(needle)
+            if i >= 0:
+                # Start the window after the id-bearing tag's own closing
+                # '>' -- otherwise the snippet's first "words" are that
+                # tag's leftover attributes, not the entry's actual text.
+                start = html_text.find(">", i)
+                start = start + 1 if start >= 0 else i
+                return _snippet_text(html_text[start:start + _SNIPPET_WINDOW])
+    return _snippet_text(html_text[:_SNIPPET_WINDOW])
+
+
+def _fts5_available():
+    try:
+        c = sqlite3.connect(":memory:")
+        c.execute("CREATE VIRTUAL TABLE t USING fts5(x)")
+        c.close()
+        return True
+    except sqlite3.OperationalError:
+        return False
+
+
+def content_cache_dir(ddir):
+    """$XDG_CACHE_HOME/devdocs/<hash of DEVDOCS_DIR>. DEVDOCS_DIR is itself a
+    /nix/store/<hash>-devdocs-index path, and hashing the STRING (never its
+    contents -- nothing here reads the .sqlite files to compute this) is
+    enough for free invalidation: any change to the installed doc set (a
+    docs.lock.json bump, a new source, a schema change) changes that store
+    path, which changes this cache key, so a stale content index for an
+    old build is simply never read again -- no explicit invalidation logic
+    needed. Mirrors nix-tarball-cache-repack.nix's own
+    ${XDG_CACHE_HOME:-$HOME/.cache} resolution."""
+    xdg = os.environ.get("XDG_CACHE_HOME") or os.path.join(os.path.expanduser("~"), ".cache")
+    key = hashlib.sha256(ddir.encode()).hexdigest()[:16]
+    return os.path.join(xdg, "devdocs", key)
+
+
+def content_db_path(ddir, slug):
+    safe = re.sub(r"[^A-Za-z0-9_.~-]+", "_", slug)
+    return os.path.join(content_cache_dir(ddir), safe + ".fts")
+
+
+def build_content_index(conn, slug, ddir):
+    """Build (or rebuild) slug's FTS5 content index and publish it
+    atomically: write to a per-process temp file, then os.replace() into
+    place. A killed build (Ctrl-C, the activation hook's timeout) leaves
+    only an obvious stray `.tmp.<pid>` file, never a half-written `.fts`
+    that a concurrent reader could open -- see AGENTS.md's "any script that
+    processes a list must be resumable". Returns the finished path.
+
+    Deliberately the DEFAULT (content-storing) FTS5 table, not a
+    "contentless" `content=''` one: that leaner form was tried first and
+    measured smaller (~103MB for the full corpus vs ~200MB here), but a
+    contentless table returns NULL for every original column on
+    `SELECT name, desc FROM fts WHERE fts MATCH ?` -- confirmed with a
+    4-line interactive check -- because FTS5 does not retain the source
+    text for that mode at all; it exists for a caller that keeps the text
+    in a SEPARATE table of its own and only wants the search index. There
+    is no such separate table here, so the default form is what's needed.
+    `detail=none`/`detail=column` were also tried and separately BREAK
+    phrase queries (sqlite3.OperationalError: "phrase queries are not
+    supported") -- exactly the query shape that answers "all trim and strip
+    functions" -- so `detail=full` (also the default) is not a tuning knob
+    either."""
+    if not _fts5_available():
+        fail(3, "sqlite3 in this Python build has no FTS5 support; "
+                 "content search is unavailable")
+    cache_dir = content_cache_dir(ddir)
+    os.makedirs(cache_dir, exist_ok=True)
+    final = content_db_path(ddir, slug)
+    tmp = final + f".tmp.{os.getpid()}"
+    # Sweep every stray temp for THIS slug, not just this pid's own name --
+    # a build killed by the activation hook's `timeout` (SIGTERM, no
+    # cleanup handler) leaves `<slug>.fts.tmp.<OLD_PID>` behind, and a later
+    # run under a DIFFERENT pid would otherwise never look for or remove
+    # it: harmless to a future build (which always writes its own fresh
+    # tmp name and only ever reads `final`), but a permanent per-crash disk
+    # leak -- see AGENTS.md's "clean stale temp files at start-up and count
+    # that as CLEANUP". `final` itself is untouched by this build regardless
+    # of whether it already exists: this function never writes to it
+    # directly, only atomically replaces it at the very end -- creating
+    # this index is always safe to call again for a slug that already has
+    # one cached.
+    for stale in glob.glob(final + ".tmp.*"):
+        os.remove(stale)
+
+    zdict = doc_zdict(conn)
+    out = sqlite3.connect(tmp)
+    out.execute("PRAGMA journal_mode=off")
+    out.execute("PRAGMA synchronous=off")
+    out.execute(
+        "CREATE VIRTUAL TABLE fts USING fts5(name, desc, tokenize='porter unicode61')"
+    )
+    page_cache = {}
+    batch = []
+    for name, anchor, page_id, path in conn.execute(
+        "SELECT e.name, e.anchor, e.page_id, p.path FROM entries e "
+        "JOIN pages p ON p.id = e.page_id"
+    ):
+        if page_id not in page_cache:
+            if len(page_cache) > 400:  # bound memory on very large docs
+                page_cache.clear()
+            page_cache[page_id] = page_html(conn, page_id, path, zdict)
+        desc = _entry_snippet(page_cache[page_id], anchor)
+        batch.append((name, desc))
+        if len(batch) >= 5000:
+            out.executemany("INSERT INTO fts(name, desc) VALUES (?, ?)", batch)
+            batch.clear()
+    if batch:
+        out.executemany("INSERT INTO fts(name, desc) VALUES (?, ?)", batch)
+    out.commit()
+    out.execute("INSERT INTO fts(fts) VALUES ('optimize')")
+    out.commit()
+    out.close()
+    os.replace(tmp, final)  # atomic on the same filesystem
+    return final
+
+
+def open_content_index(ddir, slug, path):
+    """A cache miss builds inline (median 0.06s, worst 2.4s measured --
+    cheap enough to do synchronously) with a one-line stderr note, so a slow
+    first call is never silent."""
+    final = content_db_path(ddir, slug)
+    if not os.path.exists(final):
+        print(f"# building content index for {slug} (first use)...", file=sys.stderr)
+        conn = open_doc(path)
+        try:
+            build_content_index(conn, slug, ddir)
+        finally:
+            conn.close()
+    return sqlite3.connect(f"file:{final}?mode=ro", uri=True)
+
+
+def _content_search_one_doc(ddir, slug, path, query, limit):
+    conn = open_content_index(ddir, slug, path)
+    try:
+        rows = conn.execute(
+            "SELECT name, desc FROM fts WHERE fts MATCH ? "
+            "ORDER BY bm25(fts, 1.0, 3.0) LIMIT ?",
+            (query, limit if limit else -1),
+        ).fetchall()
+    except sqlite3.OperationalError as exc:
+        fail(3, f"content index query failed for {slug}: {exc}",
+             f"try: rm {content_db_path(ddir, slug)!r} and re-run")
+    finally:
+        conn.close()
+    return [(slug, name, desc) for name, desc in rows]
+
+
 def _search_one_doc(conn, slug, query, type_filter, limit):
     """Three-tier ranking (exact > prefix > substring), same result order as
     a plain per-row scan, but the exact/prefix tiers now run as indexed SQL
@@ -842,6 +1050,29 @@ def cmd_search(args):
         fail(3, f"no installed docs under DEVDOCS_DIR={ddir!r}")
 
     limit = args.limit
+
+    if args.content:
+        # Separate tier, not a fallback: never triggered by a zero-hit
+        # name-tier search, so the default `search`'s exit-code contract
+        # (1 = "searched, nothing matched") and 0.6s latency are unchanged
+        # for everyone not asking for this explicitly.
+        results = []
+        for slug in wanted:
+            results.extend(_content_search_one_doc(ddir, slug, docs[slug], args.query, limit))
+        results = results[:limit] if limit else results
+
+        if getattr(args, "format", "md") == "json":
+            payload = [{"doc": s, "name": n, "desc": d} for s, n, d in results]
+            emit_json(payload, args)
+            return
+
+        if not results:
+            fail(1, f"no content match for '{args.query}' across {len(wanted)} doc(s) "
+                     f"(searched description text, not entry names)")
+        lines = [f"{s}\t{n}\t{d}" for s, n, d in results]
+        emit_text("\n".join(lines) + "\n", args)
+        return
+
     results = []
     total_entries = 0
     for slug in wanted:
@@ -1127,6 +1358,46 @@ def cmd_doctor(_args):
     print(f"{len(docs)} doc(s) OK")
 
 
+def cmd_warm_content(args):
+    """Build/refresh the content-search cache. Entry point for both a human
+    (`+devdocs warm-content`) and devdocs.nix's activation hook, which wraps
+    this in `timeout 90 ... || true` -- bounded and non-fatal, because an
+    activation must never fail over a nice-to-have search index, and
+    `search --content`'s own on-demand build (see open_content_index) is the
+    correctness backstop if the pre-warm times out or is skipped.
+
+    Every doc is classified SUCCESS/SKIP/ERROR, never collapsed -- per
+    AGENTS.md's "any script that processes a list must be resumable" rule --
+    so the summary line is trustworthy and a re-run is cheap (SKIP unless
+    --force)."""
+    ddir = devdocs_dir()
+    docs = installed_docs(ddir)
+    wanted = [resolve_doc_arg(ddir, d)[0] for d in args.doc] if args.doc else sorted(docs)
+    if not wanted:
+        fail(3, f"no installed docs under DEVDOCS_DIR={ddir!r}")
+
+    built = skipped = errors = 0
+    for slug in wanted:
+        if os.path.exists(content_db_path(ddir, slug)) and not args.force:
+            skipped += 1
+            continue
+        conn = open_doc(docs[slug])
+        try:
+            build_content_index(conn, slug, ddir)
+            built += 1
+        except SystemExit:
+            raise
+        except (sqlite3.Error, OSError) as exc:
+            print(f"# warm-content: {slug} failed: {exc}", file=sys.stderr)
+            errors += 1
+        finally:
+            conn.close()
+    print(f"warm-content: {built} built, {skipped} already cached, {errors} errors "
+          f"({len(wanted)} doc(s) considered)")
+    if errors:
+        sys.exit(1)
+
+
 # --------------------------------------------------------------------------
 # Argument parsing
 # --------------------------------------------------------------------------
@@ -1149,6 +1420,9 @@ def build_parser():
     sp.add_argument("--doc", action="append", metavar="SLUG")
     sp.add_argument("--type")
     sp.add_argument("--limit", type=int, default=50)
+    sp.add_argument("--content", action="store_true",
+                     help="search description text (FTS5), not just entry names -- "
+                          "builds a cache outside the store on first use per doc")
     sp.add_argument("--online", action="store_true", help="always fails: DevDocs has no search API")
     add_common_output(sp)
     sp.set_defaults(func=cmd_search)
@@ -1183,6 +1457,13 @@ def build_parser():
 
     sp = sub.add_parser("doctor", help="verify DEVDOCS_DIR and every installed doc")
     sp.set_defaults(func=cmd_doctor)
+
+    sp = sub.add_parser("warm-content",
+                         help="build/refresh the content-search cache for installed docs")
+    sp.add_argument("--doc", action="append", metavar="SLUG")
+    sp.add_argument("--force", action="store_true",
+                     help="rebuild even if a cache file already exists")
+    sp.set_defaults(func=cmd_warm_content)
 
     return p
 

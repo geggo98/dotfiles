@@ -167,6 +167,98 @@ def test_output_plumbing(cli, ddir):
     json.loads(j.stdout)  # must parse even with a 1-byte cap: json is never truncated
 
 
+def _content_env(tag):
+    # A dedicated tmp cache dir per test, never the real ~/.cache -- hermetic
+    # even when this file is run standalone outside the Nix sandbox (which
+    # sets HOME=$TMPDIR itself; this is defense in depth, matching AGENTS.md's
+    # general preference for explicit inputs over relying on ambient state).
+    return {"XDG_CACHE_HOME": tempfile.mkdtemp(prefix=f"devdocs-cache-{tag}-")}
+
+
+def test_content_search_finds_wording_name_search_misses(cli, ddir):
+    # "Appends" names List.add(E)'s BEHAVIOUR, never its own entry name --
+    # exactly the gap that motivated this tier (`search trim` cannot find
+    # `String.strip()`). A plain name search must still miss it.
+    name_only = run(cli, ddir, "search", "Appends", "--doc", "fixture~1", expect_ok=False)
+    assert name_only.returncode == 1, "name-only search matched a WORD -- fixture assumption broke"
+
+    env = _content_env("wording")
+    content = run(cli, ddir, "search", "Appends", "--content", "--doc", "fixture~1", env_extra=env)
+    assert "List.add()" in content.stdout
+    assert "id=" not in content.stdout, "the id-bearing tag itself leaked into the snippet"
+
+
+def test_content_search_cache_is_built_once_and_reused(cli, ddir):
+    env = _content_env("reuse")
+    first = run(cli, ddir, "search", "Appends", "--content", "--doc", "fixture~1", env_extra=env)
+    assert "building content index" in first.stderr
+
+    cache_root = os.path.join(env["XDG_CACHE_HOME"], "devdocs")
+    fts_files = [f for r, _, fs in os.walk(cache_root) for f in fs if f.endswith(".fts")]
+    assert fts_files, f"no .fts cache file appeared under {cache_root}"
+    assert not any(f.endswith(".tmp") or ".tmp." in f for f in fts_files), (
+        "a temp file was left where the final .fts should be -- os.replace() did not fire"
+    )
+
+    second = run(cli, ddir, "search", "Appends", "--content", "--doc", "fixture~1", env_extra=env)
+    assert "building content index" not in second.stderr, "cache hit rebuilt the index anyway"
+    assert second.stdout == first.stdout
+
+
+def test_content_index_rebuild_sweeps_foreign_pid_stale_temps(cli, ddir):
+    # A build killed mid-write (the activation hook's `timeout`, no cleanup
+    # handler on SIGTERM) leaves `<slug>.fts.tmp.<PID>` behind. A LATER
+    # rebuild runs under a DIFFERENT pid, so it must not only avoid tripping
+    # over such a file -- it must actually remove it, or every crash leaks
+    # one file forever. Fabricate two, from two fake "other" pids.
+    env = _content_env("stale-sweep")
+    run(cli, ddir, "warm-content", "--doc", "fixture~1", env_extra=env)
+
+    cache_root = os.path.join(env["XDG_CACHE_HOME"], "devdocs")
+    final = next(
+        os.path.join(r, f) for r, _, fs in os.walk(cache_root) for f in fs
+        if f.endswith(".fts")
+    )
+    stale = [final + ".tmp.111111", final + ".tmp.222222"]
+    for s in stale:
+        with open(s, "w") as f:
+            f.write("garbage from a killed build")
+
+    rebuilt = run(cli, ddir, "warm-content", "--doc", "fixture~1", "--force", env_extra=env)
+    assert "1 built, 0 already cached, 0 errors" in rebuilt.stdout, "rebuild over an existing index must not fail"
+    assert not any(os.path.exists(s) for s in stale), "foreign-pid stale temp files were not swept"
+    assert os.path.exists(final), "the real index must still be there after the rebuild"
+
+
+def test_content_search_json_and_exit_codes(cli, ddir):
+    env = _content_env("json")
+    ok = run(cli, ddir, "search", "Appends", "--content", "--doc", "fixture~1",
+             "--format", "json", env_extra=env)
+    payload = json.loads(ok.stdout)
+    assert payload and payload[0]["doc"] == "fixture~1" and payload[0]["desc"], (
+        "content search JSON must carry doc/name/desc, matching the name-only tier's shape"
+    )
+
+    miss = run(cli, ddir, "search", "zzz_no_such_word_anywhere", "--content", "--doc", "fixture~1",
+               env_extra=env, expect_ok=False)
+    assert miss.returncode == 1, "content search miss must be exit 1, same contract as the name tier"
+    assert "description text" in miss.stderr
+
+
+def test_warm_content_classifies_built_vs_skipped(cli, ddir):
+    env = _content_env("warm")
+    first = run(cli, ddir, "warm-content", "--doc", "fixture~1", env_extra=env)
+    assert "1 built, 0 already cached, 0 errors" in first.stdout
+
+    second = run(cli, ddir, "warm-content", "--doc", "fixture~1", env_extra=env)
+    assert "0 built, 1 already cached, 0 errors" in second.stdout, (
+        "a re-run without --force must SKIP an existing cache file, not rebuild it"
+    )
+
+    forced = run(cli, ddir, "warm-content", "--doc", "fixture~1", "--force", env_extra=env)
+    assert "1 built, 0 already cached, 0 errors" in forced.stdout, "--force must rebuild anyway"
+
+
 def test_offline_stays_offline(cli, ddir):
     # A non-routable address as the online base: every NON---online path
     # must still succeed, proving there is no silent network fallback.
@@ -316,6 +408,11 @@ def main():
         (test_empty_result_names_the_population, (cli, ddir)),
         (test_failure_modes_stay_distinct, (cli, ddir)),
         (test_output_plumbing, (cli, ddir)),
+        (test_content_search_finds_wording_name_search_misses, (cli, ddir)),
+        (test_content_search_cache_is_built_once_and_reused, (cli, ddir)),
+        (test_content_index_rebuild_sweeps_foreign_pid_stale_temps, (cli, ddir)),
+        (test_content_search_json_and_exit_codes, (cli, ddir)),
+        (test_warm_content_classifies_built_vs_skipped, (cli, ddir)),
         (test_offline_stays_offline, (cli, ddir)),
         (test_builder_round_trip, (ddir,)),
         (test_javadoc_anchor_is_percent_decoded, (cli, ddir)),

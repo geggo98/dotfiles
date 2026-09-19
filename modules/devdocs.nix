@@ -16,6 +16,49 @@
 # modules/mcp-servers.nix, which remains the only source for an arbitrary
 # Maven artifact neither of the above carries.
 #
+# `+devdocs search --content` (2026-09-18) adds a second search tier over
+# description WORDING, not just entry names -- `search trim` alone cannot
+# find `String.strip()`. It is FTS5 over a per-entry text snippet, built
+# lazily per doc into a runtime cache OUTSIDE the store (devdocs-cli.py's
+# content_cache_dir, keyed on DEVDOCS_DIR's own store-path hash for free
+# invalidation) and pre-warmed, bounded and non-fatally, by the activation
+# hook below. `sqliteai/sqlite-vector` (a real vector-search SQLite
+# extension, Apache-2.0, prebuilt macOS arm64 binary) was evaluated first
+# and rejected for now, on MEASURED evidence, not a guess:
+#   - It only stores/searches vectors -- it does not generate embeddings.
+#     Real semantic search needs, in addition: an embedding model (fetched
+#     into the public R2 cache), and an inference runtime reachable at
+#     QUERY time (not just build time) by a CLI that is otherwise
+#     stdlib-only and answers in 0.2-0.6s.
+#   - The FTS5 tier alone already resolves the query that prompted this
+#     evaluation ("find all trim and strip functions across Java and
+#     libs"): `String.trim()`, `String.strip()`, `StringUtils.strip()`,
+#     `str::trim` (rust), `strings.TrimSpace()` (go), `bytearray.strip()`
+#     (python) all rank together, at ~200MB for the full corpus.
+#   - Two local embedding models were pulled and measured for real
+#     (all-minilm 384-d, nomic-embed-text 768-d) against a live Ollama
+#     server: full-corpus embedding is 56-136 minutes single-stream and
+#     147MB-1.2GB of vectors, for a quality win limited to queries sharing
+#     ZERO vocabulary with the docs' own wording (e.g. "shrink memory used
+#     by a collection" -> `ArrayList.trimToSize()`, which FTS5 cannot
+#     reach) -- while adding noise to queries FTS5 already answers cleanly.
+#     That duration rules vectors out of every timing option here (build
+#     time, lazy, or a bounded pre-warm); FTS5's ~20s fits all three.
+#   Revisit only if that narrow zero-overlap query class turns out to
+#   matter in practice; the numbers above are what a revisit should start
+#   from, not re-derive.
+#   - A first implementation of the FTS5 snippet reused `show`'s own
+#     page_html -> extract_anchor_html -> render_markdown pipeline for
+#     fidelity, and that was ALSO measured to be a real mistake:
+#     extract_anchor_html re-parses a page's entire HTML from byte 0 per
+#     call, and some real pages carry 200+ entries (openjdk's busiest: 245)
+#     -- so build cost scaled as O(entries_per_page * page_size), and
+#     `openjdk~25` alone did not finish in 90s. The shipped version locates
+#     each anchor with a plain string search and takes a fixed-size window
+#     (devdocs-cli.py's `_entry_snippet`), which is O(1) per entry
+#     regardless of page size -- full corpus cold build measured at
+#     20-25s afterward, openjdk alone at ~2.3s.
+#
 # Standalone aspect on its OWN namespace (`my.devdocs`, not `my.ai.devdocs`):
 # ai-options.nix's `key = "nix-darwin-ai-options"` exists because four AI
 # aspects read each other's settings (agent-integration reads
@@ -570,6 +613,24 @@ in
         ];
 
         home.packages = [ devdocsCli ];
+
+        # Bounded, non-fatal pre-warm of `+devdocs search --content`'s cache
+        # (devdocs-cli.py's content_cache_dir/build_content_index -- an FTS5
+        # index over a per-entry description snippet, entirely OUTSIDE the
+        # Nix store, rebuilt lazily on first use of a doc if this never
+        # runs or times out). Real full-corpus cold build measured at
+        # 20-25s across all ~80 docs; 90s leaves generous margin for a
+        # slower disk/CPU. `|| true`: an activation must never fail because
+        # a nice-to-have search index couldn't finish in time -- the lazy
+        # on-demand build in open_content_index is the correctness
+        # backstop. Full store paths throughout, not bare command names, so
+        # this does not depend on whatever PATH the activation script runs
+        # with (the same reasoning AGENTS.md gives for launchd jobs, though
+        # activation scripts are not launchd -- belt and suspenders here
+        # costs nothing).
+        home.activation.devdocsContentWarm = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
+          run --quiet ${pkgs.coreutils}/bin/timeout 90 ${devdocsCli}/bin/+devdocs warm-content || true
+        '';
       };
     };
 

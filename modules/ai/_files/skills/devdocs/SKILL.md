@@ -1,6 +1,6 @@
 ---
 name: devdocs
-description: Offline API reference from a local index — DevDocs (freeCodeCamp) for the JDK's own javadoc plus Kotlin, Groovy (GDK), Scala, Spring Boot's reference guide, Clojure, "Can I use" (as `browser_support_tables`), and ~35 other docs (Rust, Go, Python, TypeScript, Node, Deno, Bun, CSS, Web APIs, React, Vue, Playwright, PostgreSQL, MariaDB, SQLite, DuckDB, Docker, Kubernetes, Terraform, Git, shells, jq, man pages, Hammerspoon) — PLUS javadoc built straight from Maven Central for Apache Commons (~20 components: Lang3, IO, Collections4, Text, Codec, CSV, Compress, CLI, Net, Pool2, DBCP2, Configuration2, Validator, BeanUtils, Exec, VFS2, JEXL3, FileUpload, Numbers, RNG, Statistics), JUnit 5 (Jupiter/Platform), Groovy's own Java API (`groovy-api`, distinct from the GDK docs above), and Spring (Framework, Boot 4.x, Security, Data) — plus Gradle's own javadoc and Valkey's command reference (`valkey-commands`, a maintained Redis-compatible fork). Use whenever a class, method, function, command or signature from any of these comes up — even when you think you know the answer, your training data lags every one of them. NOT for nixpkgs packages, NixOS/home-manager/nix-darwin options or /nix/store paths — use the `nixos` skill for those. Anchor-scoped, so one member costs ~200 tokens instead of a whole page. Prefer this over the `javadocs` MCP for the JDK/Commons/JUnit/Spring (that MCP is remote and flaky; this index is offline and pinned), over context7 for exact signatures, and over WebSearch for anything the installed docs cover.
+description: Offline API reference from a local index — DevDocs (freeCodeCamp) for the JDK's own javadoc plus Kotlin, Groovy (GDK), Scala, Spring Boot's reference guide, Clojure, "Can I use" (as `browser_support_tables`), and ~35 other docs (Rust, Go, Python, TypeScript, Node, Deno, Bun, CSS, Web APIs, React, Vue, Playwright, PostgreSQL, MariaDB, SQLite, DuckDB, Docker, Kubernetes, Terraform, Git, shells, jq, man pages, Hammerspoon) — PLUS javadoc built straight from Maven Central for Apache Commons (~20 components: Lang3, IO, Collections4, Text, Codec, CSV, Compress, CLI, Net, Pool2, DBCP2, Configuration2, Validator, BeanUtils, Exec, VFS2, JEXL3, FileUpload, Numbers, RNG, Statistics), JUnit 5 (Jupiter/Platform), Groovy's own Java API (`groovy-api`, distinct from the GDK docs above), and Spring (Framework, Boot 4.x, Security, Data) — plus Gradle's own javadoc and Valkey's command reference (`valkey-commands`, a maintained Redis-compatible fork). Use whenever a class, method, function, command or signature from any of these comes up — even when you think you know the answer, your training data lags every one of them. NOT for nixpkgs packages, NixOS/home-manager/nix-darwin options or /nix/store paths — use the `nixos` skill for those. Anchor-scoped, so one member costs ~200 tokens instead of a whole page. `search --content` additionally matches description WORDING, not just entry names — use it when you know the concept but not the exact name (e.g. which of several trim/strip/chomp methods does what). Prefer this over the `javadocs` MCP for the JDK/Commons/JUnit/Spring (that MCP is remote and flaky; this index is offline and pinned), over context7 for exact signatures, and over WebSearch for anything the installed docs cover.
 allowed-tools: Bash(+devdocs *) Read
 dependencies: "+devdocs (installed by modules/devdocs.nix, my.devdocs.enable); doc databases live in /nix/store — no network, no API key"
 ---
@@ -46,6 +46,7 @@ Builder`), so both `RestClient.Builder` and the fully-qualified form resolve.
 |---|---|
 | list installed docs, release, size | `+devdocs docs` |
 | fuzzy search names/paths | `+devdocs search QUERY [--doc SLUG]... [--type T] [--limit N]` |
+| search description WORDING, not just names | `+devdocs search QUERY --content [--doc SLUG]... [--limit N]` |
 | one member, anchor-scoped | `+devdocs show 'PAGE#ANCHOR'` |
 | a page by FQN, no anchor | `+devdocs show java.util.List` |
 | every member of a page | `+devdocs members REF [--doc SLUG]` |
@@ -53,6 +54,7 @@ Builder`), so both `RestClient.Builder` and the fully-qualified form resolve.
 | a doc's category index | `+devdocs types SLUG` |
 | a page not installed anywhere | `+devdocs show --online --doc SLUG 'PATH[#ANCHOR]'` |
 | is the index healthy | `+devdocs doctor` |
+| pre-build the content-search cache | `+devdocs warm-content [--doc SLUG]... [--force]` |
 
 `--doc` matches by unambiguous prefix (`--doc openjdk` → `openjdk~25`), same
 convention as this repo's `+vault -address=`. Without `--doc`, `search` and
@@ -68,6 +70,28 @@ stderr; more than that, or matches spread across different pages or docs,
 renders nothing and lists the candidates instead (exit 4) — copy the exact
 `path#anchor` from that list for the follow-up call. `+devdocs members` is
 the fast way to learn the exact anchor before calling `show`.
+
+## Content search: when you know the concept, not the name
+
+`search` (no `--content`) matches entry NAMES only, so `search trim` cannot
+find `String.strip()` — different words, same purpose. `search --content`
+matches the description text instead, so cross-language, cross-word queries
+work:
+
+```bash
++devdocs search trim --content --doc openjdk --doc commons-lang3    # finds strip() too
++devdocs search '"leading and trailing" AND (space OR whitespace)' --content
+```
+
+Standard [FTS5 query syntax](https://sqlite.org/fts5.html#full_text_query_syntax)
+applies — quote a phrase, `AND`/`OR`/`NOT` combine terms — a bare multi-word
+query is an implicit AND of every word including common ones, which is
+noisier than a quoted phrase for anything longer than one or two words.
+
+The first `--content` search of a not-yet-installed doc builds a small cache
+outside the Nix store (a few seconds at most, one-line stderr note); every
+doc is normally pre-warmed at `just switch` already, so this is rarely felt.
+Exit codes match the name-only tier exactly (1 = searched, no match).
 
 ## Which tool for which question
 
