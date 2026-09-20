@@ -196,3 +196,98 @@ least-privilege IAM is done and documented far better in README "## AWS";
 update); and `known_hosts` was solved differently — public host keys sit in
 cleartext in `src/inventory.ts` as `ssh.hostKeyEd25519` and are checked by
 `just infra-verify`, which is why putting them in SOPS would be backwards.
+
+---
+
+## SecretSpec-routed 1Password migration for critical secrets (Phase 7)
+
+**Not built, and nothing here has been run.** `secretspec` (a declarative
+secret contract with pluggable providers, see `Architecture.md` §9) now reads
+infra/'s four secrets from the same `secrets/infra.enc.yaml` SOPS file as
+before. This phase is the runbook for moving the three cloud-facing ones —
+`AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `CLOUDFLARE_API_TOKEN` — to a
+1Password provider with biometric unlock, per `Architecture.md` §9's
+recommendation. `PULUMI_ACCESS_TOKEN` deliberately stays out — see that
+section for why.
+
+**Goal:** each of the three secrets ends up stored only in 1Password, read
+through `secretspec`'s `onepassword://` provider, with the old SOPS-stored
+value rotated at its source and removed — never just copied to a new store
+under the same value.
+
+### Prerequisite (config-only, safe, not done in this pass)
+
+- Add `"1password-cli"` to the casks list in `modules/homebrew-common.nix`,
+  next to the existing `"1password"` GUI cask, then `just switch`. Installs
+  `op`. Deliberately the Homebrew cask, not nixpkgs' `_1password-cli` —
+  `+nix-query info _1password-cli` reports `License: unfree`, and this repo
+  already avoids putting unfree vendor binaries where the R2 post-build-hook
+  could sweep them into the public cache (see the VS Code editor decision in
+  `AGENTS.md`).
+- In the 1Password app: Settings → Developer → enable "Integrate with
+  1Password CLI". Manual, not scriptable — the CLI is then unlocked by Touch
+  ID with no separate `op signin` needed.
+- Pick the target vault (reuse `"Homelab"`, or create a dedicated one).
+  Independent of `modules/onepassword.nix`'s `vaults` list — that file only
+  controls which vaults the **SSH agent** may offer keys from; `op` CLI
+  biometric unlock is a separate channel, gated by the toggle above.
+
+### AWS (`pulumi-deploy`, account `155895292230`)
+
+1. `pulumi-deploy`'s own attached policies (`README.md` "## AWS") grant no
+   `iam:CreateAccessKey`/`iam:DeleteAccessKey` on itself — rotate this as an
+   AWS account admin/root identity, not with the credential being rotated.
+   IAM console → Users → `pulumi-deploy` → Security credentials → Create
+   access key. IAM allows two active keys per user, so the old one keeps
+   working during the overlap.
+2. Store the new pair in 1Password:
+   `secretspec set AWS_ACCESS_KEY_ID --provider onepassword://<vault>` and
+   the same for `AWS_SECRET_ACCESS_KEY`. No `ref` needed — a freshly created
+   item uses the provider's own convention path.
+3. In `infra/secretspec.toml`, for both entries, change
+   `providers = ["infra_sops"]` to `providers = ["onepassword://<vault>"]`
+   and drop their `ref` table. This is the entire cutover.
+4. Verify: `just infra-secrets-check`, then `just pulumi preview` — read-only,
+   must show no diff caused by this change alone.
+5. Only once that holds: deactivate (not delete) the old AWS access key in
+   IAM. After a confidence window, delete it, then remove both keys from
+   `secrets/infra.enc.yaml`:
+   `sops unset secrets/infra.enc.yaml '["aws_access_key_id"]'` and
+   `sops unset secrets/infra.enc.yaml '["aws_secret_access_key"]'` —
+   following `AGENTS.md` § "Moving a secret between SOPS files"'s order
+   (config first, copy, flip the routing, only then unset the source),
+   adapted here to "flip `providers`" instead of "flip the Nix declaration".
+
+### Cloudflare (`cloudflare_api_token`, scoped to `schwetschke.dev`)
+
+1. In the Cloudflare dashboard, open the *existing* token and read its
+   current permission groups before assuming the list in `README.md`
+   "Cloudflare R2 binary cache" (R2 admin, DNS edit, Zone Settings Write,
+   Cache & Performance → Cache Settings → Edit) is still current.
+2. Create a **new** token with the identical scope. Do not edit the old
+   token's permissions — `README.md` already notes that changes its
+   behaviour, not its value; the old secret would stay valid.
+3. `secretspec set CLOUDFLARE_API_TOKEN --provider onepassword://<vault>`.
+4. In `infra/secretspec.toml`, same `providers` swap as the AWS keys above.
+5. Verify: `just pulumi preview`.
+6. Only once that holds: **Roll** the old token (not "edit" — Roll is what
+   actually changes its value) to invalidate it, then
+   `sops unset secrets/infra.enc.yaml '["cloudflare_api_token"]'`.
+
+### Trip-wires
+
+- **A missed or cancelled Touch ID prompt must not silently break `just
+  pulumi`.** During the cutover window only, a transitional
+  `providers = ["onepassword://<vault>", "infra_sops"]` (1Password first,
+  SOPS as fallback) is a reasonable safety net — SecretSpec's documented
+  behaviour is that an unreadable provider warns and the chain continues.
+  Verify this empirically on the first real cutover rather than trusting the
+  docs blind; drop the SOPS entry once confidence is established and the
+  source value is unset.
+- **Never leave both credentials valid.** Each section above ends with
+  revoking the old one — do not stop at "the new one works."
+  `PULUMI_ACCESS_TOKEN` is deliberately excluded from this phase; don't fold
+  it in without revisiting `Architecture.md` §9's reasoning first.
+- **Routing mistakes surface only when the consumer fails, never at edit
+  time** — same caution as Phase 2. Review the `secretspec.toml` diff at
+  every step, especially which secret's `providers` list is being touched.

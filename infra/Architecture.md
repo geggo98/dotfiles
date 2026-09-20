@@ -295,7 +295,74 @@ on every PR becomes valuable enough to justify the extra trust anchor.
 
 **Switch to 1Password when:** generated-secret volume gets high enough that
 the `command.local`+`sops set` round-trip becomes friction, or another
-consumer (mobile app, browser) needs the same secrets.
+consumer (mobile app, browser) needs the same secrets. As of the SecretSpec
+adoption below, "switch" for one secret is a `providers` list edit, not a
+rewrite — see the next two sections.
+
+### SecretSpec as the injection layer for infra/ secrets
+
+infra/'s four SOPS-backed secrets used to reach Pulumi through four separate
+`sops -d --extract` calls in the `just pulumi` wrapper, plus a second,
+never-called reimplementation of the same pattern in
+`infra/src/helpers/sops.ts` (kept, not removed — Plan.md "Phase 2" already
+depends on its `projectRoot()` helper for an unbuilt write-side bridge). We
+now read them through [SecretSpec](https://secretspec.dev), a declarative
+secret contract with pluggable providers:
+
+```toml
+# infra/secretspec.toml
+[providers]
+infra_sops = "sops://../secrets/infra.enc.yaml"
+
+[profiles.default]
+PULUMI_ACCESS_TOKEN = { ref = { item = "pulumi_access_token" }, providers = ["infra_sops"] }
+```
+
+- **Nothing moved.** SecretSpec's `sops` provider shells out to the same
+  `sops` CLI `.sops.yaml` already configures; `ref.item` names the existing
+  flat top-level keys directly, so `infra.enc.yaml` itself is untouched.
+- **A provider is a config edit, not a rewrite.** A `ref`ed secret's
+  `providers` list decides which store SecretSpec reads and writes. Moving
+  one secret to a different store later means editing that one line, never
+  `justfile` or any Pulumi code — see "SOPS + 1Password" below.
+- **The devenv.nix integration does not apply here.** `devenv`'s own
+  `secretspec.enable`/`config.secretspec.secrets.*` wiring refuses to run
+  under Nix Flakes — `cachix/devenv`'s `secretspec.nix` asserts
+  `!(config.secretspec.enable && config.devenv.flakesIntegration)`. That is
+  exactly this repo's setup: `modules/devshell.nix` imports
+  `inputs.devenv.flakeModule` and is entered via `nix develop`, never the
+  `devenv` CLI. So `justfile` calls the `secretspec` CLI directly
+  (`secretspec run -- pulumi "$@"`) instead of the Nix-level integration.
+- **No new dependency.** `secretspec` ships as a sibling binary inside the
+  already-pinned `devenv` package (`modules/packages.nix:64`). Since 0.19 it
+  refuses to resolve a secret without `--reason "…"` (an audit-log policy, on
+  by default, logging to `~/.local/state/secretspec/audit.log`) — see the
+  reason strings on `justfile`'s `pulumi` and `infra-secrets-check` recipes.
+
+### SOPS + 1Password for the highest-blast-radius secrets (not decided yet)
+
+`AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` (IAM user `pulumi-deploy`,
+account `155895292230`) and `CLOUDFLARE_API_TOKEN` can directly create,
+modify, or delete live cloud resources — including the R2 bucket this repo's
+shared Nix binary cache and supply-chain model depend on.
+`PULUMI_ACCESS_TOKEN` sits in a narrower risk class: it gates Pulumi Cloud's
+state backend, not a cloud API directly.
+
+**Recommendation, not yet acted on:** route the three cloud-facing secrets
+through a 1Password provider gated by the desktop app's biometric unlock
+(Touch ID), so using them costs a fingerprint, not just a file read; leave
+`PULUMI_ACCESS_TOKEN` on SOPS until that risk class changes (for instance, if
+the unbuilt Phase 2 write-bridge starts routing first-class secrets through
+Pulumi state).
+
+**Not executed, and rotation is the precondition, not an afterthought.**
+Pointing a `secretspec.toml` entry at a new provider must never be a silent
+copy of the same value — the SOPS-stored value has to be treated as retired,
+which means the credential itself has to be rotated at the source (a new AWS
+access key, a new Cloudflare token), not merely re-homed. `Plan.md` "Phase 7"
+has the exact steps, written in the shape of this file's other
+forward-looking phases: intent and trip-wires, not a script to run
+unattended.
 
 ### colmena vs. nixos-rebuild --target-host vs. deploy-rs
 

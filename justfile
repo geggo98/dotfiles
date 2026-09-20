@@ -745,15 +745,14 @@ _sops-preflight file:
     } >&2
     exit 1
 
-# Run any pulumi command in infra/ with the Pulumi Cloud + Cloudflare tokens from SOPS
+# Run any pulumi command in infra/ with the Pulumi Cloud + Cloudflare + AWS
+# secrets injected via SecretSpec (infra/secretspec.toml) instead of a
+# hand-rolled `sops -d --extract` per secret — same secrets/infra.enc.yaml
+# SOPS file underneath, nothing rotated. See infra/Architecture.md §9
+# "SecretSpec as the injection layer for infra/ secrets".
 pulumi *args: (_sops-preflight "secrets/infra.enc.yaml")
     #!/bin/zsh
     set -euo pipefail
-    PULUMI_ACCESS_TOKEN="$(sops -d --extract '["pulumi_access_token"]' secrets/infra.enc.yaml)"
-    export PULUMI_ACCESS_TOKEN
-    # The default cloudflare provider (and CLI `pulumi import`) reads this env var.
-    CLOUDFLARE_API_TOKEN="$(sops -d --extract '["cloudflare_api_token"]' secrets/infra.enc.yaml)"
-    export CLOUDFLARE_API_TOKEN
     # AWS goes through the environment rather than ~/.aws/credentials, per
     # Architecture.md §2: infra secrets live in the pulumi process and nowhere
     # else. That is not just tidiness here — sops-nix writes the *C24 work*
@@ -761,11 +760,8 @@ pulumi *args: (_sops-preflight "secrets/infra.enc.yaml")
     # put two unrelated identities in one place and pick between them by
     # convention. Static env credentials outrank the shared file in the SDK
     # chain, but an AWS_PROFILE inherited from the caller would still redirect
-    # the provider at that work profile. Unset it so the identity Pulumi uses is
-    # decided here and nowhere else.
-    AWS_ACCESS_KEY_ID="$(sops -d --extract '["aws_access_key_id"]' secrets/infra.enc.yaml)"
-    AWS_SECRET_ACCESS_KEY="$(sops -d --extract '["aws_secret_access_key"]' secrets/infra.enc.yaml)"
-    export AWS_ACCESS_KEY_ID AWS_SECRET_ACCESS_KEY
+    # the provider at that work profile — SecretSpec injects the keys below but
+    # never touches AWS_PROFILE, so unset it here regardless.
     unset AWS_PROFILE AWS_DEFAULT_PROFILE
     # Which stack to operate on. Unlike the backend (pinned in infra/Pulumi.yaml),
     # this cannot be declared in the project file — Pulumi's ProjectBackend carries
@@ -784,14 +780,34 @@ pulumi *args: (_sops-preflight "secrets/infra.enc.yaml")
     # pulumi runs the compiled dist/index.js (see Pulumi.yaml `main`), so rebuild
     # it first — tsc is fast/incremental and keeps the program in sync. pulumi +
     # pnpm live in the devenv shell; fall back to it when not already active
-    # (e.g. non-interactive `just` without a loaded direnv). Args are forwarded
-    # via "$@" (see `set positional-arguments`), so quoting/whitespace survives.
+    # (e.g. non-interactive `just` without a loaded direnv). secretspec ships
+    # alongside devenv itself (modules/packages.nix installs the devenv package,
+    # which bundles a sibling `secretspec` binary), so it's on PATH either way —
+    # no separate availability check, same as `sops` above. `secretspec run`
+    # auto-detects infra/secretspec.toml from cwd and injects
+    # PULUMI_ACCESS_TOKEN, CLOUDFLARE_API_TOKEN, AWS_ACCESS_KEY_ID and
+    # AWS_SECRET_ACCESS_KEY into the pulumi child process only — never into this
+    # script's own environment. Args are forwarded via "$@" (see `set
+    # positional-arguments`), so quoting/whitespace survives.
+    # secretspec 0.19+ refuses to resolve secrets without a --reason (policy
+    # `require_reason`, on by default) — it goes into the audit log
+    # (~/.local/state/secretspec/audit.log), not into Pulumi's environment.
     if command -v pulumi >/dev/null 2>&1 && command -v pnpm >/dev/null 2>&1; then
       pnpm run --silent build
-      pulumi "$@"
+      secretspec run --reason "just pulumi $*" -- pulumi "$@"
     else
-      nix develop ../ --no-pure-eval -c bash -euc 'pnpm run --silent build && pulumi "$@"' -- "$@"
+      nix develop ../ --no-pure-eval -c bash -euc 'pnpm run --silent build && secretspec run --reason "just pulumi $*" -- pulumi "$@"' -- "$@"
     fi
+
+# Fast, Pulumi-free check that infra/secretspec.toml's four secrets all
+# resolve through the SOPS provider — prints no secret values (secretspec
+# check only reports presence). Complements _sops-preflight, which only
+# proves the file decrypts, not that every declared key exists in it.
+infra-secrets-check: (_sops-preflight "secrets/infra.enc.yaml")
+    #!/bin/zsh
+    set -euo pipefail
+    cd infra
+    secretspec check --reason "just infra-secrets-check"
 
 # Preview infrastructure changes
 pulumi-preview: (pulumi "preview")
