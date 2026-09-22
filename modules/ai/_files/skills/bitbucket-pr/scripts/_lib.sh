@@ -87,8 +87,70 @@ parse_repo_target() {
   fi
 }
 
+# resolve_ws_repo — echo "<workspace>/<slug>" for a REST call. Uses an
+# explicit --repo/--workspace target (parse_repo_target's BB_TARGET_EXPLICIT/
+# BB_WS/BB_REPO) if given, else the current git remote. Returns non-zero (with
+# a stderr message) when it cannot resolve one; callers run it in $(...) so it
+# must `return`, not `exit`. Shared by bitbucket_pr.sh's reviewer REST calls
+# (cmd_create/cmd_update) and its build-status REST calls (cmd_status).
+resolve_ws_repo() {
+  if (( BB_TARGET_EXPLICIT )); then
+    printf '%s/%s' "$BB_WS" "$BB_REPO"
+    return 0
+  fi
+  local url slug first
+  url="$(git remote get-url origin 2>/dev/null || true)"
+  if [[ "$url" == *bitbucket.org* ]]; then
+    slug="${url##*bitbucket.org}"   # ":ws/repo.git" (scp) | "/ws/repo.git" (https) | ":22/ws/repo.git" (ssh+port)
+    slug="${slug#:}"                 # drop scp-form / ssh-port leading colon
+    slug="${slug#/}"                 # drop leading slash of the URL path
+    first="${slug%%/*}"
+    if [[ "$first" =~ '^[0-9]+$' ]]; then slug="${slug#*/}"; fi   # ssh://…:PORT/ws/repo → drop numeric port
+    slug="${slug%.git}"
+    slug="${slug%/}"
+    if [[ "$slug" == */* && "$slug" != */*/* ]]; then
+      printf '%s' "$slug"
+      return 0
+    fi
+  fi
+  log_error "Could not determine <workspace>/<slug> for the REST call. Pass --repo <workspace>/<slug>."
+  return 1
+}
+
 validate_numeric() {
   [[ "$1" =~ ^[0-9]+$ ]] || { log_error "Invalid $2: '$1' (must be numeric)"; exit 1; }
+}
+
+# _bb_duration_seconds <duration> — echo whole seconds for a "<N>[smhd]"
+# string (gtimeout's own suffix vocabulary; no unit means seconds already).
+# Returns non-zero on anything else; callers run it in $(...) so it must
+# `return`, not `exit`. Used by bitbucket_pr.sh's cmd_status to size its
+# timeout guard to `status --watch`'s own --deadline instead of the flat
+# default.
+_bb_duration_seconds() {
+  # NOT `local d="$1" unit="${d: -1}"`: zsh evaluates every value-expression
+  # in a combined `local` statement before any of the names become local, so
+  # `${d: -1}` there reads an as-yet-unset `d` and aborts under `set -u`
+  # (measured: "d: parameter not set"). Separate statements, matching
+  # resolve_ws_repo()'s declare-then-assign style above.
+  local d="$1"
+  local unit="${d: -1}"
+  local num
+  case "$unit" in
+    [0-9]) [[ "$d" =~ ^[0-9]+$ ]] || return 1; printf '%s' "$d"; return 0 ;;
+    s) num="${d%s}" ;;
+    m) num="${d%m}" ;;
+    h) num="${d%h}" ;;
+    d) num="${d%d}" ;;
+    *) return 1 ;;
+  esac
+  [[ "$num" =~ ^[0-9]+$ ]] || return 1
+  case "$unit" in
+    s) printf '%s' "$num" ;;
+    m) printf '%s' $(( num * 60 )) ;;
+    h) printf '%s' $(( num * 3600 )) ;;
+    d) printf '%s' $(( num * 86400 )) ;;
+  esac
 }
 
 # read_stdin_content — prints stdin content to stdout; exits 1 on TTY/empty.

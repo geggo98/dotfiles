@@ -7,6 +7,8 @@
 #   bitbucket_pr.sh get <pr-id>
 #   bitbucket_pr.sh create [--draft] [--reviewer ID]... <title> <source-branch> [destination-branch]   # description via stdin (optional)
 #   bitbucket_pr.sh update <pr-id> [--title <new-title>] [--description-from-stdin] [--add-reviewer ID]... [--remove-reviewer ID]...
+#   bitbucket_pr.sh status (--pr ID|--commit SHA|--branch NAME) [--all-commits] [--history]
+#                          [--format table|json|tsv] [--watch [--interval DUR] [--deadline DUR]] [--exit-code]
 #
 # Reviewers do NOT go through bb: bb's --reviewer/--add-reviewer flags resolve
 # values by enumerating the ENTIRE workspace member list client-side, which
@@ -15,6 +17,12 @@
 # reviewer flags) and sets reviewers via the REST API through the companion
 # `bitbucket_pr_reviewers.py` helper (account_id/uuid only). Every bb and helper
 # invocation runs under a timeout guard (see $BB_TIMEOUT) so nothing can hang.
+#
+# Build/pipeline status also bypasses bb entirely — bb has no command for it
+# (checked v0.18.2/v0.18.6) and `bb pipeline` queries the wrong API (Bitbucket
+# Pipelines, not a Jenkins-via-webhook CI — see SKILL.md §13). `status` talks
+# to the commit-statuses REST API through the companion
+# `bitbucket_pr_status.py` helper.
 #
 # Hidden / dangerous operations (use raw `bb` if you really need them):
 #   merge, decline, approve/unapprove, request-changes
@@ -31,11 +39,16 @@ set -eEuo pipefail
 BITBUCKET_CLI="${BITBUCKET_CLI:-bb}"
 JQ_PATH="${JQ_PATH:-jq}"
 REVIEWERS_PY="${REVIEWERS_PY:-${0:A:h}/bitbucket_pr_reviewers.py}"
+STATUS_PY="${STATUS_PY:-${0:A:h}/bitbucket_pr_status.py}"
 
 # Timeout guard: wrap every bb / helper call so a hang (e.g. bb enumerating a
 # huge workspace) fails fast instead of blocking forever. Prefer gtimeout (the
 # GNU coreutils name on macOS), fall back to timeout; if neither exists, run
 # unguarded. Override the budget with $BB_TIMEOUT (a `timeout` DURATION).
+# BB_TIMEOUT_EXPLICIT records whether the caller set it (vs. the default
+# below) — cmd_status needs that distinction to decide whether it may widen
+# the guard on its own for --watch.
+BB_TIMEOUT_EXPLICIT="${BB_TIMEOUT:+1}"
 BB_TIMEOUT="${BB_TIMEOUT:-120s}"
 BB_TIMEOUT_CMD=""
 if command -v gtimeout >/dev/null 2>&1; then
@@ -63,33 +76,7 @@ report_bb_failure() {
   exit "$code"
 }
 
-# resolve_ws_repo — echo "<workspace>/<slug>" for the REST helper. Uses an
-# explicit --repo/--workspace target if given, else the current git remote.
-# Returns non-zero (with a stderr message) when it cannot resolve one; callers
-# run it in $(...) so it must `return`, not `exit`.
-resolve_ws_repo() {
-  if (( BB_TARGET_EXPLICIT )); then
-    printf '%s/%s' "$BB_WS" "$BB_REPO"
-    return 0
-  fi
-  local url slug first
-  url="$(git remote get-url origin 2>/dev/null || true)"
-  if [[ "$url" == *bitbucket.org* ]]; then
-    slug="${url##*bitbucket.org}"   # ":ws/repo.git" (scp) | "/ws/repo.git" (https) | ":22/ws/repo.git" (ssh+port)
-    slug="${slug#:}"                 # drop scp-form / ssh-port leading colon
-    slug="${slug#/}"                 # drop leading slash of the URL path
-    first="${slug%%/*}"
-    if [[ "$first" =~ '^[0-9]+$' ]]; then slug="${slug#*/}"; fi   # ssh://…:PORT/ws/repo → drop numeric port
-    slug="${slug%.git}"
-    slug="${slug%/}"
-    if [[ "$slug" == */* && "$slug" != */*/* ]]; then
-      printf '%s' "$slug"
-      return 0
-    fi
-  fi
-  log_error "Could not determine <workspace>/<slug> for the reviewer REST call. Pass --repo <workspace>/<slug>."
-  return 1
-}
+# resolve_ws_repo is defined in _lib.sh (shared with cmd_status below).
 
 # route_reviewers <pr-id> <workspace/slug> — apply REV_ADD/REV_REMOVE to a PR via
 # the REST helper (account_id/uuid only). Runs directly (not in $(...)), so it
@@ -281,6 +268,51 @@ cmd_update() {
   fi
 }
 
+# cmd_status <args...> — forward to bitbucket_pr_status.py's `get` subcommand,
+# resolving --repo from an explicit --repo/--workspace target (already parsed
+# by parse_repo_target into BB_WS/BB_REPO) or the current git remote, via the
+# shared resolve_ws_repo(). Needs neither bb nor jq — it is a pure REST client.
+#
+# Sizing the timeout guard: an ordinary query is bounded like every other call
+# in this script ($BB_TIMEOUT, default 120s). --watch can run up to its own
+# --deadline (default 15m) polling; the flat 120s guard would kill it mid-poll
+# and read as an unrelated failure. So under --watch, and only when the caller
+# did NOT set $BB_TIMEOUT explicitly, the guard is widened to deadline + 60s —
+# the Python side's own --deadline always fires first, gtimeout is only the
+# backstop against a genuine hang (e.g. a dead network connection). An
+# explicit $BB_TIMEOUT is trusted and never overridden here.
+cmd_status() {
+  command -v uv >/dev/null 2>&1 || { log_error "uv not found — required to run bitbucket_pr_status.py (runs under 'uv run')."; exit 2; }
+  [[ -x "$STATUS_PY" ]] || { log_error "Status helper not found or not executable: $STATUS_PY"; exit 2; }
+
+  local ws_repo wr_rc=0
+  ws_repo="$(resolve_ws_repo)" || wr_rc=$?
+  (( wr_rc == 0 )) || exit 1
+
+  local -a prefix=("${BB_PREFIX[@]}")
+  if [[ -z "$BB_TIMEOUT_EXPLICIT" && -n "$BB_TIMEOUT_CMD" ]]; then
+    local watching=false deadline="900" i
+    for (( i = 1; i <= $#; i++ )); do
+      case "${@[i]}" in
+        --watch)    watching=true ;;
+        --deadline) (( i < $# )) && deadline="${@[i+1]}" ;;
+      esac
+    done
+    if [[ "$watching" == true ]]; then
+      local guard_secs
+      guard_secs="$(_bb_duration_seconds "$deadline")" || { log_error "Invalid --deadline '$deadline'"; exit 1; }
+      prefix=("$BB_TIMEOUT_CMD" "$(( guard_secs + 60 ))")
+    fi
+  fi
+
+  local rc=0
+  "${prefix[@]}" "$STATUS_PY" get "$@" --repo "$ws_repo" || rc=$?
+  if (( rc == 124 )); then
+    log_error "Status query timed out under the guard (\$BB_TIMEOUT, or --deadline+60s under --watch). Raise \$BB_TIMEOUT if you need a wider margin."
+  fi
+  exit "$rc"
+}
+
 show_usage() {
   cat >&2 <<EOF
 Usage: bitbucket_pr.sh <command> [args...]
@@ -301,6 +333,14 @@ Commands:
                                                 Update title and/or description (description via stdin), and/or
                                                 add/remove reviewers (repeatable, also comma-separated; ID as for create,
                                                 applied via the REST helper).
+  status (--pr ID|--commit SHA|--branch NAME) [--all-commits] [--history] [--format table|json|tsv]
+         [--watch [--interval DUR] [--deadline DUR] [--no-require-overall]] [--exit-code|--no-exit-code]
+                                                Build/pipeline status (Jenkins commit statuses) — bb has no command for
+                                                this and \`bb pipeline\` queries the wrong API (see SKILL.md §13). Default
+                                                target for --pr is the PR's head commit only; --all-commits shows every
+                                                commit ever pushed to the PR. --watch polls until every stage is terminal
+                                                or --deadline (default 15m) is hit. Full flag reference:
+                                                \`${0:t} status --help\` is NOT available — see bitbucket_pr_status.py --help.
 
 Hidden (use raw bb if needed): merge, decline, approve, unapprove, request-changes.
 
@@ -315,11 +355,13 @@ list them under reviewers/participants; \`bb user me\` shows your own.
 Environment:
   BITBUCKET_CLI         Path to bb               (default: bb)
   JQ_PATH               Path to jq               (default: jq)
-  BB_TIMEOUT            Timeout guard per bb/helper call (default: 120s; a \`timeout\` DURATION)
+  BB_TIMEOUT            Timeout guard per bb/helper call (default: 120s; a \`timeout\` DURATION).
+                        Under \`status --watch\`, auto-widened to --deadline+60s unless set explicitly.
   BB_OUTPUT_MAX_BYTES   Spill output > N bytes to a tempfile (default: 32768)
   BITBUCKET_USER / BITBUCKET_APP_PASSWORD   Override the REST credentials (else bb's config-cli.yml profile)
 
 Exit codes: 0 success, 1 bad args, 2 missing prereq (bb/uv/helper), 3 API/network failure, 4 PR not found.
+status additionally supports --exit-code (10 red, 11 in-progress/deadline, 12 no statuses) — see SKILL.md §6/§13.
 EOF
 }
 
@@ -327,20 +369,23 @@ main() {
   (( $# >= 1 )) || { log_error "Missing command"; show_usage; exit 1; }
   case "$1" in -h|--help|help) show_usage; exit 0 ;; esac
 
-  check_prerequisites
   parse_repo_target "$@"; set -- "${BB_REST_ARGS[@]}"
   (( BB_TARGET_EXPLICIT )) || warn_if_no_bitbucket_remote
   (( $# >= 1 )) || { log_error "Missing command"; show_usage; exit 1; }
   local command="$1"; shift
 
   case "$command" in
-    list)   cmd_list   "$@" ;;
-    get)    (( $# >= 1 )) || { log_error "get requires <pr-id>"; exit 1; }
+    list)   check_prerequisites; cmd_list   "$@" ;;
+    get)    check_prerequisites
+            (( $# >= 1 )) || { log_error "get requires <pr-id>"; exit 1; }
             cmd_get    "$@" ;;
-    create) (( $# >= 2 )) || { log_error "create requires <title> <source-branch>"; exit 1; }
+    create) check_prerequisites
+            (( $# >= 2 )) || { log_error "create requires <title> <source-branch>"; exit 1; }
             cmd_create "$@" ;;
-    update) (( $# >= 1 )) || { log_error "update requires <pr-id>"; exit 1; }
+    update) check_prerequisites
+            (( $# >= 1 )) || { log_error "update requires <pr-id>"; exit 1; }
             cmd_update "$@" ;;
+    status) cmd_status "$@" ;;   # needs neither bb nor jq — pure REST
     *) log_error "Unknown command: '$command'"; show_usage; exit 1 ;;
   esac
 }

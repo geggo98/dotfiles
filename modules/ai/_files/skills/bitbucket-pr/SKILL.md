@@ -1,8 +1,8 @@
 ---
 name: bitbucket-pr
-description: "Read and manage Bitbucket Cloud pull requests, comments, and tasks via the `bb` CLI (gildas/bitbucket-cli v0.18.1+). Use when reviewing PR feedback, replying to comments, creating tasks/PRs, or marking review tasks done. Also bridges JIRA issues to their linked Bitbucket PRs/branches/repos via Jira's dev-status API — find the PR(s) for a JIRA key (e.g. JIRA-1234), even in repos that aren't cloned locally."
-allowed-tools: Bash(./scripts/bitbucket_pr.sh *) Bash(./scripts/bitbucket_pr_comments.sh *) Bash(./scripts/bitbucket_pr_tasks.sh *) Bash(./scripts/bitbucket_jira.sh *) Bash(./scripts/bitbucket_pr_reviewers.py *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_comments.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_tasks.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_jira.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_reviewers.py *) Bash(zsh *) Skill(technical-writing)
-dependencies: "bb (Bitbucket CLI, installed via Nix on this host), jq, curl (JIRA bridge), uv (runs the reviewer REST helper bitbucket_pr_reviewers.py — httpx/pyyaml, pinned in its .py.lock). REST credentials reuse bb's config-cli.yml profile (or BITBUCKET_USER / BITBUCKET_APP_PASSWORD). JIRA bridge credentials: files jira_url / jira_username / jira_api_token in ~/.config/sops-nix/secrets, overridable per invocation via JIRA_URL / JIRA_USERNAME / JIRA_API_TOKEN"
+description: "Read and manage Bitbucket Cloud pull requests, comments, and tasks via the `bb` CLI (gildas/bitbucket-cli v0.18.1+), plus build/pipeline status via direct REST (bb has no command for this — see §13). Use when reviewing PR feedback, replying to comments, creating tasks/PRs, marking review tasks done, or checking whether a PR's CI build is green. Also bridges JIRA issues to their linked Bitbucket PRs/branches/repos via Jira's dev-status API — find the PR(s) for a JIRA key (e.g. JIRA-1234), even in repos that aren't cloned locally."
+allowed-tools: Bash(./scripts/bitbucket_pr.sh *) Bash(./scripts/bitbucket_pr_comments.sh *) Bash(./scripts/bitbucket_pr_tasks.sh *) Bash(./scripts/bitbucket_jira.sh *) Bash(./scripts/bitbucket_pr_reviewers.py *) Bash(./scripts/bitbucket_pr_status.py *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_comments.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_tasks.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_jira.sh *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_reviewers.py *) Bash(${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_status.py *) Bash(zsh *) Skill(technical-writing)
+dependencies: "bb (Bitbucket CLI, installed via Nix on this host), jq, curl (JIRA bridge), uv (runs the reviewer REST helper bitbucket_pr_reviewers.py and the build-status REST helper bitbucket_pr_status.py — httpx/pyyaml, each pinned in its own .py.lock). REST credentials reuse bb's config-cli.yml profile (or BITBUCKET_USER / BITBUCKET_APP_PASSWORD). JIRA bridge credentials: files jira_url / jira_username / jira_api_token in ~/.config/sops-nix/secrets, overridable per invocation via JIRA_URL / JIRA_USERNAME / JIRA_API_TOKEN"
 ---
 
 # Bitbucket Pull Request Skill
@@ -24,6 +24,7 @@ A wrapper around `bb` (Bitbucket Cloud CLI) exposing **stable, read- and safe-wr
 | PR      | `list`, `get` | `create` (opt. `--draft`, `--reviewer`), `update` (title / description / `--add-reviewer` / `--remove-reviewer`) — reviewers applied via the REST helper (see [§12](#12-reviewers-rest-bypass)) | `merge`, `decline`, `approve`, `unapprove`, `request-changes` |
 | Comment | `list`, `get` | `create`, `update`, `resolve`, `reopen` | `delete` |
 | Task    | `list`, `get` | `create`, `update`, `resolve`, `reopen` | `delete` |
+| Build status | `status` (overall + per-stage, `--watch`; see [§13](#13-build--pipeline-status)) | — | — |
 
 Bitbucket's hierarchy: **PR → comment → task** (tasks may also live on the PR with no parent comment).
 
@@ -36,8 +37,9 @@ Bitbucket's hierarchy: **PR → comment → task** (tasks may also live on the P
 | `${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_tasks.sh`    | Task operations    |
 | `${CLAUDE_SKILL_DIR}/scripts/bitbucket_jira.sh`        | JIRA → Bitbucket bridge (find PRs/branches/repos for a JIRA key); see [§11](#11-jira--bitbucket-bridge) |
 | `${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_reviewers.py`| Reviewer REST helper (`uv`+httpx) — sets reviewers by account_id/uuid, bypassing bb's hanging `--reviewer`; see [§12](#12-reviewers-rest-bypass). Called automatically by `bitbucket_pr.sh create/update`; also usable directly (`get`/`set`/`check-auth`). |
+| `${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_status.py`   | Build-status REST helper (`uv`+httpx) — reads Jenkins-posted commit statuses for a PR/commit/branch; `bb` has no equivalent. Called via `bitbucket_pr.sh status`; also usable directly (`get`/`check-auth`). See [§13](#13-build--pipeline-status). |
 
-The four **zsh** scripts source `${CLAUDE_SKILL_DIR}/scripts/_lib.sh` for shared helpers (logging, prerequisite checks, stdin reading, output buffering, `--repo` target parsing). Run them directly — they refuse to run under bash. Run any script with `--help` for its full grammar. The three `bb` wrappers share the same exit codes and env vars (see §6, §7); `bitbucket_jira.sh` reuses the same exit-code scheme but talks to Jira, not `bb` (see §11). `bitbucket_pr_reviewers.py` is a self-contained **uv** script (PEP-723 header + `.py.lock`) that talks REST, not `bb` (see §12).
+The four **zsh** scripts source `${CLAUDE_SKILL_DIR}/scripts/_lib.sh` for shared helpers (logging, prerequisite checks, stdin reading, output buffering, `--repo` target parsing). Run them directly — they refuse to run under bash. Run any script with `--help` for its full grammar. The three `bb` wrappers share the same exit codes and env vars (see §6, §7); `bitbucket_jira.sh` reuses the same exit-code scheme but talks to Jira, not `bb` (see §11). `bitbucket_pr_reviewers.py` and `bitbucket_pr_status.py` are each a self-contained **uv** script (PEP-723 header + its own `.py.lock`) that talks REST, not `bb` (see §12, §13).
 
 ## 3. Usage by resource
 
@@ -97,6 +99,16 @@ MD
 > un-publish) draft status. To confirm a PR is a draft, query the REST API directly:
 > `GET repositories/<ws>/<slug>/pullrequests/<id>?fields=id,draft,state` with the same
 > credentials `bb` stores (Basic auth, user + app password from `config-cli.yml`).
+
+**Build/pipeline status** — `bb` has no command for this (see [§13](#13-build--pipeline-status) for why and the full flag reference):
+
+```bash
+# Default: PR's head commit only, deduped, human table
+${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh status --pr 1234
+
+# Machine-readable, and poll until every stage is terminal (or 15m)
+${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh status --pr 1234 --watch --format json
+```
 
 #### PR description conventions (attribution & prompt reference)
 
@@ -256,6 +268,7 @@ echo "Fixed in <commit-hash>" | \
 - `bitbucket_pr_comments.sh list` (JSON path) is **filtered** down to `{id, content, inline}` per comment for compactness; pipe further through `jq` for selection: `... list 1234 | jq 'map(select(.inline))'`. The TSV path keeps `bb`'s columns: `id, created_on, updated_on, file, user, content`.
 - `bitbucket_pr_comments.sh get` returns the raw markdown body only (no JSON wrapper); when spilled, the tempfile suffix is `.md`.
 - **Spillover for large outputs.** If a command's output exceeds `BB_OUTPUT_MAX_BYTES` (default **32 768**), it is written to `${TMPDIR:-/tmp}/bb-<label>.XXXXXX.<ext>` (`<ext>` ∈ `json` / `tsv` / `md`) and stdout shows a header (size, line count, full path) followed by a 10-line preview. Read the full result with `jq . <path>` (JSON) or `column -t -s $'\t' <path>` (TSV). Raise the threshold if needed: `BB_OUTPUT_MAX_BYTES=65536 ${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh get 1234`.
+- **`status` is the exception to the JSON default:** it renders a human table by default (`--format json|tsv` to switch, `--json` as a shortcut). Under `--watch`, poll progress goes to **stderr**; the final table/JSON prints to **stdout exactly once**, so `--watch --format json | jq …` still works. Spillover to a tempfile does not apply to `status`.
 
 ## 6. Exit codes
 
@@ -263,9 +276,17 @@ echo "Fixed in <commit-hash>" | \
 |---|---|
 | 0 | Success |
 | 1 | Invalid arguments / missing stdin / bad flag |
-| 2 | `bb` / `jq` / `curl` / `uv` / reviewer helper not on PATH (JIRA bridge & reviewer REST: also missing credentials) |
-| 3 | `bb` invocation, reviewer REST call, or JIRA REST call failed (network, auth, server error) |
-| 4 | PR / comment / task / JIRA issue not found |
+| 2 | `bb` / `jq` / `curl` / `uv` / reviewer or status helper not on PATH (JIRA bridge & reviewer/status REST: also missing credentials) |
+| 3 | `bb` invocation, reviewer/status REST call, or JIRA REST call failed (network, auth, server error) |
+| 4 | PR / comment / task / commit / branch / JIRA issue not found |
+
+`status` additionally supports an opt-in `--exit-code` (defaulted **on** under `--watch`; `--no-exit-code` to opt out) that maps the build result **without changing 0–4 above**:
+
+| Code | Meaning |
+|---|---|
+| 10 | Build is red — `FAILED` or `STOPPED` (overall or any stage) |
+| 11 | Still `INPROGRESS`, or `--watch` hit its `--deadline` |
+| 12 | No statuses at all on the target — "nothing found" must never read as a green build |
 
 ## 7. Environment variables
 
@@ -273,7 +294,7 @@ echo "Fixed in <commit-hash>" | \
 |------------------------|----------------------------------------------------------------------------------------------|
 | `BITBUCKET_CLI`        | Path to the `bb` binary (default `bb`)                                                       |
 | `JQ_PATH`              | Path to `jq` (default `jq`)                                                                  |
-| `BB_TIMEOUT`           | Timeout guard around every `bb`/reviewer-helper call (default `120s`; a `timeout` DURATION). See [§12](#12-reviewers-rest-bypass). |
+| `BB_TIMEOUT`           | Timeout guard around every `bb`/reviewer-helper/status call (default `120s`; a `timeout` DURATION). Under `status --watch`, auto-widened to `--deadline + 60s` unless set explicitly. See [§12](#12-reviewers-rest-bypass), [§13](#13-build--pipeline-status). |
 | `BB_OUTPUT_MAX_BYTES`  | Spill output larger than this to a tempfile (default `32768`; matches `database` skill)      |
 | `BB_PROFILE`           | Which `bb`/`config-cli.yml` profile to use (read by `bb` **and** the reviewer REST helper)   |
 | `BITBUCKET_USER`       | (Reviewer REST) override the Basic-auth user; else the active `config-cli.yml` profile's `user` |
@@ -308,6 +329,10 @@ echo "Fixed in <commit-hash>" | \
 | `task resolve`/`reopen` rejected / invalid state | Used `needs_work`/`complete`/`pending` from `bb`'s `--state` help | Those values are wrong; the API only accepts `RESOLVED`/`UNRESOLVED` — the wrapper's `resolve`/`reopen` already send the correct ones. See [§9](#9-known-quirks). |
 | Output goes to a tempfile (header + preview only) | Output exceeded `BB_OUTPUT_MAX_BYTES` (default 32 KB) | Read the tempfile with `jq . <path>` / `column -t -s $'\t' <path>`, or raise the cap: `BB_OUTPUT_MAX_BYTES=65536 …`. For `list`, try `--format tsv` first — it's usually small enough to stay inline. |
 | `ERROR: This script requires zsh but is running under bash.` | Invoked via `bash ${CLAUDE_SKILL_DIR}/scripts/...` | Run the script directly (`${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh ...`) or with `zsh ${CLAUDE_SKILL_DIR}/scripts/...`. |
+| `bb pipeline list` prints `No pipelines found` and exits 0 | Wrong API — `bb pipeline` queries Bitbucket's own Pipelines, not the commit-statuses a webhook-based CI (e.g. Jenkins) posts to | Use `bitbucket_pr.sh status --pr <id>` instead. See [§13](#13-build--pipeline-status) and [§9](#9-known-quirks). |
+| `status` shows "(no stage statuses)" / 0 on head | The build for the current push hasn't started yet, or the PR was force-pushed | Wait and retry, or add `--all-commits` to see statuses from earlier commits too. |
+| `status --watch` never returns until `--deadline` | The CI never posts an "overall" status, only stages | Add `--no-require-overall` so `--watch` terminates once no stage is `INPROGRESS`, without waiting for one. |
+| `status` reports `stopped after N pages … with more to come` | More than `--max-pages` (default 20 ≈ 2000 statuses) exist on the target | Raise `--max-pages`. This is a hard error on purpose — a silently truncated page could be hiding a `FAILED` stage. |
 | (JIRA bridge) `Missing Jira credentials` | `JIRA_URL`/`JIRA_USERNAME`/token absent from env **and** `$SOPS_SECRETS_DIR` | Set the env vars, or ensure the `jira_url`/`jira_username`/`jira_api_token` sops-nix secrets exist; confirm with `bitbucket_jira.sh whoami`. |
 | (JIRA bridge) empty `pullRequests` / `detail: []` | `--application-type stash` against a Cloud site, or the issue has no linked dev data | Use the default `bitbucket`; verify the issue really has a linked branch/PR. |
 | (JIRA bridge) `HTTP 401/403` | Wrong account/token, or token lacks access | `bitbucket_jira.sh whoami` shows the token's account; use the Jira token via Basic auth (not a Bitbucket Bearer token). |
@@ -339,6 +364,18 @@ the mapping to match the help text. Unlike the now-fixed `pr update` bug noted
 above, this is a documentation defect, not tied to a release: the `RESOLVED` /
 `UNRESOLVED` API contract is permanent, so this note stays even after `bb`
 upgrades.
+
+### `bb` cannot read build/pipeline status
+
+Checked against `bb` v0.18.2 (installed) and upstream v0.18.6 (2026-09-18):
+there is no statuses command. `bb pullrequest merge-status` is the
+closest-sounding name, but it reports the **merge task** state (whether the
+PR's own merge button/queue succeeded), not CI. `bb pipeline` exists and
+queries Bitbucket's own Pipelines API — the wrong tool for a repo whose CI
+reports through the commit-statuses webhook (e.g. Jenkins): run against a
+real PR carrying 7 Jenkins-posted statuses, `bb pipeline list` printed
+`No pipelines found` and **exited 0**. Use `bitbucket_pr.sh status` instead —
+see [§13](#13-build--pipeline-status).
 
 ## 10. What this skill does NOT do
 
@@ -408,9 +445,9 @@ tempfile past `BB_OUTPUT_MAX_BYTES`, same as the `bb` wrappers.
 **`reviewers` is the only reliable approval source.** Each entry is `{name, approved}`,
 covering both assigned reviewers and anyone who approved without being one. Prefer it
 over `bb pr get`, which returns `participants: null` and lists only *assigned* reviewers —
-a PR approved by a non-reviewer looks unapproved there. `bitbucket_pr.sh activities` adds
-timestamps when you need to know *when* an approval happened (e.g. whether it predates
-the last push).
+a PR approved by a non-reviewer looks unapproved there. Raw `bb pullrequest activities <id>`
+(not wrapped by this skill) adds timestamps when you need to know *when* an approval
+happened (e.g. whether it predates the last push).
 
 > **Slug and URL caveat.** dev-status does not reliably return human-readable repository
 > URLs: for some workspaces the path is `…/{workspace-uuid}/{repo-uuid}` and the
@@ -504,3 +541,84 @@ ${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_reviewers.py check-auth
 > — it reads the lock but never tries to update it (an update would fail on the
 > RO store). To change dependencies, edit the PEP-723 header and regenerate with
 > `uv lock --script bitbucket_pr_reviewers.py`, then commit the refreshed lock.
+
+## 13. Build / pipeline status
+
+**Why this isn't `bb pipeline`.** `bb` has no command for build/pipeline
+status at all — checked against v0.18.2 (installed) and upstream v0.18.6
+(2026-09-18). `bb pipeline` exists but queries Bitbucket's own Pipelines API,
+which is the wrong tool for a repo whose CI reports through the
+**commit-statuses** webhook (Jenkins does this): run against a real PR
+carrying 7 Jenkins-posted statuses, `bb pipeline list` printed `No pipelines
+found` and **exited 0** — see [§9](#9-known-quirks). `bitbucket_pr.sh status`
+talks to `GET /pullrequests/{id}/statuses` (or `GET /commit/{sha}/statuses`
+for a `--commit`/`--branch` target) directly.
+
+**Two kinds of entry share one flat list**, told apart by `refname`: exactly
+one **overall** entry per commit (`refname` set to the branch name, `name`
+carries a build number `… #N`) and N **stage** entries (`refname` null,
+`description` **is** the stage name — e.g. `Checkout Code`, `Build`, `Test`).
+
+**`key` is not a stable stage identifier.** Jenkins mints a fresh random key
+per post — a re-run's stages get entirely new keys — so dedup is by
+`(name, description)`, newest `created_on` wins. `--history` skips the dedup
+and shows every raw status, including repeated posts from re-runs.
+
+**Head-commit default.** A PR's own `source.commit.hash` field is truncated
+to 12 characters while statuses carry the full 40 — comparison is by prefix,
+never `==`. By default `--pr` only shows statuses on the PR's current head
+commit; `--all-commits` includes every commit ever pushed to the PR. `--commit
+<sha>` (a 7+ char prefix resolves server-side) and `--branch <name>` target a
+single commit directly, with no "other commits" concept.
+
+**Pagination is real** (measured: `pagelen=3` returns a `next` link) and is
+followed up to `--max-pages` (default 20 ≈ 2000 statuses); hitting the cap is
+a **hard error**, not a silent truncation — a cut-off page could be hiding
+the one `FAILED` stage.
+
+**`--watch`** polls every `--interval` (default 15s, minimum 5s) until no
+stage is `INPROGRESS` and an overall status exists and is terminal (or
+`--no-require-overall` to skip waiting for the overall), up to `--deadline`
+(default 15m). For a `--pr` target, the head commit is re-checked every poll
+— a force-push mid-watch is announced, not silently ignored. Poll progress
+goes to **stderr**; the final table/JSON prints to **stdout exactly once**.
+`SIGTERM` (e.g. from the surrounding `gtimeout` guard) still prints the last
+snapshot before exiting.
+
+**The `gtimeout` guard auto-widens for `--watch`.** `bitbucket_pr.sh` wraps
+every call in `$BB_TIMEOUT` (default 120s) — too short for a 15-minute watch.
+When `$BB_TIMEOUT` is **not** set explicitly, `status --watch` sizes the
+guard to `--deadline + 60s` instead, so the Python side's own deadline always
+fires first and produces a clean report; the guard is only the backstop
+against a genuine hang. An explicit `$BB_TIMEOUT` is trusted and never
+widened automatically.
+
+**Exit codes.** 0–4 are unchanged (§6). `--exit-code` (default **on** under
+`--watch`; `--no-exit-code` to opt out) additionally maps the build result:
+`10` red (`FAILED`/`STOPPED`, overall or any stage), `11` still `INPROGRESS`
+or `--watch` hit its deadline, `12` no statuses at all on the target — "no
+statuses" must never look like a green build.
+
+**Credentials** are the same as [§12](#12-reviewers-rest-bypass)'s — `bb`'s
+`config-cli.yml` profile, or `BITBUCKET_USER`/`BITBUCKET_APP_PASSWORD`.
+
+```bash
+R=acme/example-service
+# Default: head commit only, deduped, human table
+${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh status --pr 1234 --repo "$R"
+# Machine-readable
+${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh status --pr 1234 --repo "$R" --format json
+# Every commit ever pushed to the PR, not just the head
+${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh status --pr 1234 --repo "$R" --all-commits
+# A specific commit or branch, no PR needed
+${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh status --commit a1b2c3d --repo "$R"
+${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh status --branch feature/example --repo "$R"
+# Poll until the build finishes (or 15m), then exit 10/11/0 accordingly
+${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr.sh status --pr 1234 --repo "$R" --watch --exit-code
+```
+
+> **⚠ Lockfile is read-only in the Nix store**, same as [§12](#12-reviewers-rest-bypass)'s:
+> `bitbucket_pr_status.py.lock` is deployed into `/nix/store`, so the shebang
+> runs `uv … --frozen` — it reads the lock but never tries to update it. To
+> change dependencies, edit the PEP-723 header and regenerate with
+> `uv lock --script bitbucket_pr_status.py`, then commit the refreshed lock.
