@@ -148,62 +148,75 @@
     # from release binaries.
     nixpkgs-llm-agents.url = "github:numtide/llm-agents.nix";
 
-    # TEMPORARY PIN — claude-code 2.1.258. Consumed by modules/agents.nix.
+    # TEMPORARY PIN — claude-code 2.1.280. Consumed by modules/agents.nix.
     #
-    # Why: nixpkgs-llm-agents sits on 2.1.234, which cannot talk to Fable 5.1 and
-    # carries none of the heap-growth fixes this pin was originally taken for.
-    # Per the upstream changelog, 2.1.257 added Claude Fable 5.1
-    # (`claude-fable-5-1`) and made it the default Fable model, and 2.1.258 fixed
-    # a launch failure on macOS 12 that 2.1.255 had introduced. 2.1.258 is
-    # therefore the first version that is both Fable-5.1-capable and known-good on
-    # macOS, and it contains the whole earlier fix chain (2.1.238, .243, .246,
-    # .247) that the previous pin existed for.
+    # Why: Claude Opus 5.5 (`claude-opus-5-5`). Per the upstream changelog 2.1.280
+    # adds it and makes it the default Opus model, so `settings.model = "opusplan"`
+    # in modules/agents.nix reaches it with no further change. The version is a
+    # hard floor on the CLIENT side, not a preference: an older build lists the
+    # model as "Opus 5.5 (disabled) — Update to 2.1.280+ to use Opus 5.5" in
+    # `/model` (anthropics/claude-code#96131). nixpkgs-llm-agents ships 2.1.250 at
+    # its locked rev and cannot reach 2.1.280 under its 14-day bar before
+    # 2026-10-06. Everything the previous pin existed for — Fable 5.1 from 2.1.257,
+    # the macOS launch fix from 2.1.258, and the heap chain before that — is
+    # contained in this one.
     #
-    # 2.1.259 exists and was not taken; see the note on `latest` below.
-    #
-    # THE COOLDOWN UNDERCUT. 2.1.258 was published 2026-09-01 22:25Z — 1.8 days
+    # THE COOLDOWN UNDERCUT. 2.1.280 was published 2026-09-22 15:44Z — 1.1 days
     # old against the 14-day bar scripts/supply-chain.toml gives this ecosystem.
     # That is a deliberate undercut under AGENTS.md "Undercutting a cooldown:
     # research first, fetch second", and the research was done while fetching
     # nothing but metadata:
     #
-    #   hashes.json at this rev == Anthropic's manifest.json for 2.1.258, all
-    #     three built platforms (darwin-arm64, linux-arm64, linux-x64)
-    #   artifact still served: HTTP 200, 199_027_600 bytes,
-    #     last-modified 2026-09-01 22:21Z — four minutes before the npm publish
-    #   npm: listed, no `deprecated` flag, `time` entry intact
-    #   OSV: 0 advisories affecting 2.1.258
-    #   no reporting of a live campaign against this package; the most recent
-    #     relevant one (ChainDrop, 2026-08-04) is already written up in AGENTS.md
+    #   hashes.json at this rev == Anthropic's manifest.json for 2.1.280, all
+    #     three built platforms (darwin-arm64, linux-arm64, linux-x64). The five
+    #     platforms llm-agents does not build (darwin-x64, the two musl variants,
+    #     win32-x64, win32-arm64) stand in the manifest and are correctly absent
+    #     from hashes.json
+    #   artifact still served: HTTP 200, 217_254_576 bytes,
+    #     last-modified 2026-09-22 15:42Z — two minutes before the npm publish
+    #   npm: listed, no `deprecated` flag, `time` entry intact. No attestations,
+    #     which is normal for THIS package — 2.1.258 carries none either — and is
+    #     therefore not the signal its absence would be for codex
+    #   OSV: 0 advisories affecting 2.1.280
+    #   no reporting of a live campaign against this package or its publisher;
+    #     what searches surface is the 2026-03-31 source leak (2.1.88) and its
+    #     coat-tail riders, and the defects filed against 2.1.280 itself are UI
+    #     and edge cases
     #
-    # BE PRECISE ABOUT WHAT THE HASH COMPARISON PROVES, because the previous
-    # version of this comment overclaimed it as "two independent sources". It is
-    # not two: llm-agents' updater is `kind = "manifest-checksums"` with
+    # WHAT THE HASH COMPARISON PROVES is unchanged from the 2.1.258 pin and still
+    # worth stating, because it is easy to overclaim: llm-agents' updater is
+    # `kind = "manifest-checksums"` with
     # `checksumPath = "platforms.{platform}.checksum"`, so it DERIVES its hashes
-    # from that same manifest. What the comparison actually establishes is that
-    # the packaging layer added nothing — a tampered llm-agents commit pointing at
-    # someone else's binary would fail it. It says nothing about Anthropic's own
-    # release, and no check available here could.
+    # from that same manifest. It is not two independent sources. What it does
+    # establish is that the packaging layer added nothing — a tampered llm-agents
+    # commit pointing at someone else's binary would fail it. It says nothing
+    # about Anthropic's own release.
     #
-    # WHY 2.1.258 AND NOT 2.1.259. Anthropic withdraws a bad release by repointing
-    # `latest`, which is why llm-agents' updater carries
+    # A SECOND SOURCE DID ARRIVE, and it rides along with this bump. Upstream's
+    # "claude-code: pin the Developer ID signature to Anthropic PBC" (2026-09-16)
+    # adds `codesignCheckHook` with `codesignTeamId = "Q6L2SF6YDW"` over
+    # `source.darwinSrcs`, so the build now verifies the downloaded artifact's
+    # Apple Developer ID. That chain is Apple's, not Anthropic's manifest — which
+    # is exactly the gap the paragraph above describes. Note it checks the SOURCE:
+    # the installed binary carries no signature, because nixpkgs' darwin fixup
+    # rewrites it after the check.
+    #
+    # THE RESIDUAL RISK, NAMED RATHER THAN OMITTED. Anthropic withdraws a bad
+    # release by repointing `latest`, which is why llm-agents' updater carries
     # `versionPolicy = "follow_pointer"` — and really acted on it for 2.1.243 on
-    # 2026-08-25. `latest` now points at 2.1.259, so 2.1.258 has been superseded
-    # normally rather than pulled. A version that IS `latest` cannot show that
-    # signal yet, and 2.1.259 has half the soak. 2.1.258 is also exactly the
-    # requirement, not more.
+    # 2026-08-25. `latest` points at 2.1.280 itself, so that signal cannot exist
+    # yet. The 2.1.258 pin sidestepped this by deliberately taking the superseded
+    # version; here there is nothing to step to, because 2.1.280 is the only
+    # version that can talk to Opus 5.5 at all. Taken on that basis, not by
+    # oversight.
     #
-    # A checkable detail worth recording, because it makes the changelog read
-    # oddly otherwise: npm jumps 2.1.252 -> 2.1.257. 2.1.253..2.1.256 were never
-    # published there, so the macOS regression "introduced in 2.1.255" refers to a
-    # build that this ecosystem never served.
-    #
-    # The blast radius is deliberately ONE package: the rev sits exactly on the
-    # bump commit "claude-code: 2.1.257 -> 2.1.258" (2026-09-01 23:07Z), and only
-    # claude-code is taken from it. opencode, gemini-cli, antigravity-cli, ccusage
-    # and the ACP shims stay on nixpkgs-llm-agents and stay soaked (codex has a
-    # pin of its own below, since 2026-09-11, on the same terms). Moving the main
-    # input instead would have pulled all of them out of the 14-day window for
+    # The blast radius is deliberately ONE package, and this time one FILE: the
+    # rev sits exactly on the bump commit "claude-code: 2.1.278 -> 2.1.280"
+    # (2026-09-22 17:08Z), whose entire diff is packages/claude-code/hashes.json,
+    # and only claude-code is taken from it. opencode, gemini-cli, antigravity-cli,
+    # ccusage and the ACP shims stay on nixpkgs-llm-agents and stay soaked (codex
+    # has a pin of its own below, since 2026-09-11, on the same terms). Moving the
+    # main input instead would have pulled all of them out of the 14-day window for
     # one CLI.
     #
     # No `inputs.nixpkgs.follows` on purpose, and it is load-bearing. Without it
@@ -224,13 +237,13 @@
     # licence consequences: see "The public cache mirrors system closures" in
     # AGENTS.md.
     #
-    # REMOVE once nixpkgs-llm-agents itself ships >= 2.1.258 — at the earliest on
-    # 2026-09-15, when `just update` with the 14-day bar lands on a rev from
-    # 2026-09-01 23:07Z or later. An assertion in modules/agents.nix breaks
+    # REMOVE once nixpkgs-llm-agents itself ships >= 2.1.280 — at the earliest on
+    # 2026-10-06, when `just update` with the 14-day bar lands on a rev from
+    # 2026-09-22 17:08Z or later. An assertion in modules/agents.nix breaks
     # the build at that point and spells out the four steps, so the pin cannot go
     # stale silently.
     llm-agents-claude-code-pin.url =
-      "github:numtide/llm-agents.nix/393c7dba98cf1b27f35dfab3090f17588991439e";
+      "github:numtide/llm-agents.nix/90e2d7eef26aa533fc53cc463604b1accfa15da4";
 
     # TEMPORARY PIN — codex 0.153.4, for GPT-6-Astra. Consumed by
     # modules/agents.nix (programs.codex.package) and modules/agents.nix
