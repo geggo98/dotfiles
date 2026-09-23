@@ -5,7 +5,6 @@ in
 {
   flake.modules.homeManager.agent-content = { config, pkgs, lib, ... }:
     let
-      root = ./..;
       rulesSrc = ./ai/_files/rules;
 
       baseRules = map (n: { name = n; path = rulesSrc + "/${n}"; }) (
@@ -105,8 +104,14 @@ in
 
         my.ai.content.artifacts = {
           inherit skillsDir rulesDir rulesFile;
-          # OpenCode historically receives repository context as well.
-          opencodeContext = builtins.readFile (root + "/AGENTS.md") + "\n\n" + rulesText;
+          # OpenCode's global context used to also carry this repo's own
+          # AGENTS.md, concatenated ahead of the global rules. That put a
+          # repo-specific 150 KB+ document into EVERY opencode session in
+          # EVERY project on this machine (`~/.config/opencode/AGENTS.md`),
+          # and doubled it in this repo, since opencode already reads a
+          # project's own AGENTS.md itself. Global context should carry only
+          # what is actually global: the shared rules.
+          opencodeContext = rulesText;
         };
         xdg.configFile = {
           "ai/content/skills" = { source = skillsDir; recursive = true; };
