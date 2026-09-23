@@ -1776,7 +1776,7 @@ such as `llm`, Ollama and `+nix-query`.
 |---|---|---|
 | `my.ai.agents.enable` | `false` | Agent packages, settings and wrappers |
 | `my.ai.agents.<name>.enable` | `true` | Select individual agents within that global gate |
-| `my.ai.agents.codex.model` | `"gpt-5.6-sol"` | Default model merged into Codex's writable config.toml; `null` leaves it unmanaged |
+| `my.ai.agents.codex.model` | `"gpt-6-sol"` | Default model merged into Codex's writable config.toml; `null` leaves it unmanaged |
 | `my.ai.agents.codex.reasoningEffort` | `"medium"` | `model_reasoning_effort` for Codex's default (execute) mode |
 | `my.ai.agents.codex.planReasoningEffort` | `"xhigh"` | `plan_mode_reasoning_effort` for Codex's Plan mode (`Shift+Tab`); CLI only — Codex Desktop ignores it ([openai/codex#18712](https://github.com/openai/codex/issues/18712)) |
 | `my.ai.agents.codex.reasoningEffortOverride` | `false` | Upstream `[features] reasoning_effort_override`; off on purpose — from codex 0.154.0 it makes Plan mode's effort change emit a `configuration_update` that `gpt-5.6-luna/terra/sol` reject with HTTP 400 ([openai/codex#44751](https://github.com/openai/codex/issues/44751)) |

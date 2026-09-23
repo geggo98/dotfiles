@@ -29,7 +29,7 @@
           };
           model = mkOption {
             type = types.nullOr types.str;
-            default = "gpt-5.6-sol";
+            default = "gpt-6-sol";
             description = "Default model merged into Codex's writable config.toml; null leaves the key unmanaged and gives back a previously owned value.";
           };
           reasoningEffort = mkOption {
@@ -58,12 +58,14 @@
           # 2026-09-17, and `false` is the issue's own stated workaround:
           # https://github.com/openai/codex/issues/44751
           #
-          # Inert on the currently pinned codex 0.153.4 (modules/agents.nix, input
-          # llm-agents-codex-pin): that build has no such flag, and Features is a
-          # flattened BTreeMap<String,bool>, so the key parses and is only logged as
-          # "unknown feature key in config" under RUST_LOG=warn. Written now so the
-          # flag is already off on the day the pin advances past 0.154.0 rather than
-          # after the first 400.
+          # Inert on the currently pinned codex 0.156.1 (modules/agents.nix, input
+          # llm-agents-codex-pin) for a second, independent reason on top of being
+          # off by default: the `configuration_update` send now additionally gates
+          # on a per-model flag (`supports_reasoning_effort_updates`), and no model
+          # in 0.156.1's bundled catalog sets it -- not even gpt-6-astra. So even
+          # flipping this to `true` would not reproduce #44751 on this version. Left
+          # off regardless, since the flag is still Stage::UnderDevelopment upstream
+          # and the issue is unfixed as of 2026-09-23.
           reasoningEffortOverride = mkOption {
             type = types.nullOr types.bool;
             default = false;

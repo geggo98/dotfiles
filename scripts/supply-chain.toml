@@ -115,20 +115,41 @@ npm = "@openai/codex"
 [[packages]]
 # Second entry for codex, same construction and same reason as "claude-code (pinned)"
 # above: since the codex pin (flake.nix, input llm-agents-codex-pin, added 2026-09-11)
-# the version on these machines is not the one the entry above dates. This one dates
-# what is installed.
+# the version on these machines is not the one the entry above dates. This one is
+# meant to date what is installed -- see the CAVEAT below, though, for where that
+# stops being true as of the 0.156.1 bump.
 #
 # npm is only the dated PROXY here — llm-agents builds codex from the GitHub tag
 # rust-v<version>, npm never enters the chain. The npm `time` entry and the GitHub
 # release were published six minutes apart, so the date is the same either way.
 #
-# Expected output up to and including 2026-09-18: TOO NEW, exit 1 — the wanted state,
-# a deliberate cooldown undercut for GPT-6-Astra. Two dates again: this ENTRY goes
-# quiet once 0.153.4 turns 14 days old (published 2026-09-04 23:31Z, so from
-# 2026-09-18 23:31Z — in practice the first run on 2026-09-19), the PIN can go once
-# nixpkgs-llm-agents ships >= 0.153.4, i.e. once
-# `just update` lands on a rev from 2026-09-05 03:20Z or later — 2026-09-19 at the
-# earliest. The assertion in modules/agents.nix says when.
+# THIS ENTRY IS BLIND TO THE CURRENT 0.156.1 OVERRIDE, AND THAT IS KNOWN, NOT A BUG
+# TO FIX HERE. `eval_package_version()` reads
+# `inputs."llm-agents-codex-pin".packages.<system>.codex.version` by pure
+# evaluation of the flake INPUT — it cannot see the `.override { version; hash;
+# cargoVendor.cargoHash; }` applied in modules/agents.nix, because that override
+# lives inside the consuming module, not in anything this input's own flake
+# outputs. So `just audit` still reports this entry against 0.153.4 (what rev
+# 6d96d0808 actually ships), while the installed codex is 0.156.1. Validate the
+# scan before believing "clean" here, per AGENTS.md's own rule on that: a clean
+# run of THIS entry says nothing about 0.156.1's age. The gap closes on its own
+# once nixpkgs-llm-agents ships >= 0.156.1 and the override in modules/agents.nix
+# is replaced by an ordinary rev bump of llm-agents-codex-pin (see the removal
+# comment there) — at that point `attr`/`input` here resolve to what is really
+# installed again, with no change needed in this file.
+#
+# Expected output up to and including 2026-10-07: TOO NEW, exit 1 -- the wanted
+# state, a deliberate cooldown undercut for GPT-6-Astra 0.153.4, now superseded by
+# a second, independent undercut for GPT-6-Sol/Luna 0.156.1 (2026-09-23, see the
+# comment in modules/agents.nix for that research). This ENTRY, bound to 0.153.4
+# as explained above, goes quiet once THAT version turns 14 days old (published
+# 2026-09-04 23:31Z, so from 2026-09-18 23:31Z) regardless of the 0.156.1 override
+# -- it is dating the wrong version already, so its own quiet date is not a signal
+# to act on. The PIN itself can go once nixpkgs-llm-agents ships >= 0.156.1, i.e.
+# once `just update` lands on a rev built after 2026-09-23T02:41:36Z (0.156.1's
+# GitHub release) with a working `codex-chatgpt` compile. The assertion in
+# modules/agents.nix enforces the version half; nothing currently enforces the
+# 0.156.1 age floor automatically, precisely because of the blind spot above.
 name = "codex (pinned)"
 input = "llm-agents-codex-pin"
 attr = "codex"

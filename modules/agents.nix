@@ -1,4 +1,4 @@
-{ inputs, config, ... }:
+{ inputs, config, lib, ... }:
 let
   aiOptions = config.flake.modules.homeManager.ai-options;
   llm-agents-pkgs = system: inputs.nixpkgs-llm-agents.packages.${system};
@@ -14,14 +14,112 @@ let
   claude-code-pinned = system:
     inputs.llm-agents-claude-code-pin.packages.${system}.claude-code;
 
-  # TEMPORARY codex pin, 0.153.4 — the reasoning is at the llm-agents-codex-pin
-  # input in flake.nix. Only codex comes from that input; codex-acp stays on
-  # nixpkgs-llm-agents and is overridden to use this codex in modules/agents.nix.
-  # Same pairing rule as above: version string and rev belong together, the
-  # assertion below enforces it.
-  codex-pin-version = "0.153.4";
+  # TEMPORARY codex pin, 0.156.1 — for GPT-6 Sol and GPT-6 Luna, which only
+  # appear in the bundled model catalog (codex-rs/models-manager/models.json)
+  # from this version on (openai/codex, tag rust-v0.156.1, GitHub release
+  # 2026-09-23T02:41:36Z, hotfix openai/codex#47405 backporting #47332).
+  #
+  # THIS IS NOT A CLEAN REV BUMP. nixpkgs-llm-agents (numtide/llm-agents.nix)
+  # cannot build 0.156.1 yet: its automated bump PR #9696 fails compiling
+  # codex-chatgpt with "queries overflow the depth limit" (rustc's query-depth
+  # limit, tripped by new code in connectors::list_connectors). A fix exists
+  # (PR #9748, one-line `#![recursion_limit = "256"]`) but comes from an
+  # external contributor's fork, unmerged as of 2026-09-23 — and per this
+  # repo's own third-party-data / supply-chain rules that fork is NOT a
+  # source this repo pulls from, however small the diff looks. So instead of
+  # a new llm-agents-codex-pin rev (which would require exactly that fork or
+  # the equally unmerged bot branch), this overrides `version`/`hash`/
+  # `cargoHash` on the EXISTING, already-vetted package recipe from the
+  # current llm-agents-codex-pin input (rev 6d96d0808, see below) — same
+  # recipe, no new source, only the three data values that differ for
+  # 0.156.1. `librusty_v8` is untouched: rust-toolchain.toml pins
+  # `v8 = "=150.4.0"` identically in rust-v0.155.1 and rust-v0.156.1.
+  #
+  # THE COOLDOWN UNDERCUT (0.156.1 was ~10 h old when checked against the
+  # 14-day bar, 2026-09-23 ~13:00 UTC), researched from metadata only, no
+  # binary fetched, per AGENTS.md "Undercutting a cooldown: research first,
+  # fetch second":
+  #   npm: published 2026-09-23T02:45:25Z by the same trusted GitHub-Actions
+  #     OIDC publisher and the same 18 maintainers as every prior version, no
+  #     `deprecated`, no `unpublished`. SLSA + npm-publish attestations
+  #     present, Rekor log entries match the release workflow run.
+  #   OSV: {} for 0.156.1 -- no advisories. GitHub Security Advisories: only
+  #     two historical GHSAs, neither affects 0.156.1.
+  #   No report of a live campaign against @openai/codex or its maintainers
+  #     in September 2026; known incidents (codexui-android, a May-2026 npm
+  #     campaign, a Shai-Hulud note naming `keyv`) are all third-party
+  #     packages, not this one.
+  #   Diff 0.156.0 -> 0.156.1 confirmed (via the GitHub compare API) to be
+  #     only models.json (+367/-11, the new catalog entries) plus two real
+  #     code lines (a migration target and a catalog constant) plus
+  #     snapshots/tests. Nothing touches build, update or network code.
+  #     Cargo.lock is byte-identical to 0.156.0.
+  #   ONE ANOMALY, NAMED RATHER THAN OMITTED: the tag sits two commits above
+  #     the `release/0.156` branch head, on an independent hotfix branch; its
+  #     PR #47405 was closed UNMERGED, without review, 34 minutes before
+  #     publish (as was its predecessor #47385). Every prior codex tag
+  #     (0.153.4, 0.155.1) sat exactly on its release branch's head. Content,
+  #     publisher identity and provenance still match the reviewed `main` PR
+  #     #47332, and the release workflow run / Rekor entry binds the
+  #     published artifact to that exact commit -- so this is a process
+  #     deviation on OpenAI's side, not evidence of tampering.
+  #
+  # SELF-BUILD BEHAVIOUR CHECKED FROM SOURCE (openai/codex on GitHub, no
+  # build/run): a /nix/store path is classified InstallMethod::Other, for
+  # which there is no code path that downloads or replaces a binary -- only
+  # a banner. The hourly daemon updater only acts on a "managed package"
+  # with a codex-package.json, which this Nix build never produces;
+  # prepare_install.rs explicitly refuses a bare executable. Voice
+  # (realtime_conversation, default-on since 0.156.0) needs the same
+  # "package layout" and fetches nothing at runtime when it is absent -- it
+  # is simply inactive here. `reasoningEffortOverride = false`
+  # (my.ai.agents.codex.reasoningEffortOverride, for openai/codex#44751)
+  # stays inert for a second reason on 0.156.1: the `configuration_update`
+  # problem now additionally gates on a per-model flag
+  # (`supports_reasoning_effort_updates`) that no bundled model in 0.156.1
+  # sets, not even gpt-6-astra.
+  #
+  # BUILD OUTCOME, MEASURED RATHER THAN ASSUMED: a full local build of this
+  # override (2026-09-23, aarch64-darwin, `nix build --impure` against this
+  # override directly) did NOT hit the "queries overflow the depth limit"
+  # error above -- codex-chatgpt compiled cleanly, the whole workspace
+  # finished in 28m44s, and `codex --version` reports `codex-cli 0.156.1`
+  # with both `"gpt-6-sol"` and `"gpt-6-luna"` present in the binary's
+  # embedded model catalog. This was NOT expected going in; the working
+  # theory (not independently confirmed) is that this override still builds
+  # against the OLDER rustc pulled in by the existing llm-agents-codex-pin
+  # input's own locked nixpkgs (rev 6d96d0808, 2026-09-05) rather than
+  # whatever newer rustc numtide's current CI resolves on `main` -- the
+  # recursion-limit diagnostic is a compiler query-depth count, which can
+  # genuinely shift between rustc releases for code sitting right at the
+  # edge of the default 128 limit. Nothing here reintroduces or relies on
+  # PR #9748's patch; no such patch was needed for this exact toolchain.
+  # Re-verify this on the next `just update` of nixpkgs-llm-agents, since a
+  # newer rustc reaching this pin's own nixpkgs could reintroduce the error.
+  #
+  # The version string and (eventually, once main catches up) the rev in
+  # flake.nix belong together; the first assertion below enforces the
+  # version half now. codex-acp stays on nixpkgs-llm-agents and is
+  # overridden to use this codex in +agent-codex, same as before.
+  codex-pin-version = "0.156.1";
   codex-pinned = system:
-    inputs.llm-agents-codex-pin.packages.${system}.codex;
+    inputs.llm-agents-codex-pin.packages.${system}.codex.override {
+      version = codex-pin-version;
+      # openai/codex, tag rust-v0.156.1, fetchFromGitHub source archive.
+      # Self-computed 2026-09-23 via the lib.fakeHash-then-correct idiom,
+      # fetching directly from https://github.com/openai/codex/archive/
+      # refs/tags/rust-v0.156.1.tar.gz -- no third-party repackaging
+      # involved. (It happens to equal the value PR #9748 also carries,
+      # which is expected: both are the same official tarball's hash,
+      # computed independently rather than copied from that PR.)
+      hash = "sha256-H53f57hmnyCtn5yPxtBe/A92qyQyzQBeU/vK2qSBrvI=";
+      # FOD of `cargo vendor` for that tag's Cargo.lock (codex-rs/Cargo.lock).
+      # Self-computed the same way and on the same date as `hash` above, by
+      # letting the real vendor step run and reading its reported hash --
+      # again independently equal to what PR #9748 carries, not copied
+      # from it.
+      cargoVendor.cargoHash = "sha256-W87rX/W2J1pwqNrihX+Rj6DfagoZYuB6C+l/S4BhyJM=";
+    };
 
 in
 {
