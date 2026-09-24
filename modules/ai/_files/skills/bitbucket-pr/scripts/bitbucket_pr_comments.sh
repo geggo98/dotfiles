@@ -5,7 +5,8 @@
 # Usage:
 #   bitbucket_pr_comments.sh list    <pr-id> [--format json|tsv]
 #   bitbucket_pr_comments.sh get     <pr-id> <comment-id>
-#   bitbucket_pr_comments.sh create  <pr-id> [--file PATH --line N] [--parent CID]   # body via stdin
+#   bitbucket_pr_comments.sh create  <pr-id> [--file PATH (--line N | --from N)] [--parent CID]  # body via stdin
+#                                    --line/--to anchor on the NEW version, --from on the OLD one
 #   bitbucket_pr_comments.sh update  <pr-id> <comment-id>                            # new body via stdin
 #   bitbucket_pr_comments.sh resolve <pr-id> <comment-id>
 #   bitbucket_pr_comments.sh reopen  <pr-id> <comment-id>
@@ -76,19 +77,26 @@ cmd_create() {
   local pr_id="$1"; shift
   validate_numeric "$pr_id" "PR ID"
 
-  local file="" line="" parent=""
+  local file="" to_line="" from_line="" parent=""
   while (( $# > 0 )); do
     case "$1" in
-      --file)   (( $# >= 2 )) || { log_error "--file requires PATH";   exit 1; }; file="$2";   shift 2 ;;
-      --line)   (( $# >= 2 )) || { log_error "--line requires N";      exit 1; }; line="$2";   shift 2 ;;
-      --parent) (( $# >= 2 )) || { log_error "--parent requires CID";  exit 1; }; parent="$2"; shift 2 ;;
+      --file)   (( $# >= 2 )) || { log_error "--file requires PATH";   exit 1; }; file="$2";     shift 2 ;;
+      --line)   (( $# >= 2 )) || { log_error "--line requires N";      exit 1; }; to_line="$2";   shift 2 ;;
+      --to)     (( $# >= 2 )) || { log_error "--to requires N";        exit 1; }; to_line="$2";   shift 2 ;;
+      --from)   (( $# >= 2 )) || { log_error "--from requires N";      exit 1; }; from_line="$2"; shift 2 ;;
+      --parent) (( $# >= 2 )) || { log_error "--parent requires CID";  exit 1; }; parent="$2";    shift 2 ;;
       *) log_error "Unknown create flag: '$1'"; exit 1 ;;
     esac
   done
-  [[ -z "$line"   ]] || validate_numeric "$line"   "line number"
-  [[ -z "$parent" ]] || validate_numeric "$parent" "parent comment ID"
-  if [[ -n "$line" ]] && [[ -z "$file" ]]; then
-    log_error "--line requires --file (inline comments need a file path)"
+  [[ -z "$to_line"   ]] || validate_numeric "$to_line"   "line number"
+  [[ -z "$from_line" ]] || validate_numeric "$from_line" "line number"
+  [[ -z "$parent"    ]] || validate_numeric "$parent"    "parent comment ID"
+  if [[ -n "$to_line" ]] && [[ -n "$from_line" ]]; then
+    log_error "--from and --line/--to are the old and new side, not a range — give exactly one"
+    exit 1
+  fi
+  if { [[ -n "$to_line" ]] || [[ -n "$from_line" ]]; } && [[ -z "$file" ]]; then
+    log_error "--line/--to/--from require --file (inline comments need a file path)"
     exit 1
   fi
 
@@ -96,11 +104,15 @@ cmd_create() {
   body="$(read_stdin_content)"
 
   local -a args=(pr comment create --pullrequest "$pr_id" --comment "$body")
-  [[ -n "$file"   ]] && args+=(--file   "$file")
-  [[ -n "$line"   ]] && args+=(--line   "$line")
-  [[ -n "$parent" ]] && args+=(--parent "$parent")
+  [[ -n "$file"      ]] && args+=(--file "$file")
+  [[ -n "$to_line"   ]] && args+=(--to   "$to_line")
+  [[ -n "$from_line" ]] && args+=(--from "$from_line")
+  [[ -n "$parent"    ]] && args+=(--parent "$parent")
 
-  log_info "Creating comment on PR #$pr_id${file:+ on $file${line:+:$line}}${parent:+ (reply to $parent)}..."
+  local line_desc=""
+  [[ -n "$to_line"   ]] && line_desc=":$to_line (new)"
+  [[ -n "$from_line" ]] && line_desc=":$from_line (old)"
+  log_info "Creating comment on PR #$pr_id${file:+ on $file$line_desc}${parent:+ (reply to $parent)}..."
   local output
   if ! output=$("$BITBUCKET_CLI" "${args[@]}" "${BB_TARGET[@]}" --output json 2>&1); then
     log_error "Failed to create comment on PR #$pr_id"
@@ -166,7 +178,10 @@ Usage: bitbucket_pr_comments.sh <command> <pr-id> [args...]
 Commands:
   list    <pr-id> [--format json|tsv]                   JSON (default; filtered to {id,content,inline}) or TSV.
   get     <pr-id> <comment-id>                          Raw markdown of one comment
-  create  <pr-id> [--file PATH --line N] [--parent CID] Body via stdin; --file/--line for inline; --parent for replies
+  create  <pr-id> [--file PATH (--line N | --from N)] [--parent CID]
+                                                         Body via stdin; --file/--line (or --to) for an inline
+                                                         comment on the NEW version, --file/--from for the OLD
+                                                         version (e.g. a deleted line); --parent for replies
   update  <pr-id> <comment-id>                          New body via stdin
   resolve <pr-id> <comment-id>                          Mark comment as resolved
   reopen  <pr-id> <comment-id>                          Reopen a resolved comment

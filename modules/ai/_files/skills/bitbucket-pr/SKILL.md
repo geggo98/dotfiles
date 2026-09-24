@@ -202,9 +202,13 @@ ${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_comments.sh get 1234 5678
 echo "**Heads up:** depends on #1230." | \
   ${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_comments.sh create 1234
 
-# Inline comment on a file/line
+# Inline comment on a file/line — line 42 of the NEW version (right-hand side of the diff)
 echo "Consider extracting this." | \
   ${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_comments.sh create 1234 --file src/main.go --line 42
+
+# Inline comment on a line the PR deletes — line 17 of the OLD version
+echo "This validation moved, right? Make sure it still runs somewhere." | \
+  ${CLAUDE_SKILL_DIR}/scripts/bitbucket_pr_comments.sh create 1234 --file src/main.go --from 17
 
 # Reply to an existing comment
 echo "Agreed, will fix." | \
@@ -364,6 +368,30 @@ the mapping to match the help text. Unlike the now-fixed `pr update` bug noted
 above, this is a documentation defect, not tied to a release: the `RESOLVED` /
 `UNRESOLVED` API contract is permanent, so this note stays even after `bb`
 upgrades.
+
+### `bb pr comment create --line` anchors on the OLD side
+
+`bb`'s `--line` flag (through v0.18.2, unchanged upstream in v0.18.6) is not its
+own thing — it's a second name for `--from`:
+
+```go
+// cmd/pullrequest/comment/create.go
+createCmd.Flags().IntVar(&createOptions.From, "line", 0, "From line to comment on. …")
+createCmd.Flags().IntVar(&createOptions.From, "from", 0, "From line to comment on. …")
+createCmd.Flags().IntVar(&createOptions.To,   "to",   0, "To line to comment on. …")
+```
+
+`--help`'s wording ("From/To line") suggests a range; it isn't one. Per
+Bitbucket's own API spec, `inline.from` and `inline.to` are the two **diff
+sides** — `from` anchors on the file's old version, `to` on the new one. So raw
+`bb pr comment create --file F --line 42` anchors comment 42 on the **old**
+version, which is wrong for anything on the new/added side of the diff — the
+common case when reviewing.
+
+`bitbucket_pr_comments.sh create` fixes this: its `--line` (and `--to`) map to
+`bb`'s `--to` (new version); use its `--from` explicitly for a line the PR
+deletes. **Only raw `bb`, not the wrapper, has this trap** — do not "simplify"
+the wrapper back to passing `--line` through to `bb`.
 
 ### `bb` cannot read build/pipeline status
 
