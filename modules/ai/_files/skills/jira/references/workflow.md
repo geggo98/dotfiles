@@ -34,6 +34,46 @@ list it. The skill therefore does not offer it.
 > endpoint is unreachable (no blind POST of stale ids). Look it up fresh with
 > `jira.sh transitions <KEY> --format tsv`.
 
+## Issue types & hierarchy (measured 2026-09-25)
+
+VUKFZIF has three issue types, no sub-tasks:
+
+| Type | hierarchyLevel |
+| --- | --- |
+| Epic | 1 |
+| Bug | 0 |
+| Task | 0 |
+
+An Epic needs nothing beyond `project`, `issuetype` and `summary` to create — there is no
+separate "Epic Name" field on this site. The Epic Link custom field is gone from the create
+and edit screens; the standard **`parent`** field is how a ticket attaches to an Epic, both
+ways: `jira.sh --write create --type Epic --summary "…"` then `--write create --summary "…"
+--parent EPIC-KEY` (or `--write edit KEY --parent EPIC-KEY` on an existing ticket). In JQL,
+`parent = EPIC-KEY` and `"Epic Link" = EPIC-KEY` return the same tickets; `jira.sh epic
+EPIC-KEY` uses `parent =`.
+
+Two API quirks that only show up on the `parent` field, both worked around in the client
+(`create --parent` and `edit` both read the result back rather than trust the response):
+
+- Jira has answered a `parent` write with **HTTP 204** while silently not storing it
+  ([JRACLOUD-78657](https://jira.atlassian.com/browse/JRACLOUD-78657), reported fixed).
+- A **null** `parent` write (`edit --no-parent`) 500s on an issue that has no parent to
+  remove — `edit` only sends it when a parent is actually set.
+
+## Ordering link types (for `jira.sh epic`)
+
+`jira.sh epic EPIC-KEY` sorts an Epic's children so a blocker/dependency always precedes
+what needs it. Only these four of the site's link types carry a before/after meaning; the
+rest (`Relates`, `Cloners`, `Connects`, `Contains`, …) are shown per ticket but never
+reorder anything:
+
+| Type | Reading that puts the SUBJECT first | Reading that puts the OBJECT first |
+| --- | --- | --- |
+| `Blocks` | "A blocks B" → A first | — |
+| `Used` | "A Used by B" → A first | — |
+| `Depends` | — | "A Depends on B" → B first |
+| `Follows` | — | "A follows B" → B first |
+
 ## Issue creation — conventions (from real tickets, internal CVE runbook)
 
 - **Issue type:** `Task`. **Label:** `security` (for CVE / security tickets).

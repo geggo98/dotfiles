@@ -2,17 +2,20 @@
 name: jira
 description: >
   Control JIRA Cloud tickets over the REST API v2: arbitrary status transitions,
-  comments, assignee, create issues, set descriptions, upload/embed attachments,
-  labels, links, watchers, JQL search, and assignable-user lookup. A reliable
+  comments, assignee, create issues (including Epics), edit parent/summary/due date,
+  set descriptions, upload/embed attachments, labels, links, watchers, JQL search,
+  list an Epic's children in dependency order, and assignable-user lookup. A reliable
   fallback for the Atlassian MCP's gaps (no arbitrary transitions; comment Markdown
   gets mangled to wiki-markup; attachment upload can't see the host filesystem).
   Operations are split into read (no flag), write (--write), and dangerous/destructive
   (--dangerous) tiers, and every overwriting or deleting op is journaled locally so it
   can be undone. Long fields (description, comment bodies) can be read out to a file or a
   pipe and written back, so they can be edited with sed/perl without loading them into
-  context. Use for: change ticket status / transition, comment, assign, create issue, read
-  or edit a description or comment body, upload/embed/delete attachment, add/remove labels,
-  link issues, search JQL, resolve an assignee, or undo a prior change.
+  context. Use for: change ticket status / transition, comment, assign, create issue or
+  Epic, attach a ticket to an Epic (--parent), edit parent/summary/due date, read or edit
+  a description or comment body, upload/embed/delete attachment, add/remove labels,
+  link issues, list an Epic's children with their dependency order, search JQL, resolve
+  an assignee, or undo a prior change.
 argument-hint: "[--write|--dangerous] <command> [args...] | help"
 allowed-tools: Read(references/*) Bash(./scripts/jira.sh *) Bash(zsh *) Skill(technical-writing) Read
 dependencies: "uv, gtimeout"
@@ -68,6 +71,8 @@ $J comments JIRA-3052 --max 50           # newest comments first (idempotency pr
 $J comment-get JIRA-3052 121771          # one comment's raw body (read side of comment-edit)
 $J search 'project = VUKFZIF AND status = "In QA"' --max 20   # JQL search
 $J links JIRA-3052                       # issue links: id, relation, key, status, summary
+$J epic JIRA-3000                        # an Epic's children, dependency-sorted (see below)
+$J epic JIRA-3000 --format json --open   # JSON, done children dropped from list and order
 $J attachments JIRA-3052                 # id/filename/size/mime/content-url per attachment
 $J download JIRA-3052 crawllog.zip       # download an attachment (by id or filename)
 $J user alex.beispiel@example.com        # resolve accountId (cached; see below)
@@ -91,6 +96,12 @@ $J --write watch JIRA-3052                          # add self as watcher (or un
 printf '%s' "<description>" | \
   $J --write create --type Task --label security --summary "[ServiceA] High CVEs (netty)" -
 $J --write create --summary "…" --description-file finding.wiki    # or from a file
+$J --write create --type Epic --summary "Login Redesign"           # an Epic is just a type
+$J --write create --summary "…" --parent JIRA-3000                 # attach to an Epic at creation
+$J --write edit JIRA-3052 --parent JIRA-3000       # attach an existing ticket to an Epic
+$J --write edit JIRA-3052 --no-parent                # detach it again
+$J --write edit JIRA-3052 --title "…" --due 2026-10-01   # summary and/or due date
+$J --write edit JIRA-3052 --no-due                   # clear the due date
 
 # --- attachments (write) ---
 $J --write attach JIRA-3052 screenshot.png crawllog.zip     # upload only
@@ -137,6 +148,35 @@ $J --write undo --id 42                                 # revert a specific jour
   convention and this used to be read as the literal text `-`.
 - **`describe`** **replaces** the description (no merge). The prior text is journaled, so
   `undo` restores it.
+- **`create --parent KEY`** attaches the new ticket to an Epic (or any issue) at creation.
+  Jira has answered a `parent` write with success while silently not storing it
+  ([JRACLOUD-78657](https://jira.atlassian.com/browse/JRACLOUD-78657)), so `create` always
+  **reads the parent back**; a mismatch still prints the new key (the ticket exists) but
+  exits `3` and tells you to fix it with `edit --parent`.
+- **`edit <KEY>`** changes `parent`, `summary`/`title` (an alias for the same field — Jira
+  has no separate title) and `due` (`--due YYYY-MM-DD` / `--no-due`) on an existing ticket.
+  It is **idempotent**: a flag that already matches the current value is a no-op — no PUT,
+  no undo entry — which matters for `--no-parent`, since a null-parent write 500s on an
+  issue that has no parent to remove. Every change is **read back and verified**, for the
+  same JRACLOUD-78657 reason as `create --parent`; a mismatch exits `3` with the field, the
+  wanted value and what Jira actually has, and still journals the attempt so `undo` has
+  something to work with. One `edit` call journals as **one** undo entry covering every
+  field it changed, so `undo` restores them together.
+- **`epic <EPIC-KEY>`** lists every ticket with `parent = EPIC-KEY`, ordered so that a
+  blocker/dependency always appears before what needs it. Only four link types carry an
+  ordering (measured on this site — not read from Jira's link-type metadata, which has no
+  concept of "before"): `Blocks`, `Used`, `Depends`, `Follows`; everything else (`Relates`,
+  `Cloners`, …) is shown under each ticket but never reorders anything. Ticket at position N
+  is one you could start once everything at a lower `level` is done — `level` is the
+  longest dependency chain ending at that ticket, so equal levels can run in parallel; ties
+  within a level fall back to the tickets' own Rank (their backlog order), so the list stays
+  close to the board unless a dependency forces a swap. A **dependency cycle** (A blocks B
+  blocks A) cannot be ordered — those tickets are appended by Rank with `level: "cycle"` and
+  a warning on stderr, not silently mis-sorted. `--open` drops `Done`/`Closed` children from
+  both the list and the ordering (a finished blocker no longer blocks anything); links to
+  tickets outside the Epic are still shown, marked `(outside epic, <status>)`. `--max`
+  (default 500) caps how many children are fetched; a cap that truncates the real list warns
+  on stderr rather than silently sorting a partial graph.
 
 ## Long fields: read, edit, write back
 
@@ -206,10 +246,11 @@ timeouts / **HTTP 429** you hit when repeatedly enumerating a huge user director
 ## Undo journal
 
 Before any op that **overwrites or deletes** data (`transition`, `comment-edit`,
-`assign`, `describe`, `label`, `comment-rm`, `attach-rm`), the client snapshots the prior
-value into a **durable local SQLite journal** (`JIRA_STATE_DIR`, default
+`assign`, `describe`, `edit`, `label`, `comment-rm`, `attach-rm`), the client snapshots the
+prior value into a **durable local SQLite journal** (`JIRA_STATE_DIR`, default
 `$XDG_STATE_HOME/jira-skill`); `attach-rm` also backs up the attachment bytes so the
-delete is reversible.
+delete is reversible. `edit` records only the fields it actually changed, so its undo
+touches nothing it did not touch.
 
 - `undo --list [--issue KEY]` — read; shows recent entries (id, time, key, op, status).
 - `undo [--issue KEY] [--id N]` — write; applies the inverse of the most recent (or
