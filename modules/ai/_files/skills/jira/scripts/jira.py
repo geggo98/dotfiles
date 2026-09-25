@@ -17,8 +17,8 @@ httpx; works from ANY directory (no git, no `bb`).
 
 Three operation tiers, gated by global flags (see main()):
   * read      — no flag (whoami/get/status/transitions/comments/user/users/search/
-                links/attachments/download/undo --list)
-  * write     — require --write (transition/comment/comment-edit/assign/create/
+                links/epic/attachments/download/undo --list)
+  * write     — require --write (transition/comment/comment-edit/assign/create/edit/
                 attach/describe/label/link/watch/unwatch/undo)
   * dangerous — require --dangerous, which implies --write (comment-rm/attach-rm)
 
@@ -42,6 +42,8 @@ Exit codes: 0 success, 1 bad args / gating refusal, 2 missing prereq/credentials
 """
 from __future__ import annotations
 
+import datetime
+import heapq
 import json
 import mimetypes
 import os
@@ -888,7 +890,7 @@ def cmd_get(ctx: Ctx, args: list[str]) -> None:
     key = require_key(key, "get")
     validate_format(fmt, "json", "tsv")
     d = ctx.client.get(
-        f"/issue/{key}?fields=summary,status,assignee,issuetype,labels,updated,description"
+        f"/issue/{key}?fields=summary,status,assignee,issuetype,labels,updated,description,parent,duedate"
     )
     f = d["fields"]
     # The description text itself stays out of `get`: it is unbounded, it would have to be
@@ -904,6 +906,8 @@ def cmd_get(ctx: Ctx, args: list[str]) -> None:
         "labels": f.get("labels") or [],
         "updated": f.get("updated"),
         "description_chars": len(f.get("description") or ""),
+        "parent": (f.get("parent") or {}).get("key"),
+        "due": f.get("duedate"),
     }
     if fmt == "tsv":
         text = f"{rec['key']}\t{rec['status']}\t{rec['type']}\t{rec['assignee'] or '-'}\t{rec['summary']}"
@@ -1079,6 +1083,34 @@ def cmd_users(ctx: Ctx, args: list[str]) -> None:
     )
 
 
+def _search_all(client: JiraClient, jql: str, fields: str, maxr: int) -> tuple[list[dict], bool]:
+    """Page `/search/jql` up to `maxr` issues. Returns (issues, truncated) — truncated
+    is true when the cap was hit before Jira reported `isLast`, i.e. more results exist
+    than were fetched. Shared by `search` and `epic` so both page the same way."""
+    issues: list[dict] = []
+    token = None
+    more = False  # true iff Jira said there is another page we chose not to fetch
+    while len(issues) < maxr:
+        params: dict[str, Any] = {
+            "jql": jql,
+            "maxResults": min(50, maxr - len(issues)),
+            "fields": fields,
+        }
+        if token:
+            params["nextPageToken"] = token
+        # Atlassian removed the legacy /search (HTTP 410). /search/jql is token-paginated
+        # (nextPageToken + isLast) and returns no total.
+        data = client.get("/search/jql", params=params)
+        batch = data.get("issues", [])
+        issues.extend(batch)
+        token = data.get("nextPageToken")
+        if data.get("isLast") or not token or not batch:
+            more = False
+            break
+        more = True
+    return issues[:maxr], more and len(issues) >= maxr
+
+
 def cmd_search(ctx: Ctx, args: list[str]) -> None:
     fmt = "tsv"
     maxr = 50
@@ -1105,25 +1137,9 @@ def cmd_search(ctx: Ctx, args: list[str]) -> None:
     if not jql:
         raise SkillError("search requires a JQL query", 1)
     validate_format(fmt, "tsv", "json")
-    issues: list[dict] = []
-    token = None
-    while len(issues) < maxr:
-        params: dict[str, Any] = {
-            "jql": jql,
-            "maxResults": min(50, maxr - len(issues)),
-            "fields": "summary,status,issuetype,assignee,updated",
-        }
-        if token:
-            params["nextPageToken"] = token
-        # Atlassian removed the legacy /search (HTTP 410). /search/jql is token-paginated
-        # (nextPageToken + isLast) and returns no total.
-        data = ctx.client.get("/search/jql", params=params)
-        batch = data.get("issues", [])
-        issues.extend(batch)
-        token = data.get("nextPageToken")
-        if data.get("isLast") or not token or not batch:
-            break
-    issues = issues[:maxr]
+    issues, truncated = _search_all(ctx.client, jql, "summary,status,issuetype,assignee,updated", maxr)
+    if truncated:
+        log_info(f"search hit --max {maxr}; more results may exist. Raise --max to see them.")
     if fmt == "json":
         text = json.dumps(
             [
@@ -1244,16 +1260,19 @@ def _link_payload(key: str, other: str, type_name: str, reverse: bool) -> dict:
     }
 
 
-def _read_links(client: JiraClient, key: str) -> list[dict]:
-    """Every link on `key`, rendered from KEY's point of view.
+def _rows_from_issuelinks(issuelinks: list[dict]) -> list[dict]:
+    """Turn a raw `issuelinks` array (as `fields=issuelinks` returns it) into rows
+    from the OWNING issue's point of view.
 
     Each entry names the OTHER issue, and the field it sits in gives the
-    direction: `outwardIssue` present -> KEY is the subject (type.outward),
-    otherwise KEY is the object (type.inward). Same rule Jira's UI applies.
+    direction: `outwardIssue` present -> the owner is the subject (type.outward),
+    otherwise the owner is the object (type.inward). Same rule Jira's UI applies.
+    Shared by `_read_links` (one issue, via a dedicated GET) and `epic` (many
+    issues at once, from the fields a search already returned) so the direction
+    logic can never drift between the two commands.
     """
-    data = client.get(f"/issue/{key}?fields=issuelinks")
     rows = []
-    for l in (data["fields"].get("issuelinks") or []):
+    for l in issuelinks or []:
         t = l.get("type", {})
         if l.get("outwardIssue"):
             other, rel, direction = l["outwardIssue"], t.get("outward"), "outward"
@@ -1272,6 +1291,12 @@ def _read_links(client: JiraClient, key: str) -> list[dict]:
             }
         )
     return rows
+
+
+def _read_links(client: JiraClient, key: str) -> list[dict]:
+    """Every link on `key`, rendered from KEY's point of view (one dedicated GET)."""
+    data = client.get(f"/issue/{key}?fields=issuelinks")
+    return _rows_from_issuelinks(data["fields"].get("issuelinks"))
 
 
 def _render_link(key: str, row: dict) -> str:
@@ -1302,6 +1327,247 @@ def cmd_links(ctx: Ctx, args: list[str]) -> None:
             for r in rows
         )
     emit(text, out=out, label=f"links-{key}", ext=("json" if fmt == "json" else "txt"))
+
+
+# --------------------------------------------------------------------------
+# `epic` — all children of an Epic, dependency-sorted
+# --------------------------------------------------------------------------
+
+# Which link types express an ORDERING (as opposed to Relates/Cloners/… which only
+# describe a relationship). "subject" means the type's outward subject must come
+# FIRST ("A blocks B" -> A before B); "object" means the outward OBJECT must come
+# first ("A Depends on B" -> B before A, since A needs B to be ready first; "A
+# follows B" -> B before A, since A comes after B). Not read from the live
+# /issueLinkType table (it carries no such semantics) — this is a judgment call
+# about the project's four link types with a real before/after meaning.
+ORDER_LINK_TYPES = {
+    "Blocks": "subject",
+    "Used": "subject",
+    "Depends": "object",
+    "Follows": "object",
+}
+
+
+def _epic_order_edges(children: dict[str, dict], link_rows: dict[str, list[dict]]) -> list[tuple[str, str]]:
+    """(before, after) edges among `children`'s own keys, from ORDER_LINK_TYPES.
+
+    Every ordering link appears in `link_rows` on BOTH ends (once per owning child);
+    both computations agree on the same (before, after) pair (see the derivation this
+    relies on: `row['direction']` names which side of the link the OWNER sits on, and
+    swapping the owner swaps `direction` too, so the resolved subject/object pair does
+    not depend on which end triggered it) — dedup by link id rather than by pair so a
+    reversed insertion order never produces two edges for one link.
+    """
+    seen: set[str] = set()
+    edges: list[tuple[str, str]] = []
+    for owner, rows in link_rows.items():
+        for row in rows:
+            role = ORDER_LINK_TYPES.get(row["type"])
+            if not role or row["key"] not in children:
+                continue
+            lid = str(row["id"])
+            if lid in seen:
+                continue
+            seen.add(lid)
+            other = row["key"]
+            subject, obj = (owner, other) if row["direction"] == "outward" else (other, owner)
+            edges.append((subject, obj) if role == "subject" else (obj, subject))
+    return edges
+
+
+def _topo_sort(nodes: list[str], edges: list[tuple[str, str]], rank: dict[str, int]) -> tuple[list[str], list[str]]:
+    """Kahn's algorithm, ties broken by `rank` (the tickets' own Rank order) via a min-heap
+    — the ordering stays as close to the backlog order as the dependencies allow. Returns
+    (ordered, cyclic): `cyclic` lists nodes that never reached indegree 0, i.e. sit in a
+    dependency cycle; they are not a bug in this function, they are a finding about the
+    ticket graph, so the caller reports them rather than this function raising."""
+    succ: dict[str, list[str]] = {n: [] for n in nodes}
+    indeg: dict[str, int] = {n: 0 for n in nodes}
+    for before, after in edges:
+        succ[before].append(after)
+        indeg[after] += 1
+    heap = [(rank[n], n) for n in nodes if indeg[n] == 0]
+    heapq.heapify(heap)
+    ordered: list[str] = []
+    while heap:
+        _, n = heapq.heappop(heap)
+        ordered.append(n)
+        for m in succ[n]:
+            indeg[m] -= 1
+            if indeg[m] == 0:
+                heapq.heappush(heap, (rank[m], m))
+    placed = set(ordered)
+    cyclic = sorted((n for n in nodes if n not in placed), key=lambda n: rank[n])
+    return ordered, cyclic
+
+
+def _epic_levels(ordered: list[str], edges: list[tuple[str, str]]) -> dict[str, int]:
+    """level[n] = length of the longest path ending at n (0 for a source) — the wave of
+    tickets that could run in parallel. Valid only when walked in topological order, which
+    `ordered` (from `_topo_sort`) already is; a predecessor missing from `level` is a
+    cyclic node and is simply not counted (cyclic nodes get their own 'cycle' marker)."""
+    preds: dict[str, list[str]] = {n: [] for n in ordered}
+    for before, after in edges:
+        if after in preds:
+            preds[after].append(before)
+    level: dict[str, int] = {}
+    for n in ordered:
+        ps = [level[p] for p in preds[n] if p in level]
+        level[n] = (max(ps) + 1) if ps else 0
+    return level
+
+
+def _render_epic_link(row: dict) -> str:
+    if row["inside"]:
+        return f"{row['relation']} {row['key']}"
+    return f"{row['relation']} {row['key']} (outside epic, {row.get('status') or '?'})"
+
+
+EPIC_FLAGS = {"--format", "--open", "--max", "--output"}
+
+
+def cmd_epic(ctx: Ctx, args: list[str]) -> None:
+    fmt = "text"
+    open_only = False
+    maxr = 500
+    key = None
+    out = None
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a == "--format":
+            fmt = _flag_value(args, i, a, EPIC_FLAGS)
+            i += 2
+        elif a == "--open":
+            open_only = True
+            i += 1
+        elif a == "--max":
+            maxr = int(_flag_value(args, i, a, EPIC_FLAGS))
+            i += 2
+        elif a == "--output":
+            out = _set_once(out, _flag_value(args, i, a, EPIC_FLAGS), a)
+            i += 2
+        elif a.startswith("--"):
+            raise SkillError(f"Unknown epic flag: '{a}'", 1)
+        else:
+            if key is not None:
+                raise SkillError(f"epic takes one issue key (got a second: '{a}')", 1)
+            key = a
+            i += 1
+    key = require_key(key, "epic")
+    validate_format(fmt, "text", "tsv", "json")
+    client = ctx.client
+
+    epic_data = client.get(f"/issue/{key}?fields=summary,status,issuetype")
+    ef = epic_data["fields"]
+    epic_type = ef.get("issuetype") or {}
+    if epic_type.get("hierarchyLevel", 1) < 1:
+        log_warn(
+            f"{key} is a '{epic_type.get('name')}' (hierarchy level "
+            f"{epic_type.get('hierarchyLevel')}), not an Epic — listing 'parent = {key}' anyway."
+        )
+
+    issues, truncated = _search_all(
+        client, f"parent = {key} ORDER BY Rank ASC", "summary,status,issuetype,assignee,issuelinks", maxr
+    )
+    if truncated:
+        log_info(f"epic hit --max {maxr}; more children may exist. Raise --max to see them.")
+
+    by_key = {it["key"]: it for it in issues}
+    all_keys = list(by_key.keys())
+    rank = {k: idx for idx, k in enumerate(all_keys)}  # search order IS Rank order
+
+    def status_of(it: dict) -> dict:
+        return it["fields"].get("status") or {}
+
+    def is_done(it: dict) -> bool:
+        return (status_of(it).get("statusCategory") or {}).get("key") == "done"
+
+    included = [k for k in all_keys if not (open_only and is_done(by_key[k]))]
+    included_set = set(included)
+
+    link_rows = {k: _rows_from_issuelinks(by_key[k]["fields"].get("issuelinks")) for k in all_keys}
+    display_links = {
+        k: [{**row, "inside": row["key"] in included_set} for row in link_rows[k]] for k in included
+    }
+    order_edges_all = _epic_order_edges(by_key, link_rows)
+    order_edges = [(b, a) for b, a in order_edges_all if b in included_set and a in included_set]
+
+    ordered, cyclic = _topo_sort(included, order_edges, rank)
+    if cyclic:
+        log_warn(f"{key}: dependency cycle among {', '.join(cyclic)} — listed by Rank, level 'cycle'.")
+    level = _epic_levels(ordered, order_edges)
+
+    preds: dict[str, list[str]] = {k: [] for k in included}
+    for before, after in order_edges:
+        preds[after].append(before)
+
+    final_order = ordered + cyclic
+    # Counts mirror exactly what the body below shows for `included` children: a link
+    # counts as "ordering" only if it actually produced a sort edge (ordering-type AND
+    # both ends among `included`); everything else displayed — outside-epic links,
+    # non-ordering types, and an ordering-type link whose other end got --open'd away —
+    # is "other". Dedup by id: the same link is a row on both of its included ends.
+    own_ids = {str(r["id"]) for rows in display_links.values() for r in rows}
+    n_order_links = len(order_edges)
+    n_other_links = len(own_ids) - n_order_links
+    n_done = sum(1 for it in by_key.values() if is_done(it))
+
+    if fmt == "json":
+        children = []
+        for pos, k in enumerate(final_order, start=1):
+            it = by_key[k]
+            f = it["fields"]
+            children.append(
+                {
+                    "pos": pos,
+                    "level": level.get(k, "cycle"),
+                    "key": k,
+                    "status": status_of(it).get("name"),
+                    "statusCategory": (status_of(it).get("statusCategory") or {}).get("key"),
+                    "type": (f.get("issuetype") or {}).get("name"),
+                    "assignee": (f.get("assignee") or {}).get("displayName"),
+                    "summary": f.get("summary"),
+                    "after": sorted(preds.get(k, [])),
+                    "links": display_links.get(k, []),
+                }
+            )
+        text = json.dumps(
+            {"epic": key, "children": children, "cycles": cyclic, "truncated": truncated},
+            indent=2,
+            ensure_ascii=False,
+        )
+    elif fmt == "tsv":
+        lines = []
+        for pos, k in enumerate(final_order, start=1):
+            it = by_key[k]
+            f = it["fields"]
+            after = ",".join(sorted(preds.get(k, []))) or "-"
+            lvl = level.get(k, "cycle")
+            lines.append(
+                f"{pos}\t{lvl}\t{k}\t{status_of(it).get('name')}\t"
+                f"{(f.get('assignee') or {}).get('displayName') or '-'}\t{f.get('summary')}\t{after}"
+            )
+        text = "\n".join(lines)
+    else:
+        head = (
+            f"Epic {key} — {ef.get('summary')} ({(ef.get('status') or {}).get('name')})\n"
+            f"  {len(all_keys)} children ({len(all_keys) - n_done} open / {n_done} done), "
+            f"{n_order_links} ordering link(s), {n_other_links} other link(s), {len(cyclic)} cycle(s)"
+        )
+        lines = [head, ""]
+        for pos, k in enumerate(final_order, start=1):
+            it = by_key[k]
+            f = it["fields"]
+            lvl = "cycle" if k in cyclic else f"L{level.get(k, 0)}"
+            lines.append(
+                f"{pos}\t{lvl}\t{k}\t{status_of(it).get('name')}\t"
+                f"{(f.get('assignee') or {}).get('displayName') or '-'}\t{f.get('summary')}"
+            )
+            for row in display_links.get(k, []):
+                lines.append(f"\t\t{_render_epic_link(row)}")
+        text = "\n".join(lines)
+    emit(text, out=out, label=f"epic-{key}", ext=("json" if fmt == "json" else "txt"))
 
 
 def cmd_attachments(ctx: Ctx, args: list[str]) -> None:
@@ -1539,13 +1805,22 @@ def cmd_assign(ctx: Ctx, args: list[str]) -> None:
     log_success(f"{key}: assigned to {who or acc} ({acc}) (undo available).")
 
 
-CREATE_FLAGS = {"--type", "--summary", "--project", "--label", "--description", "--description-file"}
+CREATE_FLAGS = {
+    "--type",
+    "--summary",
+    "--project",
+    "--label",
+    "--description",
+    "--description-file",
+    "--parent",
+}
 
 
 def cmd_create(ctx: Ctx, args: list[str]) -> None:
     typ = None
     summary = None
     project = None
+    parent = None
     desc = None
     desc_file = None
     desc_stdin = False
@@ -1567,6 +1842,8 @@ def cmd_create(ctx: Ctx, args: list[str]) -> None:
             summary = _set_once(summary, v, a)
         elif a == "--project":
             project = _set_once(project, v, a)
+        elif a == "--parent":
+            parent = require_key(_set_once(parent, v, a), "create --parent")
         elif a == "--label":
             labels.append(v)
         elif a == "--description-file":
@@ -1608,6 +1885,8 @@ def cmd_create(ctx: Ctx, args: list[str]) -> None:
         fields["description"] = desc
     if labels:
         fields["labels"] = labels
+    if parent:
+        fields["parent"] = {"key": parent}
     resp = ctx.client.post("/issue", {"fields": fields})
     key = resp.get("key")
     # Report what was actually sent: a create that silently lost its body still exits 0 and
@@ -1616,7 +1895,175 @@ def cmd_create(ctx: Ctx, args: list[str]) -> None:
         f"Created {key} ({typ}) in {project}; "
         f"summary: {len(summary)} chars, description: {len(desc)} chars."
     )
+    if parent:
+        # JRACLOUD-78657: a PUT/POST of `parent` has answered success while silently not
+        # storing it. Read back rather than trust the POST — same reasoning as `link`.
+        got = (ctx.client.get(f"/issue/{key}?fields=parent")["fields"].get("parent") or {}).get("key")
+        if got != parent:
+            print(key)  # the ticket exists; don't hide it behind a nonzero exit
+            raise SkillError(
+                f"{key}: created, but parent was not stored (requested {parent}, got "
+                f"{got or '(none)'}). Retry with: --write edit {key} --parent {parent}",
+                3,
+            )
+        log_success(f"{key}: parent set to {parent}.")
     print(key)
+
+
+def _put_fields_verified(client: JiraClient, key: str, fields: dict, verify_fields: str) -> dict:
+    """PUT /issue/<key> {"fields": fields}, then read the same fields back and return
+    them. Jira has answered success (HTTP 204) on a `parent` write without applying it
+    (JRACLOUD-78657), so a caller must never trust the PUT alone — compare the returned
+    dict against intent with `_diff_fields`."""
+    client.put(f"/issue/{key}", {"fields": fields})
+    return client.get(f"/issue/{key}?fields={verify_fields}")["fields"]
+
+
+def _diff_fields(after: dict, expected: dict[str, Any]) -> list[str]:
+    """Compare a read-back `fields` dict against `expected` (field name -> desired
+    value; `parent` is given as a bare key string or None, matching what `edit` and its
+    undo both work with). Returns one human-readable line per mismatch."""
+    out = []
+    for name, want in expected.items():
+        got = (after.get("parent") or {}).get("key") if name == "parent" else after.get(name)
+        if got != want:
+            out.append(f"{name} (wanted {want!r}, got {got!r})")
+    return out
+
+
+EDIT_FLAGS = {"--parent", "--no-parent", "--summary", "--title", "--due", "--no-due"}
+DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _parse_due(s: str, flag: str) -> str:
+    if not DATE_RE.match(s):
+        raise SkillError(f"{flag} expects a date as YYYY-MM-DD, got '{s}'", 1)
+    try:
+        datetime.date.fromisoformat(s)
+    except ValueError as e:
+        raise SkillError(f"{flag}: '{s}' is not a valid calendar date ({e})", 1) from e
+    return s
+
+
+def cmd_edit(ctx: Ctx, args: list[str]) -> None:
+    key = None
+    parent = None
+    no_parent = False
+    summary = None
+    summary_flag = None
+    due = None
+    no_due = False
+    i = 0
+    while i < len(args):
+        a = args[i]
+        if a == "--parent":
+            parent = require_key(_set_once(parent, _flag_value(args, i, a, EDIT_FLAGS), a), "edit --parent")
+            i += 2
+        elif a == "--no-parent":
+            no_parent = True
+            i += 1
+        elif a in ("--summary", "--title"):
+            v = _flag_value(args, i, a, EDIT_FLAGS)
+            if summary is not None:
+                raise SkillError(
+                    f"{a} given more than once (already have {summary_flag} '{summary}')", 1
+                )
+            summary, summary_flag = v, a
+            i += 2
+        elif a == "--due":
+            due = _parse_due(_flag_value(args, i, a, EDIT_FLAGS), a)
+            i += 2
+        elif a == "--no-due":
+            no_due = True
+            i += 1
+        elif a.startswith("--"):
+            raise SkillError(f"Unknown edit flag: '{a}'", 1)
+        else:
+            if key is not None:
+                raise SkillError(f"edit takes one issue key (got a second: '{a}')", 1)
+            key = a
+            i += 1
+    key = require_key(key, "edit")
+    if parent is not None and no_parent:
+        raise SkillError("edit: --parent and --no-parent are mutually exclusive.", 1)
+    if due is not None and no_due:
+        raise SkillError("edit: --due and --no-due are mutually exclusive.", 1)
+    if parent == key:
+        raise SkillError(f"Refusing to set {key} as its own parent.", 1)
+    if summary is not None and not summary.strip():
+        raise SkillError(f"{summary_flag} cannot be empty.", 1)
+    if parent is None and not no_parent and summary is None and due is None and not no_due:
+        raise SkillError(
+            "edit requires at least one change: --parent/--no-parent KEY, "
+            "--summary/--title TEXT, or --due/--no-due YYYY-MM-DD.",
+            1,
+        )
+
+    client = ctx.client
+    prior = client.get(f"/issue/{key}?fields=summary,parent,duedate")["fields"]
+    prior_parent = (prior.get("parent") or {}).get("key")
+
+    changes: dict[str, Any] = {}
+    prior_for_undo: dict[str, Any] = {}
+    skipped: list[str] = []
+
+    if parent is not None or no_parent:
+        target = None if no_parent else parent
+        if target == prior_parent:
+            skipped.append("parent")
+        else:
+            changes["parent"] = {"key": target} if target else None
+            prior_for_undo["parent"] = prior_parent
+    if summary is not None:
+        if summary == prior.get("summary"):
+            skipped.append("summary")
+        else:
+            changes["summary"] = summary
+            prior_for_undo["summary"] = prior.get("summary")
+    if due is not None or no_due:
+        target = None if no_due else due
+        if target == prior.get("duedate"):
+            skipped.append("due")
+        else:
+            changes["duedate"] = target
+            prior_for_undo["duedate"] = prior.get("duedate")
+
+    if skipped:
+        log_info(f"{key}: already at the requested value for {', '.join(skipped)} — no change.")
+    if not changes:
+        log_success(f"{key}: nothing to change.")
+        return
+
+    # Journal BEFORE the mutating call so a crash mid-PUT still leaves the prior value
+    # recoverable — same ordering as every other write in this module.
+    UndoJournal().record(key, "edit", None, prior_for_undo)
+    verify_fields = ",".join(sorted(changes.keys()))
+    after = _put_fields_verified(client, key, changes, verify_fields)
+
+    expected: dict[str, Any] = {}
+    if "parent" in changes:
+        expected["parent"] = changes["parent"]["key"] if changes["parent"] else None
+    if "summary" in changes:
+        expected["summary"] = changes["summary"]
+    if "duedate" in changes:
+        expected["duedate"] = changes["duedate"]
+    mismatches = _diff_fields(after, expected)
+    if mismatches:
+        raise SkillError(
+            f"{key}: the PUT succeeded but the read-back disagrees — {'; '.join(mismatches)}.\n"
+            f"  DO NOT assume the change took effect. Check with: get {key} --format json\n"
+            f"  A prior value was journaled regardless: undo --issue {key}",
+            3,
+        )
+
+    parts = []
+    if "parent" in changes:
+        parts.append(f"parent → {expected['parent'] or '(none)'}")
+    if "summary" in changes:
+        parts.append("summary updated")
+    if "duedate" in changes:
+        parts.append(f"due → {expected['duedate'] or '(none)'}")
+    log_success(f"{key}: {'; '.join(parts)} (undo available).")
 
 
 def cmd_attach(ctx: Ctx, args: list[str]) -> None:
@@ -1899,6 +2346,36 @@ def _apply_undo(client: JiraClient, row: tuple) -> str:
     if op == "label":
         client.put(f"/issue/{key}", {"fields": {"labels": prior.get("labels", [])}})
         return f"{key}: labels restored."
+    if op == "edit":
+        fields: dict[str, Any] = {}
+        expected: dict[str, Any] = {}
+        if "parent" in prior:
+            want = prior["parent"]
+            if want is None:
+                # A null-parent PUT 500s on an issue that already has no parent
+                # (measured against the live API) — only send it if one is actually set.
+                cur = (client.get(f"/issue/{key}?fields=parent")["fields"].get("parent") or {}).get("key")
+                if cur is not None:
+                    fields["parent"] = None
+            else:
+                fields["parent"] = {"key": want}
+            expected["parent"] = want
+        if "summary" in prior:
+            fields["summary"] = prior["summary"]
+            expected["summary"] = prior["summary"]
+        if "duedate" in prior:
+            fields["duedate"] = prior["duedate"]
+            expected["duedate"] = prior["duedate"]
+        restored = ", ".join(sorted(expected.keys()))
+        if fields:
+            after = _put_fields_verified(client, key, fields, ",".join(sorted(expected.keys())))
+            mismatches = _diff_fields(after, expected)
+            if mismatches:
+                raise SkillError(
+                    f"{key}: undo PUT succeeded but the read-back disagrees — {'; '.join(mismatches)}.",
+                    3,
+                )
+        return f"{key}: edit undone ({restored})."
     if op == "link":
         client.delete(f"/issueLink/{ref}")
         return f"{key}: link {ref} removed (was: {prior.get('rendered')})."
@@ -2003,6 +2480,7 @@ COMMANDS: dict[str, tuple[Any, str]] = {
     "users": (cmd_users, READ),
     "search": (cmd_search, READ),
     "links": (cmd_links, READ),
+    "epic": (cmd_epic, READ),
     "attachments": (cmd_attachments, READ),
     "download": (cmd_download, READ),
     "undo": (cmd_undo, READ),  # apply path enforces --write internally
@@ -2012,6 +2490,7 @@ COMMANDS: dict[str, tuple[Any, str]] = {
     "comment-edit": (cmd_comment_edit, WRITE),
     "assign": (cmd_assign, WRITE),
     "create": (cmd_create, WRITE),
+    "edit": (cmd_edit, WRITE),
     "attach": (cmd_attach, WRITE),
     "describe": (cmd_describe, WRITE),
     "label": (cmd_label, WRITE),
@@ -2059,6 +2538,9 @@ READ (all accept [--output PATH|-]):
                                                Assignable-user search (paged + cached).
   search   <JQL>    [--format tsv|json] [--max n]    JQL issue search.
   links    <KEY>    [--format tsv|json]        Issue links: id, relation, key, status, summary.
+  epic     <EPIC>   [--format text|tsv|json] [--open] [--max n]
+                     All children of an Epic (parent = EPIC), dependency-sorted from
+                     Blocks/Depends/Used/Follows links; --open drops done children.
   attachments <KEY>                            List attachments (id/name/size/mime/url).
   download <KEY> <att-id|filename> [--output P|-]   Download an attachment.
   undo     --list [--issue KEY]                List undoable journal entries.
@@ -2068,8 +2550,11 @@ WRITE (need --write):
   comment    <KEY> [text | --file P | --file - | -] [--attach F]... [--embed F]...  Add a comment.
   comment-edit <KEY> <id> [text | --file P | --file - | -]   Replace a comment body.
   assign     <KEY> <email|accountId|@me|alias|--unassign>   Set/clear the assignee.
-  create     --summary S [--type T] [--project K] [--label L]...
+  create     --summary S [--type T] [--project K] [--label L]... [--parent EPIC-KEY]
              [--description TEXT | --description-file P | --description-file - | -]
+  edit       <KEY> [--parent EPIC-KEY | --no-parent] [--summary S | --title S]
+             [--due YYYY-MM-DD | --no-due]      Change parent/summary/due; idempotent,
+             read-back verified (Jira has 204'd a parent write it didn't store).
   attach     <KEY> <file>...                   Upload attachment(s).
   describe   <KEY> [text | --file P | --file - | -] [--attach F]... [--embed F]...  Set/replace description.
   label      <KEY> [--add L]... [--remove L]...   Add/remove labels.

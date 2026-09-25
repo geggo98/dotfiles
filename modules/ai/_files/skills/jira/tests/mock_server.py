@@ -23,6 +23,43 @@ PORTFILE, REQLOG, BODYLOG = sys.argv[1], sys.argv[2], sys.argv[3]
 
 LOCK = threading.Lock()
 
+# Issue-type hierarchy, so `epic`'s "is this actually an Epic?" check and `create
+# --type Epic` have something real to read. Mirrors the three types measured on the
+# live site 2026-09-25: Epic (hierarchyLevel 1), Bug and Task (both 0, no sub-tasks).
+ISSUETYPE_META = {
+    "Epic": {"hierarchyLevel": 1},
+    "Bug": {"hierarchyLevel": 0},
+    "Task": {"hierarchyLevel": 0},
+}
+
+# statusCategory.key drives `epic --open`. Real Jira nests this on every `status`
+# field; the mock derives it from the status name so fixtures stay one line each.
+STATUS_CATEGORY = {
+    "To Do": "new",
+    "In Code Review": "indeterminate",
+    "In QA": "indeterminate",
+    "Done": "done",
+}
+
+
+def _issue(summary, status, issuetype, *, parent=None, duedate=None, description="", labels=None):
+    """One STATE['issue'] entry. A tiny constructor because `epic`'s fixtures need
+    six near-identical children — spelling all eight keys out six times would bury
+    the one thing that differs (status/parent/links) in boilerplate."""
+    return {
+        "summary": summary,
+        "status": status,
+        "issuetype": issuetype,
+        "assignee": None,
+        "labels": labels or [],
+        "updated": "2026-07-20T10:00:00.000+0000",
+        "description": description,
+        "attachment": [],
+        "parent": parent,
+        "duedate": duedate,
+    }
+
+
 STATE = {
     "issue": {
         "JIRA-1": {
@@ -58,8 +95,72 @@ STATE = {
             "description": "BIG " * 15000,
             "attachment": [],
         },
+        # Sabotage fixture for `edit`'s read-back guard: its PUT handler (below) always
+        # 204s a `parent` write WITHOUT applying it, reproducing JRACLOUD-78657 (Jira
+        # answering success while silently not storing `parent`) so the read-back check
+        # has something real to catch.
+        "JIRA-3": _issue("Stubborn ticket (parent write is silently ignored)", "To Do", "Task"),
+        # An Epic with six children, wired up to exercise every ordering link type plus
+        # a non-ordering one and an outside-epic one. Rank == insertion order below.
+        "JIRA-10": _issue("Login Redesign", "To Do", "Epic", description="EPIC DESC"),
+        "JIRA-11": _issue("Design the new form", "To Do", "Task", parent="JIRA-10"),
+        "JIRA-12": _issue("Build the form", "To Do", "Task", parent="JIRA-10"),
+        "JIRA-13": _issue("Wire up validation", "To Do", "Task", parent="JIRA-10"),
+        "JIRA-14": _issue("Add the validation API", "To Do", "Task", parent="JIRA-10"),
+        "JIRA-15": _issue("Write the migration guide", "To Do", "Task", parent="JIRA-10"),
+        "JIRA-16": _issue("Retire the old form", "Done", "Task", parent="JIRA-10"),
+        # A second Epic whose two children block each other both ways — a genuine
+        # dependency cycle, not a contrived string, for `epic`'s cycle handling.
+        "JIRA-20": _issue("Cyclic Epic", "To Do", "Epic"),
+        "JIRA-21": _issue("Chicken", "To Do", "Task", parent="JIRA-20"),
+        "JIRA-22": _issue("Egg", "To Do", "Task", parent="JIRA-20"),
+        # A third, otherwise-untouched Epic — the `create --parent` test attaches a
+        # child to THIS one, not JIRA-10, so it never changes JIRA-10's child count
+        # out from under the `epic` ordering tests that assume exactly six.
+        "JIRA-30": _issue("Unrelated Epic (create --parent target)", "To Do", "Epic"),
+        # A plain, unrelated ticket for `edit` to mutate freely (parent/summary/due,
+        # repeatedly) — deliberately NOT one of JIRA-10's children, so `edit`'s test
+        # never changes what `epic JIRA-10` sees.
+        "JIRA-31": _issue("edit's scratch ticket", "To Do", "Task"),
     },
-    "links": {},
+    # Pre-seeded issue links (ids 70001+, well below the 9001+ range `next_link_id`
+    # hands out to links created during the test run, so the two never collide).
+    # Direction follows the convention measured against the live site and documented
+    # in jira.py: {"type": T, "inwardIssue": A, "outwardIssue": B} == "A <T.outward> B".
+    "links": {
+        "70001": {  # JIRA-11 blocks JIRA-12 -> JIRA-11 first
+            "id": "70001", "type": {"id": "10000", "name": "Blocks", "outward": "blocks", "inward": "is blocked by"},
+            "inwardIssue": {"key": "JIRA-11"}, "outwardIssue": {"key": "JIRA-12"},
+        },
+        "70002": {  # JIRA-12 Used by JIRA-13 -> JIRA-12 first
+            "id": "70002", "type": {"id": "10012", "name": "Used", "outward": "Used by", "inward": "Uses"},
+            "inwardIssue": {"key": "JIRA-12"}, "outwardIssue": {"key": "JIRA-13"},
+        },
+        "70003": {  # JIRA-13 Depends on JIRA-14 -> JIRA-14 first
+            "id": "70003", "type": {"id": "10010", "name": "Depends", "outward": "Depends on", "inward": "Used by"},
+            "inwardIssue": {"key": "JIRA-13"}, "outwardIssue": {"key": "JIRA-14"},
+        },
+        "70004": {  # JIRA-15 follows JIRA-16 -> JIRA-16 first (JIRA-16 is Done)
+            "id": "70004", "type": {"id": "20000", "name": "Follows", "outward": "follows", "inward": "is followed by"},
+            "inwardIssue": {"key": "JIRA-15"}, "outwardIssue": {"key": "JIRA-16"},
+        },
+        "70005": {  # JIRA-11 relates to JIRA-15 -> decorative only, no ordering
+            "id": "70005", "type": {"id": "10003", "name": "Relates", "outward": "relates to", "inward": "relates to"},
+            "inwardIssue": {"key": "JIRA-11"}, "outwardIssue": {"key": "JIRA-15"},
+        },
+        "70006": {  # JIRA-11 blocks JIRA-2 -> ordering TYPE, but JIRA-2 is outside the epic
+            "id": "70006", "type": {"id": "10000", "name": "Blocks", "outward": "blocks", "inward": "is blocked by"},
+            "inwardIssue": {"key": "JIRA-11"}, "outwardIssue": {"key": "JIRA-2"},
+        },
+        "70007": {  # JIRA-21 blocks JIRA-22
+            "id": "70007", "type": {"id": "10000", "name": "Blocks", "outward": "blocks", "inward": "is blocked by"},
+            "inwardIssue": {"key": "JIRA-21"}, "outwardIssue": {"key": "JIRA-22"},
+        },
+        "70008": {  # ...and JIRA-22 blocks JIRA-21 right back -> a real cycle
+            "id": "70008", "type": {"id": "10000", "name": "Blocks", "outward": "blocks", "inward": "is blocked by"},
+            "inwardIssue": {"key": "JIRA-22"}, "outwardIssue": {"key": "JIRA-21"},
+        },
+    },
     "comments": {
         "JIRA-1": [
             {
@@ -138,6 +239,26 @@ USERS = [
 ]
 
 
+def _issuetype_field(name):
+    return {"name": name, "hierarchyLevel": ISSUETYPE_META.get(name, {}).get("hierarchyLevel", 0)}
+
+
+def _parent_stub(parent_key):
+    """The nested `parent` field, matching what /editmeta and a GET measured against the
+    live site actually return: {key, fields: {issuetype, priority, status, summary}}."""
+    it = STATE["issue"].get(parent_key)
+    if not it:
+        return None
+    return {
+        "key": parent_key,
+        "fields": {
+            "issuetype": _issuetype_field(it["issuetype"]),
+            "status": {"name": it["status"]},
+            "summary": it["summary"],
+        },
+    }
+
+
 def _issue_fields(key, fields=None):
     """Honour the `fields=` query param like real Jira does.
 
@@ -147,14 +268,19 @@ def _issue_fields(key, fields=None):
     it = STATE["issue"][key]
     all_fields = {
         "summary": it["summary"],
-        "status": {"name": it["status"]},
-        "issuetype": {"name": it["issuetype"]},
+        "status": {
+            "name": it["status"],
+            "statusCategory": {"key": STATUS_CATEGORY.get(it["status"], "new")},
+        },
+        "issuetype": _issuetype_field(it["issuetype"]),
         "assignee": it["assignee"],
         "labels": it["labels"],
         "updated": it["updated"],
         "description": it["description"],
         "attachment": it["attachment"],
         "issuelinks": _issue_links(key),
+        "parent": _parent_stub(it.get("parent")),
+        "duedate": it.get("duedate"),
     }
     if not fields:
         return all_fields
@@ -247,10 +373,28 @@ class Handler(BaseHTTPRequestHandler):
             return self._send(200, USERS[start : start + mx])
 
         if path == "/rest/api/2/search/jql":
-            issues = [
-                {"key": k, "fields": _issue_fields(k, q.get("fields"))} for k in STATE["issue"]
-            ]
-            return self._send(200, {"issues": issues, "isLast": True, "nextPageToken": None})
+            jql = (q.get("jql") or [""])[0]
+            # Only the one clause `epic`/`search` actually send is understood — this is a
+            # mock, not a JQL parser. `parent = KEY` narrows; anything else lists everyone
+            # (matches the existing 'project = VUKFZIF' callers, which want all issues).
+            pm = re.search(r"parent\s*=\s*(\S+)", jql)
+            if pm:
+                keys = [k for k, it in STATE["issue"].items() if it.get("parent") == pm.group(1)]
+            else:
+                keys = list(STATE["issue"].keys())
+            # Real pagination (not "return everything with isLast=True"): `epic --max`
+            # relies on the mock actually stopping early for its truncation test, the same
+            # way /user/search's pagination already backs the user-cache test below.
+            start = int((q.get("nextPageToken") or ["0"])[0])
+            mx = int((q.get("maxResults") or ["50"])[0])
+            page = keys[start : start + mx]
+            issues = [{"key": k, "fields": _issue_fields(k, q.get("fields"))} for k in page]
+            next_start = start + len(page)
+            is_last = next_start >= len(keys)
+            return self._send(
+                200,
+                {"issues": issues, "isLast": is_last, "nextPageToken": None if is_last else str(next_start)},
+            )
 
         # Issue links. Kept above the /issue/... routes below: the regex there does
         # not match "/issueLink", but the paths are one character apart and the next
@@ -303,6 +447,12 @@ class Handler(BaseHTTPRequestHandler):
         # does not match this path (which is why `create` was untestable until now).
         if path == "/rest/api/2/issue" and method == "POST":
             fields = (body or {}).get("fields") or {}
+            parent_field = fields.get("parent")
+            parent_key = None
+            if parent_field:
+                parent_key = parent_field.get("key")
+                if parent_key not in STATE["issue"]:
+                    return self._send(400, {"errorMessages": [f"no such parent: {parent_key}"]})
             with LOCK:
                 STATE["next_issue_id"] += 1
                 key = f"VUKFZIF-{STATE['next_issue_id']}"
@@ -315,6 +465,8 @@ class Handler(BaseHTTPRequestHandler):
                 "updated": "2026-07-20T12:00:00.000+0000",
                 "description": fields.get("description"),
                 "attachment": [],
+                "parent": parent_key,
+                "duedate": None,
             }
             return self._send(201, {"id": str(STATE["next_issue_id"]), "key": key})
 
@@ -338,6 +490,29 @@ class Handler(BaseHTTPRequestHandler):
                     STATE["issue"][key]["description"] = fields["description"]
                 if "labels" in fields:
                     STATE["issue"][key]["labels"] = fields["labels"]
+                if "summary" in fields:
+                    STATE["issue"][key]["summary"] = fields["summary"]
+                if "duedate" in fields:
+                    STATE["issue"][key]["duedate"] = fields["duedate"]
+                if "parent" in fields:
+                    if key == "JIRA-3":
+                        # Sabotage fixture: reproduces JRACLOUD-78657 (204, but the parent
+                        # is never actually stored) so `edit`'s read-back guard has a real
+                        # mismatch to catch, on purpose, every time.
+                        pass
+                    else:
+                        new_parent = fields["parent"]
+                        if new_parent is None:
+                            if STATE["issue"][key].get("parent") is None:
+                                # Measured against the live API: a null-parent PUT 500s
+                                # when the issue has no parent to remove.
+                                return self._send(500, {"errorMessages": ["We couldn't save your changes."]})
+                            STATE["issue"][key]["parent"] = None
+                        else:
+                            pkey = new_parent.get("key")
+                            if pkey not in STATE["issue"]:
+                                return self._send(400, {"errorMessages": [f"no such parent: {pkey}"]})
+                            STATE["issue"][key]["parent"] = pkey
                 upd = (body or {}).get("update") or {}
                 for op in upd.get("labels", []):
                     if "add" in op and op["add"] not in STATE["issue"][key]["labels"]:

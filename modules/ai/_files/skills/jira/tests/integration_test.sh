@@ -350,6 +350,150 @@ run --write undo --issue $A >/dev/null 2>&1
 run links $A --format tsv --output - 2>/dev/null | perl -F'\t' -lane 'print $F[1]' | grep -qx "Uses" \
   && ok "undo re-creates a link that 'unlink' deleted (relation preserved)" || no "undo did not restore the unlinked link"
 
+echo "== test 13: create — --type Epic and --parent =="
+k="$(run --write create --type Epic --summary "New Epic" 2>/dev/null)"
+typ="$(run get "$k" --format json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["type"])')"
+[[ "$typ" == "Epic" ]] && ok "create --type Epic creates an Epic" || no "create --type Epic gave type '$typ'"
+
+# JIRA-30, not JIRA-10: the `epic` tests below assume JIRA-10's child count is fixed.
+k="$(run --write create --summary "Child via create" --parent JIRA-30 2>/dev/null)"
+[[ "$k" =~ ^[A-Z]+-[0-9]+$ ]] && ok "create --parent returns a key ($k)" || no "create --parent key='$k'"
+got="$(run get "$k" --format json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["parent"])')"
+[[ "$got" == "JIRA-30" ]] && ok "create --parent stored the parent (read back via get)" || no "parent not stored: '$got'"
+
+b="$(count 'POST /rest/api/2/issue$')"
+err="$(run --write create --summary "Bad parent" --parent not-a-key 2>&1 >/dev/null)"; rc=$?
+{ [[ $rc -eq 1 ]] && [[ "$b" == "$(count 'POST /rest/api/2/issue$')" ]]; } \
+  && ok "a malformed --parent key is rejected before any POST" || no "malformed parent rc=$rc posts $b->$(count 'POST /rest/api/2/issue$')"
+
+err="$(run --write create --summary "Nonexistent parent" --parent JIRA-9999 2>&1 >/dev/null)"; rc=$?
+[[ $rc -eq 3 ]] && ok "a well-formed but nonexistent --parent fails from the server (rc 3)" || no "nonexistent parent rc=$rc"
+
+echo "== test 14: edit — parent/summary/title/due, idempotent, read-back verified =="
+err="$(run edit JIRA-11 --no-due 2>&1)"; rc=$?
+{ [[ $rc -eq 1 ]] && grep -q -- "--write" <<<"$err"; } && ok "edit without --write is refused" || no "edit gating rc=$rc"
+
+b="$(count 'PUT /rest/api/2/issue/JIRA-31$')"
+out="$(run --write edit JIRA-31 --parent JIRA-20 2>&1)"; rc=$?
+{ [[ $rc -eq 0 ]] && grep -q "parent → JIRA-20" <<<"$out"; } \
+  && ok "edit --parent sets and reports the read-back result" || no "edit --parent rc=$rc out=$out"
+after1="$(count 'PUT /rest/api/2/issue/JIRA-31$')"
+[[ "$after1" -gt "$b" ]] && ok "edit --parent sent exactly one PUT" || no "no PUT sent for edit --parent"
+
+out="$(run --write edit JIRA-31 --parent JIRA-20 2>&1)"; rc=$?
+{ [[ $rc -eq 0 ]] && grep -q "nothing to change" <<<"$out" && [[ "$(count 'PUT /rest/api/2/issue/JIRA-31$')" == "$after1" ]]; } \
+  && ok "a repeated identical --parent is a no-op (no PUT)" || no "edit --parent not idempotent"
+
+run --write edit JIRA-31 --no-parent >/dev/null 2>&1
+after2="$(count 'PUT /rest/api/2/issue/JIRA-31$')"
+got="$(run get JIRA-31 --format json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["parent"])')"
+[[ "$got" == "None" ]] && ok "edit --no-parent clears the parent" || no "--no-parent left parent='$got'"
+out="$(run --write edit JIRA-31 --no-parent 2>&1)"; rc=$?
+{ [[ $rc -eq 0 ]] && grep -q "nothing to change" <<<"$out" && [[ "$(count 'PUT /rest/api/2/issue/JIRA-31$')" == "$after2" ]]; } \
+  && ok "a repeated --no-parent is a no-op — the mock would 500 a redundant null" || no "repeated --no-parent sent a PUT"
+
+b="$(count 'PUT /rest/api/2/issue/JIRA-31$')"
+err="$(run --write edit JIRA-31 --summary S --title T 2>&1 >/dev/null)"; rc=$?
+{ [[ $rc -eq 1 ]] && [[ "$b" == "$(count 'PUT /rest/api/2/issue/JIRA-31$')" ]]; } \
+  && ok "--summary and --title together is an error, no PUT" || no "summary/title conflict not rejected rc=$rc"
+
+run --write edit JIRA-31 --title "Retire old form v2" >/dev/null 2>&1
+got="$(run get JIRA-31 --format json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["summary"])')"
+[[ "$got" == "Retire old form v2" ]] && ok "--title is an alias for --summary" || no "--title gave summary='$got'"
+
+err="$(run --write edit JIRA-31 --due 2026-02-30 2>&1 >/dev/null)"; rc=$?
+[[ $rc -eq 1 ]] && ok "an invalid calendar date is rejected" || no "bad date rc=$rc"
+
+run --write edit JIRA-31 --due 2026-10-01 >/dev/null 2>&1
+got="$(run get JIRA-31 --format json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["due"])')"
+[[ "$got" == "2026-10-01" ]] && ok "--due sets the due date" || no "--due gave due='$got'"
+run --write edit JIRA-31 --no-due >/dev/null 2>&1
+got="$(run get JIRA-31 --format json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["due"])')"
+[[ "$got" == "None" ]] && ok "--no-due clears the due date" || no "--no-due left due='$got'"
+
+err="$(run --write edit JIRA-31 --parent JIRA-31 2>&1 >/dev/null)"; rc=$?
+[[ $rc -eq 1 ]] && ok "edit refuses an issue as its own parent" || no "self-parent accepted"
+
+err="$(run --write edit JIRA-31 2>&1 >/dev/null)"; rc=$?
+[[ $rc -eq 1 ]] && ok "edit with no flags is an error" || no "no-op edit accepted"
+
+# One journal entry per `edit` call, covering every field it changed — so a single
+# undo restores all three together, whatever JIRA-31's state happened to be before.
+before="$(run get JIRA-31 --format json 2>/dev/null)"
+run --write edit JIRA-31 --parent JIRA-20 --title "Renamed via edit" --due 2026-11-01 >/dev/null 2>&1
+run --write undo --issue JIRA-31 >/dev/null 2>&1
+after="$(run get JIRA-31 --format json 2>/dev/null)"
+[[ "$before" == "$after" ]] \
+  && ok "undo restores parent, summary and due together from one edit" \
+  || no "undo of a combined edit did not fully restore: before=$before after=$after"
+
+# JIRA-3's PUT handler always 204s a `parent` write without applying it
+# (JRACLOUD-78657) — edit's read-back guard must catch that, not report success.
+b="$(count 'PUT /rest/api/2/issue/JIRA-3$')"
+err="$(run --write edit JIRA-3 --parent JIRA-10 2>&1 >/dev/null)"; rc=$?
+{ [[ $rc -eq 3 ]] && grep -q "read-back disagrees" <<<"$err" \
+  && [[ "$(count 'PUT /rest/api/2/issue/JIRA-3$')" -gt "$b" ]]; } \
+  && ok "edit detects a PUT that 204s without applying the change" || no "read-back guard rc=$rc err=$err"
+got="$(run get JIRA-3 --format json 2>/dev/null | python3 -c 'import json,sys; print(json.load(sys.stdin)["parent"])')"
+[[ "$got" == "None" ]] && ok "the sabotaged parent write really did not take effect" || no "JIRA-3 parent unexpectedly set to '$got'"
+
+echo "== test 15: epic — dependency-sorted children, cycles, --open, --max =="
+tsv="$(run epic JIRA-10 --format tsv --output - 2>/dev/null)"
+order="$(echo "$tsv" | perl -F'\t' -lane 'print $F[2]' | paste -sd, -)"
+[[ "$order" == "JIRA-11,JIRA-12,JIRA-14,JIRA-13,JIRA-16,JIRA-15" ]] \
+  && ok "epic orders children: Blocks/Used/Depends/Follows all respected, tie-break by Rank" \
+  || no "epic order: $order"
+
+levels="$(echo "$tsv" | perl -F'\t' -lane 'print $F[1]' | paste -sd, -)"
+[[ "$levels" == "0,1,0,2,0,1" ]] && ok "epic levels are the longest-path wave numbers" || no "epic levels: $levels"
+
+echo "$tsv" | perl -F'\t' -lane 'print "$F[2]\t$F[6]"' | grep -qP '^JIRA-13\t(JIRA-12,JIRA-14|JIRA-14,JIRA-12)$' \
+  && ok "epic 'after' lists both predecessors of a multi-parent child" || no "JIRA-13 after column wrong: $(echo "$tsv" | perl -F'\t' -lane 'print if $F[2] eq "JIRA-13"')"
+
+json="$(run epic JIRA-10 --format json --output - 2>/dev/null)"
+python3 -c 'import json,sys; json.load(sys.stdin)' <<<"$json" \
+  && ok "epic --format json is valid JSON" || no "epic json unparseable"
+python3 -c 'import json,sys; d=json.load(sys.stdin); sys.exit(0 if d["cycles"]==[] else 1)' <<<"$json" \
+  && ok "epic JIRA-10 reports no cycles" || no "epic JIRA-10 wrongly reported a cycle"
+
+echo "$json" >"$TMP/epic10.json"
+python3 - "$TMP/epic10.json" <<'PY'
+import json, sys
+d = json.load(open(sys.argv[1]))
+by_key = {c["key"]: c for c in d["children"]}
+j11, j15 = by_key["JIRA-11"], by_key["JIRA-15"]
+rel11 = [l for l in j11["links"] if l["type"] == "Relates"]
+ok = bool(rel11) and rel11[0]["key"] == "JIRA-15"
+ok = ok and "JIRA-15" not in j11["after"] and "JIRA-11" not in j15["after"]
+sys.exit(0 if ok else 1)
+PY
+rc=$?
+[[ $rc -eq 0 ]] && ok "'Relates' is shown but does not affect the topological order" || no "Relates leaked into ordering"
+
+text="$(run epic JIRA-10 --format text 2>/dev/null)"
+grep -q "blocks JIRA-2 (outside epic, To Do)" <<<"$text" \
+  && ok "an outside-epic link is shown with its status and marked 'outside epic'" || no "outside-epic link not rendered: $text"
+
+open_order="$(run epic JIRA-10 --format tsv --open --output - 2>/dev/null | perl -F'\t' -lane 'print $F[2]' | paste -sd, -)"
+[[ "$open_order" == "JIRA-11,JIRA-12,JIRA-14,JIRA-13,JIRA-15" ]] \
+  && ok "--open drops the Done child and its edge, re-leveling what depended on it" \
+  || no "--open order: $open_order"
+
+err="$(run epic JIRA-20 --format tsv 2>&1 >/dev/null)"
+cyc_levels="$(run epic JIRA-20 --format tsv --output - 2>/dev/null | perl -F'\t' -lane 'print $F[1]' | sort -u)"
+{ [[ "$cyc_levels" == "cycle" ]] && grep -q "dependency cycle among" <<<"$err"; } \
+  && ok "a real 2-cycle is reported as a cycle, not silently ordered" || no "cycle handling broke: levels=$cyc_levels err=$err"
+
+err="$(run epic JIRA-1 --format tsv 2>&1 >/dev/null)"
+grep -q "not an Epic" <<<"$err" && ok "epic on a non-Epic key warns but still lists" || no "no non-Epic warning: $err"
+
+err="$(run epic JIRA-10 --format tsv --max 2 2>&1 >/dev/null)"
+# No --output here (unlike elsewhere in this file): "-" is byte-exact with no added
+# trailing newline, which would make `wc -l` undercount by one against a 2-line body.
+n="$(run epic JIRA-10 --format tsv --max 2 2>/dev/null | wc -l | tr -d ' ')"
+{ grep -q -- "--max" <<<"$err" && [[ "$n" == "2" ]]; } \
+  && ok "--max caps the children and warns about truncation" || no "--max: n=$n err=$err"
+
 echo
 echo "== results: $pass passed, $fail failed =="
 [[ $fail -eq 0 ]]
