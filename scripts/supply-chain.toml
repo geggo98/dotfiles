@@ -222,6 +222,19 @@ github = "google-antigravity/antigravity-cli"
 # pins, so a clean run means "this extension is still healthy upstream", not "the
 # installed version is healthy". Rules 1 and 3 — still there, still listed — are the
 # withdrawal signal, and those are what a date cannot give you.
+#
+# An entry may carry `pin = "<version>"` instead of relying on the cooldown walk. That
+# changes what "ok" means for it: rules 1 and 3 still apply to the PINNED version
+# specifically (still exists, still listed), rule 2 applies to it too (a hand-bumped pin
+# gets no exemption from the 14-day bar), and a newer non-prerelease version upstream is
+# now itself a finding (PIN_BEHIND) rather than silence — the point of a hard pin is that
+# nothing moves without a human reading this comment and the one in modules/vscode.nix.
+# Added 2026-09-27 for lucax88x.codeacejumper, whose upstream has carried an open
+# "maintainer wanted" issue since 2022 — see the pin's full audit trail in
+# modules/vscode.nix, next to the `codeAceJumper` binding. The two `pin` values (here and
+# in modules/vscode.nix's `version`) are enforced equal by an assertion in that file; they
+# are two separate copies of the same fact because this file has no business granting
+# itself a hash pin.
 
 [[extensions]]
 id = "bierner.markdown-mermaid"

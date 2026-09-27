@@ -130,12 +130,14 @@ CHANNEL = "channel"      # Hydra-gated channel head — see below         (SUCCE
 OK = "ok"                # audit: clears the bar and still exists       (SUCCESS)
 TOO_NEW = "too_new"      # audit: younger than the bar                  (FINDING)
 WITHDRAWN = "withdrawn"  # yanked / unpublished / 404 / deprecated      (FINDING)
+PIN_BEHIND = "pin_behind"  # audit: hard-pinned, upstream has a newer   (FINDING)
+                            # release — review before bumping the pin
 IMMUTABLE = "immutable"  # tag/rev pin — flake update cannot move it    (SKIP)
 FROZEN = "frozen"        # explicitly excluded by the manifest          (SKIP)
 UNSUPPORTED = "unsupported"  # not a datable input type                 (SKIP)
 FAILED = "failed"        # lookup or lock error                         (ERROR)
 
-FINDING_CATEGORIES = {TOO_NEW, WITHDRAWN}
+FINDING_CATEGORIES = {TOO_NEW, WITHDRAWN, PIN_BEHIND}
 
 # A nixpkgs CHANNEL branch (nixos-26.05, nixos-unstable, …) must never get a commit
 # cooldown, and this is not a preference — it produces a worse revision.
@@ -505,10 +507,11 @@ def openvsx_pick(namespace: str, name: str, cutoff: datetime
         f"sit beyond the cap.")
 
 
-def vsmarketplace_pick(namespace: str, name: str, cutoff: datetime
-                       ) -> tuple[str, datetime, list[str]]:
-    """Same policy against the MS Marketplace gallery API. Versions repeat per
-    targetPlatform, so they are deduped, and pre-releases are skipped as on Open VSX."""
+def vsmarketplace_versions(namespace: str, name: str) -> tuple[dict[str, datetime], list[str]]:
+    """All non-prerelease, deduped {version: lastUpdated} for namespace.name on the MS
+    Marketplace. Caller decides what to do with the set — vsmarketplace_pick walks it
+    newest-first for the cooldown bar; check_extension's `pin` path looks up one entry
+    directly. Raises ToolError only when the extension itself is gone (rule 1)."""
     # flags = IncludeVersions(1) | IncludeFiles(2) | IncludeCategoryAndTags(16)
     #       | IncludeVersionProperties(32) | IncludeAssetUri(128) | IncludeStatistics(256)
     #
@@ -560,6 +563,14 @@ def vsmarketplace_pick(namespace: str, name: str, cutoff: datetime
         seen[ver] = iso(raw)
     if prerelease:
         notes.append(f"{prerelease} pre-release version(s) skipped")
+    return seen, notes
+
+
+def vsmarketplace_pick(namespace: str, name: str, cutoff: datetime
+                       ) -> tuple[str, datetime, list[str]]:
+    """Same policy against the MS Marketplace gallery API: newest release version that
+    clears the cooldown."""
+    seen, notes = vsmarketplace_versions(namespace, name)
     for ver, when in sorted(seen.items(), key=lambda kv: kv[1], reverse=True):
         if when <= cutoff:
             return ver, when, notes
@@ -567,12 +578,55 @@ def vsmarketplace_pick(namespace: str, name: str, cutoff: datetime
                     f"(newest {len(seen)} release versions are all inside the cooldown)")
 
 
-def check_extension(ext_id: str, registry: str, cutoff: datetime, now: datetime
-                    ) -> tuple[str, str, str]:
-    """-> (category, ext_id, detail)."""
+def check_extension(ext_id: str, registry: str, cutoff: datetime, now: datetime,
+                    pin: str | None = None) -> tuple[str, str, str]:
+    """-> (category, ext_id, detail).
+
+    Without `pin` (the common case): resolve the newest version that clears the cooldown
+    and is still listed — the openvsx_pick / vsmarketplace_pick walk.
+
+    With `pin` (lucax88x.codeacejumper, see modules/vscode.nix): the version is fixed
+    elsewhere by a Nix hash pin, so this asks a different question about that ONE fixed
+    version — still listed (rules 1/3), still old enough (rule 2: a hand-bumped pin gets
+    no exemption from the cooldown), and not itself behind a newer non-prerelease release
+    upstream. That last case is new — PIN_BEHIND — and it is the point of pinning: a
+    newer release must be reviewed and adopted by a human editing both the hash and the
+    `pin` field, never absorbed silently the way the cooldown walk absorbs one.
+    """
     if "." not in ext_id:
         return FAILED, ext_id, "id must be <namespace>.<name>"
     namespace, name = ext_id.split(".", 1)
+
+    if pin is not None:
+        if registry != "vscode-marketplace":
+            return FAILED, ext_id, (
+                f'pin = "{pin}" is only implemented for registry = "vscode-marketplace" '
+                f'(got "{registry}") — no extension has needed an Open VSX hard pin yet')
+        try:
+            seen, notes = vsmarketplace_versions(namespace, name)
+        except ToolError as e:
+            return WITHDRAWN, ext_id, str(e)
+        if pin not in seen:
+            return WITHDRAWN, ext_id, (f"pinned {pin} is no longer listed on the "
+                                       f"Marketplace — withdrawn or renamed")
+        when = seen[pin]
+        if when > cutoff:
+            return TOO_NEW, ext_id, (
+                f"pinned {pin} ({when:%Y-%m-%d}, {age_days(when, now):.1f}d) is younger "
+                f"than the {(now - cutoff).days}d bar")
+        newer = {v: w for v, w in seen.items() if w > when}
+        if newer:
+            latest_ver, latest_when = max(newer.items(), key=lambda kv: kv[1])
+            return PIN_BEHIND, ext_id, (
+                f"pinned {pin} ({when:%Y-%m-%d}) — upstream has {latest_ver} "
+                f"({latest_when:%Y-%m-%d}, {age_days(latest_when, now):.1f}d); review "
+                f"before bumping the pin")
+        detail = (f"pinned {pin} ({when:%Y-%m-%d}, {age_days(when, now):.1f}d) is the "
+                  f"newest release and still listed")
+        if notes:
+            detail += "  [" + "; ".join(notes) + "]"
+        return OK, ext_id, detail
+
     pick = openvsx_pick if registry == "open-vsx" else vsmarketplace_pick
     try:
         ver, when, notes = pick(namespace, name, cutoff)
@@ -596,12 +650,13 @@ LABEL = {
     OK: "ok — old enough and still published",
     TOO_NEW: "TOO NEW — inside the cooldown",
     WITHDRAWN: "WITHDRAWN UPSTREAM",
+    PIN_BEHIND: "PINNED — upstream published a newer version; review before bumping",
     IMMUTABLE: "skipped — immutable pin",
     FROZEN: "skipped — frozen",
     UNSUPPORTED: "skipped — cannot be dated",
     FAILED: "ERROR",
 }
-ORDER = [WITHDRAWN, TOO_NEW, COOLED, CHANNEL, OK, CURRENT, HELD_NEWER,
+ORDER = [WITHDRAWN, PIN_BEHIND, TOO_NEW, COOLED, CHANNEL, OK, CURRENT, HELD_NEWER,
          IMMUTABLE, FROZEN, UNSUPPORTED, FAILED]
 
 
@@ -936,7 +991,7 @@ def cmd_audit(args, manifest, now, token) -> int:
                   f"with `just audit-extensions <id>…`.")
         else:
             rows = [check_extension(e["id"], e.get("registry", "open-vsx"),
-                                    cutoff, now) for e in todo]
+                                    cutoff, now, pin=e.get("pin")) for e in todo]
             c = render("layer 3 — VS Code extensions "
                        f"({ext_days}d bar, must still be published)", rows)
             findings += sum(c.get(k, 0) for k in FINDING_CATEGORIES)
