@@ -430,7 +430,7 @@ The general set is pinned in `modules/vscode.nix` via `nix-vscode-extensions`; a
 with a language toolchain is project-specific (`.vscode/extensions.json`). VS Code itself
 stays a Homebrew cask, deliberately not nixpkgs (unfree, would be built locally and
 pushed into the public R2 cache). After a switch, verify with
-`find ~/.vscode/extensions -maxdepth 1 -type l ! -name '.*' | wc -l` (expect 18) — not
+`find ~/.vscode/extensions -maxdepth 1 -type l ! -name '.*' | wc -l` (expect 19) — not
 `ls -l | grep '->'`, which silently reports 0 here because the interactive `ls` alias
 renders symlinks with `⇒`. `settings.json` is a read-only `/nix/store` symlink; a write
 attempt fails silently in the UI (only the renderer log shows `EACCES`) — see

@@ -277,6 +277,13 @@ id = "jnoortheen.nix-ide"
 registry = "open-vsx"
 
 [[extensions]]
+# Hash-pinned in modules/vscode.nix, not consumed from `vsmp` — see the `pin` note above
+# this section and the audit trail next to the `codeAceJumper` binding in that file.
+id = "lucax88x.codeacejumper"
+registry = "vscode-marketplace"      # not on Open VSX at all (404)
+pin = "3.4.0"
+
+[[extensions]]
 id = "marclipovsky.string-manipulation"
 registry = "open-vsx"
 

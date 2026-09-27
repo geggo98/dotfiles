@@ -10,10 +10,11 @@ project-specific and belongs in that project's `.vscode/extensions.json`. This s
 the one `scripts/supply-chain.toml` writes down: *"Nix manages the default extension
 set; further extensions go in each project's `.vscode` metadata."*
 
-## Managed by Nix (18)
+## Managed by Nix (19)
 
 Declared in `modules/vscode.nix`, audited by `just audit-extensions`, cooled down by the
-age of the `nix-vscode-extensions` input.
+age of the `nix-vscode-extensions` input — except `lucax88x.codeacejumper`, which is
+hash-pinned outside that input; see below.
 
 | Group | Extensions |
 |---|---|
@@ -21,7 +22,7 @@ age of the `nix-vscode-extensions` input.
 | Containers, Kubernetes | `docker.docker`, `ms-azuretools.vscode-containers`, `ms-kubernetes-tools.vscode-kubernetes-tools` |
 | Git | `eamodio.gitlens` |
 | This repo's own languages | `jnoortheen.nix-ide`, `redhat.vscode-yaml`, `bmalehorn.vscode-fish` |
-| Editor comfort | `vscode-icons-team.vscode-icons`, `christian-kohler.path-intellisense`, `marclipovsky.string-manipulation`, `ms-vscode.hexeditor`, `deerawan.vscode-dash` |
+| Editor comfort | `vscode-icons-team.vscode-icons`, `christian-kohler.path-intellisense`, `marclipovsky.string-manipulation`, `ms-vscode.hexeditor`, `deerawan.vscode-dash`, `lucax88x.codeacejumper` |
 
 Plus `local-turbo-vision-theme`, which is built from files in this repo and exists in no
 registry.
@@ -44,6 +45,11 @@ versions without any error. Measured 2026-08-26 against both registries:
 ¹ `nix-vscode-extensions` pinned 2.1.2 at first; 2.2.0 needed a deliberate cooldown
 override to fix a real bug — see "root cause was a vstirbu bug" below.
 
+`lucax88x.codeacejumper` is not in this table on purpose: it comes from neither `ovsx`
+nor `vsmp`, so this registry comparison does not apply to it. It is also on the
+Marketplace only (Open VSX 404s), but for a different reason than the six above — see
+"Hash-pinned outside `nix-vscode-extensions`" below.
+
 Two more facts from the same measurement:
 
 - **Use the `-release` attribute sets.** `open-vsx` and `vscode-marketplace` include
@@ -54,6 +60,61 @@ Two more facts from the same measurement:
   keyed on the lowercase id makes `ms-vsliveshare.vsliveshare` look withdrawn; the
   publisher is canonically `MS-vsliveshare`. Match case-insensitively before concluding
   an extension is gone.
+
+### Hash-pinned outside `nix-vscode-extensions`: `lucax88x.codeacejumper`
+
+Added 2026-09-27 for AceJump-style cursor jumping, matched to IntelliJ's CodeAceJumper
+keybindings (see `profiles.default.keybindings` in `modules/vscode.nix`). Every other
+managed extension rides the dated `nix-vscode-extensions` snapshot: `just update` moves
+the whole set forward once the revision clears the 14-day bar, and no human looks at any
+one extension's version when that happens. That posture is wrong here: the upstream
+repo (`github.com/lucax88x/CodeAceJumper`) has carried an open "maintainer wanted" issue
+(#439) since 2022-01-31 — exactly the situation in which open-source projects get taken
+over by a new, malicious maintainer. A silent bump two weeks after a takeover is the
+failure this pin exists to prevent, for an extension that activates on every VS Code
+start (`activationEvents: ["*"]`) and has few enough installs (28k) that something wrong
+might go unnoticed for a while.
+
+So this one extension is pinned by content hash in `modules/vscode.nix`
+(`pkgs.vscode-utils.extensionFromVscodeMarketplace`, not `vsmp.…`), and moves only when a
+human edits both the version and the hash after repeating the audit below. An assertion
+in that file ties the pin to `scripts/supply-chain.toml`'s `[[extensions]]` entry for the
+same id (its `pin` field), so the two cannot drift apart unnoticed.
+
+**Audited 2026-09-27, version 3.4.0** — the only version published, and only on the
+Marketplace (Open VSX 404s):
+
+- No git tag exists for 3.4.0. It matches `master@866e983` (PR #443, merged
+  2025-06-25T14:07:07Z, published to the Marketplace 17 minutes later). The VSIX's
+  `package.json` is byte-identical to master's except for `version`.
+- `dist/extension.js` — one bundled, minified line, 76 KB — calls exactly one `require`:
+  `require("vscode")`. No `child_process`, no `http`/`https`/`fetch`, no `eval`/`new
+  Function`, no `process.env`, no base64/`atob` decoding.
+- The VSIX bundles `node_modules` (`lodash@4.17.21`, `ramda@0.26.1`,
+  `xmlbuilder@13.0.2`), but the bundled `extension.js` never loads it — those packages
+  ship alongside the extension without being pulled into the built output. lodash carries
+  two current advisories (GHSA-xxjr-mmjv-4gpg, GHSA-r5fr-rjxr-66jc), both in
+  `_.unset`/`_.omit`/`_.template`; none of the three appear in the bundle.
+- The hash in `modules/vscode.nix` was obtained by downloading the VSIX directly from
+  `lucax88x.gallery.vsassets.io` and hashing it, then cross-checked against
+  `nix-vscode-extensions` rev `41316674b7` (2026-09-08)'s own cache — both agree.
+
+**Updating the pin.** Repeat this whole audit against the new version before touching
+`modules/vscode.nix`:
+
+```bash
+curl -sSL -o acejump.vsix \
+  'https://lucax88x.gallery.vsassets.io/_apis/public/gallery/publisher/lucax88x/extension/codeacejumper/<version>/assetbyname/Microsoft.VisualStudio.Services.VSIXPackage'
+unzip -o -q acejump.vsix -d x
+```
+
+Then: does a matching git tag exist, and if not, which commit does `package.json` match
+and who merged it; does `dist/extension.js` still call only `require("vscode")`; does the
+bundled `node_modules` still go unused; hash the VSIX
+(`openssl dgst -sha256 -binary acejump.vsix | perl -MMIME::Base64 -0777 -ne 'print
+"sha256-" . encode_base64($_, "")'`). Only then update `version` and `hash` together in
+`modules/vscode.nix`, and `pin` in `scripts/supply-chain.toml` in the same change — the
+assertion in `modules/vscode.nix` fails the build otherwise.
 
 ## Deliberately NOT managed (3)
 
@@ -221,6 +282,14 @@ python3 scripts/supply-chain.py audit --extensions-only \
 The `just` recipe always asks Open VSX; the marketplace needs the script directly,
 because `--registry` applies to the whole invocation rather than per id.
 
+**Adding one that should be hash-pinned instead** (an orphaned or low-visibility
+extension — see the reasoning under "Hash-pinned outside `nix-vscode-extensions`"
+above): use `pkgs.vscode-utils.extensionFromVscodeMarketplace { publisher; name;
+version; hash; }` in `modules/vscode.nix` rather than `vsmp.…`/`ovsx.…`, and give
+`[[extensions]]` a `pin = "<version>"` alongside its `registry` in
+`scripts/supply-chain.toml`. Do the audit described in that section before ever setting
+the hash — a hash pin is exactly as strong as the review that produced it.
+
 **Moving the set forward.** `just update` advances `nix-vscode-extensions` to the newest
 revision at least 14 days old, which is what gives every extension its cooldown. There
 are no version strings to edit.
@@ -230,12 +299,12 @@ because VS Code loads the higher version and the gallery copy carries a version 
 in its directory name while the Nix one does not. The pin then exists and does nothing.
 
 ```bash
-find ~/.vscode/extensions -maxdepth 1 -type l ! -name '.*' | wc -l   # expect 18
+find ~/.vscode/extensions -maxdepth 1 -type l ! -name '.*' | wc -l   # expect 19
 ls ~/.vscode/extensions | grep -E '^(docker\.docker|eamodio\.gitlens)-'  # expect nothing
 ```
 
 `! -name '.*'` excludes `.nix-managed-extensions.json`, the hook's trigger file, which is
-a symlink too — without it the count is 19 and the check fails on a healthy machine.
+a symlink too — without it the count is 20 and the check fails on a healthy machine.
 
 `find`, deliberately, not `ls -l | grep -- '->'`: the latter reported 0 on a correctly
 switched machine because the interactive `ls` renders symlinks with `⇒`. A shell alias

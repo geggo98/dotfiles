@@ -20,6 +20,56 @@
       ovsx = pkgs.nix-vscode-extensions.open-vsx-release;
       vsmp = pkgs.nix-vscode-extensions.vscode-marketplace-release;
 
+      # lucax88x.codeacejumper — hash-pinned OUTSIDE nix-vscode-extensions, deliberately.
+      # Every other extension in this file rides the dated snapshot: `just update` moves
+      # it forward once the whole revision clears the 14-day bar, with no human looking at
+      # the individual version. That is the wrong posture here. The upstream repo has
+      # carried an open "Maintainer wanted" issue since 2022-01-31
+      # (github.com/lucax88x/CodeAceJumper/issues/439) — exactly the situation in which
+      # open-source projects get taken over by a malicious new maintainer, per the user.
+      # A silent version bump two weeks after a takeover is the failure mode to prevent,
+      # for an extension with `activationEvents: ["*"]` (loads on every VS Code start) and
+      # only 28k installs to notice something wrong.
+      #
+      # So: a content hash pin (nix build fails on any byte difference from what was
+      # audited below), not a registry lookup. `just audit-extensions` still runs against
+      # it (scripts/supply-chain.toml's `pin` field), but it now asks "is 3.4.0 still the
+      # newest release and still listed", not "what is newest and how old is it" — see
+      # PIN_BEHIND in scripts/supply-chain.py. Bumping the version means repeating the
+      # audit below, not just editing a number.
+      #
+      # Audited 2026-09-27, version 3.4.0 (the only version on the VS Marketplace; not on
+      # Open VSX at all — 404):
+      #   - no git tag for 3.4.0; matches master@866e983 (PR #443, merged 2025-06-25
+      #     14:07:07Z, published 17 minutes later at 14:24:56Z). package.json in the VSIX
+      #     is identical to master's except `version`.
+      #   - dist/extension.js (76 KB, one bundled line) calls only `require("vscode")` —
+      #     no child_process, no http/fetch, no eval, no process.env, no atob/base64.
+      #   - bundled node_modules (lodash 4.17.21, ramda 0.26.1, xmlbuilder 13.0.2) is never
+      #     loaded from the bundle; lodash's two current advisories (GHSA-xxjr-mmjv-4gpg,
+      #     GHSA-r5fr-rjxr-66jc) are in `_.unset`/`_.omit`/`_.template`, none of which the
+      #     bundle calls.
+      #   - hash below downloaded directly from gallery.vsassets.io and confirmed to match
+      #     nix-vscode-extensions rev 41316674b7 (2026-09-08)'s cache entry independently.
+      codeAceJumper = pkgs.vscode-utils.extensionFromVscodeMarketplace {
+        publisher = "lucax88x";
+        name = "codeacejumper";
+        version = "3.4.0";
+        hash = "sha256-zJNhifpThxktVB6IoLfVhFAxCn9e49c1CVefWcC8rAQ=";
+      };
+
+      # Drift guard for the pin above: scripts/supply-chain.toml carries its OWN copy of
+      # the version, under [[extensions]] id = "lucax88x.codeacejumper", so
+      # `just audit-extensions` can ask "is this still the newest release" (PIN_BEHIND in
+      # scripts/supply-chain.py) without this file granting it write access to a hash pin.
+      # Two independent copies of the same fact drift exactly when only one is edited —
+      # the assertion below is what turns that into a build failure instead of a silent
+      # mismatch.
+      supplyChainManifest = builtins.fromTOML (builtins.readFile ../scripts/supply-chain.toml);
+      codeAceJumperAudit = lib.findFirst (e: (e.id or null) == "lucax88x.codeacejumper")
+        null
+        (supplyChainManifest.extensions or [ ]);
+
       # Same wrapper shape as mkZshScript in modules/nix-cache.nix. PATH is set
       # explicitly rather than inherited: an activation script gets almost none, and the
       # script's python3 must not depend on what happens to be installed.
@@ -106,6 +156,7 @@
         ovsx.marclipovsky.string-manipulation
         ovsx.ms-vscode.hexeditor
         vsmp.deerawan.vscode-dash # not on Open VSX at all (404)
+        codeAceJumper # hash-pinned, not from vsmp/ovsx — see the binding above
       ];
 
       # Named rather than inline so the Settings Sync ignore list below can be
@@ -238,6 +289,13 @@
 
         "claudeCode.preferredLocation" = "sidebar";
         "excalidraw.theme" = "auto";
+
+        # AceJump, matched to the IntelliJ AceJump behaviour these keybindings mirror
+        # (see profiles.default.keybindings below). Defaults are onlyInitialLetter=true
+        # (word-initial letters only) and jumpToLineEndings=false (line-start marks only);
+        # both are the opposite of IntelliJ's default reach.
+        "aceJump.finder.onlyInitialLetter" = false; # match anywhere in the text, not just word starts
+        "aceJump.finder.jumpToLineEndings" = true; # Line mode marks both line start AND end
         "github.copilot.chat.claudeAgent.enabled" = true;
         "gitlens.plusFeatures.enabled" = false;
         "gitlens.showWhatsNewAfterUpgrades" = false;
@@ -248,6 +306,22 @@
       };
     in
     {
+      assertions = [
+        {
+          assertion = codeAceJumperAudit != null
+            && (codeAceJumperAudit.pin or null) == codeAceJumper.version;
+          message = ''
+            modules/vscode.nix pins lucax88x.codeacejumper at version
+            "${codeAceJumper.version}", but scripts/supply-chain.toml's [[extensions]]
+            entry for id = "lucax88x.codeacejumper" names pin =
+            "${toString (codeAceJumperAudit.pin or null)}" (or that entry is missing
+            entirely). The two must always agree -- when bumping the version, edit both
+            in the same change, after repeating the audit documented next to the
+            codeAceJumper binding in this file.
+          '';
+        }
+      ];
+
       programs.vscode = {
         enable = true;
 
@@ -292,6 +366,60 @@
             "settingsSync.ignoredSettings" = builtins.attrNames
               (managedSettings // { "extensions.autoCheckUpdates" = false; });
           };
+
+          # Nix-managed keybindings.json (a list here, not a path) turns it into a
+          # read-only /nix/store symlink, same as userSettings above — home-manager backs
+          # up the old file as keybindings.json.hm.bak (backupFileExtension in
+          # modules/home-manager-darwin.nix). Editing a shortcut in the VS Code UI after
+          # this will fail silently the same way a settings.json edit does; see
+          # `just vscode-settings-check`.
+          #
+          # The first two reproduce what keybindings.json already held by hand. The rest
+          # map codeAceJumper's four commands (extension.aceJump{,.multiChar,.line,
+          # .selection}, see the binding above) onto the IntelliJ CodeAceJumper shortcuts
+          # in the screenshot the user supplied — this extension has no built-in defaults
+          # at all, unlike IntelliJ's plugin. Not mapped: IntelliJ's "Reverse Cycle" and
+          # the "All Line Ends/Indents/Starts" modes, none of which this extension has a
+          # command for, and the mode-cycle-on-repeated-press behaviour, which this
+          # extension does not implement either — each press re-triggers the same jump.
+          # F19 alone (no modifier) is Escape via Hammerspoon's nix_f19.lua, which the
+          # extension's own `escape` keybinding (package.json) uses to cancel a pending
+          # jump; F19 with a modifier passes through unchanged, so shift+f19 reaches VS
+          # Code as such.
+          keybindings = [
+            {
+              key = "cmd+`";
+              command = "workbench.action.terminal.toggleTerminal";
+              when = "editorTextFocus";
+            }
+            {
+              key = "cmd+`";
+              command = "workbench.action.terminal.toggleTerminal";
+              when = "terminalFocus";
+            }
+            {
+              # IntelliJ: "Activate / Cycle AceJump Mode"
+              key = "ctrl+;";
+              command = "extension.aceJump.multiChar";
+              when = "editorTextFocus";
+            }
+            {
+              key = "shift+f19";
+              command = "extension.aceJump.multiChar";
+              when = "editorTextFocus";
+            }
+            {
+              # IntelliJ: "Start AceJump in All Line Marks Mode"
+              key = "shift+cmd+;";
+              command = "extension.aceJump.line";
+              when = "editorTextFocus";
+            }
+            {
+              key = "ctrl+shift+;";
+              command = "extension.aceJump.line";
+              when = "editorTextFocus";
+            }
+          ];
         };
       };
 

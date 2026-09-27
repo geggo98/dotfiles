@@ -31,6 +31,16 @@ date cannot give. Be precise about its limit: it resolves its **own** candidate 
 from the registry, not the one `nix-vscode-extensions` pins, so a clean run means "still
 healthy upstream", not "the installed version is healthy".
 
+**One extension skips the dated snapshot entirely.** `lucax88x.codeacejumper` is
+hash-pinned straight from the VS Marketplace in `modules/vscode.nix`
+(`vscode-utils.extensionFromVscodeMarketplace`), not consumed from `vsmp`/`ovsx` — its
+upstream has carried an open "maintainer wanted" issue since 2022, and a takeover there
+must not ride in silently on the next `just update`. `[[extensions]]`'s `pin` field
+changes what "ok" means for that one row: the audit checks the FIXED pinned version
+(still listed, still old enough) and adds a new finding, `PIN_BEHIND`, when upstream has
+since published something newer — a nudge to review, not an automatic adoption. Full
+audit trail: `modules/_files/vscode/EXTENSIONS.md`.
+
 **VS Code itself deliberately stays on the Homebrew cask**, and `programs.vscode.package`
 is `null` — a supported value, since the home-manager module gates `home.packages` on
 `cfg.package != null` and takes the `.vscode` directory name from its caller, not from
@@ -51,7 +61,7 @@ so a leftover gallery copy silently wins and the Nix pin does nothing. That is w
 uninstalls the gallery copies first, and why the check after a switch is:
 
 ```bash
-find ~/.vscode/extensions -maxdepth 1 -type l ! -name '.*' | wc -l   # expect 18
+find ~/.vscode/extensions -maxdepth 1 -type l ! -name '.*' | wc -l   # expect 19
 ```
 
 The `! -name '.*'` is load-bearing, not tidiness: `.nix-managed-extensions.json` — the
@@ -102,6 +112,12 @@ UI says so beyond a toast — the evidence is one line in
 [error] Unable to write file 'vscode-userdata:…/User/settings.json'
         (EntryWriteLocked (FileSystemError): EACCES: permission denied)
 ```
+
+`keybindings.json` joined it as a second read-only symlink once
+`profiles.default.keybindings` gained entries (added for `lucax88x.codeacejumper`'s
+AceJump shortcuts). Same mechanism, same failure mode: rebinding a key in the Keyboard
+Shortcuts UI fails silently, and the same `EACCES` line appears with `keybindings.json`
+in place of `settings.json`. `just vscode-settings-check` watches both files.
 
 **A setting whose TYPE changed upstream is the usual cause, and it is invisible in the
 value.** Measured 2026-08-26 against VS Code 1.134.0: `extensions.autoUpdate` was written

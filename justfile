@@ -566,7 +566,8 @@ show-derivation:
 # Reads the NEWEST log session only, and refuses to call a session that predates the
 # last switch clean: "VS Code has not started since" must not read as "nothing wrong".
 #
-# Has VS Code tried to write the Nix-managed settings.json? (reads the newest log)
+# Has VS Code tried to write a Nix-managed settings.json or keybindings.json? (reads the
+# newest log)
 vscode-settings-check:
     #!/bin/zsh
     set -euo pipefail
@@ -612,21 +613,26 @@ vscode-settings-check:
         exit 2
     fi
 
-    matched=$(perl -ne 'print if m{Unable to write file .*/User/settings\.json}' "${files[@]}" || true)
+    # keybindings.json joined settings.json as a read-only /nix/store symlink once
+    # profiles.default.keybindings was populated (modules/vscode.nix, for codeAceJumper's
+    # shortcuts) — same failure shape, so the same check covers both files.
+    matched=$(perl -ne 'print if m{Unable to write file .*/User/(?:settings|keybindings)\.json}' "${files[@]}" || true)
     count=$(print -r -- "$matched" | perl -ne '$n++ if /\S/; END { print $n // 0 }')
 
     if (( count == 0 )); then
-        echo "clean: no write attempts against settings.json in session ${session:t} ($when),"
-        echo "across ${#files} log file(s). VS Code and the Nix-managed settings agree."
+        echo "clean: no write attempts against settings.json or keybindings.json in session"
+        echo "${session:t} ($when), across ${#files} log file(s). VS Code and the"
+        echo "Nix-managed files agree."
         exit 0
     fi
 
-    echo "$count write attempt(s) against the read-only settings.json in session ${session:t} ($when):" >&2
+    echo "$count write attempt(s) against a read-only settings.json/keybindings.json in session ${session:t} ($when):" >&2
     print -r -- "$matched" | perl -ne 'print if $. <= 3' | cut -c1-160 >&2
     echo "" >&2
     echo "Something wants a value the Nix config does not produce. Compare what VS Code" >&2
-    echo "would save (Settings editor -> open settings.json, it shows the pending value)" >&2
-    echo "against modules/vscode.nix, and check userDataSync.log for a Settings Sync loop." >&2
+    echo "would save (Settings editor -> open settings.json, it shows the pending value;" >&2
+    echo "Keyboard Shortcuts -> open keybindings.json for the other) against" >&2
+    echo "modules/vscode.nix, and check userDataSync.log for a Settings Sync loop." >&2
     exit 1
 
 # --- Store maintenance ---
