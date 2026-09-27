@@ -37,6 +37,23 @@ if [[ -z "$code" ]]; then
   exit 1
 fi
 
+# Sampled BEFORE the regeneration below, deliberately: this is the case a rescan cannot
+# fix on its own. A window's extension host reads extensions.json once, at its own
+# startup, and never again — so a window already open at this point has ALREADY fixed
+# its extension list in memory, and everything this script does from here on happens
+# invisibly to it. Measured 2026-09-27: a window whose exthost started one minute before
+# this script's rewrite of extensions.json never activated the extension this run added
+# (not even as an error — it simply never appears in that session's exthost.log), and
+# `command '…' not found` was the only symptom. `-x` matches the exact process name
+# (macOS's `Code`, not Linux's 15-char-truncated comm), which is what excludes the
+# `Code Helper (Renderer)`/`Code Helper (GPU)`/`Code Helper (Plugin)` subprocesses and
+# the unrelated `chrome_crashpad_handler` — a plain `-f` substring match on the app
+# bundle path would catch all of those too, since they live under the same `.app`.
+already_running=0
+if pgrep -x Code >/dev/null 2>&1; then
+  already_running=1
+fi
+
 # THE TRAP THIS GUARD EXISTS FOR. Uninstalling an extension only queues its directory in
 # .obsolete; VS Code deletes it at its next start. A rescan performed while the queue is
 # non-empty picks those directories up again — and since they carry a version suffix
@@ -76,3 +93,11 @@ import json, sys
 print(len(json.load(open(sys.argv[1]))))
 ' "$extdir/extensions.json" 2>/dev/null) || n="?"
 print -u2 -- "OK: extensions.json regenerated — $n extensions registered."
+
+if (( already_running )); then
+  print -u2 -- "NOTE: VS Code is currently running and was already open before this"
+  print -u2 -- "      regeneration. Its open window(s) read their extension list once, at"
+  print -u2 -- "      their own startup, and will NOT see this change until reloaded"
+  print -u2 -- "      (Cmd+Shift+P -> Developer: Reload Window) or the app is quit and"
+  print -u2 -- "      reopened."
+fi

@@ -296,6 +296,34 @@
         # both are the opposite of IntelliJ's default reach.
         "aceJump.finder.onlyInitialLetter" = false; # match anywhere in the text, not just word starts
         "aceJump.finder.jumpToLineEndings" = true; # Line mode marks both line start AND end
+
+        # Without this, codeAceJumper never activates in an untrusted workspace (this
+        # repo, opened fresh, is one by default) — and does so SILENTLY: no error, no
+        # log line anywhere, it simply never appears in the eager-activation list.
+        # Confirmed 2026-09-27 directly against the installed 1.135.0 build's own source
+        # (workbench.desktop.main.js): `getExtensionUntrustedWorkspaceSupportType` returns
+        # the manifest's declared `capabilities.untrustedWorkspaces.supported` and, absent
+        # one, falls through to a default of `false` for any extension that has a `main`
+        # entry point (i.e. runs code at all) — codeAceJumper has `main` and declares no
+        # `capabilities` block, so it gets the conservative default. This user setting is
+        # VS Code's own documented per-extension override for exactly that gap (Extensions
+        # view: "Manage Workspace Trust" does the same thing through the UI).
+        #
+        # Granting it is consistent with the audit already on file next to the
+        # `codeAceJumper` binding above: the bundle calls only `require("vscode")` — no
+        # child_process, no network, no eval, no filesystem access beyond the extension
+        # API — which is exactly the profile workspace trust exists to gate.
+        #
+        # `version` pins the grant to the audited version, the same way the hash pin
+        # above does: bumping codeAceJumper's version without also updating this value
+        # makes VS Code revert to the conservative default until the grant is renewed,
+        # rather than carrying an old audit's trust forward onto unreviewed code.
+        "extensions.supportUntrustedWorkspaces" = {
+          "lucax88x.codeacejumper" = {
+            supported = true;
+            version = codeAceJumper.version;
+          };
+        };
         "github.copilot.chat.claudeAgent.enabled" = true;
         "gitlens.plusFeatures.enabled" = false;
         "gitlens.showWhatsNewAfterUpgrades" = false;

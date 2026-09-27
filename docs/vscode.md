@@ -97,6 +97,27 @@ Related, and the reason to check the directory rather than the exit code:
 `code --uninstall-extension` reported `OK` for `jrebocho.vscode-random` while its
 directory was neither deleted nor queued, and a later rescan registered it again.
 
+**The mirror-image case: a window already open when the regen runs.** Same root cause
+(a window's extension host reads `extensions.json` once, at its own startup, never
+again), opposite timing — instead of a window that predates the extension, one that was
+already running when `just switch` rewrote `extensions.json` underneath it. A window
+whose extension host started before the rewrite will not see it — not even as an error,
+the new extension simply never appears in that session's `exthost.log`. The regen script
+now samples `pgrep -x Code` **before** touching `extensions.json` and prints a `NOTE:`
+line if VS Code was already running, since this is invisible to the running window no
+matter how correct the regeneration is. The fix is the same as the first case: reload
+(`Cmd+Shift+P` → `Developer: Reload Window`) or quit and reopen.
+
+**This was NOT what actually happened when `lucax88x.codeacejumper` first showed
+`command '…' not found` on 2026-09-27**, which is worth recording precisely because the
+symptom is identical and it cost a round of the wrong diagnosis: a genuinely fresh
+window, started well after `extensions.json` was correct on disk, *still* didn't
+activate it — and still without a single log line anywhere. The actual cause was
+workspace trust, not staleness; see "It does not activate at all in an untrusted
+workspace, silently" in `modules/_files/vscode/EXTENSIONS.md`. Both failure modes
+produce the exact same symptom (present on disk, absent from every log, command not
+found) — a fresh window ruling out staleness is what tells them apart.
+
 `mutableExtensionsDir = true` keeps that directory real and writable, which is what lets
 project-specific extensions be installed into it by hand. The alternative — a single
 directory symlink — would make VS Code's own `extensions.json` unwritable.

@@ -99,6 +99,36 @@ Marketplace (Open VSX 404s):
   `lucax88x.gallery.vsassets.io` and hashing it, then cross-checked against
   `nix-vscode-extensions` rev `41316674b7` (2026-09-08)'s own cache — both agree.
 
+**It does not activate at all in an untrusted workspace, silently.** Discovered
+2026-09-27, right after the pin above first shipped: the extension was correctly
+installed (present in `extensions.json`, files on disk, no scan errors anywhere), yet
+absent from *every* log — not even in the eager-activation list, despite declaring
+`activationEvents: ["*"]` the same as several extensions that DID activate. Confirmed
+against the installed 1.135.0 build's own source
+(`getExtensionUntrustedWorkspaceSupportType` in `workbench.desktop.main.js`): an
+extension with a `main` entry point (i.e. one that runs code, as opposed to a
+declarative theme/grammar-only extension) that does not declare
+`capabilities.untrustedWorkspaces` in its manifest defaults to **not supported** in an
+untrusted workspace — and codeAceJumper declares no `capabilities` block at all. This is
+not specific to Nix or to this repo; it would happen with a marketplace install too. The
+fix is the per-extension user override VS Code itself exposes for exactly this gap
+(same effect as "Manage Workspace Trust" in the Extensions view), set in
+`managedSettings` next to the `aceJump.*` settings:
+
+```nix
+"extensions.supportUntrustedWorkspaces"."lucax88x.codeacejumper" = {
+  supported = true;
+  version = codeAceJumper.version;
+};
+```
+
+Granting it is covered by the same audit as the hash pin — no `child_process`, no
+network, no `eval`, nothing beyond the `vscode` API surface. The `version` field is not
+decorative: VS Code re-checks it against the installed version and reverts to the
+conservative default if they differ, so a version bump (which the hash-pin assertion
+already forces to go through `modules/vscode.nix`) does not silently carry an old
+audit's trust grant onto code nobody has reviewed yet.
+
 **Updating the pin.** Repeat this whole audit against the new version before touching
 `modules/vscode.nix`:
 
@@ -110,11 +140,15 @@ unzip -o -q acejump.vsix -d x
 
 Then: does a matching git tag exist, and if not, which commit does `package.json` match
 and who merged it; does `dist/extension.js` still call only `require("vscode")`; does the
-bundled `node_modules` still go unused; hash the VSIX
+bundled `node_modules` still go unused; does `capabilities.untrustedWorkspaces` still go
+undeclared (if a future version adds one, it — not this override — decides workspace
+trust, and this override may no longer be needed); hash the VSIX
 (`openssl dgst -sha256 -binary acejump.vsix | perl -MMIME::Base64 -0777 -ne 'print
 "sha256-" . encode_base64($_, "")'`). Only then update `version` and `hash` together in
-`modules/vscode.nix`, and `pin` in `scripts/supply-chain.toml` in the same change — the
-assertion in `modules/vscode.nix` fails the build otherwise.
+`modules/vscode.nix`, `pin` in `scripts/supply-chain.toml`, and the
+`extensions.supportUntrustedWorkspaces` entry's `version` — all in the same change; the
+assertion in `modules/vscode.nix` fails the build if the first two drift apart, and a
+missed third one silently re-blocks the extension in every untrusted workspace.
 
 ## Deliberately NOT managed (3)
 
