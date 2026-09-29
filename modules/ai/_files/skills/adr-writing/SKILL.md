@@ -151,6 +151,8 @@ Forbidden without justification:
 
 ## Related skills
 
+- **`grobdesign`**: for the surrounding high-level design (placement, interfaces,
+  flows); link the ADRs from its "Decisions" chapter.
 - **`technical-writing`**: how to write the context, decision and consequences
   this skill asks for. TL;DR first, German and English — see the note under
   "ADR Writing" above.
@@ -164,4 +166,4 @@ Skip ADRs when:
 - Purely tactical (implementation detail)
 - Team already aligned and context is obvious
 
-Document these decisions in code comments or design docs instead.
+Document these decisions in code comments or a `grobdesign` instead.
