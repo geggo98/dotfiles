@@ -148,42 +148,49 @@
     # from release binaries.
     nixpkgs-llm-agents.url = "github:numtide/llm-agents.nix";
 
-    # TEMPORARY PIN — claude-code 2.1.280. Consumed by modules/agents.nix.
+    # TEMPORARY PIN — claude-code 2.1.284. Consumed by modules/agents.nix.
     #
-    # Why: Claude Opus 5.5 (`claude-opus-5-5`). Per the upstream changelog 2.1.280
-    # adds it and makes it the default Opus model, so `settings.model = "opusplan"`
-    # in modules/agents.nix reaches it with no further change. The version is a
-    # hard floor on the CLIENT side, not a preference: an older build lists the
-    # model as "Opus 5.5 (disabled) — Update to 2.1.280+ to use Opus 5.5" in
-    # `/model` (anthropics/claude-code#96131). nixpkgs-llm-agents ships 2.1.250 at
-    # its locked rev and cannot reach 2.1.280 under its 14-day bar before
-    # 2026-10-06. Everything the previous pin existed for — Fable 5.1 from 2.1.257,
-    # the macOS launch fix from 2.1.258, and the heap chain before that — is
-    # contained in this one.
+    # Why: Claude Sonnet 5.5 (`claude-sonnet-5-5`). Per the upstream changelog
+    # 2.1.284 adds it and makes it the default Sonnet model on the Anthropic API,
+    # so `settings.model = "opusplan"` in modules/agents.nix reaches it on the
+    # execution half with no further change. Measured directly: the installed
+    # 2.1.280 bundle contains `claude-opus-5-5` (41 hits) but not
+    # `claude-sonnet-5-5` at all — 2.1.284 is a hard floor on the CLIENT side, not
+    # a preference. Everything the previous pin existed for — Opus 5.5 from
+    # 2.1.280, Fable 5.1 from 2.1.257, the macOS launch fix from 2.1.258 — is
+    # contained in this one; only the model catalog moved.
     #
-    # THE COOLDOWN UNDERCUT. 2.1.280 was published 2026-09-22 15:44Z — 1.1 days
-    # old against the 14-day bar scripts/supply-chain.toml gives this ecosystem.
-    # That is a deliberate undercut under AGENTS.md "Undercutting a cooldown:
-    # research first, fetch second", and the research was done while fetching
-    # nothing but metadata:
+    # THE COOLDOWN UNDERCUT. 2.1.284 was published to npm 2026-09-28 17:11:59Z —
+    # about 1 day old against the 14-day bar scripts/supply-chain.toml gives this
+    # ecosystem. Deliberate, under AGENTS.md "Undercutting a cooldown: research
+    # first, fetch second", researched from metadata only, no binary fetched:
     #
-    #   hashes.json at this rev == Anthropic's manifest.json for 2.1.280, all
-    #     three built platforms (darwin-arm64, linux-arm64, linux-x64). The five
-    #     platforms llm-agents does not build (darwin-x64, the two musl variants,
+    #   hashes.json at this rev == Anthropic's manifest.json for 2.1.284 (hex
+    #     checksums converted to SRI and diffed by hand), all three built
+    #     platforms (darwin-arm64, linux-arm64, linux-x64). The five platforms
+    #     llm-agents does not build (darwin-x64, the two musl variants,
     #     win32-x64, win32-arm64) stand in the manifest and are correctly absent
     #     from hashes.json
-    #   artifact still served: HTTP 200, 217_254_576 bytes,
-    #     last-modified 2026-09-22 15:42Z — two minutes before the npm publish
-    #   npm: listed, no `deprecated` flag, `time` entry intact. No attestations,
-    #     which is normal for THIS package — 2.1.258 carries none either — and is
-    #     therefore not the signal its absence would be for codex
-    #   OSV: 0 advisories affecting 2.1.280
-    #   no reporting of a live campaign against this package or its publisher;
-    #     what searches surface is the 2026-03-31 source leak (2.1.88) and its
-    #     coat-tail riders, and the defects filed against 2.1.280 itself are UI
-    #     and edge cases
+    #   artifact still served: HTTP 200, 226_563_088 bytes, last-modified
+    #     2026-09-28 17:07:19Z — 4 minutes before the npm publish; manifest
+    #     buildDate 02:36:51Z the same day
+    #   npm: listed, no `deprecated` flag, `time` entry intact, same publisher
+    #     account as 2.1.280 and 2.1.283. No attestations, which is normal for
+    #     THIS package — every prior version carries none either
+    #   GitHub release v2.1.284: published 2026-09-28 18:02Z, not draft, not
+    #     prerelease
+    #   OSV: 0 advisories for 2.1.284. GitHub Security Advisories for
+    #     anthropics/claude-code: none affect 2.1.284 (the newest, 2026-09-25,
+    #     is a Claude Desktop/Cowork issue, a different product)
+    #   no reporting of a live campaign against this package or its publisher as
+    #     of 2026-09-29; what searches surface is the 2026-03-31 source leak
+    #     (2.1.88) and its coat-tail riders (the axios trojan) and the August
+    #     2026 ChainDrop campaign, all third-party packages, not this one
+    #   upstream issues mentioning "2.1.284": all UI/edge-case bugs; the one
+    #     open security-adjacent report (#97854, auto-mode classifier returning
+    #     no verdict) is server-side and version-independent
     #
-    # WHAT THE HASH COMPARISON PROVES is unchanged from the 2.1.258 pin and still
+    # WHAT THE HASH COMPARISON PROVES is unchanged from the 2.1.280 pin and still
     # worth stating, because it is easy to overclaim: llm-agents' updater is
     # `kind = "manifest-checksums"` with
     # `checksumPath = "platforms.{platform}.checksum"`, so it DERIVES its hashes
@@ -192,32 +199,37 @@
     # commit pointing at someone else's binary would fail it. It says nothing
     # about Anthropic's own release.
     #
-    # A SECOND SOURCE DID ARRIVE, and it rides along with this bump. Upstream's
-    # "claude-code: pin the Developer ID signature to Anthropic PBC" (2026-09-16)
-    # adds `codesignCheckHook` with `codesignTeamId = "Q6L2SF6YDW"` over
-    # `source.darwinSrcs`, so the build now verifies the downloaded artifact's
-    # Apple Developer ID. That chain is Apple's, not Anthropic's manifest — which
-    # is exactly the gap the paragraph above describes. Note it checks the SOURCE:
-    # the installed binary carries no signature, because nixpkgs' darwin fixup
-    # rewrites it after the check.
+    # THE SECOND SOURCE (Apple's Developer ID, via `codesignCheckHook` +
+    # `codesignTeamId = "Q6L2SF6YDW"` over `source.darwinSrcs`, added upstream
+    # 2026-09-16) is unchanged by this bump — package.nix itself did not move
+    # between the two pinned revs, only hashes.json did — but it only runs where
+    # the derivation is actually BUILT, not where it is substituted from
+    # cache.numtide.com. That cache hit is upstream CI's build, so their CI ran
+    # the check, not this machine; verified independently below (V3) against the
+    # freshly downloaded artifact regardless.
     #
     # THE RESIDUAL RISK, NAMED RATHER THAN OMITTED. Anthropic withdraws a bad
     # release by repointing `latest`, which is why llm-agents' updater carries
     # `versionPolicy = "follow_pointer"` — and really acted on it for 2.1.243 on
-    # 2026-08-25. `latest` points at 2.1.280 itself, so that signal cannot exist
-    # yet. The 2.1.258 pin sidestepped this by deliberately taking the superseded
-    # version; here there is nothing to step to, because 2.1.280 is the only
-    # version that can talk to Opus 5.5 at all. Taken on that basis, not by
-    # oversight.
+    # 2026-08-25. `latest` points at 2.1.284 itself, so that signal cannot exist
+    # yet; `stable` (2.1.277) lags by design and is not a withdrawal signal either
+    # (upstream issue #92274, closed, documents the channel running weeks behind).
+    # There is nothing to step to instead, because 2.1.284 is the only version
+    # that can talk to Sonnet 5.5 at all. Taken on that basis, not by oversight,
+    # and with the trade-off put to the user first.
     #
     # The blast radius is deliberately ONE package, and this time one FILE: the
-    # rev sits exactly on the bump commit "claude-code: 2.1.278 -> 2.1.280"
-    # (2026-09-22 17:08Z), whose entire diff is packages/claude-code/hashes.json,
+    # rev sits exactly on the bump commit "claude-code: 2.1.283 -> 2.1.284"
+    # (2026-09-28 23:01:17Z), whose entire diff is packages/claude-code/hashes.json,
     # and only claude-code is taken from it. opencode, gemini-cli, antigravity-cli,
     # ccusage and the ACP shims stay on nixpkgs-llm-agents and stay soaked (codex
-    # has a pin of its own below, since 2026-09-11, on the same terms). Moving the
-    # main input instead would have pulled all of them out of the 14-day window for
-    # one CLI.
+    # has a pin of its own below, on the same terms). Moving the main input
+    # instead would have pulled all of them out of the 14-day window for one CLI.
+    # The rev's own nixpkgs lock also moved (35e2127 -> 3181085, 2026-09-27), but
+    # `original.ref = "nixpkgs-unstable"` — a Hydra-built channel branch, exempt
+    # from the cooldown by the same reasoning docs/supply-chain.md gives for
+    # nixpkgs elsewhere in this flake — and it only supplies stdenv and the
+    # wrapper's bash, not claude-code's own source.
     #
     # No `inputs.nixpkgs.follows` on purpose, and it is load-bearing. Without it
     # the derivation is bit-identical to upstream CI's, and upstream publishes it
@@ -237,13 +249,13 @@
     # licence consequences: see "The public cache mirrors system closures" in
     # AGENTS.md.
     #
-    # REMOVE once nixpkgs-llm-agents itself ships >= 2.1.280 — at the earliest on
-    # 2026-10-06, when `just update` with the 14-day bar lands on a rev from
-    # 2026-09-22 17:08Z or later. An assertion in modules/agents.nix breaks
+    # REMOVE once nixpkgs-llm-agents itself ships >= 2.1.284 — at the earliest on
+    # 2026-10-12, when `just update` with the 14-day bar lands on a rev from
+    # 2026-09-28 23:01Z or later. An assertion in modules/agents.nix breaks
     # the build at that point and spells out the four steps, so the pin cannot go
     # stale silently.
     llm-agents-claude-code-pin.url =
-      "github:numtide/llm-agents.nix/90e2d7eef26aa533fc53cc463604b1accfa15da4";
+      "github:numtide/llm-agents.nix/fe037ebd459c2eb90b143efb52806f5213a59052";
 
     # TEMPORARY PIN — codex 0.153.4, for GPT-6-Astra. Consumed by
     # modules/agents.nix (programs.codex.package) and modules/agents.nix
