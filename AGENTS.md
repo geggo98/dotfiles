@@ -169,6 +169,7 @@ Each module defines a single aspect across all relevant configuration classes (d
 | `nixos-backup-copy.nix` | Second restic copy, R2 → Dropbox; ciphertext only |
 | `nixos-secrets.nix` | sops-nix on the **nixos** class — decrypts to `/run/secrets/`, host-generated key |
 | `misc.nix` | Key remapping, Hammerspoon, misc home config |
+| `iterm2-claude-hooks.nix` | iTerm2's Claude Code status hooks, option `my.iterm2.claudeCodeHooks.enable` ([docs](https://iterm2.com/claude-code-integration.html)) |
 | `onepassword.nix` | Generates `~/.config/1Password/ssh/agent.toml`. See `docs/ionos-vps.md` |
 | `aichat.nix` / `ai-tools.nix` | AI chat tool config; general AI tool packages (`llm`, Ollama, `+nix-query`) |
 | `boundary.nix` | HashiCorp Boundary PM2-managed proxies (work host) |

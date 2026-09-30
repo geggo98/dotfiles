@@ -18,6 +18,8 @@ in
       mcp.enable = lib.mkDefault true;
     };
     my.devdocs.enable = lib.mkDefault true;
+    # iTerm2 is a Homebrew cask on both Macs (homebrew-common.nix).
+    my.iterm2.claudeCodeHooks.enable = lib.mkDefault true;
     imports = [
       hm.shell
       # Split from `shell` so that aspect can be imported by hosts without
@@ -41,6 +43,7 @@ in
       hm.packages
       hm.supply-chain-hardening
       hm.misc
+      hm.iterm2-claude-hooks
       hm.vscode
       hm.gram
       hm.voxscriber
