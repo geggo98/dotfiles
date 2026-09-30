@@ -1,12 +1,12 @@
 ---
-name: grobdesign
-description: "Use when writing a Grobdesign (high-level / rough design): a short architecture document that fixes functional placement (which component does what), interfaces (technical contracts, standards, non-functional requirements) and flows (data flow vs. activity flow). Markdown with Mermaid diagrams in C4 zoom levels, arc42-light structure. Triggers: 'Grobdesign', 'Grobkonzept', 'high-level design', 'rough design', 'component responsibilities', 'interface design', 'data flow vs. activity flow', 'C4 diagram'."
-allowed-tools: Bash(zsh *) Read(references/*) Skill(technical-writing) Skill(diagram-renderer) Skill(adr-writing)
+name: high-level-design
+description: "Use when writing a high-level design (a.k.a. rough design, German 'Grobdesign'): a short architecture document that fixes functional placement (which component does what), interfaces (technical contracts, standards, non-functional requirements) and flows (data flow vs. activity flow). Markdown with Mermaid diagrams in C4 zoom levels, arc42-light structure. Triggers: 'Grobdesign', 'Grobkonzept', 'high-level design', 'rough design', 'component responsibilities', 'interface design', 'data flow vs. activity flow', 'C4 diagram'."
+allowed-tools: Bash(zsh *) Read(references/*) Skill(technical-writing) Skill(diagram-renderer) Skill(adr-writing) Skill(grilling)
 ---
 
-# Grobdesign
+# High-level design
 
-A Grobdesign answers three questions and nothing else:
+A high-level design answers three questions and nothing else:
 
 1. **Functional placement:** which component is responsible for what?
 2. **Interfaces:** what do the technical contracts between them look like?
@@ -18,7 +18,7 @@ Class and method design, configuration and step-by-step implementation do not be
 
 > **Write the prose with `Skill(technical-writing)`, and render every diagram
 > with `Skill(diagram-renderer)` before you hand the document over.** A
-> Grobdesign is read to decide whether the approach is sound, so it starts with
+> high-level design is read to decide whether the approach is sound, so it starts with
 > a TL;DR. A diagram that does not render counts as not delivered.
 > Match the language of the surrounding documentation (German or English).
 
@@ -26,11 +26,11 @@ Start from `references/template.md`. Delete every chapter that has nothing to sa
 
 ## Structure (arc42-light)
 
-Every chapter is optional. A chapter without content is **removed**, not filled with "n/a".
+Every chapter is optional, **except chapter 0**. A chapter without content is **removed**, not filled with "n/a".
 
 | # | Chapter | arc42 | Content |
 |---|---|---|---|
-| 0 | TL;DR, goals, non-goals | §1 | 1–3 sentences: what and why. What is explicitly out of scope. |
+| 0 | TL;DR, goals, non-goals | §1 | 1–3 sentences: what and why. Mandatory: see *Goals and non-goals*. |
 | 1 | Context and scope | §3 | C4 level 1 diagram; who and what is outside the system. |
 | 2 | Functional placement | §5 | C4 level 2/3 diagrams; responsibility table. |
 | 3 | Interfaces | §3, §5 | One profile per interface. |
@@ -38,6 +38,24 @@ Every chapter is optional. A chapter without content is **removed**, not filled 
 | 5 | Cross-cutting and NFRs | §8, §10 | Only deviations from the norm. |
 | 6 | Decisions | §9 | Links to ADRs (`Skill(adr-writing)`); no decision essays here. |
 | 7 | Risks and open questions | §11 | What is unclear, who clarifies it. |
+
+## Goals and non-goals
+
+Chapter 0 is mandatory, and **non-goals matter more than goals**.
+"Sound" only has a meaning relative to a goal, so a reader cannot judge the
+design without them.
+
+- **Goals:** 1–5 outcomes. Each one is verifiable and says *what*, not *how*
+  ("orders survive a restart", not "use Kafka"). Each traces back to the requirement.
+- **Non-goals:** things a reasonable reader **could expect** and will not get.
+  No straw men. They fix the scope, stop scope creep and tell reviewers what not
+  to ask for. Mark each one *deferred* (maybe later) or *excluded* (never, with a reason).
+- Every component, interface and flow in the later chapters serves a goal.
+  Work on a non-goal is a defect.
+
+**Do not invent goals or non-goals.** If the request does not state them clearly,
+run `Skill(grilling)` with the user **before you draw anything**. Look up facts
+yourself; put only the decisions to the user. Write the result into chapter 0.
 
 ## Functional placement
 
@@ -149,11 +167,15 @@ Legend: green = new, yellow = changed, grey = external.
 - Data direction and trigger merged into one arrow, so polling looks like push.
 - A trigger called "the system" or "someone".
 - "Service X handles everything about Y": a responsibility without a boundary.
-- Decision reasoning inside the Grobdesign instead of a linked ADR.
+- Decision reasoning inside the high-level design instead of a linked ADR.
+- Missing non-goals, or straw-man non-goals that nobody would expect.
+- Goals phrased as solutions.
+- Goals and non-goals invented instead of clarified with the user.
 - Chapters filled with "n/a" or "tbd" placeholders.
 
 ## Related skills
 
 - **`technical-writing`**: TL;DR first, German and English. Load it before you write.
 - **`diagram-renderer`**: renders the Mermaid blocks; run it on the finished file.
-- **`adr-writing`**: for each significant decision that the Grobdesign surfaces.
+- **`grilling`**: clarifies unclear goals and non-goals with the user before you write.
+- **`adr-writing`**: for each significant decision that the high-level design surfaces.

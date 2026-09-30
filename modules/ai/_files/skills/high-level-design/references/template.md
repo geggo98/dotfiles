@@ -1,11 +1,18 @@
-# Grobdesign: <Title>
+# High-level design: <Title>
 
 <!-- Delete every chapter without content. Fictional names only in examples. -->
 
 **TL;DR:** <What changes and why, in one to three sentences.>
 
-**Goals:** <...>
-**Non-goals:** <...>
+<!-- Chapter 0 is mandatory. Unclear goals or non-goals: run Skill(grilling) first. -->
+
+**Goals:**
+
+- <verifiable outcome, not a solution>
+
+**Non-goals:**
+
+- <something a reader could reasonably expect> — <deferred | excluded: reason>
 
 ## 1 Context and scope (C4 L1)
 
