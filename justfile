@@ -170,6 +170,10 @@ check: _check-untracked
 ai-check: _check-untracked
     nix build --no-link .#checks.aarch64-darwin.ai-composition
 
+# Test suite of the +errlog wrapper (modules/_files/errlog), in the Nix sandbox
+errlog-check: _check-untracked
+    nix build --no-link .#checks.aarch64-darwin.errlog
+
 # Format all Nix files
 fmt:
     nix run nixpkgs#nixpkgs-fmt -- $(find . -name '*.nix' -not -path './_*')

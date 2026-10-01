@@ -50,6 +50,7 @@ A `justfile` provides safe, pre-approved commands that agents can run without us
 | Command | Description |
 |---|---|
 | `just build` / `just build-host <host>` | Build (current or a specific) host config without applying |
+| `just errlog-check` | Run the `+errlog` test suite in the Nix sandbox |
 | `just check` / `just ai-check` / `just fmt-check` / `just eval` | `nix flake check`; isolated AI-aspect tests; format check; fast syntax check |
 | `just fmt` | Format all Nix files with `nixpkgs-fmt` |
 | `just update` / `-preview` / `-input <i>` / `-head` | Update flake inputs honouring the supply-chain cooldown (`-head` bypasses it) |
@@ -161,6 +162,7 @@ Each module defines a single aspect across all relevant configuration classes (d
 | `mcp-servers.nix` / `mcp-clients.nix` | Shared MCP catalog; client renderers and portable exports — see `docs/ai-tooling.md` |
 | `agent-integration.nix` | Delivers content/MCP to enabled Nix agents; removes owned entries when disabled |
 | `devdocs.nix` | Offline DevDocs lookup (`+devdocs`), own namespace `my.devdocs`. See `docs/devdocs.md` |
+| `errlog.nix` | `+errlog`: stderr of noisy commands into a file, masked, exit code kept; ships its own global rule |
 | `secrets.nix` | SOPS declarations, per-host merging (**home-manager only** — servers use `nixos-secrets.nix`) |
 | `nixos-wiring.nix` | Defines `configurations.nixos` and wires `flake.nixosConfigurations`/`deployTargets` |
 | `nixos-base.nix` | Baseline for every NixOS host: sshd, authorized keys, lockout assertions, serial getty |
@@ -256,7 +258,7 @@ more) live in `docs/scripting.md`.
 ### Any script that processes a list must be resumable
 
 The general form — progress with ETA, abort, `flock` lock, `--status` — is the global rule
-`long-running-scripts.md`; this section keeps the incident reports.
+`long-running-scripts.md`; this section keeps the incident reports. Noisy stderr: `+errlog` (rule `errlog.md`).
 
 Four rules, each paid for by a real incident — full write-ups in `docs/scripting.md`:
 

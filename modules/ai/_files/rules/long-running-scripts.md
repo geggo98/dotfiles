@@ -88,11 +88,17 @@ mit PID bloß ein Überbleibsel.
 
 - **Lange Läufe vom Harness abkoppeln.** Hintergrundjobs des Harness sterben nach
   etwa 10 Minuten. `setsid` gibt es auf macOS nicht; stattdessen python3 mit
-  `os.fork()` und `os.setsid()`, Ausgabe in eine Logdatei.
+  `os.fork()` und `os.setsid()`, Ausgabe in eine Logdatei (für stderr liefert
+  `+errlog` genau das, samt Exit-Code und Statistik am Ende).
 - **Status abfragen, nicht am Log raten:** `--status` beziehungsweise die
   Lock-Probe, dazu der Zeitstempel der letzten Fortschrittszeile.
 - **Nach einem Abbruch einfach neu starten** — dafür ist Punkt 1 da. Nicht
   zuerst aufräumen, nicht Zustand nachbauen.
+- **Lauten Läufen `+errlog` voranstellen** (`+errlog -- <kommando>`): stderr geht in eine
+  Datei, deren Pfad sofort genannt wird, der Exit-Code kommt unverändert zurück, und
+  bekannte Geheimnisse lassen sich maskieren. Das gilt für fremde Werkzeuge ebenso
+  wie für eigene Skripte — deren Fortschrittszeilen (Punkt 3) landen dann in der Datei
+  und werden per `tail` gelesen statt in den Kontext gekippt. Siehe `errlog.md`.
 
 ## Referenz: perl-Einzeiler (Liste in einer Datei, ein Element je Zeile)
 

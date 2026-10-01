@@ -34,6 +34,7 @@ in
       hm.gradle
       hm.neovim
       hm.devdocs
+      hm.errlog
       hm.agents
       hm.agent-content
       hm.mcp-servers
