@@ -20,14 +20,14 @@ static release binary from <https://github.com/xo/usql/releases>.
 usql -J -c "SELECT id, name FROM users LIMIT 10" pg://stefan@host/db
 
 # CSV
-usql -C -c "SELECT * FROM brokerresult WHERE created_at > current_date - 1" \
-     my://root:pw@db:3306/kfzif > today.csv
+usql -C -c "SELECT * FROM orders WHERE created_at > current_date - 1" \
+     my://root:pw@db:3306/appdb > today.csv
 
 # Script file, stop at first error
 usql -v ON_ERROR_STOP=1 -f migrations/001-add-index.sql pg://stefan@host/db
 
 # Backslash commands work in `-c`
-usql -c '\d brokerresult' my://root@host/kfzif
+usql -c '\d orders' my://root@host/appdb
 usql -c '\dt+ public.*'   pg://stefan@host/db
 usql -c '\df'             pg://stefan@host/db   # functions
 
@@ -36,9 +36,9 @@ usql -c 'EXPLAIN ANALYZE SELECT ...' pg://...
 usql -c 'EXPLAIN FORMAT=JSON SELECT ...' my://...
 
 # Cross-DB copy (built-in)
-usql -c "\copy 'pg://prod/kfzif' 'my://stage/kfzif' \
-         'SELECT * FROM brokerresult LIMIT 1000' \
-         'INSERT INTO brokerresult_sample'"
+usql -c "\copy 'pg://prod/appdb' 'my://stage/appdb' \
+         'SELECT * FROM orders LIMIT 1000' \
+         'INSERT INTO orders_sample'"
 ```
 
 ## Flags relevant to agents

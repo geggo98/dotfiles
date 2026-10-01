@@ -12,11 +12,11 @@ nix shell nixpkgs#mongosh
 
 ```bash
 # One-shot with JSON output
-mongosh "mongodb://stefan@localhost/kfzif" --quiet \
+mongosh "mongodb://stefan@localhost/appdb" --quiet \
         --eval 'JSON.stringify(db.users.find().limit(10).toArray())'
 
 # Aggregation
-mongosh "mongodb://localhost/kfzif" --quiet --eval '
+mongosh "mongodb://localhost/appdb" --quiet --eval '
   db.events.aggregate([
     { $match: { ts: { $gt: ISODate("2026-01-01") } } },
     { $group: { _id: "$type", count: { $sum: 1 } } }
@@ -24,14 +24,14 @@ mongosh "mongodb://localhost/kfzif" --quiet --eval '
 ' | jq .
 
 # Script
-mongosh "mongodb://localhost/kfzif" --quiet --file analysis.js
+mongosh "mongodb://localhost/appdb" --quiet --file analysis.js
 ```
 
 ## Data export
 
 ```bash
 nix shell nixpkgs#mongodb-tools
-mongoexport --uri="mongodb://localhost/kfzif" \
+mongoexport --uri="mongodb://localhost/appdb" \
             --collection=users --type=json --out=users.json
 ```
 

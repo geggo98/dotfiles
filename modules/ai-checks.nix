@@ -112,6 +112,12 @@ in
           chmod +x _files/skills/devenv/scripts/devenv-tools.sh
           patchShebangs _files/skills/devenv/scripts/devenv-tools.sh
           python3 tests/test_devenv_tools.py
+          mkdir -p _files/skills/database
+          cp -R ${./ai/_files/skills/database/scripts} _files/skills/database/scripts
+          chmod -R u+w _files/skills/database/scripts
+          chmod +x _files/skills/database/scripts/*.sh
+          patchShebangs _files/skills/database/scripts
+          python3 tests/test_database_secrets.py
           python3 tests/test_codex_config.py
           python3 - ${codexLeafHooks} <<'PY'
           import json, re, sys, tomllib

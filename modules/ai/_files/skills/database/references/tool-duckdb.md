@@ -17,11 +17,11 @@ duckdb -json -c "
 INSTALL postgres; LOAD postgres;
 INSTALL mysql;    LOAD mysql;
 
-ATTACH 'postgres://stefan@prod/kfzif'     AS pg (READ_ONLY);
-ATTACH 'mysql://root@legacy/old_kfzif'    AS my (TYPE mysql, READ_ONLY);
+ATTACH 'postgres://stefan@prod/appdb'     AS pg (READ_ONLY);
+ATTACH 'mysql://root@legacy/old_appdb'    AS my (TYPE mysql, READ_ONLY);
 
 SELECT br.id, br.carrier, lc.legacy_status
-FROM pg.brokerresult br
+FROM pg.orders br
 JOIN my.legacy_customers lc ON lc.id = br.customer_id
 WHERE br.created_at > '2026-01-01'
 LIMIT 100;

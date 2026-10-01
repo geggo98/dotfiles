@@ -10,14 +10,14 @@ the only defence that survives a wrapper bug.
 ```sql
 -- PostgreSQL
 CREATE ROLE claude_agent LOGIN PASSWORD '…';
-GRANT CONNECT ON DATABASE kfzif TO claude_agent;
+GRANT CONNECT ON DATABASE appdb TO claude_agent;
 GRANT USAGE ON SCHEMA public TO claude_agent;
 GRANT SELECT ON ALL TABLES IN SCHEMA public TO claude_agent;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT SELECT ON TABLES TO claude_agent;
 
 -- MySQL
 CREATE USER 'claude_agent'@'%' IDENTIFIED BY '…';
-GRANT SELECT ON kfzif.* TO 'claude_agent'@'%';
+GRANT SELECT ON appdb.* TO 'claude_agent'@'%';
 ```
 
 ## 2. Tool-level read-only flags
@@ -79,6 +79,10 @@ what the agent did and when.
 ## Never
 
 - Embed plaintext credentials in commit history, even in tests.
-- Use `MYSQL_PWD` or `-p<password>` — they leak to `ps` and `~/.bash_history`.
+- Use `-p<password>` — it leaks to `ps` and `~/.bash_history`. Avoid
+  `MYSQL_PWD` as well; a `[client]` option file (mode 600) is safer.
+  `db.sh` builds one for you.
+- Rely on the output filter as the only defence. Keep the password out of
+  argv first; `scripts/redact.pl` is the second layer.
 - Run agent queries against production with a write-capable DB user.
 - Disable `--maximum_bytes_billed` for BigQuery. The wrapper refuses.

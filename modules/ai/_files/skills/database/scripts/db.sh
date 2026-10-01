@@ -27,7 +27,7 @@ Subcommands:
   raw -- <cmd...>        Pass-through under the timeout (no formatting)
   help                   This message
 
-Global options:
+Global options (before the subcommand; also accepted directly after it):
   --dsn-cmd 'CMD'        Resolve DSN by running CMD; capture stdout
   --dsn-file PATH        Read DSN from a file (mode 600 recommended)
   --dsn URL              Literal DSN (visible in shell history — warns)
@@ -40,6 +40,10 @@ Global options:
   --read-only            Default. Dialect-specific read-only wrapping.
   --write                Allow writes. Required for mongosh.
   --no-rc                Skip user rc files (~/.psqlrc, ~/.my.cnf, ...)
+
+Secrets: the DSN password never goes on the client's command line (0600 file
+or the tool's own env var instead), and all stdout/stderr is run through
+scripts/redact.pl. A literal --dsn is still visible in *this* script's argv.
   -h, --help             This message
 
 DSN schemes → tools:
@@ -54,9 +58,9 @@ DSN schemes → tools:
   *                         → usql
 
 Examples:
-  ${CLAUDE_SKILL_DIR}/scripts/db.sh query \
+  ${CLAUDE_SKILL_DIR}/scripts/db.sh \
     --dsn-cmd 'vault kv get -field=dsn kv/db/prod' \
-    "SELECT id, email FROM users WHERE active LIMIT 50"
+    query "SELECT id, email FROM users WHERE active LIMIT 50"
 
   ${CLAUDE_SKILL_DIR}/scripts/db.sh --dsn 'sqlite::memory:' \
     query "SELECT 1 AS one"
@@ -85,28 +89,52 @@ dsn_file=""
 dsn_env="DB_DSN"
 subcommand=""
 args=()
+rest=()
 
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --dsn)              dsn_cli="$2";     shift 2 ;;
-    --dsn-cmd)          dsn_cli_cmd="$2"; shift 2 ;;
-    --dsn-file)         dsn_file="$2";    shift 2 ;;
-    --dsn-env)          dsn_env="$2";     shift 2 ;;
-    --timeout)          timeout_dur="$2"; shift 2 ;;
-    --output-max-bytes) max_bytes="$2";   shift 2 ;;
-    --output)           output_file="$2"; shift 2 ;;
-    --format)           format="$2";      shift 2 ;;
-    --read-only)        mode="read-only"; shift ;;
-    --write)            mode="write";     shift ;;
-    --no-rc)            no_rc=1;          shift ;;
-    -h|--help|help)     usage; exit 0 ;;
-    query|schema|explain|raw)
-                        subcommand="$1"; shift; args=("$@"); break ;;
-    *)                  die "unknown option or subcommand: $1 (try --help)" ;;
-  esac
-done
+need_value() { [[ $# -ge 2 ]] || die "option $1 needs a value"; }
 
-[[ -n "$subcommand" ]] || die "no subcommand given (try --help)"
+# parse_opts <argv...>
+# Consumes global options from the front; leaves the remainder in rest[].
+# Only exact option names match, so SQL starting with "-- comment" is safe.
+parse_opts() {
+  while [[ $# -gt 0 ]]; do
+    case "$1" in
+      --dsn)              need_value "$@"; dsn_cli="$2";     shift 2 ;;
+      --dsn-cmd)          need_value "$@"; dsn_cli_cmd="$2"; shift 2 ;;
+      --dsn-file)         need_value "$@"; dsn_file="$2";    shift 2 ;;
+      --dsn-env)          need_value "$@"; dsn_env="$2";     shift 2 ;;
+      --timeout)          need_value "$@"; timeout_dur="$2"; shift 2 ;;
+      --output-max-bytes) need_value "$@"; max_bytes="$2";   shift 2 ;;
+      --output)           need_value "$@"; output_file="$2"; shift 2 ;;
+      --format)           need_value "$@"; format="$2";      shift 2 ;;
+      --read-only)        mode="read-only"; shift ;;
+      --write)            mode="write";     shift ;;
+      --no-rc)            no_rc=1;          shift ;;
+      -h|--help)          usage; exit 0 ;;
+      *)                  break ;;
+    esac
+  done
+  rest=("$@")
+}
+
+parse_opts "$@"
+set -- "${rest[@]+"${rest[@]}"}"
+[[ $# -gt 0 ]] || die "no subcommand given (try --help)"
+case "$1" in
+  help)                    usage; exit 0 ;;
+  query|schema|explain|raw) subcommand="$1"; shift ;;
+  *)                       die "unknown option or subcommand: $1 (try --help)" ;;
+esac
+# `raw` forwards everything after it to the native command.
+if [[ "$subcommand" == "raw" ]]; then
+  # gtimeout would take a leading "--" for the command itself.
+  [[ "${1-}" == "--" ]] && shift
+  args=("$@")
+else
+  parse_opts "$@"
+  [[ "${rest[0]-}" == "--" ]] && rest=("${rest[@]:1}")
+  args=("${rest[@]+"${rest[@]}"}")
+fi
 
 # ---------------------------------------------------------------------------
 # Resolve DSN
@@ -144,6 +172,25 @@ case "$scheme" in
     ;;
 esac
 
+# ---------------------------------------------------------------------------
+# Redaction and credential hand-off
+# ---------------------------------------------------------------------------
+
+trap cleanup_temp_dirs EXIT
+trap 'exit 143' TERM INT HUP
+with_secret_tmpdir
+secret_dir="$__SECRET_DIR"
+
+parsed=0
+parse_dsn "$DSN" && parsed=1
+if [[ -n "$DSN_PASS" ]]; then
+  add_redact_secret "$DSN_PASS"
+  add_redact_secret "$DSN"
+fi
+need_parts() {
+  [[ "$parsed" -eq 1 ]] || die "$dialect: DSN must be a URL like scheme://user:password@host:port/db"
+}
+
 # Warn (once) for dialects where the wrapper can't enforce read-only itself.
 case "$dialect:$mode" in
   mongo:read-only|mssql:read-only|oracle:read-only|usql:read-only)
@@ -159,6 +206,12 @@ esac
 
 strip_scheme() { local v="$1"; v="${v#*:}"; printf '%s' "${v#//}"; }
 
+# pgpass_escape: ":" and "\" are the field separator and escape in a .pgpass line
+pgpass_escape() { local v="${1//\\/\\\\}"; printf '%s' "${v//:/\\:}"; }
+
+# mycnf_quote: double-quoted value of a MySQL option file
+mycnf_quote() { local v="${1//\\/\\\\}"; printf '"%s"' "${v//\"/\\\"}"; }
+
 run_psql() {
   ensure_pkgs psql postgresql
   local sql="$1"
@@ -173,19 +226,47 @@ run_psql() {
     export PGOPTIONS="${PGOPTIONS-} -c default_transaction_read_only=on"
   fi
   export PGAPPNAME=claude-skill-database
-  with_timeout "$timeout_dur" -- psql "${flags[@]}" -c "$sql" "$DSN"
+  # Password through a 0600 .pgpass file; psql only understands the
+  # postgres(ql):// schemes, so "pg://" is rewritten as well.
+  local target="$DSN"
+  if [[ "$parsed" -eq 1 ]]; then
+    target="postgresql://${DSN_NOPASS#*://}"
+    if [[ -n "$DSN_PASS" ]]; then
+      ( umask 077; printf '*:*:*:*:%s\n' "$(pgpass_escape "$DSN_PASS")" > "$secret_dir/pgpass" )
+      export PGPASSFILE="$secret_dir/pgpass"
+    fi
+  fi
+  with_timeout "$timeout_dur" -- psql "${flags[@]}" -c "$sql" "$target"
 }
 
 run_mysql() {
   ensure_pkgs mysql mysql-client
+  need_parts
   local sql="$1"
   local -a flags=(--batch --skip-column-names --connect-timeout=10)
-  [[ "$no_rc" -eq 1 ]] && flags+=(--no-defaults)
   [[ "$mode" == "read-only" ]] && sql="SET SESSION TRANSACTION READ ONLY; $sql"
   case "$format" in
     csv|tsv|json|native|*) : ;;  # mysql -B is TSV; no native JSON/CSV
   esac
-  with_timeout "$timeout_dur" -- mysql "${flags[@]}" --uri="$DSN" -e "$sql"
+  [[ -z "$DSN_QUERY" ]] || warn_once mysql-query "mysql: DSN query parameters are not passed to the client"
+  # mysql has no --uri (that is MySQL Shell) and rejects it with an error
+  # that echoes the whole argument. Credentials go through an option file.
+  # --defaults-file / --defaults-extra-file must be the first option.
+  local host="${DSN_HOST#[}"; host="${host%]}"
+  local cnf="$secret_dir/my.cnf"
+  (
+    umask 077
+    {
+      printf '[client]\n'
+      [[ -n "$DSN_USER" ]] && printf 'user=%s\n' "$(mycnf_quote "$DSN_USER")"
+      [[ -n "$DSN_PASS" ]] && printf 'password=%s\n' "$(mycnf_quote "$DSN_PASS")"
+      [[ -n "$host" ]]     && printf 'host=%s\n' "$(mycnf_quote "$host")"
+      [[ -n "$DSN_PORT" ]] && printf 'port=%s\n' "$DSN_PORT"
+    } > "$cnf"
+  )
+  local cfg="--defaults-extra-file=$cnf"
+  [[ "$no_rc" -eq 1 ]] && cfg="--defaults-file=$cnf"
+  with_timeout "$timeout_dur" -- mysql "$cfg" "${flags[@]}" -e "$sql" ${DSN_DB:+"$DSN_DB"}
 }
 
 run_sqlite() {
@@ -227,31 +308,22 @@ run_duckdb() {
 run_mongo() {
   ensure_pkgs mongosh mongosh
   [[ "$mode" == "write" ]] || die "mongosh wrapper requires --write (mongo has no session-level read-only)"
-  with_timeout "$timeout_dur" -- mongosh "$DSN" --quiet --eval "$1"
+  # The URI travels in the environment: `mongosh <uri>` would put it in argv.
+  export DB_MONGO_URI="$DSN"
+  with_timeout "$timeout_dur" -- mongosh --nodb --quiet \
+    --eval "db = connect(process.env.DB_MONGO_URI); $1"
 }
 
 run_mssql() {
   ensure_pkgs sqlcmd go-sqlcmd
+  need_parts
   local sql="$1"
-  # Parse mssql://user:pw@host:port/db
-  local rest="${DSN#*://}"
-  local userpass="" hostdb="$rest"
-  if [[ "$rest" == *@* ]]; then
-    userpass="${rest%%@*}"
-    hostdb="${rest#*@}"
-  fi
-  local user="" pass=""
-  if [[ -n "$userpass" ]]; then
-    user="${userpass%%:*}"
-    [[ "$userpass" == *:* ]] && pass="${userpass#*:}"
-  fi
-  local host_port="${hostdb%%/*}"
-  local db=""
-  [[ "$hostdb" == */* ]] && db="${hostdb#*/}"
-  local -a flags=(-b -h -1 -W -y 0 -S "tcp:$host_port")
-  [[ -n "$user" ]] && flags+=(-U "$user")
-  [[ -n "$pass" ]] && flags+=(-P "$pass")
-  [[ -n "$db" ]]   && flags+=(-d "$db")
+  local server="tcp:${DSN_HOST}${DSN_PORT:+,$DSN_PORT}"
+  local -a flags=(-b -h -1 -W -y 0 -S "$server")
+  [[ -n "$DSN_USER" ]] && flags+=(-U "$DSN_USER")
+  [[ -n "$DSN_DB" ]]   && flags+=(-d "$DSN_DB")
+  # go-sqlcmd reads the password from SQLCMDPASSWORD; -P would show in argv.
+  [[ -n "$DSN_PASS" ]] && export SQLCMDPASSWORD="$DSN_PASS"
   case "$format" in
     csv) flags+=(-s ',') ;;
     tsv) flags+=(-s $'\t') ;;
@@ -263,11 +335,12 @@ run_mssql() {
 run_oracle() {
   export NIXPKGS_ALLOW_UNFREE=1 NIXPKGS_ALLOW_UNSUPPORTED_SYSTEM=1
   ensure_pkgs sqlcl sqlcl
+  need_parts
   local sql="$1"
-  local rest="${DSN#oracle://}"
-  local userpass="${rest%%@*}"
-  local hostservice="${rest#*@}"
-  local conn="${userpass}@//${hostservice}"
+  # The connect line goes through stdin; a connect string in argv would show
+  # in `ps`. The password is quoted so "@" and "/" in it survive.
+  local pw="${DSN_PASS//\"/\"\"}"
+  local conn="connect ${DSN_USER}/\"${pw}\"@//${DSN_HOST}${DSN_PORT:+:$DSN_PORT}${DSN_DB:+/$DSN_DB}"
   local -a preamble=(
     "set echo off"
     "set feedback off"
@@ -283,8 +356,8 @@ run_oracle() {
   esac
   [[ "$mode" == "read-only" ]] && preamble+=("set readonly on")
   local script
-  script="$(printf '%s;\n' "${preamble[@]}"; printf '%s;\nexit\n' "$sql")"
-  printf '%s' "$script" | with_timeout "$timeout_dur" -- sqlcl -S "$conn"
+  script="$(printf '%s\n' "$conn"; printf '%s;\n' "${preamble[@]}"; printf '%s;\nexit\n' "$sql")"
+  printf '%s' "$script" | with_timeout "$timeout_dur" -- sqlcl -S /nolog
 }
 
 run_usql() {
@@ -298,7 +371,17 @@ run_usql() {
     tsv)  flags+=(--field-separator $'\t') ;;
     native|*) ;;
   esac
-  with_timeout "$timeout_dur" -- usql "${flags[@]}" -c "$sql" "$DSN"
+  # Password through a 0600 pass file (protocol:host:port:db:user:password).
+  local target="$DSN"
+  if [[ "$parsed" -eq 1 ]]; then
+    target="$DSN_NOPASS"
+    if [[ -n "$DSN_PASS" ]]; then
+      ( umask 077; printf '*:*:*:*:*:%s
+' "$(pgpass_escape "$DSN_PASS")" > "$secret_dir/usqlpass" )
+      export USQLPASS="$secret_dir/usqlpass"
+    fi
+  fi
+  with_timeout "$timeout_dur" -- usql "${flags[@]}" -c "$sql" "$target"
 }
 
 # ---------------------------------------------------------------------------
@@ -371,9 +454,14 @@ producer() {
 
 set -o pipefail
 
+# Every byte the wrapper emits is filtered, results and errors alike: we
+# cannot reliably tell the two apart.
 if [[ -n "$output_file" ]]; then
-  producer > "$output_file"
+  rc=0
+  producer 2>"$secret_dir/stderr" | redact_stream > "$output_file" || rc=$?
+  redact_stream < "$secret_dir/stderr" >&2
+  [[ "$rc" -eq 0 ]] || exit "$rc"
   printf 'wrote output to %s\n' "$output_file"
 else
-  producer 2>&1 | buffer_output --max-bytes "$max_bytes" --label "$dialect" --preview-lines 20
+  producer 2>&1 | redact_stream | buffer_output --max-bytes "$max_bytes" --label "$dialect" --preview-lines 20
 fi

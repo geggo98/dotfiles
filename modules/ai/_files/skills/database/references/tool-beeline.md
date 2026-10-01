@@ -18,13 +18,13 @@ nix shell nixpkgs#hive
 ```bash
 beeline --silent=true \
         -d com.mysql.cj.jdbc.Driver \
-        -u "jdbc:mysql://localhost:3306/kfzif" \
+        -u "jdbc:mysql://localhost:3306/appdb" \
         -n stefan -p geheim \
         --outputformat=csv2 \
-        -e "SELECT id, carrier FROM brokerresult LIMIT 10"
+        -e "SELECT id, carrier FROM orders LIMIT 10"
 
 beeline --silent=true --force=false \
-        -u "jdbc:postgresql://localhost/kfzif" \
+        -u "jdbc:postgresql://localhost/appdb" \
         -n stefan \
         -f migrations/001.sql
 ```

@@ -15,17 +15,17 @@ nix shell nixpkgs#go-sqlcmd
 
 ```bash
 # One-shot, batch mode, CSV-ish
-sqlcmd -S server.example.com -d kfzif -U stefan -P "$MSSQL_PWD" \
+sqlcmd -S server.example.com -d appdb -U stefan -P "$MSSQL_PWD" \
        -b -h -1 -s "," -W \
        -Q "SET NOCOUNT ON; SELECT id, name FROM dbo.users"
 
 # Entra / Azure AD (fits OIDC stacks)
-sqlcmd -S server.database.windows.net -d kfzif \
+sqlcmd -S server.database.windows.net -d appdb \
        --authentication-method ActiveDirectoryDefault \
        -Q "SELECT @@VERSION"
 
 # Run script
-sqlcmd -S server -d kfzif -U stefan -P "$PWD" -b -i script.sql
+sqlcmd -S server -d appdb -U stefan -P "$PWD" -b -i script.sql
 ```
 
 ## Flags

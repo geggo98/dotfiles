@@ -2,17 +2,52 @@
 # _lib.sh — sourced helpers for the `database` skill. Not directly executable.
 #
 # Provides: die, with_timeout, resolve_secret, buffer_output, human_bytes,
-# detect_timeout, warn_once.
+# detect_timeout, warn_once, redact_stream, redact_text, add_redact_secret,
+# parse_dsn, url_decode, with_secret_tmpdir.
 #
 # Callers are expected to `set -eEuo pipefail` themselves and source this
 # file with `. "$SCRIPT_DIR/_lib.sh"`.
+
+# ---------------------------------------------------------------------------
+# Redaction
+# ---------------------------------------------------------------------------
+#
+# Everything a wrapper prints — stdout, stderr, error messages — goes through
+# redact.pl. Database clients echo their own argv and connection strings in
+# error text (MariaDB: "unknown variable 'uri=mysql://u:pw@…'"), and we cannot
+# tell error lines from result lines, so the filter covers all of it.
+#
+# Secrets the wrapper knows are registered with add_redact_secret and masked
+# exactly. Anything else is caught by the pattern rules inside redact.pl.
+
+__REDACT_PL="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/redact.pl"
+# Separated by \x1f. Reaches redact.pl through its environment only,
+# never through argv and never into the database client's environment.
+__DB_REDACT_SECRETS=""
+
+# add_redact_secret <value>
+add_redact_secret() {
+  [[ -n "${1-}" ]] || return 0
+  __DB_REDACT_SECRETS="${__DB_REDACT_SECRETS}${1}"$'\x1f'
+}
+
+# redact_stream — stdin to stdout. Fails closed: if perl is missing the
+# pipeline breaks instead of passing the text through unfiltered.
+redact_stream() {
+  DB_REDACT_SECRETS="$__DB_REDACT_SECRETS" perl "$__REDACT_PL"
+}
+
+# redact_text <text...> — for single messages.
+redact_text() {
+  printf '%s' "$*" | redact_stream 2>/dev/null || printf '(message withheld: redaction unavailable)'
+}
 
 # ---------------------------------------------------------------------------
 # Error reporting
 # ---------------------------------------------------------------------------
 
 die() {
-  printf 'error: %s\n' "$*" >&2
+  printf 'error: %s\n' "$(redact_text "$*")" >&2
   exit 1
 }
 
@@ -25,7 +60,7 @@ warn_once() {
     *" $key "*) return 0 ;;
   esac
   __WARNED_KEYS="${__WARNED_KEYS}${key} "
-  printf 'warning: %s\n' "$*" >&2
+  printf 'warning: %s\n' "$(redact_text "$*")" >&2
 }
 
 # ---------------------------------------------------------------------------
@@ -97,7 +132,7 @@ resolve_secret() {
   done
 
   if [[ -n "$cli_cmd" ]]; then
-    sh -c "$cli_cmd"
+    __run_secret_cmd "$cli_cmd"
     return
   fi
   if [[ -n "$cli_file" ]]; then
@@ -118,7 +153,7 @@ resolve_secret() {
   if [[ -n "$env_cmd_name" ]]; then
     local cmd="${!env_cmd_name-}"
     if [[ -n "$cmd" ]]; then
-      sh -c "$cmd"
+      __run_secret_cmd "$cmd"
       return
     fi
   fi
@@ -138,6 +173,18 @@ resolve_secret() {
     return
   fi
   return 0
+}
+
+# __run_secret_cmd <cmd>
+# Run a secret provider; stdout is the secret, stderr is shown redacted.
+# Provider errors ("bad token=…") must not reach the transcript raw.
+__run_secret_cmd() {
+  local err rc=0
+  err="$(mktemp "${TMPDIR:-/tmp}/db-provider-err.XXXXXX")"
+  sh -c "$1" 2>"$err" || rc=$?
+  redact_stream <"$err" >&2 || true
+  rm -f "$err"
+  return "$rc"
 }
 
 __read_secret_file() {
@@ -287,8 +334,15 @@ ensure_pkgs() {
   done
   pkg_list_str="${pkg_list_str# }"
 
+  # The argv may carry a literal --dsn; show it masked.
+  local -a shown_argv=()
+  local prev="" a
+  for a in "${__ORIGINAL_ARGV[@]}"; do
+    if [[ "$prev" == "--dsn" ]]; then shown_argv+=("<redacted>"); else shown_argv+=("$a"); fi
+    prev="$a"
+  done
   local quoted_argv
-  quoted_argv="$(printf ' %q' "$0" "${__ORIGINAL_ARGV[@]}")"
+  quoted_argv="$(printf ' %q' "$0" "${shown_argv[@]}")"
   quoted_argv="${quoted_argv# }"
   local example="nix shell --impure ${pkg_list_str} --command ${quoted_argv}"
 
@@ -382,4 +436,80 @@ setup_gcloud_service_account() {
 # nothing if absent. Safe to call inside $(...).
 gcp_project_from_key_file() {
   jq -r '.project_id // empty' "$1" 2>/dev/null || true
+}
+
+# ---------------------------------------------------------------------------
+# DSN parsing and credential files
+# ---------------------------------------------------------------------------
+#
+# Database clients take credentials from argv by default, and `ps` shows
+# argv to every local user. The wrappers hand them over through a 0600 file
+# or the tool's own environment variable instead. These helpers split a DSN
+# so each run_* function can do that.
+
+# url_decode — stdin to stdout. %41 -> A. "+" is left alone (userinfo, not a form).
+url_decode() {
+  perl -pe 's/%(?<hex>[0-9A-Fa-f]{2})/chr hex $+{hex}/ge'
+}
+
+# parse_dsn <dsn>
+# Sets DSN_SCHEME DSN_USER DSN_PASS (both decoded) DSN_HOST DSN_PORT DSN_DB
+# DSN_QUERY and DSN_NOPASS (the same DSN without password and without
+# password= query parameters). Returns 1 if there is no "://".
+# Example: mysql://app:p%40ss@db.example:3306/shop?ssl=1
+#   -> app, p@ss, db.example, 3306, shop, ssl=1, mysql://app@db.example:3306/shop?ssl=1
+parse_dsn() {
+  local dsn="$1" rest userinfo hostport
+  DSN_SCHEME="" DSN_USER="" DSN_PASS="" DSN_HOST="" DSN_PORT="" DSN_DB="" DSN_QUERY="" DSN_NOPASS=""
+  [[ "$dsn" == *://* ]] || return 1
+  DSN_SCHEME="${dsn%%://*}"
+  rest="${dsn#*://}"
+  if [[ "$rest" == *\?* ]]; then DSN_QUERY="${rest#*\?}"; rest="${rest%%\?*}"; fi
+
+  # Userinfo ends at the LAST "@": a password may hold an unencoded "@" or "/".
+  local user_raw=""
+  if [[ "$rest" == *@* ]]; then
+    userinfo="${rest%@*}"
+    rest="${rest##*@}"
+    user_raw="${userinfo%%:*}"
+    DSN_USER="$(printf '%s' "$user_raw" | url_decode)"
+    if [[ "$userinfo" == *:* ]]; then
+      DSN_PASS="$(printf '%s' "${userinfo#*:}" | url_decode)"
+    fi
+  fi
+
+  hostport="${rest%%/*}"
+  [[ "$rest" == */* ]] && DSN_DB="${rest#*/}"
+  if [[ "$hostport" == \[* ]]; then                 # [::1]:5432
+    DSN_HOST="${hostport%%\]*}]"
+    [[ "$hostport" == *\]:* ]] && DSN_PORT="${hostport##*\]:}"
+  else
+    DSN_HOST="${hostport%%:*}"
+    [[ "$hostport" == *:* ]] && DSN_PORT="${hostport#*:}"
+  fi
+
+  local kept="" pair qpass=""
+  local -a pairs=()
+  IFS='&' read -r -a pairs <<<"$DSN_QUERY"
+  for pair in "${pairs[@]}"; do
+    case "$(printf '%s' "${pair%%=*}" | tr '[:upper:]' '[:lower:]')" in
+      password|passwd|pwd|pass) qpass="${pair#*=}"; continue ;;
+    esac
+    kept="${kept:+$kept&}$pair"
+  done
+  [[ -z "$DSN_PASS" && -n "$qpass" ]] && DSN_PASS="$(printf '%s' "$qpass" | url_decode)"
+  DSN_NOPASS="${DSN_SCHEME}://${user_raw:+$user_raw@}${hostport}${DSN_DB:+/$DSN_DB}${kept:+?$kept}"
+}
+
+# with_secret_tmpdir
+# Creates a 0700 directory and leaves its path in $__SECRET_DIR. The caller
+# arranges `trap cleanup_temp_dirs EXIT`. Call it in the main shell, not in
+# $(…): a command substitution would register the cleanup in a subshell.
+__SECRET_DIR=""
+with_secret_tmpdir() {
+  local d
+  d="$(mktemp -d "${TMPDIR:-/tmp}/db-secret.XXXXXX")"
+  chmod 700 "$d"
+  __CLEANUP_DIRS+=("$d")
+  __SECRET_DIR="$d"
 }

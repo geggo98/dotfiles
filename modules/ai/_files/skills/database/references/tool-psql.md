@@ -11,21 +11,21 @@ nix shell nixpkgs#postgresql_16   # bundles psql
 ```bash
 # Safe one-shot: skip rc, stop on error, no password prompt, CSV
 psql -X -v ON_ERROR_STOP=1 -w --csv \
-     -h db.example.com -U stefan -d kfzif \
+     -h db.example.com -U stefan -d appdb \
      -c "SELECT id, name FROM users WHERE active LIMIT 100"
 
 # Script in a single transaction
-psql -X -v ON_ERROR_STOP=1 -w -1 -h db -U stefan -d kfzif -f migration.sql
+psql -X -v ON_ERROR_STOP=1 -w -1 -h db -U stefan -d appdb -f migration.sql
 
 # JSON via SQL (psql has no --json)
 psql -X -A -t -c "SELECT json_agg(t) FROM (SELECT id, name FROM users) t" \
-     -h db -U stefan -d kfzif
+     -h db -U stefan -d appdb
 
 # Schema dump for inspection
-pg_dump --schema-only --no-owner -h db -U stefan -d kfzif > schema.sql
+pg_dump --schema-only --no-owner -h db -U stefan -d appdb > schema.sql
 
 # Machine-readable table list
-psql -X -A -t -F $'\t' -c '\dt' -h db -U stefan -d kfzif
+psql -X -A -t -F $'\t' -c '\dt' -h db -U stefan -d appdb
 ```
 
 ## Flags
@@ -59,7 +59,7 @@ audit logs show the source.
 
 ```bash
 psql -X -c "EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) SELECT ..." \
-     -h db -U stefan -d kfzif
+     -h db -U stefan -d appdb
 ```
 
 ## Read-only

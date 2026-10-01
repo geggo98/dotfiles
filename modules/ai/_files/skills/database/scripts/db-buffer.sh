@@ -19,7 +19,8 @@ Usage:
 Buffers stdin to a tempfile (in $TMPDIR). When the captured size is
 within the threshold, prints content to stdout and deletes the tempfile.
 When over the threshold, prints a short header, the absolute path, and
-the first N lines as a preview; the file is left on disk.
+the first N lines as a preview; the file is left on disk. Credential
+patterns (URL passwords, password=…, private keys) are masked first.
 
 Options:
   --max-bytes N          Threshold in bytes (default: 32768, or
@@ -42,4 +43,5 @@ if [[ "${1:-}" == "-h" || "${1:-}" == "--help" ]]; then
   exit 0
 fi
 
-buffer_output "$@"
+# Credentials in piped-in output are masked before they reach the tempfile.
+redact_stream | buffer_output "$@"

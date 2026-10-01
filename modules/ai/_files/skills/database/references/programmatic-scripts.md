@@ -25,18 +25,18 @@ cfg.setPassword(sys.env("DB_PWD"))
 cfg.setReadOnly(true)
 val ds = HikariDataSource(cfg)
 
-case class BrokerResult(id: Long, carrierId: String, premiumCents: Long) derives DbCodec
+case class Order(id: Long, carrierId: String, premiumCents: Long) derives DbCodec
 
 Using.resource(ds) { _ =>
   connect(ds):
     val rows = sql"""
       SELECT id, carrier_id, premium_cents
-      FROM broker_result
+      FROM orders
       WHERE created_at > current_date - interval 1 day
-    """.query[BrokerResult].run()
+    """.query[Order].run()
 
     import upickle.default.*
-    given ReadWriter[BrokerResult] = macroRW
+    given ReadWriter[Order] = macroRW
     println(write(rows))
 }
 ```
@@ -45,7 +45,7 @@ Run:
 
 ```bash
 nix shell nixpkgs#scala-cli
-DB_URL=jdbc:mysql://localhost/kfzif DB_USER=stefan DB_PWD=... scala-cli run query.sc
+DB_URL=jdbc:mysql://localhost/appdb DB_USER=stefan DB_PWD=... scala-cli run query.sc
 ```
 
 Trade-offs: 2–4s cold start; ~1s cached. Coursier cache must be reachable
@@ -65,7 +65,7 @@ PEP-723 inline metadata makes Python scripts self-contained.
 #   "cryptography>=42",
 # ]
 # ///
-"""Daily report: BrokerResults from the last 24h as JSON."""
+"""Daily report: Orders from the last 24h as JSON."""
 from __future__ import annotations
 
 import json, os, sys
@@ -77,7 +77,7 @@ since = datetime.utcnow() - timedelta(days=1)
 
 query = text("""
     SELECT id, carrier_id, premium_cents, created_at
-    FROM broker_result WHERE created_at >= :since ORDER BY id LIMIT 1000
+    FROM orders WHERE created_at >= :since ORDER BY id LIMIT 1000
 """)
 
 with engine.connect() as conn:
@@ -92,7 +92,7 @@ Run:
 
 ```bash
 chmod +x query.py
-DB_URL='mysql+pymysql://stefan:pw@localhost/kfzif' ./query.py | jq .
+DB_URL='mysql+pymysql://stefan:pw@localhost/appdb' ./query.py | jq .
 ```
 
 First run loads deps to the uv cache (~2s); subsequent runs <500ms.
@@ -133,7 +133,7 @@ fun main() {
     }
     Database.connect(HikariDataSource(cfg))
     transaction {
-        exec("SELECT id, carrier_id, premium_cents FROM broker_result LIMIT 10") { rs ->
+        exec("SELECT id, carrier_id, premium_cents FROM orders LIMIT 10") { rs ->
             while (rs.next()) println("""{"id":${rs.getLong(1)},"carrier":"${rs.getString(2)}","premium":${rs.getLong(3)}}""")
         }
     }
@@ -141,7 +141,7 @@ fun main() {
 ```
 
 ```bash
-DB_URL=jdbc:mysql://localhost/kfzif DB_USER=stefan DB_PWD=... jbang query.kt
+DB_URL=jdbc:mysql://localhost/appdb DB_USER=stefan DB_PWD=... jbang query.kt
 ```
 
 Use jbang when the team is Kotlin/Java-leaning; otherwise scala-cli is

@@ -256,9 +256,15 @@ producer() {
 
 set -o pipefail
 
+# Everything the wrapper emits is filtered (private keys, tokens, URL
+# passwords): errors from bq/gcloud can quote credentials.
 if [[ -n "$output_file" ]]; then
-  producer > "$output_file"
+  with_secret_tmpdir
+  rc=0
+  producer 2>"$__SECRET_DIR/stderr" | redact_stream > "$output_file" || rc=$?
+  redact_stream < "$__SECRET_DIR/stderr" >&2
+  [[ "$rc" -eq 0 ]] || exit "$rc"
   printf 'wrote output to %s\n' "$output_file"
 else
-  producer 2>&1 | buffer_output --max-bytes "$max_bytes" --label "bq:${subcommand}" --preview-lines 20
+  producer 2>&1 | redact_stream | buffer_output --max-bytes "$max_bytes" --label "bq:${subcommand}" --preview-lines 20
 fi

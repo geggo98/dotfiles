@@ -8,11 +8,46 @@
 
 ```bash
 # WRONG:
-psql -h db -U stefan -W -d kfzif        # prompts in script, hangs
+psql -h db -U stefan -W -d appdb        # prompts in script, hangs
 mysql -ustefan -pgeheim123 ...          # password in process list
-${CLAUDE_SKILL_DIR}/scripts/db.sh --dsn 'pg://stefan:hunter2@db/kfzif' ...
+${CLAUDE_SKILL_DIR}/scripts/db.sh --dsn 'pg://stefan:hunter2@db/appdb' ...
                                         # literal — wrapper warns; agent saw it anyway
 ```
+
+## How `db.sh` hands the password to each client
+
+The client's command line is world-readable (`ps`) and clients quote it in
+errors, so `db.sh` never puts the password there:
+
+| Client | Hand-off | argv contains |
+|---|---|---|
+| mysql / mariadb | mode-600 option file, `--defaults-extra-file` (`--defaults-file` with `--no-rc`) | host and database only |
+| psql | mode-600 `PGPASSFILE` | DSN without password |
+| usql | mode-600 `USQLPASS` file | DSN without password |
+| sqlcmd | `SQLCMDPASSWORD` in the client's environment | user, host |
+| sqlcl | `connect` line on stdin | `-S /nolog` |
+| mongosh | `DB_MONGO_URI` in the client's environment, read by `--eval` | script only |
+| sqlite, duckdb | no secret | path |
+
+The files live in a mode-700 temporary directory that the wrapper deletes on
+exit. If the DSN is not a URL (a libpq key/value string), `psql` and `usql`
+receive it unchanged. The output filter still applies.
+
+## Output redaction
+
+All stdout and stderr of `db.sh`, `bq.sh` and `db-buffer.sh` pass through
+`scripts/redact.pl`, because errors and results cannot be told apart
+reliably. The filter has two layers:
+
+1. **Exact:** the password, the full DSN, and their URL-encoded and decoded
+   forms become `***`. The values reach the filter through its environment,
+   never through argv.
+2. **Pattern:** `scheme://user:pw@`, `password=`/`pwd=`/`token=`/`secret=`,
+   `IDENTIFIED BY '…'`, `-p<pw>`, JSON keys such as `"api_token"`, and
+   `PRIVATE KEY` blocks. These catch secrets the wrapper does not know,
+   for example in `raw` output or in the stderr of a `--dsn-cmd` provider.
+
+If perl is missing, the wrapper fails instead of printing unfiltered text.
 
 ## Idiomatic per-tool secret stores
 
@@ -39,6 +74,7 @@ Both `db.sh` and `bq.sh` walk this chain. First non-empty wins.
 | 5 | `$NAME` env | **Warns** (env-leak) |
 
 Resolved value is never logged. Warnings reference only source names.
+Stderr of a `--*-cmd` provider is redacted before it is shown.
 
 ## Executable secret providers
 
@@ -93,7 +129,7 @@ ${CLAUDE_SKILL_DIR}/scripts/db.sh query \
 
 ```bash
 ${CLAUDE_SKILL_DIR}/scripts/db.sh query \
-  --dsn-cmd 'vault read -field=dsn secret/data/kfzif/readonly' \
+  --dsn-cmd 'vault read -field=dsn secret/data/appdb/readonly' \
   "SELECT count(*) FROM users"
 ```
 
@@ -125,7 +161,7 @@ INI-style with one section per environment:
 dsn-cmd = vault kv get -field=dsn kv/db/prod
 
 [staging]
-dsn = pg://reader@stage.internal/kfzif
+dsn = pg://reader@stage.internal/appdb
 ```
 
 Mode 600 enforced; the wrapper warns if it's looser.

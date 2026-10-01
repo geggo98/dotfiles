@@ -71,9 +71,9 @@ Canonical patterns (the agent picks one):
 
 ```bash
 # 1. Read-only query (DSN from an executable secret provider)
-${CLAUDE_SKILL_DIR}/scripts/db.sh query \
+${CLAUDE_SKILL_DIR}/scripts/db.sh \
   --dsn-cmd 'vault kv get -field=dsn kv/db/prod' \
-  "SELECT id, email FROM users WHERE active LIMIT 50"
+  query "SELECT id, email FROM users WHERE active LIMIT 50"
 
 # 2. Schema introspection
 ${CLAUDE_SKILL_DIR}/scripts/db.sh --dsn-file ~/.config/db/staging.dsn \
@@ -107,7 +107,26 @@ Sources are tried in this order; first non-empty wins:
 4. `${DB_DSN}_CMD` env var — wrapper runs the named command.
 5. `$DB_DSN` env var — literal env DSN (**warned** as env-leak).
 
-The resolved value is never echoed to stderr, logs, or shell history.
+The wrapper keeps the resolved value out of the transcript in two ways:
+
+- **Not on the client's command line.** `db.sh` passes the password to
+  `mysql`, `psql`, `usql`, `sqlcmd`, `sqlcl` and `mongosh` through a
+  mode-600 file or the tool's own environment variable. `ps` and the
+  client's error text therefore never contain it. Per-tool table:
+  [`references/secrets-and-connection.md`](references/secrets-and-connection.md).
+- **Redacted output.** `scripts/redact.pl` filters all stdout and stderr of
+  `db.sh`, `bq.sh` and `db-buffer.sh`. It masks the known password exactly
+  and also masks credential shapes (`scheme://user:pw@`, `password=…`,
+  `IDENTIFIED BY '…'`, private keys).
+
+Limits: the pattern rules are heuristic and can miss a secret in an unusual
+format. They can also mask result data that looks like a credential. A
+literal `--dsn` is visible in the wrapper's own argv, and `raw -- <cmd>`
+forwards whatever argv you write.
+
+Global options (`--dsn-cmd`, `--timeout`, …) go before the subcommand;
+the wrapper also accepts them directly after it.
+
 The warning labels reference only the *source name*. Use executable
 providers (`vault kv get`, `op item get`, `gcloud auth print-access-token`,
 `sops -d --extract …`, `pass show …`) whenever possible.
