@@ -31,6 +31,32 @@ Eingabe als Kommentar darüber.
 m{^ \s* url \s* = \s* "github:owner/repo/(?<tag>[^"]+)"; \s* $}x
 ```
 
+### Unicode: `-CSDA -Mutf8`, sonst zählt perl Bytes
+
+Perl unterscheidet ohne `use utf8` beziehungsweise `-C` nicht zwischen Bytes und
+Zeichen. Kann Unicode im Spiel sein — bei deutschem Text, Dateinamen, JSON also
+praktisch immer —, den Einzeiler als `perl -CSDA -Mutf8 …` aufrufen.
+
+- `-CS`: STDIN, STDOUT und STDERR als UTF-8. `-CD`: Standard-Layer für `open`
+  (und damit für `-i`). `-CA`: `@ARGV` dekodieren.
+- `-Mutf8` (= `use utf8`): Literale **im Code** sind Zeichen. `-CSD` allein
+  reicht nicht, wenn das Muster selbst Umlaute enthält.
+
+Gemessen am 01.10.2026 mit perl 5.34.1 an der Eingabe `Größe`. Keiner der Fälle
+bricht ab, alle liefern plausibel aussehende falsche Werte:
+
+| Aufruf | ohne | mit |
+|---|---|---|
+| `length` | **7** | 5 (`-CSD`) |
+| `uc` | **GRößE** | GRÖSSE (`-CSD`) |
+| Anzahl `\w` | **3** | 5 (`-CSD`) |
+| `/ö/` im Code | **miss** | hit (`-CSD -Mutf8`; `-CSD` allein: miss) |
+| `length $ARGV[0]` | **7** | 5 (`-CSDA`; `-CSD` allein: 7) |
+
+In einer Skriptdatei gehört `-C` nicht in die Shebang-Zeile: `perl script.pl`
+bricht dann mit `Too late for "-CSD" option` ab (exit 255). Dort stattdessen
+`use utf8;` und `use open qw(:std :encoding(UTF-8));`.
+
 ## Kurze Skripte: `#!/bin/zsh`, nicht bash
 
 macOS' `/bin/bash` steht bei 3.2 von 2007: keine assoziativen Arrays, kein
