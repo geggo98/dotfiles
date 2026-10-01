@@ -255,6 +255,9 @@ more) live in `docs/scripting.md`.
 
 ### Any script that processes a list must be resumable
 
+The general form — progress with ETA, abort, `flock` lock, `--status` — is the global rule
+`long-running-scripts.md`; this section keeps the incident reports.
+
 Four rules, each paid for by a real incident — full write-ups in `docs/scripting.md`:
 
 - **Classify every item as SUCCESS, SKIP, ERROR or CLEANUP, never collapse two.** A
