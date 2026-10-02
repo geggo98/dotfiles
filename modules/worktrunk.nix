@@ -45,10 +45,13 @@ in
           # Projekt-Hooks aus .config/wt.toml. Pipeline: .envrc ist gitignored und kommt
           # erst durch copy-ignored in den Worktree; `direnv allow` davor wuerde ins Leere
           # laufen. copy-ignored ist idempotent, die Projekt-Variante daneben schadet nicht.
-          # `[ -f .envrc ]` macht den Hook zum No-op fuer Repos ohne direnv.
+          # Guard: No-op ohne .envrc, und No-op bei getrackter .envrc -- die stammt dann aus
+          # dem ausgecheckten Branch (z.B. fremder PR), und `direnv allow` fuehrte dessen Code
+          # ohne Rueckfrage aus. Freigegeben wird nur die gitignorierte, aus dem
+          # Primaer-Worktree kopierte Datei.
           post-start = [
             { copy = "wt step copy-ignored"; }
-            { allow = "[ ! -f .envrc ] || direnv allow ."; }
+            { allow = "[ ! -f .envrc ] || ! git check-ignore -q .envrc || direnv allow ."; }
           ];
         };
 
