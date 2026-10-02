@@ -39,6 +39,17 @@ in
           pre-start = [
             { precommit = "cp -P {{ primary_worktree_path }}/.pre-commit-config.yaml {{ worktree_path }}/.pre-commit-config.yaml 2>/dev/null || true"; }
           ];
+
+          # direnv (und damit devenv, das die .envrc per `use devenv` einbindet) in jedem
+          # neuen Worktree freigeben. User-Hooks brauchen keine Approval, anders als die
+          # Projekt-Hooks aus .config/wt.toml. Pipeline: .envrc ist gitignored und kommt
+          # erst durch copy-ignored in den Worktree; `direnv allow` davor wuerde ins Leere
+          # laufen. copy-ignored ist idempotent, die Projekt-Variante daneben schadet nicht.
+          # `[ -f .envrc ]` macht den Hook zum No-op fuer Repos ohne direnv.
+          post-start = [
+            { copy = "wt step copy-ignored"; }
+            { allow = "[ ! -f .envrc ] || direnv allow ."; }
+          ];
         };
 
       # ── Worktrunk plugins for the agent CLIs (all from the worktrunk flake input) ──
