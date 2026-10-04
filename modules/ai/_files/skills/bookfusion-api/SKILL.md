@@ -11,6 +11,7 @@ argument-hint: "<command> [--param value ...] [--data '<json>'] [--dry-run] [--p
 allowed-tools: >-
   Bash(${CLAUDE_SKILL_DIR}/scripts/bookfusion.sh *)
   Bash(bash ${CLAUDE_SKILL_DIR}/scripts/bookfusion.sh *)
+  Skill(book-metadata)
   Read(references/*)
   Read
 dependencies: >-
@@ -80,6 +81,15 @@ bookshelves, series, authors, publisher_name, published_at). Its update rules (v
   field this mobile API neither returns nor accepts, so it cannot be read or cleared from here. An ISBN that
   *does* show up in this API lives as free text in `tags` (only editable via the `tags` array).
   `creation_token` for `createSeries`/`createBookshelf` is auto-generated when you omit it.
+
+## Fetching metadata for a book (with `Skill(book-metadata)`)
+To fill in or correct a book from the calibre metadata sources:
+1. `book-metadata.sh fetch --isbn <isbn> --format bookfusion --cover /tmp/c.jpg > /tmp/payload.json`
+2. **Verify the result first** (edition, year, language; see the warning in `Skill(book-metadata)`) and show
+   the user old vs. new values.
+3. Merge `tags` with the book's current tags, because arrays replace (see "Editing book metadata").
+4. `bookfusion.sh updateUserBook --dangerous --id <id> --cover /tmp/c.jpg --data-file /tmp/payload.json`
+   (try `--dry-run` first).
 
 ## Bulk changes — `batch` (one login, one JVM)
 Each CLI call cold-starts a JVM (~2 s), so many single writes are slow. For bulk work use `batch`, which
