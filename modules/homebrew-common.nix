@@ -25,7 +25,7 @@
       };
 
       config = {
-        my.homebrew.trustedTaps = [ "hashicorp/tap" "typewhisper/tap" ];
+        my.homebrew.trustedTaps = [ "hashicorp/tap" "johannesnagl/tap" "typewhisper/tap" ];
 
         # Nix-managed Homebrew installation. `user` is the prefix owner (per host,
         # via system.primaryUser). autoMigrate adopts the existing /opt/homebrew,
@@ -116,6 +116,7 @@
           "betterdisplay"
           "tabtab"
           { name = "typewhisper/tap/typewhisper"; }
+          { name = "johannesnagl/tap/showmd"; } # Markdown viewer
           "bettermouse"
         ];
         homebrew.masApps = {
