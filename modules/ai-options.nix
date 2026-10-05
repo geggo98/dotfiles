@@ -29,7 +29,7 @@
           };
           model = mkOption {
             type = types.nullOr types.str;
-            default = "gpt-6-sol";
+            default = "gpt-6.1-sol";
             description = "Default model merged into Codex's writable config.toml; null leaves the key unmanaged and gives back a previously owned value.";
           };
           reasoningEffort = mkOption {
@@ -45,30 +45,31 @@
             default = "xhigh";
             description = "plan_mode_reasoning_effort for Codex's Plan mode (Shift+Tab); null leaves it unmanaged.";
           };
-          # Upstream feature flag, managed and deliberately OFF.
+          # Upstream feature flag `[features] reasoning_effort_override` (PR #43110,
+          # first shipped in 0.154.0). EXPERIMENTAL: still Stage::UnderDevelopment
+          # and default-off upstream.
           #
-          # openai/codex added `[features] reasoning_effort_override` in PR #43110,
-          # first shipped in 0.154.0 (2026-09-09); it is still Stage::UnderDevelopment
-          # and default-off upstream. With it enabled, codex appends a
-          # `configuration_update` history item whenever the resolved reasoning
-          # effort changes mid-session -- which entering Plan mode ALWAYS does here,
-          # because planReasoningEffort ("xhigh") differs from reasoningEffort
-          # ("medium"). gpt-5.6-luna, -terra and -sol then answer HTTP 400 on every
-          # following turn; only gpt-6-astra tolerates the item. Open, unfixed as of
-          # 2026-09-17, and `false` is the issue's own stated workaround:
+          # With it on, codex appends a `configuration_update` history item
+          # whenever the resolved reasoning effort changes mid-session -- which
+          # entering Plan mode always does here, because planReasoningEffort
+          # ("xhigh") differs from reasoningEffort ("medium"). The item is meant to
+          # leave the cached prompt prefix intact.
+          #
+          # It was OFF while openai/codex#44751 was fresh: 0.154.0..0.156.x sent
+          # the item to gpt-5.6-luna/-terra/-sol, which answered HTTP 400 on every
+          # following turn. The issue is still open, but codex now gates the send
+          # per model on `supports_reasoning_effort_updates` in the bundled
+          # catalog (codex-rs/core/src/client.rs). Measured 2026-10-05: in 0.160.0
+          # gpt-6-astra and gpt-6.1-sol set it; gpt-6-sol and gpt-6-luna do not and
+          # never receive the item. In 0.156.1 no model set it, so the flag was
+          # inert. Hence this is only worth turning on together with a model that
+          # sets the gate -- the default `model` above is gpt-6.1-sol for that
+          # reason. "Works across the whole GPT-6 suite" is not what the catalog
+          # says.
           # https://github.com/openai/codex/issues/44751
-          #
-          # Inert on the currently pinned codex 0.156.1 (modules/agents.nix, input
-          # llm-agents-codex-pin) for a second, independent reason on top of being
-          # off by default: the `configuration_update` send now additionally gates
-          # on a per-model flag (`supports_reasoning_effort_updates`), and no model
-          # in 0.156.1's bundled catalog sets it -- not even gpt-6-astra. So even
-          # flipping this to `true` would not reproduce #44751 on this version. Left
-          # off regardless, since the flag is still Stage::UnderDevelopment upstream
-          # and the issue is unfixed as of 2026-09-23.
           reasoningEffortOverride = mkOption {
             type = types.nullOr types.bool;
-            default = false;
+            default = true;
             description = "Upstream [features] reasoning_effort_override in Codex's writable config.toml; null leaves the key unmanaged and gives back a previously owned value.";
           };
         });

@@ -34,9 +34,9 @@ in
           ];
         };
         # Managed like `tui` and unlike the scalars below: a table has an empty
-        # form, so one conditional attrset covers "not managed". Why it is pinned
-        # to false, and the upstream bug, are at my.ai.agents.codex.reasoningEffortOverride
-        # in modules/ai-options.nix.
+        # form, so one conditional attrset covers "not managed". What the flag does, why
+        # it needs a model that supports it, and the upstream bug are at
+        # my.ai.agents.codex.reasoningEffortOverride in modules/ai-options.nix.
         features = lib.optionalAttrs
           (enabled "codex" && ai.agents.codex.reasoningEffortOverride != null)
           { reasoning_effort_override = ai.agents.codex.reasoningEffortOverride; };
