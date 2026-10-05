@@ -256,68 +256,72 @@
     llm-agents-claude-code-pin.url =
       "github:numtide/llm-agents.nix/2c69cfa181ddfa18192addd41d6b3ec328cd4e44";
 
-    # TEMPORARY PIN — codex 0.153.4, for GPT-6-Astra. Consumed by
-    # modules/agents.nix (programs.codex.package) and modules/agents.nix
-    # (the codex-acp override). Same construction as the claude-code pin above;
-    # what differs is written here, what is shared is not repeated.
+    # TEMPORARY PIN — codex 0.160.0, so that `reasoning_effort_override` and the
+    # default model gpt-6.1-sol do something. Consumed by modules/agents.nix
+    # (programs.codex.package) and modules/agents.nix (the codex-acp override).
+    # Same construction as the claude-code pin above; what differs is written
+    # here, what is shared is not repeated.
     #
-    # Why: GPT-6-Astra shipped 2026-09-03. Codex gained it in 0.153.1 (API config
-    # only, hidden from the picker), and 0.153.4 is the release that shows it in
-    # the bundled model picker and makes it the default when no model is set
-    # (openai/codex#42874). "No model is set" no longer describes this repo —
-    # modules/agent-integration.nix now pins `model = "gpt-5.6-terra"` via
-    # my.ai.agents.codex.model — but the picker still needs 0.153.4 to list
-    # GPT-6-Astra at all, which is reason enough on its own to keep the pin.
-    # nixpkgs-llm-agents under its 14-day bar sits on
-    # 0.150.1 and cannot reach 0.153.4 before 2026-09-19. (The API-only catalog
-    # from 0.153.1 would arrive a day earlier via 0.153.2 — llm-agents never
-    # shipped 0.153.1 — which is not enough: the picker and the default are the
-    # point.)
+    # Why: codex only sends the `configuration_update` item behind that flag to
+    # models whose bundled catalog entry sets `supports_reasoning_effort_updates`
+    # (codex-rs/core/src/client.rs). Measured 2026-10-05 against the tags: in
+    # 0.156.1 no model sets it; in 0.160.0 gpt-6-astra and gpt-6.1-sol do, while
+    # gpt-6-sol and gpt-6-luna still do not. gpt-6.1-sol first appears in the
+    # catalog after 0.156.1. nixpkgs-llm-agents under its 14-day bar cannot
+    # reach 0.160.0 before 2026-10-15.
     #
-    # THE COOLDOWN UNDERCUT. 0.153.4 was released on GitHub 2026-09-04 23:25Z
-    # (the tag object itself is from 22:41Z) and published to npm at 23:31Z —
-    # 6.5 days old against the 14-day bar when pinned on 2026-09-11. Deliberate, under AGENTS.md "Undercutting a cooldown: research
-    # first, fetch second"; everything below was read from metadata before any
-    # source or binary was fetched:
+    # THE REV IS NOT THE 0.160.0 BUMP COMMIT. That commit (4bf9e89, "codex:
+    # 0.159.3 -> 0.160.0") only moves hashes.json and yields a codex that dies on
+    # start with "this CLI has no complete local package" (numtide/llm-agents.nix
+    # #9887): since 0.157.0 the app-server daemon needs a codex-package.json next
+    # to the binary. The rev below is two commits later and adds that layout under
+    # libexec/codex plus daemon-nix-store.patch. The patch makes the daemon run
+    # from the store instead of copying ~550 MB to ~/.codex/packages and marking
+    # the copy a "stable release", which is what lets upstream's updater swap it
+    # for a prebuilt binary. A `current` link outside the store is left alone.
+    # So the earlier reading "no update path, because no package layout" no longer
+    # holds; it is now "layout present, daemon bound to a store path".
     #
-    #   the rev is exactly the bump commit "codex: 0.153.3 -> 0.153.4"
-    #     (2026-09-05 03:20Z); nothing else moved in it
-    #   GitHub release rust-v0.153.4: published, not draft, not pre-release
-    #   npm @openai/codex 0.153.4: listed, no `deprecated`, attestations present,
-    #     `latest` already at 0.154.0 — superseded normally, not pulled
-    #   OSV: 0 advisories for @openai/codex 0.153.4
-    #   no reporting of a live campaign against @openai/codex or its maintainers;
-    #     the June 2026 codexui-android token theft was a THIRD-PARTY npm package
-    #     that read ~/.codex/auth.json, not this one
-    #   cache.numtide.com answers 200 for the aarch64-darwin narinfo of
-    #     /nix/store/lxfsi3w1c480slw93f96sn2f8ybmqbvw-codex-0.153.4
+    # THE COOLDOWN UNDERCUT. Release rust-v0.160.0 is from 2026-10-01 20:19Z, the
+    # rev from 2026-10-02 18:53Z: 3.6 days against the 14-day bar for the release,
+    # 2.7 against the 5-day bar for the input, when pinned on 2026-10-05.
+    # Deliberate, under AGENTS.md "Undercutting a cooldown: research first, fetch
+    # second"; everything below was read from metadata, nothing was fetched:
     #
-    # BE PRECISE ABOUT THE CHAIN: llm-agents builds codex FROM SOURCE — fetchFromGitHub
-    # on the tag rust-v0.153.4 plus a cargoHash — so npm is not in the supply chain
-    # at all; the npm entry in scripts/supply-chain.toml is only a dated proxy for
-    # the release. The narinfo hit says upstream CI produced the same derivation
-    # and it is served from their cache, so this costs a download, not a Rust build.
+    #   npm @openai/codex 0.160.0: published by the same GitHub-Actions OIDC
+    #     trusted publisher (same oidcConfigId as 0.159.3), the same 18
+    #     maintainers, attestations present, not deprecated, not unpublished
+    #   OSV: no advisories. GHSA: one historical (2025, <= 0.39), not this version
+    #   Cargo.lock 0.156.1 -> 0.160.0: 1493 -> 1472 packages, no new crate name,
+    #     the only new registry version is h2 0.4.19. rustc 1.95.0 and
+    #     v8 = 150.4.0 are unchanged
+    #   llm-agents.nix #10212 (bot, hashes.json only, 7/7 checks green) and the
+    #     two layout commits above, whose diffs were read
+    #   ONE ANOMALY, NAMED: the tag sits one commit above the release/0.160.0-alpha.6
+    #     branch head, branched off main, and its signature does not verify. Same
+    #     shape as the 0.156.1 hotfix tag. No sign of tampering, but it is
+    #     unproven.
     #
-    # WHY 0.153.4 AND NOT 0.154.0. 0.154.0 (2026-09-09 22:40Z) is `latest` and
-    # about a day and a half old at the time of pinning; a version that IS
-    # `latest` cannot yet show the withdrawn signal, and it has a quarter of the
-    # soak. 0.153.4 is also exactly the requirement, not more.
+    # BE PRECISE ABOUT THE CHAIN: llm-agents builds codex FROM SOURCE —
+    # fetchFromGitHub on the tag rust-v0.160.0 plus a cargoHash — so npm is not in
+    # the supply chain; the npm entry in scripts/supply-chain.toml is only a dated
+    # proxy for the release.
     #
     # No `inputs.nixpkgs.follows`, for the reason given at the claude-code pin:
     # the follows would move the out path off the one upstream caches.
     #
     # The blast radius is deliberately ONE package: only codex is taken from this
     # rev. codex-acp stays on nixpkgs-llm-agents and is `override`n to use this
-    # codex, otherwise its baked-in CODEX_PATH would drag the old 0.150.1 into
+    # codex, otherwise its baked-in CODEX_PATH would drag the old codex into
     # every generation as a second copy — the same leak the claude-agent-acp
     # override in modules/agents.nix exists for.
     #
-    # REMOVE once nixpkgs-llm-agents itself ships >= 0.153.4 — at the earliest on
-    # 2026-09-19, when `just update` with the 14-day bar lands on a rev from
-    # 2026-09-05 03:20Z or later. An assertion in modules/agents.nix breaks
-    # the build at that point and spells out the steps.
+    # REMOVE once nixpkgs-llm-agents itself ships >= 0.160.0 WITH the package
+    # layout commits above (rev 43597605 or later) — at the earliest on
+    # 2026-10-15. An assertion in modules/agents.nix breaks the build at that
+    # point and spells out the steps.
     llm-agents-codex-pin.url =
-      "github:numtide/llm-agents.nix/6d96d0808d372e8ec9b12a3ac4002d54b4175bd8";
+      "github:numtide/llm-agents.nix/43597605c97b74dc28edd2b0c39b03530a0a988c";
 
     # agent-browser: source of truth for both the version and the skill bodies
     # consumed by modules/agent-browser.nix. That module reads the version from
