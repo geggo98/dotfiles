@@ -148,47 +148,45 @@
     # from release binaries.
     nixpkgs-llm-agents.url = "github:numtide/llm-agents.nix";
 
-    # TEMPORARY PIN — claude-code 2.1.284. Consumed by modules/agents.nix.
+    # TEMPORARY PIN — claude-code 2.1.296. Consumed by modules/agents.nix.
     #
-    # Why: Claude Sonnet 5.5 (`claude-sonnet-5-5`). Per the upstream changelog
-    # 2.1.284 adds it and makes it the default Sonnet model on the Anthropic API,
-    # so `settings.model = "opusplan"` in modules/agents.nix reaches it on the
-    # execution half with no further change. Measured directly: the installed
-    # 2.1.280 bundle contains `claude-opus-5-5` (41 hits) but not
-    # `claude-sonnet-5-5` at all — 2.1.284 is a hard floor on the CLIENT side, not
-    # a preference. Everything the previous pin existed for — Opus 5.5 from
-    # 2.1.280, Fable 5.1 from 2.1.257, the macOS launch fix from 2.1.258 — is
-    # contained in this one; only the model catalog moved.
+    # Why: Claude Haiku 5.5 (`claude-haiku-5-5`, released 2026-10-07). Per the
+    # upstream changelog 2.1.293 is the first client that knows it and makes it
+    # the default Haiku model on the Anthropic API; 2.1.296 additionally fixes
+    # the Haiku 5.5 token counts behind some gateways. 2.1.296 rather than 2.1.293
+    # because it is npm `latest` and carries the fixes for the regressions of
+    # 2.1.288, 2.1.290 and 2.1.295. Everything the previous pins existed for —
+    # Sonnet 5.5 from 2.1.284, Opus 5.5 from 2.1.280, Fable 5.1 from 2.1.257 —
+    # is contained in this one; only the model catalog moved.
     #
-    # THE COOLDOWN UNDERCUT. 2.1.284 was published to npm 2026-09-28 17:11:59Z —
+    # THE COOLDOWN UNDERCUT. 2.1.296 was published to npm 2026-10-09 16:58:10Z —
     # about 1 day old against the 14-day bar scripts/supply-chain.toml gives this
     # ecosystem. Deliberate, under AGENTS.md "Undercutting a cooldown: research
-    # first, fetch second", researched from metadata only, no binary fetched:
+    # first, fetch second", researched from metadata only, no binary fetched
+    # (research dated 2026-10-10):
     #
-    #   hashes.json at this rev == Anthropic's manifest.json for 2.1.284 (hex
-    #     checksums converted to SRI and diffed by hand), all three built
-    #     platforms (darwin-arm64, linux-arm64, linux-x64). The five platforms
-    #     llm-agents does not build (darwin-x64, the two musl variants,
-    #     win32-x64, win32-arm64) stand in the manifest and are correctly absent
-    #     from hashes.json
-    #   artifact still served: HTTP 200, 226_563_088 bytes, last-modified
-    #     2026-09-28 17:07:19Z — 4 minutes before the npm publish; manifest
-    #     buildDate 02:36:51Z the same day
-    #   npm: listed, no `deprecated` flag, `time` entry intact, same publisher
-    #     account as 2.1.280 and 2.1.283. No attestations, which is normal for
-    #     THIS package — every prior version carries none either
-    #   GitHub release v2.1.284: published 2026-09-28 18:02Z, not draft, not
+    #   hashes.json at this rev == Anthropic's manifest.json for 2.1.296 (hex
+    #     checksums converted to SRI and diffed by script), all three built
+    #     platforms (darwin-arm64, linux-arm64, linux-x64). The platforms
+    #     llm-agents does not build stand in the manifest and are correctly
+    #     absent from hashes.json
+    #   artifact still served: HTTP 200, 240_664_432 bytes (darwin-arm64),
+    #     last-modified 2026-10-09 16:52:38Z — 6 minutes before the npm publish;
+    #     manifest buildDate 14:46:35Z the same day; `latest` pointer = 2.1.296
+    #   npm: listed, no `deprecated` flag, same maintainer set as before
+    #     (`claude-code-npm` among them). dist-tags latest = next = 2.1.296,
+    #     stable = 2.1.287
+    #   GitHub release v2.1.296: published 2026-10-09 19:28Z, not draft, not
     #     prerelease
-    #   OSV: 0 advisories for 2.1.284. GitHub Security Advisories for
-    #     anthropics/claude-code: none affect 2.1.284 (the newest, 2026-09-25,
-    #     is a Claude Desktop/Cowork issue, a different product)
-    #   no reporting of a live campaign against this package or its publisher as
-    #     of 2026-09-29; what searches surface is the 2026-03-31 source leak
-    #     (2.1.88) and its coat-tail riders (the axios trojan) and the August
-    #     2026 ChainDrop campaign, all third-party packages, not this one
-    #   upstream issues mentioning "2.1.284": all UI/edge-case bugs; the one
-    #     open security-adjacent report (#97854, auto-mode classifier returning
-    #     no verdict) is server-side and version-independent
+    #   OSV and the npm bulk-advisory endpoint: 0 advisories for 2.1.296. GitHub
+    #     Security Advisories for anthropics/claude-code, newest three: the
+    #     2026-10-09 plugin-SHA-pin bypass (< 2.1.179), the 2026-10-05 write-time
+    #     symlink TOCTOU (< 2.1.129) and the 2026-09-29 managed-settings issue
+    #     (>= 2.0.68, < 2.1.260) — none affects 2.1.296
+    #   the changelog entry for 2.1.292 carries a "Security:" fix (hook approvals,
+    #     auto mode and UNC-path reads), so staying on 2.1.284 forgoes it
+    #   upstream issues mentioning "2.1.296": UI/edge-case bugs; nothing
+    #     security-relevant to the package or its publisher
     #
     # WHAT THE HASH COMPARISON PROVES is unchanged from the 2.1.280 pin and still
     # worth stating, because it is easy to overclaim: llm-agents' updater is
@@ -211,21 +209,22 @@
     # THE RESIDUAL RISK, NAMED RATHER THAN OMITTED. Anthropic withdraws a bad
     # release by repointing `latest`, which is why llm-agents' updater carries
     # `versionPolicy = "follow_pointer"` — and really acted on it for 2.1.243 on
-    # 2026-08-25. `latest` points at 2.1.284 itself, so that signal cannot exist
-    # yet; `stable` (2.1.277) lags by design and is not a withdrawal signal either
+    # 2026-08-25. `latest` points at 2.1.296 itself, so that signal cannot exist
+    # yet; `stable` (2.1.287) lags by design and is not a withdrawal signal either
     # (upstream issue #92274, closed, documents the channel running weeks behind).
-    # There is nothing to step to instead, because 2.1.284 is the only version
-    # that can talk to Sonnet 5.5 at all. Taken on that basis, not by oversight,
-    # and with the trade-off put to the user first.
+    # The fallback if 2.1.296 is withdrawn is 2.1.293, the first version that
+    # knows Haiku 5.5; nothing older can talk to it. Taken on that basis, not by
+    # oversight, and with the trade-off put to the user first.
     #
     # The blast radius is deliberately ONE package, and this time one FILE: the
-    # rev sits exactly on the bump commit "claude-code: 2.1.283 -> 2.1.284"
-    # (2026-09-28 23:01:17Z), whose entire diff is packages/claude-code/hashes.json,
+    # rev sits exactly on the bump commit "claude-code: 2.1.295 -> 2.1.296"
+    # (2026-10-10 04:45:14Z), whose entire diff is packages/claude-code/hashes.json,
     # and only claude-code is taken from it. opencode, gemini-cli, antigravity-cli,
     # ccusage and the ACP shims stay on nixpkgs-llm-agents and stay soaked (codex
     # has a pin of its own below, on the same terms). Moving the main input
     # instead would have pulled all of them out of the 14-day window for one CLI.
-    # The rev's own nixpkgs lock also moved (35e2127 -> 3181085, 2026-09-27), but
+    # The rev's own locks also moved (nixpkgs 3181085 -> f45c6f0, 2026-09-28, plus
+    # flake-parts, systems and treefmt-nix, all private to this input), but
     # `original.ref = "nixpkgs-unstable"` — a Hydra-built channel branch, exempt
     # from the cooldown by the same reasoning docs/supply-chain.md gives for
     # nixpkgs elsewhere in this flake — and it only supplies stdenv and the
@@ -249,13 +248,13 @@
     # licence consequences: see "The public cache mirrors system closures" in
     # AGENTS.md.
     #
-    # REMOVE once nixpkgs-llm-agents itself ships >= 2.1.284 — at the earliest on
-    # 2026-10-12, when `just update` with the 14-day bar lands on a rev from
-    # 2026-09-28 23:01Z or later. An assertion in modules/agents.nix breaks
+    # REMOVE once nixpkgs-llm-agents itself ships >= 2.1.296 — at the earliest on
+    # 2026-10-24, when `just update` with the 14-day bar lands on a rev from
+    # 2026-10-10 04:45Z or later. An assertion in modules/agents.nix breaks
     # the build at that point and spells out the four steps, so the pin cannot go
     # stale silently.
     llm-agents-claude-code-pin.url =
-      "github:numtide/llm-agents.nix/fe037ebd459c2eb90b143efb52806f5213a59052";
+      "github:numtide/llm-agents.nix/2c69cfa181ddfa18192addd41d6b3ec328cd4e44";
 
     # TEMPORARY PIN — codex 0.153.4, for GPT-6-Astra. Consumed by
     # modules/agents.nix (programs.codex.package) and modules/agents.nix

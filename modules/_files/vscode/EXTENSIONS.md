@@ -157,11 +157,11 @@ write; leave alone what something else writes back.
 
 | Extension | Why not |
 |---|---|
-| `anthropic.claude-code` | Ships in lockstep with the CLI, which this repo pins through `nixpkgs-llm-agents`. Three versions were on disk at inventory time (2.1.210, 2.1.241, 2.1.243). A Nix pin would drift against the CLI it talks to. |
+| `anthropic.claude-code` | Ships in lockstep with the CLI (same version numbers), so a registry snapshot would drift against it. Not in Nix: installed by the activation hook `home.activation.claudeCodeExtension` in `modules/vscode.nix` at exactly the version of the CLI pin from `modules/agents.nix`. |
 | `openai.chatgpt` | Same, for the ChatGPT CLI. |
 | `ms-vscode-remote.remote-containers` | The only unfree one of the seventeen candidates (`meta.unfree = true`; every other is MIT or Apache-2.0). Building it locally would make the R2 `post-build-hook` publish a non-redistributable Microsoft binary into a world-readable bucket — the same reason VS Code itself stays on the Homebrew cask. A licence filter in the push hook is not available: `meta.license` is eval-time data and is not recorded in the store. |
 
-Install these three by hand. To take `remote-containers` under Nix anyway, add
+Install the other two by hand. To take `remote-containers` under Nix anyway, add
 `vsmp.ms-vscode-remote.remote-containers` in `modules/vscode.nix` and accept the
 publication — it is one line, and the decision belongs to whoever makes it.
 

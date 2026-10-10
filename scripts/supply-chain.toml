@@ -88,17 +88,17 @@ npm = "@anthropic-ai/claude-code"
 # keeps dating what the main input ships; this one dates what is actually
 # installed.
 #
-# Expected output up to and including 2026-10-11: TOO NEW, exit 1. That is the
+# Expected output up to and including 2026-10-23: TOO NEW, exit 1. That is the
 # wanted state, not a defect -- the pin is a deliberate cooldown undercut, and an
 # audit that reported it as clean would be hiding exactly the fact that justifies
 # the write-up in flake.nix.
 #
-# Two dates, both moved by the 2.1.280 -> 2.1.284 bump on 2026-09-29, and they
-# are close enough to be confused: this ENTRY goes quiet once 2.1.284 itself
-# turns 14 days old (published to npm 2026-09-28 17:11:59Z, so from 2026-10-12),
-# and the PIN can go away once nixpkgs-llm-agents ships >= 2.1.284, i.e. once
-# `just update` with the same bar lands on a rev from 2026-09-28 23:01Z or
-# later -- also 2026-10-12 at the earliest. A quiet entry is therefore not by
+# Two dates, both moved by the 2.1.284 -> 2.1.296 bump on 2026-10-10, and they
+# are close enough to be confused: this ENTRY goes quiet once 2.1.296 itself
+# turns 14 days old (published to npm 2026-10-09 16:58:10Z, so from 2026-10-24),
+# and the PIN can go away once nixpkgs-llm-agents ships >= 2.1.296, i.e. once
+# `just update` with the same bar lands on a rev from 2026-10-10 04:45Z or
+# later -- also 2026-10-24 at the earliest. A quiet entry is therefore not by
 # itself permission to remove the pin; the assertion in modules/agents.nix is
 # what says when, and it breaks the build rather than waiting to be noticed.
 name = "claude-code (pinned)"

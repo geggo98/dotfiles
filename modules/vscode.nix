@@ -84,6 +84,62 @@
         '';
       };
 
+      # anthropic.claude-code is the one extension that is deliberately NOT in
+      # `generalExtensions` and not under Nix at all. It ships in lockstep with the CLI
+      # (same version numbers, published 1-2 hours after each npm release; measured
+      # 2026-10-10 against npm, the marketplace and Open VSX), and a registry snapshot
+      # would drift against the CLI it talks to. Its VSIX is also platform-specific
+      # (~240 MB), so a Nix copy would only add a second download.
+      #
+      # So it is installed imperatively, by the activation hook
+      # `home.activation.claudeCodeExtension` further down, at exactly the version of
+      # the CLI that modules/agents.nix pins: one fact, one place, no second copy to
+      # forget. The cooldown for that version is the one on the CLI pin (flake.nix,
+      # input llm-agents-claude-code-pin), and `just audit` dates it through the
+      # "claude-code (pinned)" entry in scripts/supply-chain.toml.
+      #
+      # The `code` binary comes from the Homebrew cask (see `package = null` below),
+      # which is not on an activation script's PATH, hence the absolute path. A missing
+      # VS Code is a SKIP, a failed install is a loud WARN with the command to run by
+      # hand -- neither may abort a system activation.
+      claudeCodeExtScript = pkgs.writeTextFile {
+        name = "+vscode-claude-code-extension";
+        destination = "/bin/+vscode-claude-code-extension";
+        executable = true;
+        text = ''
+          #!${pkgs.zsh}/bin/zsh
+          # usage: +vscode-claude-code-extension <version>
+          export PATH="${lib.makeBinPath [ pkgs.coreutils pkgs.perl ]}:/usr/bin:/bin"
+          want=$1
+          # The cask lands in ~/Applications on this machine (measured 2026-10-10:
+          # /opt/homebrew/bin/code points there, /Applications has no VS Code), but
+          # a default cask install uses /Applications, so both are tried.
+          code=""
+          for c in "$HOME/Applications/Visual Studio Code.app" "/Applications/Visual Studio Code.app"; do
+            [[ -x $c/Contents/Resources/app/bin/code ]] && { code=$c/Contents/Resources/app/bin/code; break }
+          done
+          if [[ -z $code ]]; then
+            print -u2 "claude-code extension: VS Code not found, SKIP"
+            exit 0
+          fi
+          # matches:     anthropic.claude-code@2.1.296   ->  $1 eq "2.1.296"
+          have=$("$code" --list-extensions --show-versions 2>/dev/null \
+            | perl -ne 'print $1 if /^ anthropic\.claude-code @ (\S+) $/x')
+          if [[ $have == $want ]]; then
+            print -u2 "claude-code extension: $want already installed, SKIP"
+            exit 0
+          fi
+          print -u2 "claude-code extension: ''${have:-none} -> $want"
+          if "$code" --install-extension "anthropic.claude-code@$want" --force; then
+            print -u2 "claude-code extension: $want installed; restart VS Code to load it"
+          else
+            print -u2 "WARN claude-code extension: install of $want FAILED (offline? marketplace down?)."
+            print -u2 "WARN run by hand: \"$code\" --install-extension anthropic.claude-code@$want --force"
+          fi
+          exit 0
+        '';
+      };
+
       generalExtensions = [
         # -- Markdown, docs, diagrams ------------------------------------
         ovsx.davidanson.vscode-markdownlint
@@ -477,7 +533,17 @@
       # Also on PATH, because the one case the hook cannot handle is the one that needs
       # a human: extensions queued for deletion have to be cleared by starting VS Code
       # once, and only then can the registry be rebuilt.
-      home.packages = [ regenScript ];
+      home.packages = [ regenScript claudeCodeExtScript ];
+
+      # Installs anthropic.claude-code at the version of the pinned CLI (see
+      # claudeCodeExtScript above). After `onFilesChange`, which runs
+      # +vscode-regen-extensions: a regenerated extensions.json must not be able to
+      # throw the fresh install back out. Only with the Claude aspect enabled, since
+      # the version comes from `programs.claude-code.package`.
+      home.activation.claudeCodeExtension = lib.mkIf config.programs.claude-code.enable
+        (lib.hm.dag.entryAfter [ "onFilesChange" "vscodeProfiles" ] ''
+          run ${claudeCodeExtScript}/bin/+vscode-claude-code-extension ${config.programs.claude-code.package.version}
+        '');
 
       # The Turbo Vision theme stays a hand-built local extension: it exists in no
       # registry, so nix-vscode-extensions cannot supply it. Leaf files inside a real
