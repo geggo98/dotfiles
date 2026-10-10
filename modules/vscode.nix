@@ -240,6 +240,7 @@
         # Terminal font: BerkeleyMono Nerd Font → IoskeleyMono Nerd Font (OSS) → JetBrains Mono Nerd Font
         "terminal.integrated.fontFamily" = "'BerkeleyMono Nerd Font', 'IoskeleyMono Nerd Font', 'JetBrainsMono Nerd Font', 'Victor Mono', monospace";
         "terminal.integrated.fontSize" = 13;
+        "terminal.integrated.initialHint" = false;
 
         # Terminal profiles: Nix-managed shells
         "terminal.integrated.profiles.osx" = {
