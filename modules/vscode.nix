@@ -290,6 +290,11 @@
         "claudeCode.preferredLocation" = "sidebar";
         "excalidraw.theme" = "auto";
 
+        # The AWS Toolkit's CloudFormation language server writes this itself
+        # (defaulting to true) on first start, which fails on the read-only
+        # settings.json. Declared here so the opt-out is explicit.
+        "aws.cloudformation.telemetry.enabled" = false;
+
         # AceJump, matched to the IntelliJ AceJump behaviour these keybindings mirror
         # (see profiles.default.keybindings below). Defaults are onlyInitialLetter=true
         # (word-initial letters only) and jumpToLineEndings=false (line-start marks only);
