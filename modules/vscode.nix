@@ -287,6 +287,7 @@
         # together with whether bierner is still needed at all.
         "mermaid.languages" = [ ];
 
+        "claudeCode.hideOnboarding" = true;
         "claudeCode.preferredLocation" = "sidebar";
         "excalidraw.theme" = "auto";
 
