@@ -366,6 +366,10 @@ in
           # Set `enableWorkflows` explicitly since ultracode depends on it.
           ultracode = true;
           enableWorkflows = true;
+          # Explicit default as well, so xhigh survives `ultracode` being switched
+          # off. The settings schema accepts low|medium|high|xhigh here; "max" is
+          # session-only and cannot be persisted.
+          effortLevel = "xhigh";
           enabledPlugins = {
             "jdtls-lsp@claude-plugins-official" = true;
             "lua-lsp@claude-plugins-official" = true;
