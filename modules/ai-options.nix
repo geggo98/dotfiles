@@ -72,6 +72,18 @@
             default = true;
             description = "Upstream [features] reasoning_effort_override in Codex's writable config.toml; null leaves the key unmanaged and gives back a previously owned value.";
           };
+          # Since 0.157.0 every interactive `codex` start launches a persistent
+          # `codex app-server --managed-daemon`, copies the ~374 MB platform
+          # package into ~/.codex/packages/app-server-daemon/ and starts a
+          # detached hourly self-updater. That updater bypasses the Nix pin and
+          # the supply-chain cooldown, and the daemon keeps the environment
+          # (e.g. proxy variables) of whichever session started it. Off here.
+          # https://github.com/openai/codex/issues/48195
+          daemonAutoStart = mkOption {
+            type = types.nullOr types.bool;
+            default = false;
+            description = "Upstream [features] daemon_auto_start in Codex's writable config.toml; null leaves the key unmanaged and gives back a previously owned value.";
+          };
         });
 
         content = {

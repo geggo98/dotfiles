@@ -28,7 +28,7 @@ class MergeTests(unittest.TestCase):
 
     def desired(self, servers, status_line=None, model=None,
                 reasoning_effort=None, plan_reasoning_effort=None,
-                reasoning_effort_override=None):
+                reasoning_effort_override=None, daemon_auto_start=None):
         managed = {"mcp_servers": servers}
         if status_line is not None:
             managed["tui"] = {"status_line": status_line}
@@ -41,7 +41,9 @@ class MergeTests(unittest.TestCase):
         # `is not None`, never truthiness: False is a value this option
         # manages, and the whole default depends on it being written.
         if reasoning_effort_override is not None:
-            managed["features"] = {"reasoning_effort_override": reasoning_effort_override}
+            managed.setdefault("features", {})["reasoning_effort_override"] = reasoning_effort_override
+        if daemon_auto_start is not None:
+            managed.setdefault("features", {})["daemon_auto_start"] = daemon_auto_start
         self.managed.write_text(tomli_w.dumps(managed))
 
     def run_merge(self):
@@ -483,6 +485,37 @@ class MergeTests(unittest.TestCase):
         self.assertEqual(merger.load_toml(self.target), personal)
         self.assertIsNone(
             json.loads(self.state.read_text())["owned_reasoning_effort_override"])
+
+    # -- features.daemon_auto_start shares [features] with the override leaf and
+    # with personal keys; retracting one must leave the others standing.
+
+    def test_daemon_auto_start_coexists_with_sibling_leaves_and_disables_alone(self):
+        personal = {"features": {"memories": True}}
+        self.target.write_text(tomli_w.dumps(personal))
+        self.desired({}, reasoning_effort_override=True, daemon_auto_start=False)
+        self.run_merge()
+        self.assertEqual(merger.load_toml(self.target), {"features": {
+            "memories": True, "reasoning_effort_override": True,
+            "daemon_auto_start": False}})
+        first = self.target.read_bytes()
+        self.run_merge()
+        self.assertEqual(self.target.read_bytes(), first)
+        # Retract only daemon_auto_start.
+        self.desired({}, reasoning_effort_override=True)
+        self.run_merge()
+        self.assertEqual(merger.load_toml(self.target), {"features": {
+            "memories": True, "reasoning_effort_override": True}})
+        self.assertIsNone(json.loads(self.state.read_text())["owned_daemon_auto_start"])
+
+    def test_daemon_auto_start_false_is_managed_not_unmanaged(self):
+        self.target.write_text(tomli_w.dumps({"features": {"daemon_auto_start": True}}))
+        self.desired({}, daemon_auto_start=False)
+        self.run_merge()
+        self.assertIs(merger.load_toml(self.target)["features"]["daemon_auto_start"], False)
+        self.assertIs(json.loads(self.state.read_text())["owned_daemon_auto_start"], False)
+        self.desired({})
+        self.run_merge()
+        self.assertEqual(merger.load_toml(self.target), {})
 
     def test_invalid_reasoning_effort_override_journal_fails_before_writing(self):
         # 1 and "true" are what a lazy isinstance(v, (bool, int)) would admit.

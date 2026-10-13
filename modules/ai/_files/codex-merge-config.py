@@ -137,6 +137,8 @@ LEAVES = (
     # (isinstance(True, int)) would be true. Do NOT relax it to (bool, int).
     ("reasoning_effort_override", ("features", "reasoning_effort_override"),
      lambda v: isinstance(v, bool)),
+    ("daemon_auto_start", ("features", "daemon_auto_start"),
+     lambda v: isinstance(v, bool)),
 )
 # Only "model" gets a stderr line when it silently replaces a value it does
 # not already own: Codex's own /model picker writes that key on every
@@ -175,7 +177,7 @@ def set_leaf(result, path, value):
 
     Depth 1 (model, both reasoning fields) targets the root directly and
     never removes it. Depth 2 ([tui].status_line,
-    [features].reasoning_effort_override) prunes the parent table once it
+    [features].reasoning_effort_override, [features].daemon_auto_start) prunes the parent table once it
     becomes empty -- and only then: a real ~/.codex/config.toml keeps its own
     keys in [features] (memories, js_repl, ...), which must survive a disable.
     """

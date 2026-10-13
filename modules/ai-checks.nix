@@ -129,6 +129,7 @@ in
                   settings = tomllib.load(stream)
               items = settings.get("tui", {}).get("status_line")
               override = settings.get("features", {}).get("reasoning_effort_override")
+              daemon = settings.get("features", {}).get("daemon_auto_start")
               if case["enabled"]:
                   assert items == [
                       "run-state", "model-with-reasoning", "current-dir", "git-branch",
@@ -139,12 +140,14 @@ in
                   assert settings.get("model_reasoning_effort") == "medium", settings.get("model_reasoning_effort")
                   assert settings.get("plan_mode_reasoning_effort") == "xhigh", settings.get("plan_mode_reasoning_effort")
                   assert override is True, override
+                  assert daemon is False, daemon
               else:
                   assert items is None, items
                   assert settings.get("model") is None, settings.get("model")
                   assert settings.get("model_reasoning_effort") is None, settings.get("model_reasoning_effort")
                   assert settings.get("plan_mode_reasoning_effort") is None, settings.get("plan_mode_reasoning_effort")
                   assert override is None, override
+                  assert daemon is None, daemon
           PY
           python3 tests/test_rules.py
           python3 ${./ai/_tests/check_exports.py} \

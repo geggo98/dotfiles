@@ -110,6 +110,7 @@ such as `llm`, Ollama and `+nix-query`.
 | `my.ai.agents.codex.reasoningEffort` | `"medium"` | `model_reasoning_effort` for Codex's default (execute) mode |
 | `my.ai.agents.codex.planReasoningEffort` | `"xhigh"` | `plan_mode_reasoning_effort` for Codex's Plan mode (`Shift+Tab`); CLI only — Codex Desktop ignores it ([openai/codex#18712](https://github.com/openai/codex/issues/18712)) |
 | `my.ai.agents.codex.reasoningEffortOverride` | `true` | Upstream `[features] reasoning_effort_override` (experimental): Plan mode's effort change is sent as a `configuration_update` item instead of changing the request. Codex sends it only to models whose catalog entry sets `supports_reasoning_effort_updates` — in 0.160.0 that is `gpt-6-astra` and `gpt-6.1-sol`, not `gpt-6-sol`/`gpt-6-luna` (which therefore never get it; the HTTP 400 of [openai/codex#44751](https://github.com/openai/codex/issues/44751) is avoided by that gate, the issue itself is still open) |
+| `my.ai.agents.codex.daemonAutoStart` | `false` | Upstream `[features] daemon_auto_start`: since 0.157.0 each interactive start launches a persistent `codex app-server --managed-daemon` with a detached hourly self-updater that bypasses the Nix pin and supply-chain cooldown ([openai/codex#48195](https://github.com/openai/codex/issues/48195)). `null` leaves it unmanaged |
 | `my.ai.content.enable` | `false` | Skills and rules exported under `$XDG_CONFIG_HOME/ai/content/` |
 | `my.ai.mcp.enable` | `false` | MCP wrappers, exports and integration |
 | `my.ai.mcp.clients.<name>.enable` | `true` | MCP integration for this Nix agent; does not suppress explicit exports |
@@ -163,7 +164,7 @@ recoverable; do not delete it to silence a conflict.
 
 A small table of owned leaves — `tui.status_line` (a list), `model`,
 `model_reasoning_effort`, `plan_mode_reasoning_effort` (strings), and
-`features.reasoning_effort_override` (a boolean) — is instead
+`features.reasoning_effort_override` and `features.daemon_auto_start` (booleans) — is instead
 authoritative: activation sets each one every run while it is managed, wins
 over a later `/model` or `/statusline` edit made in between, and on disable
 removes it only if the file still holds the value this script last wrote (a
