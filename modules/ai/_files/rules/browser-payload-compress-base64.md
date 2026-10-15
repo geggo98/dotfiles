@@ -4,6 +4,10 @@ Nutzdaten zum und vom Browser — agent-browser, die Chrome-Integration,
 `javascript_tool`, jedes `evaluate` in der Seite — **erst mit gzip komprimieren,
 dann base64 kodieren**. Nicht umgekehrt und nicht roh.
 
+**Chrome-Integration:** auch dort gzip + base64 versuchen. Steht statt der Daten
+`[BLOCKED: Base64 encoded data]`, auf `agent-browser --session <name> eval …`
+ausweichen. Die Sperre nicht umgehen (kein Stückeln, keine andere Kodierung).
+
 **gzip, nicht zstd und nicht brotli.** Die Seite komprimiert mit
 `CompressionStream`, und die kennt nur drei Verfahren. Gemessen am 09.09.2026 in
 Chrome 152:
