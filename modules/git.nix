@@ -62,6 +62,12 @@
             enabled = true;
             autoUpdate = true;
           };
+          # Bitbucket Cloud nimmt SSH ab 12.11.2026 nur noch an ssh.bitbucket.org an.
+          # Fängt .gitmodules, den Clone-Dialog mit der alten Adresse und Tools mit Git-Deps ab.
+          url."git@ssh.bitbucket.org:".insteadOf = [
+            "git@bitbucket.org:"
+            "ssh://git@bitbucket.org/"
+          ];
         };
       };
       programs.difftastic = {
