@@ -33,11 +33,9 @@ import socket
 import sys
 import threading
 import time
-import urllib.parse
 
 EX_USAGE = 125
 VERSION = 1
-MASK = b"***"
 PARTIAL_FLUSH_BYTES = 64 * 1024
 PARTIAL_FLUSH_IDLE = 0.2
 TAIL_LINE_MAX = 500
@@ -126,45 +124,7 @@ def parse_args(argv):
 # masking
 # --------------------------------------------------------------------------
 
-def variants(raw):
-    """raw, URL-encoded and URL-decoded form (same idea as the database skill's redact.pl)."""
-    out = {raw, urllib.parse.unquote_to_bytes(raw), urllib.parse.quote_from_bytes(raw, safe="").encode()}
-    return {v for v in out if v}
-
-
-class Masker:
-    def __init__(self, values):
-        values = sorted({v for raw in values for v in variants(raw)}, key=lambda v: (-len(v), v))
-        self.maxlen = max((len(v) for v in values), default=0)
-        # every proper prefix of a secret: only a tail that is one of these can
-        # still turn into a secret, so only that tail is ever held back
-        self.prefixes = {v[:k] for v in values for k in range(1, len(v))}
-        self.rx = re.compile(b"|".join(re.escape(v) for v in values)) if values else None
-        self.replacements = 0
-
-    def __call__(self, data):
-        if not self.rx:
-            return data
-        out, n = self.rx.subn(MASK, data)
-        self.replacements += n
-        return out
-
-    def safe_cut(self, raw):
-        """How many leading bytes of a partial line may be written now: all but a
-        tail that could still be the start of a secret (usually nothing, so a
-        message without newline is not held back), and never a cut through the
-        middle of a match."""
-        cut = len(raw)
-        for k in range(min(self.maxlen - 1, len(raw)), 0, -1):
-            if raw[-k:] in self.prefixes:
-                cut = len(raw) - k
-                break
-        if self.rx:
-            for m in self.rx.finditer(raw):
-                if m.start() < cut < m.end():
-                    cut = m.start()
-                    break
-        return cut
+from masker import MASK, Masker  # noqa: E402  (shared with +vault; sits next to this script)
 
 
 def read_mask_values(opts):

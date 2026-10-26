@@ -79,3 +79,20 @@ Prüfen statt annehmen: das Flag setzen, den Helfer etwas Beobachtbares tun lass
 und nachsehen, welchen Wert er benutzt hat. Dieselbe Denkart wie bei der Regel zu
 `git diff` und difftastic — erst den Filter validieren, dann seinem Ergebnis
 glauben.
+
+## `+vault` maskiert Tokens — `--show-tokens` ist nichts für Agenten
+
+`vault token lookup` gibt den Token im Klartext aus (Feld `id`); so ist er schon
+mehrfach im Kontext eines Agenten gelandet. `+vault` ersetzt deshalb standardmäßig
+jeden aktiven Token in stdout und stderr durch `***` — die gespeicherten Token
+aller Umgebungen, `~/.vault-token`, `$VAULT_TOKEN` und alles, was wie ein
+Vault-Token aussieht (`hvs.…`, `hvb.…`, `hvr.…`; das fängt auch frisch erzeugte
+Token). Wurde etwas maskiert, steht am Ende eine Zeile auf stderr, die `--show-tokens`
+nennt.
+
+**Ein Agent übergibt `--show-tokens` nie von sich aus.** Die Option ist für den
+Menschen am Terminal. Um zu prüfen, ob ein Token gültig ist, genügt die maskierte
+Ausgabe (`policies`, `ttl`, `expire_time`).
+
+Nicht maskiert wird das, was nicht über `+vault` läuft: das blanke `vault` und
+`vault-token-helper get`.

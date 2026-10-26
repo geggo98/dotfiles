@@ -179,8 +179,23 @@
         export PATH="$PATH:/opt/homebrew/bin:/opt/homebrew/sbin"
       '';
 
+      # Filters Vault tokens out of `vault`'s stdout and stderr. `+vault token lookup`
+      # prints the token (`id`), and that has landed in an agent's context more
+      # than once. Python puts the resolved script directory on sys.path, so the
+      # shared masker is found next to the script, through the bin/ symlink too.
+      vaultMasked = pkgs.runCommand "vault-masked" { } ''
+        mkdir -p $out/bin $out/libexec
+        { echo '#!${pkgs.python3}/bin/python3'; cat ${./_files/vault/vault-masked.py}; } > $out/libexec/vault-masked.py
+        chmod +x $out/libexec/vault-masked.py
+        cp ${./_files/secret-mask/masker.py} $out/libexec/masker.py
+        ln -s ../libexec/vault-masked.py $out/bin/vault-masked
+      '';
+
       # Runs `vault` with `-address=<environment>` resolved — full name, or any
       # unambiguous prefix, or a literal URL.
+      #
+      # Tokens in the output are masked as `***` unless `--show-tokens` is given
+      # (consumed here like `-address`, never passed on); see vaultMasked above.
       vaultCli = pkgs.writeShellApplication {
         name = "+vault";
         text = ''
@@ -206,6 +221,7 @@
           # fires. Everything after `--` passes through untouched — a
           # `-address` there belongs to the command, not to us.
           args=()
+          show_tokens=0
           addr_value=""
           addr_found=0
           passthrough=0
@@ -219,6 +235,10 @@
               --)
                 passthrough=1
                 args+=( "$1" )
+                shift
+                ;;
+              --show-tokens)
+                show_tokens=1
                 shift
                 ;;
               -address=*|--address=*)
@@ -267,7 +287,10 @@
             exit 127
           fi
 
-          exec vault "''${args[@]}"
+          if [ "$show_tokens" -eq 1 ]; then
+            exec vault "''${args[@]}"
+          fi
+          exec ${vaultMasked}/bin/vault-masked -- vault "''${args[@]}"
         '';
       };
 
@@ -421,4 +444,16 @@
           end
         '';
     };
+
+  perSystem = { pkgs, ... }: {
+    # Same python3 the tool ships with; the masker is copied next to the script.
+    checks.vault-masked = pkgs.runCommand "vault-masked-check" { nativeBuildInputs = [ pkgs.python3 ]; } ''
+      export PYTHONDONTWRITEBYTECODE=1
+      cp ${./_files/vault/vault-masked.py} vault-masked.py
+      cp ${./_files/secret-mask/masker.py} masker.py
+      cp ${./_files/vault/test_vault_masked.py} test_vault_masked.py
+      python3 test_vault_masked.py
+      touch $out
+    '';
+  };
 }

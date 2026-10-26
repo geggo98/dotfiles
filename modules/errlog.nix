@@ -9,15 +9,15 @@
       # pinned store path, like mkZshScript in modules/nix-cache.nix: Nix puts its
       # shebang first and the source's own `#!/usr/bin/env python3` becomes a
       # comment, which is what lets the tests run the file directly.
-      errlog = pkgs.writeTextFile {
-        name = "+errlog";
-        destination = "/bin/+errlog";
-        executable = true;
-        text = ''
-          #!${pkgs.python3}/bin/python3
-          ${builtins.readFile ./_files/errlog/errlog.py}
-        '';
-      };
+      errlog = pkgs.runCommand "errlog" { } ''
+        mkdir -p $out/bin $out/libexec
+        { echo '#!${pkgs.python3}/bin/python3'; cat ${./_files/errlog/errlog.py}; } > $out/libexec/errlog.py
+        chmod +x $out/libexec/errlog.py
+        # Python puts the resolved script directory on sys.path, so the shared
+        # masker is found next to the script, through the bin/ symlink too.
+        cp ${./_files/secret-mask/masker.py} $out/libexec/masker.py
+        ln -s ../libexec/errlog.py "$out/bin/+errlog"
+      '';
     in
     {
       home.packages = [ errlog ];
@@ -29,6 +29,7 @@
     checks.errlog = pkgs.runCommand "errlog-check" { nativeBuildInputs = [ pkgs.python3 ]; } ''
       export PYTHONDONTWRITEBYTECODE=1
       cp ${./_files/errlog/errlog.py} errlog.py
+      cp ${./_files/secret-mask/masker.py} masker.py
       cp ${./_files/errlog/test_errlog.py} test_errlog.py
       python3 test_errlog.py
       touch $out

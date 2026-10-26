@@ -113,6 +113,16 @@ agent working in some other repository on this machine would otherwise never see
 it. What follows here is the repo-side detail that does not belong in a global
 rule.
 
+**Token masking.** `+vault` pipes `vault` through `vault-masked` (`modules/_files/vault/vault-masked.py`), which
+replaces every known token — the helper's files for all environments, `~/.vault-token`,
+`$VAULT_TOKEN` — and anything shaped like `hv[sbr].…` with `***`, on stdout and stderr
+separately, and prints a hint naming `--show-tokens` when it masked something. The option is
+consumed by the wrapper like `-address` (and passes through after `--`). The masker is shared
+with `+errlog` (`modules/_files/secret-mask/masker.py`, imported from the script's own
+directory). Consequence of the pipes: `vault` no longer sees a terminal on stdout/stderr, so
+there is no colour; stdin stays inherited. Plain `vault` and `vault-token-helper get` are
+**not** masked. Test: `nix build .#checks.<system>.vault-masked`.
+
 The plain `vault` binary (Homebrew, `hashicorp/tap/vault`) is deliberately **not**
 shadowed. It could not be by a package name anyway: `brew shellenv` in
 `modules/_files/shell/promptInit.fish` moves `/opt/homebrew/bin` to the front of
