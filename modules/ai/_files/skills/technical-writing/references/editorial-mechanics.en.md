@@ -353,3 +353,16 @@ left absent. Half the entries such a table would carry -- Additionally, Moreover
 Notably, Importantly -- appear on the banned lists in `anti-tropes-instruction.md` and
 `signs_of_AI_writing.md`. STE 4.4 covers what is needed: use a connector between related
 sentences, and use a plain one.
+
+**Banning the em dash entirely.** The `unslop` skill in the pstack plugin forbids every dash,
+including en dashes and hyphens used as dashes, and allows only periods and commas. This skill
+keeps section 4: LLM text overuses the em dash, but a sparing, correctly set one is not an
+error. The frequency cap in `anti-tropes-instruction.md` is the control, not a ban.
+
+**Straight quotation marks only.** `unslop` rejects curly quotes as an AI marker. In English
+prose, either style is acceptable if used consistently within one medium. Code and Markdown
+sources use straight quotes because the format needs them. In German the choice follows the
+medium, see `editorial-mechanics.de.md` section 5.
+
+**Tabs for indentation in code snippets.** A repository-specific rule of the pstack plugin.
+Indentation belongs to the project's formatter, not to this skill.

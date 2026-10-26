@@ -320,6 +320,22 @@ Schlecht (Onboarding-Doku): "Der Entwickler muss seinen API-Key vor dem ersten D
 
 Gut: "Rotiere deinen API-Key vor dem ersten Deployment." Oder: "Alle im Team rotieren ihren API-Key vor dem ersten Deployment."
 
+### Setze Einschränkungen und Bezüge so, dass sie nur eine Lesart zulassen (abgeleitet von Global English)
+
+"Nur", "nicht" und "auch" beziehen sich auf das nächste Wort. Zwei Stellungen bedeuten zwei Dinge.
+
+Schlecht (Ticket): "Die Prüfung schlägt nur bei Wachstum fehl." (Nur bei Wachstum, oder fehlt sonst nur ein Hinweis?)
+
+Gut: "Die Prüfung schlägt ausschließlich bei Wachstum fehl."
+
+Lass in einer Parallelkonstruktion das Verb der zweiten Hälfte nicht weg. Schlecht: "Phase 1 verschiebt die Konverter und Phase 2 die Laufzeit." Gut: "Phase 1 verschiebt die Konverter. Phase 2 verschiebt die Laufzeit."
+
+Wiederhole in einer Reihung den Artikel, wenn es verschiedene Dinge sind, und nutze "sowohl ... als auch", "entweder ... oder" oder "wenn ... dann", wenn sich ein "und" oder "oder" auf zwei Arten gruppieren lässt. Schlecht: "Starte Client und Host neu." Gut: "Starte sowohl den Client als auch den Host neu."
+
+Bilde keine Plurale mit Klammer ("Datei(en)") und nutze keinen Schrägstrich für "oder" (siehe `editorial-mechanics.de.md` §3). Schreibe den Plural oder nenne die Alternativen.
+
+Schreibe in Anleitungen nie "einfach", "nur kurz", "schnell" oder "lediglich" über einen Schritt. Wäre er einfach, würde der Leser nicht nachlesen. Das Wort wirkt außerdem wie ein Urteil über den Leser, wenn der Schritt scheitert. Schlecht: "Führe einfach `just switch` aus." Gut: "Führe `just switch` aus."
+
 ## 9. Konsistente Schreibpraxis
 
 ### Verwende für gleiche Aktionen die gleiche Formulierung (abgeleitet von STE 9.4)

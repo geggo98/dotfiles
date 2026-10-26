@@ -403,3 +403,16 @@ zusammenhängenden Sätzen, und nimm einen schlichten.
 Verschmelzung von Präposition und Artikel. Die etablierten Formen (`zum`, `im`, `am`, `beim`,
 `vom`, `zur`, `ins`) sind Standardsprache und in Ordnung. Die umgangssprachlichen (`fürs`,
 `übers`, `durchs`, `aufs`) gehören nicht in Dokumentation.
+
+**Der Gedankenstrich als Totalverbot.** Das Skill `unslop` aus dem pstack-Plugin verbietet
+jeden Strich, auch Halbgeviertstriche und Bindestriche als Strichersatz, und lässt nur Punkt
+und Komma zu. Dieser Skill behält §4: Der Em-Dash ist ein Merkmal von KI-Text, aber ein
+sparsam und richtig gesetzter Halbgeviertstrich ist kein Fehler. Die Häufigkeitsgrenze aus
+`anti-tropes-instruction.md` ist die Kontrolle, nicht ein Verbot.
+
+**Nur gerade Anführungszeichen.** `unslop` lehnt typografische Anführungszeichen als
+KI-Merkmal ab. Im Deutschen entscheidet das Medium, siehe §5. Code und Markdown-Quellen
+verwenden gerade Zeichen, weil das Format sie verlangt.
+
+**Tabulatoren für die Einrückung von Code-Beispielen.** Eine Regel, die nur im pstack-Repository
+gilt. Die Einrückung gehört dem Formatter des Projekts, nicht diesem Skill.

@@ -80,6 +80,28 @@ gehört in ein ADR, nicht in einen PR-Kommentar; eine API-Einschränkung in die
 Referenzdoku, nicht nur in einen Slack-Thread. Wähle den Ort, an dem der Leser
 später sucht.
 
+Für Dokumentation wähle den Modus, bevor du schreibst, und halte pro Dokument einen Modus
+(Diátaxis-Rahmenwerk). Zwei Fragen entscheiden: Dient der Inhalt dem Handeln oder dem
+Verstehen? Will der Leser lernen oder Arbeit erledigen?
+
+| | Lernen | Arbeiten |
+|---|---|---|
+| Handeln | Tutorial | Anleitung (How-to) |
+| Verstehen | Erklärung | Referenz |
+
+- Tutorial: Der Leser baut etwas und hat Erfolg. Sage, was er bauen wird, zeige nach jedem
+  Schritt die erwartete Ausgabe, und kürze Erklärung auf einen Halbsatz und einen Link.
+- Anleitung: Schritte zu einem Ziel, das der Leser schon hat. Benenne sie nach der Aufgabe
+  ("Signaturschlüssel rotieren"). Setze Kompetenz voraus, erlaube Verzweigungen ("Wenn du X
+  nutzt, mach Y") und lass Hintergrund weg.
+- Referenz: Fakten zum Nachschlagen. Beschreibe nur. Nenne Optionen, Grenzen und Fehler ohne
+  Abschwächung, und spiegele die Struktur des Beschriebenen.
+- Erklärung: warum es so gebaut ist. Ein abgegrenztes Thema mit Kontext, Randbedingungen und
+  Alternativen. Nur dieser Modus darf eine Position vertreten.
+
+Mische die Modi nicht. Eine Referenztabelle im Tutorial unterbricht den Lernenden. Ratschläge
+in einer Referenz verwischen, was Tatsache ist. Teile das Dokument und verlinke die Teile.
+
 ### Wähle nur Inhalte aus, die Leser brauchen (ISO 5.1.6)
 
 Stelle die Bedürfnisse der Leser vor deine eigenen (ISO 5.1.6 a). Lass weg, was

@@ -15,6 +15,12 @@ Don't reach for adverbs like "quietly", "deeply", "fundamentally", "remarkably",
 - "the one that quietly suffocates everything else"
 - "a quiet intelligence behind it"
 
+The same applies to an adverb that props up a weak verb. Use a stronger verb or the measured value.
+
+**Avoid → write:**
+- "runs quickly" → "is fast", or "finishes in 80 ms"
+- "significantly improves" → "cuts p99 latency from 4 s to 0.8 s"
+
 ### "Delve" and Overused Vocabulary
 
 Don't use "delve", "certainly", "utilize", "leverage" (as a verb), "robust", "streamline", or "harness". Prefer plain, specific alternatives.
@@ -32,6 +38,25 @@ Don't reach for grandiose nouns where simpler ones work. Avoid "tapestry", "land
 - "The rich tapestry of human experience..."
 - "Navigating the complex landscape of modern AI..."
 - "The ever-evolving landscape of technology..."
+
+### Abstract Metaphor Nouns
+
+Technical-sounding nouns and verbs that name no mechanism. Each usually has a plainer, concrete replacement. Pick the concrete word, or say what the thing actually does.
+
+**Avoid → write:**
+- "substrate", "bedrock", "scaffolding" → "base", "foundation", or the named component
+- "vector" (for a route or method) → "way", "method", "path"
+- "surface" ("the API surface") → "the public functions", "the endpoints"
+- "primitive" as a noun, "modality", "paradigm", "locus", "nexus", "vantage" → the specific thing, or "kind", "mode", "approach"
+- "wedge", "wedge in" → "add"
+- "harness" as a metaphor → "use", or the tool's name
+- "gold-plating" → "more than the job needs"
+- "ratchet" as a metaphor → the mechanism's real name, or "a limit that only tightens"
+- "evacuate" (for code) → "move out"
+- "endgame" → "the last phase"
+- "north star", "flywheel" → the goal, or the feedback loop in plain words
+
+A named pattern is fine when the text says what it means the first time it appears. The test: could a developer say the word out loud in a code review without sounding like a slide deck?
 
 ### The "Serves As" Dodge
 
@@ -232,6 +257,15 @@ Don't coin compound labels — "supervision paradox", "acceleration trap", "work
 - "the acceleration trap"
 - "workload creep"
 
+### The Portable Sentence
+
+Don't name a feeling where a mechanism or a number belongs. A sentence that could appear unchanged in the documentation of a different project says nothing about this one. Ask what the sentence tells the reader to do or know, and write that. If it cannot be restated as an instruction, a fact, or a number, cut it.
+
+**Avoid → write:**
+- "SQL you can read" → "`.toSQL()` returns the exact string sent to the database."
+- "Types that follow your schema" → "Renaming a column fails the build."
+- "Built for speed and reliability" → the benchmark result, or cut it.
+
 ---
 
 ## Formatting
@@ -324,4 +358,30 @@ Don't follow the formula of acknowledging problems only to immediately dismiss t
 **Avoid:**
 - "Despite these challenges, the initiative continues to thrive."
 - "Despite its industrial and residential prosperity, Korattur faces challenges typical of urban areas."
+
+### Over-Compression
+
+Don't write so tersely that the reader must decode. Dropped articles, verbless fragments, arrows and symbols in place of verbs, and unexplained abbreviations save the writer a few words and cost the reader the meaning. Write whole sentences. See `reader-comprehension.en.md` §7 for the measured background.
+
+**Avoid → write:**
+- "Parser rejects bad date → exit 2, no write" → "The parser rejects a bad date, exits with code 2, and writes nothing."
+- "Cfg missing, svc no start." → "The config file is missing, so the service does not start."
+
+This is the opposite failure to filler. Cutting a phrase that adds nothing is right. Cutting structure (an article, a `that`, a verb) is not.
+
+---
+
+## Punctuation
+
+### Colon as a Mid-Sentence Connector
+
+A colon is fine before a list or an example. Don't use it to join two clauses as a rhetorical hinge. The point reads better without the crutch.
+
+**Avoid:**
+- "If you're coming from traditional automation: instead of registering event handlers, you describe conditions."
+
+**Write:**
+- "Describing when the scheduler should fire works best as plain English."
+
+A colon that introduces the reason or result of the preceding clause is still acceptable, as in "The job failed three times for the same reason: the timeout was too low." Check that the sentence would not be clearer as two.
 - "Despite their promising applications, pyroelectric materials face several challenges that must be addressed for broader adoption."

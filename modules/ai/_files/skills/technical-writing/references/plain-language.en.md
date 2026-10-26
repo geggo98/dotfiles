@@ -75,6 +75,28 @@ Bad: explaining the new retry policy in a reply on a merged PR.
 Good: add it to `docs/runbooks/payments.md`, link that from the reply, and
 file a ticket for the open question.
 
+For documentation, pick the mode before you write, and keep one mode per document
+(the Diátaxis framework). Two questions decide it. Does the content support action or
+understanding? Does the reader want to learn or to get work done?
+
+| | Learning | Working |
+|---|---|---|
+| Action | Tutorial | How-to guide |
+| Understanding | Explanation | Reference |
+
+- Tutorial: the reader builds something and succeeds. Say what they will build, show
+  the expected output after each step, and cut explanation to a clause and a link.
+- How-to guide: steps to a goal the reader already has. Name it by the task ("How to
+  rotate the signing key"). Assume competence, allow forks ("If you use X, do Y"),
+  and leave out background.
+- Reference: facts for lookup. Describe only. State options, limits, and errors
+  without hedging, and mirror the structure of the thing described.
+- Explanation: why it is built this way. One bounded topic, with context, constraints,
+  and alternatives. This is the only mode that may argue a position.
+
+Do not mix modes. A reference table inside a tutorial interrupts the learner. Advice
+inside a reference blurs what is fact. Split the document and link the parts.
+
 ### Select only content readers need (ISO 5.1.6 a-e)
 
 Put the readers' questions first, answer them, and cut the rest. Do not

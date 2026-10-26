@@ -313,7 +313,7 @@ Count each of these as one word (STE 8.6): a number, a number with its unit, an 
 
 Hyphenated groups count as one word (STE 8.7). "The user-facing error catalog" has 4 words.
 
-## 9. Writing practices (STE 9.1-9.4, GR-1 to GR-8)
+## 9. Writing practices (STE 9.1-9.4, GR-1 to GR-13)
 
 Rewrite the sentence when a word swap is not enough (STE 9.1). Replacing one fancy word with a plain one often leaves a broken sentence. Ask what the sentence must say, then say that.
 
@@ -388,3 +388,31 @@ GR-8: Use the possessive form ("the user's token") only when you are sure it is 
     Bad:  Check `app.yaml`'s keys against the pods' statuses's conditions field.
     Good: Check the keys in `app.yaml` against the conditions field in the status
           of each pod.
+
+GR-9: Keep `only`, `not`, and `also` next to the word they change. They attach to the nearest word, and two placements mean two things.
+
+    Bad:  The check only fails on growth.  (Only fails, rather than also warns?)
+    Good: The check fails only on growth.
+
+GR-10: Do not drop the verb from the second half of a parallel sentence. The reader cannot supply it with certainty, and a translator cannot at all.
+
+    Bad:  Phase 1 moves the converters and Phase 2 the runtime.
+    Good: Phase 1 moves the converters. Phase 2 moves the runtime.
+
+GR-11: Repeat the article in a series when the nouns are different things, and use `both ... and`, `either ... or`, or `if ... then` when "and" or "or" could group two ways.
+
+    Bad:  Restart the client and host.  (One thing, or two?)
+    Good: Restart both the client and the host.
+
+    Bad:  Disable retries and caching or logging.  (Which pair?)
+    Good: Disable retries, and disable either caching or logging.
+
+GR-12: Do not form plurals with `(s)`, and do not use a slash for "or". Write the plural, or name the alternatives.
+
+    Bad:  Delete the file(s) and/or directories.
+    Good: Delete the files, the directories, or both.
+
+GR-13: In a procedure, do not write "simply", "just", "easy", or "quickly". If the step were simple, the reader would not be consulting the text. The word also reads as a judgment of the reader when the step fails.
+
+    Bad:  Simply run `just switch` and you are done.
+    Good: Run `just switch`.

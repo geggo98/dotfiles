@@ -1,6 +1,6 @@
 ---
 name: technical-writing
-description: "Use when writing documentation, commit messages, error text, explanations, reports, or summaries. Applies especially to Jira tickets, pull request descriptions, and review comments: always start these with a TL;DR summary. Combines Strunk, ASD-STE100 (Simplified Technical English), and ISO 24495-1 (plain language), for English and German text. Triggers: writing human-readable content, verbose text, unclear explanations, Jira tickets, pull requests, review comments."
+description: "Use when writing documentation, commit messages, error text, explanations, reports, or summaries. Applies especially to Jira tickets, pull request descriptions, and review comments: always start these with a TL;DR summary. Combines Strunk, ASD-STE100 (Simplified Technical English), and ISO 24495-1 (plain language), for English and German text. Triggers: writing human-readable content, verbose text, unclear explanations, Jira tickets, pull requests, review comments, AI-sounding text, unslop."
 allowed-tools: Read(references/*) Bash(zsh *) Read
 ---
 
@@ -61,6 +61,22 @@ Don't separate subject from verb or verb from object unnecessarily.
 Place emphatic words at sentence end:
 "Although improvements occurred, crime increased" not "Crime increased, although improvements occurred."
 
+If a rule makes a sentence worse, rebuild the sentence or leave it alone.
+A sentence that obeys every rule and still sounds mechanical has failed.
+
+# Readable on the First Pass
+
+Concise is not the same as compressed.
+A reader follows a text on the first read when each sentence names its subject,
+each conclusion shows its reason,
+and no function word has been cut to save a token.
+Lead with the claim, not with a denial of something nobody said.
+Give code a real verb: "returns False", not "swallows the error".
+
+See [reader comprehension](references/reader-comprehension.en.md)
+for the patterns and the one-minute reread checklist.
+For German text, load [Verständlichkeit beim ersten Lesen](references/reader-comprehension.de.md).
+
 # Quantities and Ratios
 
 For quantity statements such as "x of y" or "x von y",
@@ -111,6 +127,12 @@ Eliminate verbose constructions:
 
 Don't bury the main point:
 "My arrival caused consternation" not "The fact that I had arrived was enough to cause consternation."
+
+Omit words that do no work.
+Keep words that mark structure:
+articles, "that" or "dass", and verbs.
+Cutting these is the compression pattern that makes machine text hard to read
+(see [reader comprehension](references/reader-comprehension.en.md), section 7).
 
 # Needless Words
 
@@ -167,6 +189,7 @@ When writing:
 4. Use active voice
 5. One topic per paragraph
 6. Emphatic words at end
+7. Reread once as the reader, using the checklist in reader comprehension, section 9
 
 Every word must justify its presence.
 
@@ -219,3 +242,10 @@ See [signs of AI writing](references/signs_of_AI_writing.md)
 for a field guide to detecting AI-generated content --
 vocabulary tells, structural patterns, markup artifacts,
 and citation problems common in LLM output.
+
+See [reader comprehension](references/reader-comprehension.en.md)
+for what remains when a text is concise and still hard to follow --
+referents, missing steps, personified code, and compression patterns
+that studies of machine text have measured.
+The German adaptation is
+[Verständlichkeit beim ersten Lesen](references/reader-comprehension.de.md).
