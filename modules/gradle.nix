@@ -69,8 +69,62 @@
 # 10800). `gradle-daemon-reap 0` reaps every idle daemon regardless of age.
 { ... }:
 {
-  flake.modules.homeManager.gradle = { config, pkgs, ... }:
+  flake.modules.homeManager.gradle = { config, pkgs, lib, ... }:
     let
+      # Linux only. A wrapper-downloaded Gradle unpacks its native libraries into
+      # ~/.gradle/native, and the Linux `libnative-platform-curses.so` has no
+      # RUNPATH, so a nixpkgs-built JDK's dlopen cannot find libncursesw/libtinfo
+      # and Gradle falls back to plain console output. Forcing
+      # `org.gradle.console=rich` hides that, but also forces rich output into
+      # pipes, CI and agent runs. This sets the RUNPATH in place instead.
+      #
+      # Adapted from https://britter.dev/blog/2026/10/20/poor-mans-gradle-console-fix/
+      # (the post states no licence). Changed: the per-library outcome is counted
+      # as patched / already ok / error and the exit code follows the error count.
+      # macOS does not have the problem. Measured 2026-10-28 on this Mac:
+      #
+      #   $ otool -L ~/.gradle/native/*/osx-aarch64/libnative-platform-curses.dylib
+      #   	/usr/lib/libncurses.5.4.dylib (compatibility version 5.4.0, …)
+      #
+      # an absolute system path, nothing for the Nix JDK to miss. The package is
+      # therefore not installed on the Macs; it is here for the first Linux host
+      # that runs Gradle.
+      fix-gradle-console = pkgs.writeShellApplication {
+        name = "fix-gradle-console";
+        runtimeInputs = [ pkgs.patchelf pkgs.findutils ];
+        text = ''
+          native_dir="''${GRADLE_USER_HOME:-$HOME/.gradle}/native"
+          rpath="${lib.makeLibraryPath [ pkgs.ncurses pkgs.stdenv.cc.cc ]}"
+
+          if [[ ! -d "$native_dir" ]]; then
+            echo "No native cache at $native_dir, nothing to fix." >&2
+            exit 0
+          fi
+
+          # Every library is exactly one of: patched, already ok, error. Setting
+          # the RUNPATH only when it differs makes a second run a no-op, and
+          # refreshes store paths that a nixpkgs update or a GC left stale.
+          patched=0 ok=0 error=0
+          while IFS= read -r -d "" so; do
+            if ! current="$(patchelf --print-rpath "$so")"; then
+              echo "ERROR cannot read RUNPATH of $so" >&2
+              error=$((error + 1))
+            elif [[ "$current" == "$rpath" ]]; then
+              ok=$((ok + 1))
+            elif patchelf --set-rpath "$rpath" "$so"; then
+              echo "Patched $so"
+              patched=$((patched + 1))
+            else
+              echo "ERROR cannot patch $so" >&2
+              error=$((error + 1))
+            fi
+          done < <(find "$native_dir" -name 'libnative-platform-curses.so' -type f -print0)
+
+          echo "$patched patched, $ok already ok, $error error"
+          (( error == 0 ))
+        '';
+      };
+
       gradle-daemon-reap = pkgs.writeShellApplication {
         name = "gradle-daemon-reap";
         runtimeInputs = [ pkgs.coreutils pkgs.findutils pkgs.perl ];
@@ -251,7 +305,8 @@
       };
     in
     {
-      home.packages = [ gradle-daemon-reap ];
+      home.packages = [ gradle-daemon-reap ]
+        ++ lib.optional pkgs.stdenv.hostPlatform.isLinux fix-gradle-console;
 
       # The local build cache lives at ~/.gradle/caches/build-cache-1/ and is
       # keyed on task inputs (sources, classpath, toolchain) — not on the
