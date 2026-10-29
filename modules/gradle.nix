@@ -67,10 +67,15 @@
 #
 # Manual run: `gradle-daemon-reap` (optional argument = idle seconds, default
 # 10800). `gradle-daemon-reap 0` reaps every idle daemon regardless of age.
-{ ... }:
+{ inputs, config, ... }:
+let
+  aiOptions = config.flake.modules.homeManager.ai-options;
+in
 {
   flake.modules.homeManager.gradle = { config, pkgs, lib, ... }:
     let
+      enabled = name: config.my.ai.agents.enable && config.my.ai.agents.${name}.enable;
+
       # Linux only. A wrapper-downloaded Gradle unpacks its native libraries into
       # ~/.gradle/native, and the Linux `libnative-platform-curses.so` has no
       # RUNPATH, so a nixpkgs-built JDK's dlopen cannot find libncursesw/libtinfo
@@ -305,6 +310,18 @@
       };
     in
     {
+      imports = [ aiOptions ];
+
+      # Official Gradle skills (audit a build against the best practices, upgrade
+      # the wrapper). The repo root is the Claude plugin, so it is loaded through
+      # the same --plugin-dir mechanism as worktrunk; Codex takes the two skill
+      # directories directly, as it has no plugin loader here.
+      programs.claude-code.plugins = lib.mkIf (enabled "claude") [ "${inputs.gradle-skills}" ];
+      programs.codex.skills = lib.mkIf (enabled "codex") {
+        gradle-best-practices = "${inputs.gradle-skills}/skills/gradle-best-practices";
+        gradle-wrapper-upgrade = "${inputs.gradle-skills}/skills/gradle-wrapper-upgrade";
+      };
+
       home.packages = [ gradle-daemon-reap ]
         ++ lib.optional pkgs.stdenv.hostPlatform.isLinux fix-gradle-console;
 

@@ -152,6 +152,15 @@ Content-only users import `homeManager.agent-content` and enable
 through their existing paths. Worktrunk plugins and Claude-based commit generation
 are gated by the corresponding agent; Worktrunk itself remains independent.
 
+**External plugins come in as `flake = false` inputs and load by store path.**
+`programs.claude-code.plugins` turns each entry into a `--plugin-dir` on the
+`claude` wrapper, so nothing is installed through `/plugin` and no marketplace
+state exists to drift. Worktrunk and the official Gradle skills
+(`modules/gradle.nix`, input `gradle-skills`) work this way; Codex gets the
+individual skill directories through `programs.codex.skills`. Both are gated by
+the agent toggles. Move such an input with `just update-input <name>`, never
+`nix flake update`, so the cooldown applies.
+
 **Keep the integration aspect imported when disabling previously managed agents.**
 Its activation hooks remove managed rules blocks and owned Codex MCP entries.
 Codex keeps a writable config; the ownership journal lives at

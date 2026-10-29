@@ -575,6 +575,22 @@
         "url": "https://flakehub.com/f/cachix/git-hooks.nix/0.1.941"
       }
     },
+    "gradle-skills": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1792594337,
+        "narHash": "sha256-/AFh4LphcOCX+lKMeEzOO/1phTCv4S+Skp+/ory/aLA=",
+        "owner": "gradle",
+        "repo": "gradle-skills",
+        "rev": "b26b14955e3a3ada5d1e90a4e08e2f10b2b54b5d",
+        "type": "github"
+      },
+      "original": {
+        "owner": "gradle",
+        "repo": "gradle-skills",
+        "type": "github"
+      }
+    },
     "home-manager": {
       "inputs": {
         "nixpkgs": [
@@ -1095,6 +1111,7 @@
         "devenv": "devenv",
         "disko": "disko",
         "flake-parts": "flake-parts_3",
+        "gradle-skills": "gradle-skills",
         "home-manager": "home-manager",
         "import-tree": "import-tree",
         "llm-agents-claude-code-pin": "llm-agents-claude-code-pin",

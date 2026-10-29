@@ -392,6 +392,16 @@
       url = "github:max-sixty/worktrunk";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
+    # https://github.com/gradle/gradle-skills (Apache-2.0): the official Gradle
+    # skills, `gradle-best-practices` and `gradle-wrapper-upgrade`. Not a flake;
+    # the repo root is itself a Claude Code plugin (.claude-plugin/), loaded
+    # through modules/gradle.nix. Move it with `just update-input gradle-skills`
+    # so the supply-chain cooldown applies.
+    gradle-skills = {
+      url = "github:gradle/gradle-skills";
+      flake = false;
+    };
   };
 
   # Substituters offered to anyone building this flake (each honored only for a
