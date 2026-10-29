@@ -1125,6 +1125,7 @@
         "nixpkgs-yt-dlp": "nixpkgs-yt-dlp",
         "nvf": "nvf",
         "sops-nix": "sops-nix",
+        "superlite": "superlite",
         "worktrunk": "worktrunk",
         "yt-dlp-src": "yt-dlp-src"
       }
@@ -1188,6 +1189,22 @@
       "original": {
         "owner": "Mic92",
         "repo": "sops-nix",
+        "type": "github"
+      }
+    },
+    "superlite": {
+      "flake": false,
+      "locked": {
+        "lastModified": 1792787870,
+        "narHash": "sha256-50Vm6Uv0OmYaHtZPNS6WF9tt11ob3Q51EtA6uxiOmuM=",
+        "owner": "iha2",
+        "repo": "superlite",
+        "rev": "05cc23b1a7db8f42ae26bc9032038935e930e023",
+        "type": "github"
+      },
+      "original": {
+        "owner": "iha2",
+        "repo": "superlite",
         "type": "github"
       }
     },

@@ -16,6 +16,7 @@ in
       agents.enable = lib.mkDefault true;
       content.enable = lib.mkDefault true;
       mcp.enable = lib.mkDefault true;
+      superlite.enable = lib.mkDefault true;
     };
     my.devdocs.enable = lib.mkDefault true;
     # iTerm2 is a Homebrew cask on both Macs (homebrew-common.nix).
@@ -50,6 +51,7 @@ in
       hm.voxscriber
       hm.yt-dlp
       hm.worktrunk
+      hm.superlite
       hm.nix-tarball-cache-repack
     ];
   };

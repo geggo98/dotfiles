@@ -402,6 +402,18 @@
       url = "github:gradle/gradle-skills";
       flake = false;
     };
+
+    # https://github.com/iha2/superlite (MIT): an autonomous build-lifecycle
+    # plugin for Claude Code. Deliberately NOT in programs.claude-code.plugins:
+    # its SessionStart hook injects a skill into every session and its
+    # PreToolUse hooks run on every Bash/Edit call. It is reachable only through
+    # `+agent-claude-superlite` (modules/superlite.nix). Not a flake. The repo
+    # is days old and moves daily; `just update-input superlite` applies the
+    # cooldown, so expect the pin to trail the newest tag.
+    superlite = {
+      url = "github:iha2/superlite";
+      flake = false;
+    };
   };
 
   # Substituters offered to anyone building this flake (each honored only for a
