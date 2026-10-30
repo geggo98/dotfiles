@@ -44,7 +44,6 @@ in
       "aptakube"
       "bleunlock"
       "hashicorp/tap/hashicorp-boundary-desktop"
-      "cursor"
       "Dropbox"
 
       "openvpn-connect"
