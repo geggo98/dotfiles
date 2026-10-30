@@ -101,6 +101,7 @@
           description = "Markdown rule files contributed by imported aspects, delivered with the shared rules.";
         };
         atlassian.enable = mkEnableOption "Atlassian MCP and the Jira/Bitbucket skills";
+        monitoring.enable = mkEnableOption "the work Grafana monitoring MCP (legacy SSE via mcp-remote)";
         superlite.enable = mkEnableOption "the opt-in +agent-claude-superlite wrapper (the plugin is never loaded into plain claude)";
 
         mcp = {

@@ -74,6 +74,20 @@ in
         '';
       });
 
+      mcp-monitoring = (pkgs.writeShellApplication {
+        name = "+mcp-monitoring";
+        runtimeInputs = [ pkgs.nodejs_24 ];
+        text = ''
+          ${loadSecretsLib}
+          load_from_secret MONITORING_MCP_URL monitoring_mcp_url
+          require_secrets MONITORING_MCP_URL
+          # Legacy SSE endpoint, hence the mcp-remote bridge. The URL comes
+          # from sops because it names internal infrastructure; it is no
+          # credential, so showing up in `ps` argv is acceptable.
+          exec npx -y "mcp-remote@${npmVersions.mcp-remote}" "$MONITORING_MCP_URL"
+        '';
+      });
+
       mcp-travily = (pkgs.writeShellApplication {
         name = "+mcp-travily";
         runtimeInputs = [ pkgs.nodejs_24 ];
@@ -173,7 +187,11 @@ in
             auth = { kind = "bearer"; secret = "travily_api_key"; var = "TRAVILY_API_KEY"; };
           };
         };
-      } // lib.optionalAttrs config.my.ai.atlassian.enable { atlassian = { stdio = mcp-atlassian; }; };
+      }
+      // lib.optionalAttrs config.my.ai.atlassian.enable { atlassian = { stdio = mcp-atlassian; }; }
+      # stdio only: the endpoint speaks legacy SSE and its URL lives in sops,
+      # so there is no `remote` entry (it would need the URL as a literal).
+      // lib.optionalAttrs config.my.ai.monitoring.enable { monitoring = { stdio = mcp-monitoring; }; };
 
     in
     {

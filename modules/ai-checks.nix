@@ -34,6 +34,7 @@ in
         content.enable = true;
         mcp.enable = true;
         atlassian.enable = true;
+        monitoring.enable = true;
       };
       withoutCodexMcp = makeHome allAspects {
         agents.enable = true;
@@ -84,6 +85,9 @@ in
         (full.config.my.ai.mcp.rendered.claude ? context7)
         (!(full.config.my.ai.mcp.rendered.claude ? atlassian))
         (full.config.my.ai.mcp.rendered.codex ? atlassian)
+        (full.config.my.ai.mcp.rendered.claude ? monitoring)
+        (full.config.my.ai.mcp.rendered.codex ? monitoring)
+        (builtins.all (client: !(client ? monitoring)) (lib.attrValues mcpOnly.config.my.ai.mcp.rendered))
         (full.config.my.ai.mcp.rendered.codex.context7.bearer_token_env_var == "CONTEXT7_API_KEY")
         (withoutCodexMcp.config.my.ai.agents.codex.environmentScript == "")
         (withoutCodexMcp.config.programs.claude-code.mcpServers ? context7)

@@ -62,6 +62,8 @@ in
       # (Claude does not get the MCP server — see my.ai.mcp.clients.claude.exclude in
       # ai-options.nix — but opencode, codex and the CLI still do.)
       my.ai.atlassian.enable = true;
+      # Work-only monitoring MCP; its URL is the monitoring_mcp_url secret.
+      my.ai.monitoring.enable = true;
 
       programs.git.settings.user.email = "stefan.schwetschke@check24.de";
       programs.gpg.settings.default-key = "DKL6GDJ7X1@schwetschke.de";

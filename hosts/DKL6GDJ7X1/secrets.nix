@@ -12,6 +12,7 @@
   boundary_services = { };
   vault_addr_staging = { };
   vault_addr_production = { };
+  monitoring_mcp_url = { };
 
   # CHECK24 work credentials, moved out of the global file on 2026-08-24.
   # They have no consumer on the private Mac: the Atlassian ones feed
