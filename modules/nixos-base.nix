@@ -77,6 +77,31 @@ in
     # password auth off and no keys, the only remaining route is the Cloud
     # Panel's KVM console — this turns that outage into an eval error.
     assertions = [
+      # CVE-2026-98432 (remote, unauthenticated UAF in the IPv4 TCP handshake) is fixed
+      # from these versions on; this stops a later input rollback from silently
+      # bringing a vulnerable kernel back. Lines older than 6.1 are not offered here.
+      {
+        assertion =
+          let
+            v = config.boot.kernelPackages.kernel.version;
+            fixed = {
+              "6.1" = "6.1.190";
+              "6.6" = "6.6.159";
+              "6.12" = "6.12.113";
+              "6.18" = "6.18.56";
+              "7.2" = "7.2.10";
+            };
+            line = lib.versions.majorMinor v;
+          in
+          if fixed ? ${line} then lib.versionAtLeast v fixed.${line}
+          else lib.versionAtLeast v "7.3";
+        message = ''
+          nixos-base: kernel ${config.boot.kernelPackages.kernel.version} predates the
+          fix for CVE-2026-98432 (6.1.190, 6.6.159, 6.12.113, 6.18.56, 7.2.10, 7.3).
+          Update the nixpkgs input (`just update-input nixpkgs`).
+        '';
+      }
+
       {
         assertion = rootAuthorizedKeys != [ ];
         message = ''
@@ -124,6 +149,11 @@ in
     systemd.services."serial-getty@ttyS0".enable = true;
 
     networking.firewall.enable = true;
+
+    # CVE-2026-98432: the published root exploit needs an MPTCP listener, and Go ≥1.24
+    # (tailscaled) opens every listener as MPTCP while this is 1. Nothing here needs it.
+    # Existing listeners stay MPTCP until their process restarts (a reboot does that).
+    boot.kernel.sysctl."net.mptcp.enabled" = 0;
 
     # --- Make a rename actually take effect ---------------------------------
     # `networking.hostName` does NOT change the running system. nixpkgs says so in
