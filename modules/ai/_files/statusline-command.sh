@@ -1,7 +1,7 @@
 #!/bin/sh
 # Claude Code statusLine command
 # Displays: worktree path + git/CI status (Worktrunk), model (short), context %,
-# tokens, rate limit, starship language modules
+# tokens, weekly rate limit + projection, starship language modules
 
 input=$(cat)
 
@@ -10,7 +10,33 @@ model_full=$(echo "$input" | jq -r '.model.display_name // "?"')
 used_pct=$(echo "$input" | jq -r '.context_window.used_percentage // empty')
 total_input=$(echo "$input" | jq -r '.context_window.total_input_tokens // 0')
 total_output=$(echo "$input" | jq -r '.context_window.total_output_tokens // 0')
-five_hour_pct=$(echo "$input" | jq -r '.rate_limits.five_hour.used_percentage // empty')
+
+# Weekly limit (there is no 5h window any more) plus a projection to the reset.
+# Window start is not documented; assumed = resets_at - 7d. Projection = average
+# pace so far, extrapolated to the reset. Empty output when no seven_day window.
+#   7d:42% →78% 🟡 ↻2d5h            reaches the reset with reserve / just about
+#   7d:65% →140% 🔴 leer 1d8h ↻3d2h  runs out 1d8h from now, 3d2h before the reset
+# No projection in the first 5% of the window (~8h): the extrapolation is noise.
+week_seg=$(echo "$input" | jq -r '
+  def dur(s): (s | floor) as $s
+    | if $s >= 86400 then "\($s / 86400 | floor)d\(($s % 86400) / 3600 | floor)h"
+      else "\($s / 3600 | floor)h\(($s % 3600) / 60 | floor)m" end;
+  604800 as $week
+  | (.rate_limits.seven_day // empty) as $w
+  | ($w.used_percentage // empty) as $u
+  | ($w.resets_at // 0) as $r
+  | ($r - now) as $left
+  | (if $left > 0 then ([($week - $left) / $week, 0] | max) else null end) as $f
+  | "7d:\($u | round)%"
+    + (if $f == null then ""
+       elif $u >= 100 then " 🔴 ↻" + dur($left)
+       elif $f < 0.05 then " ↻" + dur($left)
+       else ($u / $f) as $p
+         | " →\($p | round)% " + (if $p <= 70 then "🟢" elif $p <= 100 then "🟡" else "🔴" end)
+           + (if $p > 100 then " leer " + dur((100 - $u) / ($u / ($f * $week))) else "" end)
+           + " ↻" + dur($left)
+       end)
+' 2>/dev/null)
 
 # Shorten model name: strip "Claude " prefix, shorten "Sonnet"/"Haiku"/"Opus" to 3 letters + version
 # e.g. "Claude 3.5 Sonnet" -> "3.5 Son"  "Claude Sonnet 4.5" -> "Son 4.5"
@@ -90,10 +116,9 @@ if [ "$total_tok" -gt 0 ]; then
     fi
 fi
 
-# 5-hour rate limit
-if [ -n "$five_hour_pct" ]; then
-    five_rounded=$(printf "%.0f" "$five_hour_pct")
-    parts="${parts}  5h:${five_rounded}%"
+# Weekly rate limit with projection
+if [ -n "$week_seg" ]; then
+    parts="${parts}  ${week_seg}"
 fi
 
 # Starship language/tool modules — run in cwd, strip ANSI escapes, trim brackets/spaces
