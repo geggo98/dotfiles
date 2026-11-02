@@ -2,9 +2,9 @@
 # /// script
 # requires-python = ">=3.10"
 # dependencies = [
-#   # <2: PyPI is at 2.x since mid-2026; the major is a separate migration with
-#   #   real calls, not a re-lock. See the commit that added the ceiling.
-#   "google-genai>=1.68.0,<2",
+#   # >=2.3.0: the Interactions API (client.interactions) arrived in the 2.x line.
+#   #   <3: the next major is a separate migration with real calls, not a re-lock.
+#   "google-genai>=2.3.0,<3",
 #   "requests>=2.31.0",
 # ]
 # [tool.uv]
@@ -12,16 +12,23 @@
 # ///
 
 import argparse
+import json
 import os
 import sys
 from concurrent.futures import ThreadPoolExecutor
-from typing import Dict, List
+from typing import Any, Dict, List, Optional, Tuple
 
 import requests
 from google import genai
-from google.genai import types
 
 GROUNDING_REDIRECT = "vertexaisearch.cloud.google.com/grounding-api-redirect/"
+OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions"
+
+# HTTP statuses that mean "this account cannot pay right now", not "the request
+# is wrong": 402 is the exhausted prepayment ("prepayment credits are depleted"),
+# 429 is quota. Only these may switch the backend; a 400 or a bad model name
+# would fail identically on the other side and must not be papered over.
+FALLBACK_STATUSES = {402, 429}
 
 _session = requests.Session()
 
@@ -41,49 +48,26 @@ def resolve_urls(urls: List[str], max_workers: int = 5) -> List[str]:
         return list(pool.map(resolve_grounding_url, urls))
 
 
-def build_url_map(response, max_workers: int = 5) -> Dict[str, str]:
-    """Collect all grounding URLs from the response and resolve them in one batch."""
-    cands = getattr(response, "candidates", None)
-    if not cands or not cands[0]:
-        return {}
-    gmeta = getattr(cands[0], "grounding_metadata", None)
-    if not gmeta:
-        return {}
-    chunks = getattr(gmeta, "grounding_chunks", []) or []
-    raw_urls = []
-    for ch in chunks:
-        web = getattr(ch, "web", None)
-        if web and getattr(web, "uri", None):
-            raw_urls.append(web.uri)
-    if not raw_urls:
-        return {}
-    resolved = resolve_urls(raw_urls, max_workers=max_workers)
-    return dict(zip(raw_urls, resolved))
-
 MODEL = "gemini-3.8-flash"
+MODEL_DEEPER = "gemini-4-argon"
 
 # The depth knob is the THINKING LEVEL, not the model name. gemini-3.8-flash is
-# GA, grounds against Google Search, and accepts low/medium/high. Two models of
-# two generations (gemini-3.1-pro-preview / -flash-lite-preview) used to encode
-# the same axis, which meant two names that could age apart -- and both of them
-# had.
+# GA, grounds against Google Search, and accepts low/medium/high. --deeper is the
+# one exception: it switches to the flagship, gemini-4-argon (GA 2026-10-13,
+# same three levels), which costs several times as much.
 #
-# `minimal` is deliberately ABSENT: this model rejects it with an error, so it
+# `minimal` is deliberately ABSENT: both models reject it with an error, so it
 # belongs in argparse's choices-check, where it costs nothing, rather than in a
 # request that travels to Google to be refused there.
 #
 # medium is the API's own default for Gemini 3 Flash. It is restated here so the
 # stderr line below can name the level that is actually in force instead of
 # reporting "unset" and leaving the reader to guess.
-THINKING_LEVELS = {
-    "low": types.ThinkingLevel.LOW,
-    "medium": types.ThinkingLevel.MEDIUM,
-    "high": types.ThinkingLevel.HIGH,
-}
+THINKING_LEVELS = ("low", "medium", "high")
 DEFAULT_THINKING = "medium"
 
 
-def get_api_key_from_filesystem(key_name: str) -> str:
+def get_api_key_from_filesystem(key_name: str) -> Optional[str]:
     """Read API key from ~/.config/sops-nix/secrets/ directory."""
     key_file = os.path.expanduser(f"~/.config/sops-nix/secrets/{key_name}")
     try:
@@ -93,59 +77,158 @@ def get_api_key_from_filesystem(key_name: str) -> str:
         return None
 
 
-def add_citations(response, url_map: Dict[str, str] | None = None) -> str:
+def google_key() -> Optional[str]:
+    # Prefers GEMINI_API_KEY, then GOOGLE_API_KEY, then the sops file.
+    return (
+        os.getenv("GEMINI_API_KEY")
+        or os.getenv("GOOGLE_API_KEY")
+        or get_api_key_from_filesystem("gemini_api_key")
+    )
+
+
+def openrouter_key() -> Optional[str]:
+    return os.getenv("OPENROUTER_API_KEY") or get_api_key_from_filesystem(
+        "openrouter_api_key"
+    )
+
+
+class OpenRouterError(Exception):
+    def __init__(self, status_code: int, body: str):
+        super().__init__(f"OpenRouter HTTP {status_code}: {body}")
+        self.status_code = status_code
+
+
+class Result:
+    """One answer, whichever backend produced it.
+
+    cites: (end, url, title) per grounded segment, `end` as a byte offset into
+    the UTF-8 text. Both backends report bytes; measured for OpenRouter on a
+    German answer, where slicing by bytes ends on a sentence and slicing by
+    characters runs past it.
     """
-    Insert inline citation markers after grounded segments.
-    Format: text ...[1](url)[3](url)...
-    Follows the pattern from the official docs.
-    """
-    text = response.text or ""
-    cands = getattr(response, "candidates", None)
-    if not cands or not cands[0]:
-        return text
 
-    gmeta = getattr(cands[0], "grounding_metadata", None)
-    if not gmeta:
-        return text
+    def __init__(self, text: str, cites: List[Tuple[int, str, str]], raw: Any):
+        self.text = text
+        self.cites = cites
+        self.raw = raw
 
-    supports = getattr(gmeta, "grounding_supports", []) or []
-    chunks = getattr(gmeta, "grounding_chunks", []) or []
 
-    # Avoid shifting indices by inserting from the end.
-    supports_sorted = sorted(supports, key=lambda s: s.segment.end_index, reverse=True)
-    for s in supports_sorted:
-        end_index = s.segment.end_index
-        idxs: List[int] = list(getattr(s, "grounding_chunk_indices", []) or [])
-        if not idxs:
+def run_google(model: str, prompt: str, level: str) -> Result:
+    client = genai.Client(api_key=google_key())
+    interaction = client.interactions.create(
+        model=model.removeprefix("google/"),
+        input=prompt,
+        tools=[{"type": "google_search"}],
+        generation_config={"thinking_level": level},
+        store=False,
+    )
+    if getattr(interaction, "status", None) == "failed":
+        errs = getattr(interaction, "errors", None) or []
+        raise RuntimeError(f"interaction failed: {errs}")
+
+    text = ""
+    cites: List[Tuple[int, str, str]] = []
+    for step in getattr(interaction, "steps", None) or []:
+        if getattr(step, "type", None) != "model_output":
             continue
-        links: List[str] = []
-        for i in idxs:
-            if 0 <= i < len(chunks):
-                web = getattr(chunks[i], "web", None)
-                if web and getattr(web, "uri", None):
-                    uri = url_map.get(web.uri, web.uri) if url_map else web.uri
-                    links.append(f"[{i+1}]({uri})")
-        if links:
-            citation_str = "".join(links)
-            text = text[:end_index] + citation_str + text[end_index:]
-    return text
+        for block in getattr(step, "content", None) or []:
+            if getattr(block, "type", None) != "text":
+                continue
+            # Offsets in `annotations` are relative to THIS block, so shift them
+            # by what earlier blocks already contributed (in bytes).
+            base = len(text.encode("utf-8"))
+            for a in getattr(block, "annotations", None) or []:
+                if getattr(a, "type", None) != "url_citation":
+                    continue
+                url = getattr(a, "url", None)
+                end = getattr(a, "end_index", None)
+                if url and end is not None:
+                    cites.append((base + end, url, getattr(a, "title", "") or url))
+            text += block.text
+    return Result(text, cites, interaction.model_dump(mode="json"))
 
 
-def list_sources(response, url_map: Dict[str, str] | None = None) -> List[str]:
-    cands = getattr(response, "candidates", None)
-    if not cands or not cands[0]:
-        return []
-    gmeta = getattr(cands[0], "grounding_metadata", None)
-    if not gmeta:
-        return []
-    chunks = getattr(gmeta, "grounding_chunks", []) or []
-    out = []
-    for i, ch in enumerate(chunks, start=1):
-        web = getattr(ch, "web", None)
-        if web and getattr(web, "uri", None):
-            uri = url_map.get(web.uri, web.uri) if url_map else web.uri
-            title = getattr(web, "title", "") or uri
-            out.append(f"[{i}] {title} — {uri}")
+def run_openrouter(model: str, prompt: str, level: str) -> Result:
+    key = openrouter_key()
+    if not key:
+        raise RuntimeError(
+            "set OPENROUTER_API_KEY, or place key in "
+            "~/.config/sops-nix/secrets/openrouter_api_key"
+        )
+    body = {
+        "model": model if "/" in model else f"google/{model}",
+        "messages": [{"role": "user", "content": prompt}],
+        # "native" is Google's own Search grounding; without it OpenRouter may
+        # pick its Exa engine, which is a different search with different cost.
+        "plugins": [{"id": "web", "engine": "native"}],
+        "reasoning": {"effort": level},
+    }
+    r = _session.post(
+        OPENROUTER_URL,
+        headers={"Authorization": f"Bearer {key}"},
+        json=body,
+        timeout=240,
+    )
+    if r.status_code != 200:
+        raise OpenRouterError(r.status_code, r.text[:500])
+    d = r.json()
+    msg = d["choices"][0]["message"]
+    text = msg.get("content") or ""
+    cites: List[Tuple[int, str, str]] = []
+    for a in msg.get("annotations") or []:
+        if a.get("type") != "url_citation":
+            continue
+        c = a.get("url_citation") or a
+        url, end = c.get("url"), c.get("end_index")
+        if url and end is not None:
+            cites.append((end, url, c.get("title") or url))
+    return Result(text, cites, d)
+
+
+def status_of(exc: Exception) -> Optional[int]:
+    # GenAiError (Interactions) and OpenRouterError carry status_code, the
+    # legacy genai.errors.APIError carries code.
+    for attr in ("status_code", "code"):
+        v = getattr(exc, attr, None)
+        if isinstance(v, int):
+            return v
+    return None
+
+
+def render(res: Result, resolve: bool, workers: int) -> str:
+    """Insert [n](url) after each grounded segment and append the source list."""
+    # Number sources by first appearance in the text, one number per final URL.
+    ordered = sorted(res.cites, key=lambda c: c[0])
+    raw_urls = list(dict.fromkeys(c[1] for c in ordered))
+    resolved = resolve_urls(raw_urls, max_workers=workers) if resolve else raw_urls
+    url_map = dict(zip(raw_urls, resolved))
+    number: Dict[str, int] = {}
+    titles: Dict[str, str] = {}
+    for _, url, title in ordered:
+        final = url_map[url]
+        if final not in number:
+            number[final] = len(number) + 1
+            titles[final] = title
+
+    # Work on bytes: the offsets are byte offsets. Insert from the end so earlier
+    # offsets stay valid. Several citations on one segment share one insertion.
+    by_end: Dict[int, List[int]] = {}
+    for end, url, _ in ordered:
+        n = number[url_map[url]]
+        if n not in by_end.setdefault(end, []):
+            by_end[end].append(n)
+    final_url = {n: u for u, n in number.items()}
+    data = res.text.encode("utf-8")
+    for end in sorted(by_end, reverse=True):
+        end = min(end, len(data))
+        marks = "".join(f"[{n}]({final_url[n]})" for n in by_end[end]).encode("utf-8")
+        data = data[:end] + marks + data[end:]
+    out = data.decode("utf-8", errors="replace").strip()
+
+    if number:
+        out += "\n\nSources:\n" + "\n".join(
+            f"- [{n}] {titles[u]} — {u}" for u, n in number.items()
+        )
     return out
 
 
@@ -156,8 +239,8 @@ def main():
     p.add_argument("prompt", nargs="*", help="User query to search and answer")
     p.add_argument(
         "--model",
-        default=MODEL,
-        help=f"Gemini model to use (default: {MODEL})",
+        default=None,
+        help=f"Gemini model to use (default: {MODEL}; {MODEL_DEEPER} with --deeper)",
     )
     p.add_argument(
         "--flash",
@@ -170,17 +253,29 @@ def main():
         help="Deeper synthesis: thinking level high",
     )
     p.add_argument(
+        "--deeper",
+        action="store_true",
+        help=f"Flagship model {MODEL_DEEPER} at thinking level high (several times the cost)",
+    )
+    p.add_argument(
         "--thinking-level",
-        choices=sorted(THINKING_LEVELS),
+        choices=THINKING_LEVELS,
         default=None,
         metavar="{low,medium,high}",
-        help=f"Explicit thinking level; beats --flash/--deep "
+        help=f"Explicit thinking level; beats --flash/--deep/--deeper "
         f"(default: {DEFAULT_THINKING})",
+    )
+    p.add_argument(
+        "--backend",
+        choices=("auto", "google", "openrouter"),
+        default="auto",
+        help="auto: Google, and OpenRouter if Google answers 402/429 "
+        "(default); google or openrouter: that one only, no fallback",
     )
     p.add_argument(
         "--json",
         action="store_true",
-        help="Print raw JSON response with grounding metadata",
+        help="Print raw JSON response of the backend that answered",
     )
     p.add_argument(
         "--no-resolve",
@@ -201,87 +296,79 @@ def main():
         print("Error: provide a prompt.", file=sys.stderr)
         sys.exit(2)
 
-    # --flash and --deep are opposite ends of one knob, so asking for both is a
-    # contradiction, not a preference. The old code let --flash win silently.
+    # --flash, --deep and --deeper are positions on one knob, so asking for two is
+    # a contradiction, not a preference. The old code let --flash win silently.
+    depth_flags = [n for n in ("flash", "deep", "deeper") if getattr(args, n)]
+    if len(depth_flags) > 1 and not args.thinking_level:
+        print(
+            f"Error: --{' and --'.join(depth_flags)} contradict each other; "
+            "pass one, or --thinking-level to be explicit.",
+            file=sys.stderr,
+        )
+        sys.exit(2)
     if args.thinking_level:
-        level_name = args.thinking_level
-    elif args.flash and args.deep:
-        print(
-            "Error: --flash and --deep are opposites; pass one, "
-            "or --thinking-level to be explicit.",
-            file=sys.stderr,
-        )
-        sys.exit(2)
+        level = args.thinking_level
     elif args.flash:
-        level_name = "low"
-    elif args.deep:
-        level_name = "high"
+        level = "low"
+    elif args.deep or args.deeper:
+        level = "high"
     else:
-        level_name = DEFAULT_THINKING
+        level = DEFAULT_THINKING
 
-    model = args.model
+    model = args.model or (MODEL_DEEPER if args.deeper else MODEL)
 
-    # API key loading follows official SDK behavior:
-    # prefers GOOGLE_API_KEY if both are set.
-    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
-    if not api_key:
-        # Try to read from filesystem
-        api_key = get_api_key_from_filesystem("gemini_api_key")
+    backends = ["google", "openrouter"] if args.backend == "auto" else [args.backend]
+    runners = {"google": run_google, "openrouter": run_openrouter}
 
-    if not api_key:
+    # Neither key anywhere: a configuration error (2), not a failed request (1).
+    if not any(
+        (google_key() if b == "google" else openrouter_key()) for b in backends
+    ):
         print(
-            "Error: set GEMINI_API_KEY or GOOGLE_API_KEY, or place key in ~/.config/sops-nix/secrets/gemini_api_key",
+            "Error: set GEMINI_API_KEY/GOOGLE_API_KEY (~/.config/sops-nix/secrets/gemini_api_key)"
+            " or OPENROUTER_API_KEY (~/.config/sops-nix/secrets/openrouter_api_key)",
             file=sys.stderr,
         )
         sys.exit(2)
 
-    client = genai.Client(api_key=api_key)
-
-    # Enable Google Search grounding.
-    grounding_tool = types.Tool(google_search=types.GoogleSearch())
-    config = types.GenerateContentConfig(
-        tools=[grounding_tool],
-        thinking_config=types.ThinkingConfig(
-            thinking_level=THINKING_LEVELS[level_name]
-        ),
-    )
-
-    # stderr, never stdout: stdout is the Markdown document the skill promises,
-    # and something downstream parses it. Without this line the two knobs are
-    # indistinguishable from outside -- a --deep that quietly did not take looks
-    # exactly like one that did.
-    print(f"gemini_research: model={model} thinking_level={level_name}", file=sys.stderr)
-
-    try:
-        resp = client.models.generate_content(
-            model=model, contents=prompt, config=config
+    res = None
+    errors: List[str] = []
+    for i, backend in enumerate(backends):
+        if backend == "google" and not google_key():
+            errors.append("google: no API key")
+            continue
+        # stderr, never stdout: stdout is the Markdown document the skill
+        # promises, and something downstream parses it. Without this line the
+        # knobs are indistinguishable from outside -- a --deep that quietly did
+        # not take looks exactly like one that did.
+        print(
+            f"gemini_research: backend={backend} model={model} thinking_level={level}",
+            file=sys.stderr,
         )
-    except Exception as e:
-        print(f"Request failed: {e}", file=sys.stderr)
+        try:
+            res = runners[backend](model, prompt, level)
+            break
+        except Exception as e:
+            status = status_of(e)
+            errors.append(f"{backend}: {e}")
+            if i + 1 < len(backends) and status in FALLBACK_STATUSES:
+                print(
+                    f"gemini_research: {backend} failed (HTTP {status}) -> retrying via {backends[i + 1]}",
+                    file=sys.stderr,
+                )
+                continue
+            break
+
+    if res is None:
+        for line in errors:
+            print(f"Request failed: {line}", file=sys.stderr)
         sys.exit(1)
 
-    # Resolve shortened grounding URLs in one batch.
-    url_map = None
-    if not args.no_resolve:
-        url_map = build_url_map(resp, max_workers=args.resolve_workers)
-
-    # Pretty print with inline citations.
-    text_with_citations = add_citations(resp, url_map=url_map)
-    print(text_with_citations.strip())
-
-    # Also show deduplicated source list.
-    sources = list_sources(resp, url_map=url_map)
-    if sources:
-        print("\nSources:")
-        for line in sources:
-            print(f"- {line}")
+    print(render(res, resolve=not args.no_resolve, workers=args.resolve_workers))
 
     if args.json:
-        # Emit the raw JSON for debugging or custom UIs.
-        import json
-
         print("\n--- RAW RESPONSE JSON ---")
-        print(json.dumps(resp.model_dump(mode="json"), indent=2))
+        print(json.dumps(res.raw, indent=2))
 
 
 if __name__ == "__main__":

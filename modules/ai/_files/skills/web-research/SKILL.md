@@ -37,13 +37,15 @@ Run before:
 | Script                                       | Purpose                          | Quick Mode | Deep Mode |
 | -------------------------------------------- | -------------------------------- | ---------- | --------- |
 | `${CLAUDE_SKILL_DIR}/scripts/perplexity_open_router_research.sh` | General-purpose quick research.  | Default    | `--deep`  |
-| `${CLAUDE_SKILL_DIR}/scripts/gemini_research.sh`                 | Deep research via Google Gemini. | `--flash`  | `--deep`  |
+| `${CLAUDE_SKILL_DIR}/scripts/gemini_research.sh`                 | Deep research via Google Gemini. | `--flash`  | `--deep` (`--deeper`: flagship) |
 
 The two scripts spell depth differently, and the difference matters when reading
 their output. Perplexity switches **models** (`sonar-pro` → `sonar-reasoning-pro`
 → `sonar-deep-research`). Gemini stays on **one** model, `gemini-3.8-flash`, and
 moves its *thinking level* instead — so `--flash`, no flag and `--deep` are
-`low`, `medium` and `high` thinking on the same grounded search. Each Gemini run
+`low`, `medium` and `high` thinking on the same grounded search. The one exception
+is `--deeper`, which switches to the flagship `gemini-4-argon` at `high` (several
+times the price; use it only when `--deep` was not enough). Each Gemini run
 prints the model and level it used on stderr; stdout stays pure Markdown.
 
 ### Arguments
@@ -93,19 +95,38 @@ ${CLAUDE_SKILL_DIR}/scripts/perplexity_open_router_research.sh --deep "Evaluate 
 | `--flash`                | Fast, shallow lookup. Gemini: thinking level `low`. |
 | `--deep`                 | Multi-step synthesis. Gemini: thinking level `high`. |
 | *(no depth flag)*        | Gemini: thinking level `medium`, the model's own default. |
+| `--deeper`               | Gemini only: flagship `gemini-4-argon`, thinking level `high`. Contradicts `--flash`/`--deep`. |
+| `--backend B`            | Gemini only: `auto` (default), `google` or `openrouter`. See section 6. |
 | `--thinking-level LEVEL` | Gemini only: `low`, `medium` or `high`, explicitly. Beats `--flash`/`--deep`. `minimal` is rejected — `gemini-3.8-flash` does not accept it. |
 | `--model ID`             | Override the model. Gemini defaults to `gemini-3.8-flash`. |
 | `--timeout DURATION`     | Global execution timeout (default: `5m`). Format follows GNU coreutils (e.g. `30s`, `5m`, `1h`). |
 | `perplexity_open_router` | Breadth-first research across multiple sources.   |
 | `gemini_research`        | Depth-first synthesis for comprehensive analysis. |
 
-Passing `--flash` and `--deep` together is refused with exit 2 rather than
+Passing two of `--flash`, `--deep` and `--deeper` together is refused with exit 2 rather than
 silently resolved: they are two ends of one knob, not two preferences.
 
 ## 6. Fallbacks and Error Handling
 
 If one agent fails, retry with the alternate tool.
 Ensure network access and required API keys are configured.
+
+**Gemini switches backend by itself.** It talks to Google directly (Interactions API,
+Google Search grounding). If Google answers **402** (prepayment credits depleted — the
+account must be topped up, the key is fine) or **429** (quota), `gemini_research`
+retries the same request through OpenRouter (`google/<model>`, native Google search,
+`OPENROUTER_API_KEY`) and says so on stderr:
+
+```
+gemini_research: google failed (HTTP 402) -> retrying via openrouter
+gemini_research: backend=openrouter model=gemini-3.8-flash thinking_level=medium
+```
+
+Any other error (400, wrong model name, network) does **not** switch — it would fail
+the same way on the other side. `--backend google` or `--backend openrouter` pins one
+backend and disables the fallback. OpenRouter itself can answer 504/429 when Google
+rate-limits it upstream; a repeat a few seconds later usually works. An answer without
+any `Sources:` block means the model did not ground that time — repeat it.
 
 ## 7. Output Format
 
@@ -139,7 +160,8 @@ level is caught by argparse and exits **2**, before anything reaches Google.
 | Variable             | Description                    |
 | -------------------- | ------------------------------ |
 | `OPENROUTER_API_KEY` | Required for Perplexity agent. |
-| `GOOGLE_API_KEY`     | Required for Gemini agent.     |
+| `GEMINI_API_KEY` / `GOOGLE_API_KEY` | Gemini agent, direct to Google. |
+| `OPENROUTER_API_KEY` | Also the Gemini fallback when Google answers 402/429. |
 
 ## 11. Troubleshooting
 
