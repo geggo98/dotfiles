@@ -7,6 +7,7 @@ Login flows, session persistence, OAuth, 2FA, and authenticated browsing.
 ## Contents
 
 - [Import Auth from Your Browser](#import-auth-from-your-browser)
+- [Everyday Chrome, one site only](#everyday-chrome-one-site-only)
 - [Persistent Profiles](#persistent-profiles)
 - [Session Persistence](#session-persistence)
 - [Basic Login Flow](#basic-login-flow)
@@ -68,6 +69,52 @@ This works for any site, including those with complex OAuth flows, SSO, or 2FA -
 agent-browser --session-name myapp state load ./my-auth.json
 # From now on, state is auto-saved/restored for "myapp"
 ```
+
+## Everyday Chrome, one site only
+
+Two ways reuse the Chrome you already work in on macOS, **without restarting it**. Both
+measured on 2026-11-03 (Chrome 156, agent-browser 0.36, an SSO-protected test system,
+Chrome running): a fresh session was redirected to the login page, both variants below
+reached the logged-in page.
+
+```bash
+# A) whole profile: every login in it is visible to the agent
+agent-browser --profile Default open https://app.example.com/home   # `agent-browser profiles` lists names
+
+# B) one site: only that host's cookies leave Chrome
+scripts/chrome-cookies.py app.example.com [--profile "Profile 1"] [--out FILE]
+agent-browser --state ~/.agent-browser/state/app.example.com.json open https://app.example.com/home
+```
+
+**Prefer B.** A copies the profile directory (3.8 GB here; 5.9 s against 3.1 s for B) and
+hands the agent the session of *every* site in it: mail, banking, the lot. B exports the one
+host plus its parent domains (`.example.com`, where SSO cookies usually sit) and nothing else.
+Use A when B is not enough (see limits).
+
+How B works: it reads Chrome's cookie database (copied, because Chrome holds it locked) and
+decrypts the values with the key from the Keychain item "Chrome Safe Storage". macOS asks on
+first use: answer **Allow**, not "Always Allow". Values go only into the state file (mode 600,
+written atomically); the log shows names, lengths and expiry, never a value.
+
+Limits of B:
+- `origins` stays empty, so a token kept in localStorage is **not** carried over. Use A.
+- One host per file. If the login redirects to an identity provider on a *different* host
+  that keeps its own session cookie, that cookie is missing; use A.
+- The file is a snapshot. A rotating session cookie goes stale; export again. Expired
+  cookies are not exported but listed by name on stderr: an expired session cookie is the
+  usual reason a login "does not work".
+- Exit codes: 0 done, 1 file written but a cookie failed to decrypt, 2 nothing usable,
+  125 setup or usage error (including a Keychain refusal).
+- macOS and Google Chrome only (no Chromium, no Linux).
+- Ask the user before running it, name one host, and delete the file afterwards. The state
+  file never belongs in a repository.
+
+Check the result by **URL**, not by title: in the measurement the login page and the
+logged-in page had the same `<title>`; only the URL differed.
+
+Not measured here: whether `--remote-debugging-port` still works against the default Chrome
+data directory. Chrome documents that it ignores the flag there from version 136 on, which
+would make "Import Auth from Your Browser" above fail for the everyday profile.
 
 ## Persistent Profiles
 
