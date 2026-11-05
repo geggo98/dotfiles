@@ -308,8 +308,15 @@
       # (`+vscode-ext install --global`, cooled) and mirrored from there into every profile,
       # because a profile does not inherit the default profile's extensions. Adding an id
       # here is the decision; the tool refuses any other id for a global install.
+      #
+      # Two of them are not installed by `--global` at all: anthropic.claude-code has its own
+      # activation hook (it must match the version of the pinned CLI, which a cooled pick
+      # would not), and openai.chatgpt was installed by hand. Listing them only makes sure
+      # the profiles see what the default profile has.
       sharedRuntimeExtensions = [
         "ms-vscode-remote.remote-containers" # Dev Containers (Microsoft licence)
+        "anthropic.claude-code" # installed by home.activation.claudeCodeExtension
+        "openai.chatgpt" # installed by hand; not cooled, see EXTENSIONS.md
       ];
 
       # Every profile gets the general set too: a new profile does not inherit the default
@@ -690,8 +697,14 @@
       # tolerated for the same reason as in the onChange hook above: a state a human
       # resolves, not a reason to abort a system activation. `+vscode-profiles` is the same
       # command, on PATH for the retry.
+      #
+      # After claudeCodeExtension when that exists: it installs the new extension version
+      # into the default profile, and this step copies the default profile's entry into the
+      # others, so the other order would leave them one switch behind.
       home.activation.vscodeStackProfiles =
-        lib.hm.dag.entryAfter [ "onFilesChange" "vscodeProfiles" ] ''
+        lib.hm.dag.entryAfter
+          ([ "onFilesChange" "vscodeProfiles" ]
+            ++ lib.optional config.programs.claude-code.enable "claudeCodeExtension") ''
           run ${vscodeProfilesScript}/bin/+vscode-profiles || [ $? -eq 1 ]
         '';
 

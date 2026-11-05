@@ -158,10 +158,12 @@ write; leave alone what something else writes back.
 | Extension | Why not |
 |---|---|
 | `anthropic.claude-code` | Ships in lockstep with the CLI (same version numbers), so a registry snapshot would drift against it. Not in Nix: installed by the activation hook `home.activation.claudeCodeExtension` in `modules/vscode.nix` at exactly the version of the CLI pin from `modules/agents.nix`. |
-| `openai.chatgpt` | Same, for the ChatGPT CLI. |
+| `openai.chatgpt` | Same, for the ChatGPT CLI. Installed by hand, so **not cooled**. |
 | `ms-vscode-remote.remote-containers` | The only unfree one of the seventeen candidates (`meta.unfree = true`; every other is MIT or Apache-2.0). Building it locally would make the R2 `post-build-hook` publish a non-redistributable Microsoft binary into a world-readable bucket — the same reason VS Code itself stays on the Homebrew cask. A licence filter in the push hook is not available: `meta.license` is eval-time data and is not recorded in the store. |
 
-Since 2026-11-05 `remote-containers` is a **shared runtime extension**
+`anthropic.claude-code` and `openai.chatgpt` are in the same list for a different reason: they
+stay where they are installed (default profile) and are only mirrored into the others, since
+a profile does not inherit them. Since 2026-11-05 `remote-containers` is a **shared runtime extension**
 (`sharedRuntimeExtensions` in `modules/vscode.nix`): installed at runtime into the default
 profile, with the cooldown (`+vscode-ext install --global`), and mirrored from there into
 every profile. Nix never builds it, so nothing is published. To take it under Nix anyway,
