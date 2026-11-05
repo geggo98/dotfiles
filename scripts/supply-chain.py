@@ -507,11 +507,9 @@ def openvsx_pick(namespace: str, name: str, cutoff: datetime
         f"sit beyond the cap.")
 
 
-def vsmarketplace_versions(namespace: str, name: str) -> tuple[dict[str, datetime], list[str]]:
-    """All non-prerelease, deduped {version: lastUpdated} for namespace.name on the MS
-    Marketplace. Caller decides what to do with the set — vsmarketplace_pick walks it
-    newest-first for the cooldown bar; check_extension's `pin` path looks up one entry
-    directly. Raises ToolError only when the extension itself is gone (rule 1)."""
+def vsmarketplace_extension(namespace: str, name: str) -> dict:
+    """The raw gallery record for namespace.name (every version, with properties and
+    statistics). Raises ToolError when the extension itself is gone (rule 1)."""
     # flags = IncludeVersions(1) | IncludeFiles(2) | IncludeCategoryAndTags(16)
     #       | IncludeVersionProperties(32) | IncludeAssetUri(128) | IncludeStatistics(256)
     #
@@ -539,7 +537,15 @@ def vsmarketplace_versions(namespace: str, name: str) -> tuple[dict[str, datetim
     if not results:
         raise ToolError(f"extension {namespace}.{name} does NOT exist on the VS Code "
                         f"Marketplace — withdrawn, renamed, or never published")
-    ext = results[0]
+    return results[0]
+
+
+def vsmarketplace_versions(namespace: str, name: str) -> tuple[dict[str, datetime], list[str]]:
+    """All non-prerelease, deduped {version: lastUpdated} for namespace.name on the MS
+    Marketplace. Caller decides what to do with the set — vsmarketplace_pick walks it
+    newest-first for the cooldown bar; check_extension's `pin` path looks up one entry
+    directly. Raises ToolError only when the extension itself is gone (rule 1)."""
+    ext = vsmarketplace_extension(namespace, name)
     notes: list[str] = []
     if not (ext.get("publisher") or {}).get("isDomainVerified"):
         notes.append("publisher domain NOT verified")
@@ -1009,6 +1015,130 @@ def cmd_audit(args, manifest, now, token) -> int:
     return 0
 
 
+# ------------------------------------------------- extension-pick: a cooled install plan
+#
+# `code --install-extension id@ver` honours ONE version. Everything the extension pulls
+# in with it — an extension pack's members, `extensionDependencies` — arrives in the
+# NEWEST version, cooldown or no. Measured 2026-11-05: installing ms-python.python@2026.10.0
+# brought ms-python.vscode-python-envs 1.42.0 along, one day old and never reviewed, and
+# installing ms-python.vscode-pylance@2026.4.1 pulled ms-python.python in its latest
+# version too (a dependency of a dependency). A member that is ALREADY installed is never
+# upgraded by a later install, so the whole closure has to be resolved here and installed
+# leaves-first, each member pinned. That is what this command computes.
+
+EXT_PACK = "Microsoft.VisualStudio.Code.ExtensionPack"
+EXT_DEPS = "Microsoft.VisualStudio.Code.ExtensionDependencies"
+EXT_PRERELEASE = "Microsoft.VisualStudio.Code.PreRelease"
+EXT_SHA256 = "Microsoft.VisualStudio.Services.VsixSha256"
+
+
+def _members(props: dict[str, str]) -> list[str]:
+    """Pack members and hard dependencies, de-duplicated, in declared order."""
+    out: list[str] = []
+    for key in (EXT_DEPS, EXT_PACK):
+        for part in (props.get(key) or "").split(","):
+            part = part.strip()
+            if part and part.lower() not in (o.lower() for o in out):
+                out.append(part)
+    return out
+
+
+def extension_closure(ext_id: str, cutoff: datetime, now: datetime,
+                      done: dict[str, dict], stack: tuple[str, ...] = (),
+                      platform: str = "darwin-arm64") -> None:
+    """Resolve ext_id and everything it pulls in into `done`, leaves first.
+
+    `done` is an insertion-ordered {lowercased id: entry}; an entry is inserted only
+    after all its members, so iterating `done` yields a valid install order. A member
+    that cannot be cooled (too new, withdrawn) raises ToolError naming the member: the
+    parent cannot be installed without it.
+    """
+    key = ext_id.lower()
+    if key in done:
+        return
+    if key in stack:           # pack that lists its own parent
+        return
+    if "." not in ext_id:
+        raise ToolError(f"id must be <namespace>.<name>: {ext_id!r}")
+    namespace, name = ext_id.split(".", 1)
+    ext = vsmarketplace_extension(namespace, name)
+    # One version appears once per target platform (darwin-arm64, linux-x64, … or none
+    # for a universal build). Group them, then walk the versions newest-first and take
+    # the first STABLE one that clears the bar AND has a build for this platform.
+    by_version: dict[str, list[dict]] = {}
+    for v in ext.get("versions") or []:
+        if v.get("version") and v.get("lastUpdated"):
+            by_version.setdefault(v["version"], []).append(v)
+    chosen = None
+    wrong_platform = 0
+    for ver, entries in sorted(by_version.items(),
+                               key=lambda kv: kv[1][0]["lastUpdated"], reverse=True):
+        props0 = {p.get("key"): p.get("value") for p in (entries[0].get("properties") or [])}
+        if EXT_PRERELEASE in props0:
+            # The key's mere presence marks a pre-release in the gallery, exactly as
+            # vsmarketplace_versions reads it.
+            continue
+        if iso(entries[0]["lastUpdated"]) > cutoff:
+            continue
+        build = (next((e for e in entries if e.get("targetPlatform") == platform), None)
+                 or next((e for e in entries
+                          if e.get("targetPlatform") in (None, "", "universal")), None))
+        if build is None:
+            wrong_platform += 1
+            continue
+        props = {p.get("key"): p.get("value") for p in (build.get("properties") or [])}
+        chosen = (ver, iso(build["lastUpdated"]), props, build)
+        break
+    if chosen is None:
+        why = (f"; {wrong_platform} cooled version(s) have no {platform} build"
+               if wrong_platform else "")
+        raise ToolError(f"no stable Marketplace version of {ext_id} is old enough "
+                        f"({len(by_version)} versions seen{why})")
+    ver, when, props, build = chosen
+    members = _members(props)
+    for m in members:
+        try:
+            extension_closure(m, cutoff, now, done, stack + (key,), platform)
+        except ToolError as e:
+            raise ToolError(f"{ext_id} needs {m}: {e}") from e
+    stats = {s.get("statisticName"): s.get("value") for s in (ext.get("statistics") or [])}
+    done[key] = {
+        "id": f"{ext.get('publisher', {}).get('publisherName', namespace)}.{ext.get('extensionName', name)}",
+        "version": ver,
+        "published": when.isoformat(),
+        "ageDays": round(age_days(when, now), 1),
+        "sha256": props.get(EXT_SHA256),
+        "targetPlatform": build.get("targetPlatform") or "universal",
+        "vsixUrl": f"{build['assetUri']}/Microsoft.VisualStudio.Services.VSIXPackage",
+        "domainVerified": bool((ext.get("publisher") or {}).get("isDomainVerified")),
+        "installs": int(stats.get("install") or 0),
+        "needs": members,
+    }
+
+
+def cmd_extension_pick(args, manifest, now) -> int:
+    """Cooled install plan for each id, as JSON on stdout.
+
+    Output: {"cooldownDays": N, "results": [{"id", "ok": true, "plan": [entry, …]} |
+    {"id", "ok": false, "detail": "…"}]}. `plan` is leaves-first and ALREADY includes the
+    requested extension as its last element (unless an earlier id in this call brought
+    it in as a member; plans are per id, so a shared member appears in each). Exit 0 when
+    every id resolved, 1 when any could not (too new, withdrawn, member blocked).
+    """
+    days = manifest.get("cooldown", {}).get("extensions", 14)
+    cutoff = now - timedelta(days=days)
+    results = []
+    for ext_id in args.ids:
+        done: dict[str, dict] = {}
+        try:
+            extension_closure(ext_id, cutoff, now, done, platform=args.platform)
+            results.append({"id": ext_id, "ok": True, "plan": list(done.values())})
+        except ToolError as e:
+            results.append({"id": ext_id, "ok": False, "detail": str(e)})
+    print(json.dumps({"cooldownDays": days, "results": results}, indent=2))
+    return 0 if all(r["ok"] for r in results) else 1
+
+
 # ------------------------------------------------------- tag pins: pick a cooled release
 
 def cmd_release(args, manifest, now, token) -> int:
@@ -1097,6 +1227,13 @@ def main() -> int:
                     choices=["open-vsx", "vscode-marketplace"],
                     help="registry for --extension (default: open-vsx)")
 
+    ep = sub.add_parser("extension-pick",
+                        help="cooled install plan (JSON) for VS Code extensions, "
+                             "including pack members and dependencies, leaves first")
+    ep.add_argument("ids", nargs="+", metavar="ID", help="<publisher>.<name>")
+    ep.add_argument("--platform", default="darwin-arm64",
+                    help="target platform of the builds to pick (default: darwin-arm64)")
+
     rel = sub.add_parser("release",
                          help="newest GitHub release of OWNER/REPO that clears the "
                               "layer-1 cooldown; prints the tag on stdout")
@@ -1114,6 +1251,8 @@ def main() -> int:
         return cmd_update(args, manifest, now, token)
     if args.command == "release":
         return cmd_release(args, manifest, now, token)
+    if args.command == "extension-pick":
+        return cmd_extension_pick(args, manifest, now)
     return cmd_audit(args, manifest, now, token)
 
 

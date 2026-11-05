@@ -639,6 +639,15 @@ vscode-settings-check:
     echo "modules/vscode.nix, and check userDataSync.log for a Settings Sync loop." >&2
     exit 1
 
+# Offline tests for +vscode-ext (JSONC, safe unpacking, checksum, plan) and the profile
+# activation. No network, no VS Code, no real HOME: each test imports the modules with a
+# temporary one. The Marketplace queries and `code --list-extensions` are NOT covered here;
+# see docs/vscode.md for what was measured by hand.
+vscode-ext-check:
+    #!/bin/zsh
+    set -euo pipefail
+    python3 -I modules/_files/vscode/test_vscode_ext.py
+
 # --- Store maintenance ---
 
 # Deduplicate the store by hard-linking identical files (safe, reversible)

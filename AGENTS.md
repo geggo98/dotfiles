@@ -37,7 +37,7 @@ The repository follows the **Dendritic Pattern** for Nix flake structure — use
 | Secrets, SOPS, Vault, Atlassian tokens | `docs/secrets.md` |
 | MCP servers, agent/AI aspect toggles | `docs/ai-tooling.md` |
 | `modules/devdocs.nix` | `docs/devdocs.md` |
-| `modules/vscode.nix`, extensions, settings.json | `docs/vscode.md` |
+| `modules/vscode.nix`, extensions, settings.json, VS Code profiles, `+vscode-ext` | `docs/vscode.md` |
 | iTerm2 `Web` profile / DuckDuckGo settings | `docs/iterm2-duckduckgo.md` |
 | `just update`, `just audit`, dependency advisories | `docs/supply-chain.md` |
 
@@ -53,6 +53,7 @@ A `justfile` provides safe, pre-approved commands that agents can run without us
 | `just errlog-check` | Run the `+errlog` test suite in the Nix sandbox |
 | `just check` / `just ai-check` / `just fmt-check` / `just eval` | `nix flake check`; isolated AI-aspect tests; format check; fast syntax check |
 | `just fmt` | Format all Nix files with `nixpkgs-fmt` |
+| `just vscode-ext-check` | Offline tests for `+vscode-ext` and the VS Code profile activation |
 | `just update` / `-preview` / `-input <i>` / `-head` | Update flake inputs honouring the supply-chain cooldown (`-head` bypasses it) |
 | `just audit` / `-inputs` / `-extensions [ids…]` | Cooldown + withdrawal audit: inputs, npm/GitHub package ages, VS Code extensions |
 | `just creds-check` | Do the long-lived credentials still authenticate? (jira, confluence, bb) |

@@ -302,6 +302,134 @@ registry = "vscode-marketplace"      # Open VSX is stuck on 1.6.3 (2022-06)
 id = "yzhang.markdown-all-in-one"
 registry = "vscode-marketplace"      # Open VSX is stuck on 3.6.2 (2024-01)
 
+# Stack profiles (modules/vscode.nix `stackProfiles`), added 2026-11-05 with the
+# supply-chain review in modules/ai/_files/skills/vscode-extensions/references/. All from the
+# Marketplace set, so all audited against the Marketplace.
+
+[[extensions]]
+id = "redhat.java"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "vscjava.vscode-java-debug"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "vscjava.vscode-java-test"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "vscjava.vscode-java-dependency"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "vscjava.vscode-maven"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "vscjava.vscode-gradle"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "vmware.vscode-spring-boot"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "vscjava.vscode-spring-boot-dashboard"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "redhat.vscode-xml"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "ivory-lab.jenkinsfile-support"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "ms-python.python"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "ms-python.debugpy"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "charliermarsh.ruff"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "ms-python.mypy-type-checker"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "ms-toolsai.jupyter-renderers"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "dbaeumer.vscode-eslint"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "esbenp.prettier-vscode"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "vitest.explorer"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "ms-playwright.playwright"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "Vue.volar"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "bradlc.vscode-tailwindcss"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "antfu.slidev"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "github.vscode-github-actions"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "mkhl.direnv"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "ltex-plus.vscode-ltex-plus"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "timonwong.shellcheck"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "mkhl.shfmt"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "idleberg.applescript"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "nefrob.vscode-just-syntax"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "editorconfig.editorconfig"
+registry = "vscode-marketplace"
+
+[[extensions]]
+id = "sumneko.lua"
+registry = "vscode-marketplace"
+
 # ---------------------------------------------------------------------------------
 # modules/devdocs.nix's 39 DevDocs (freeCodeCamp/devdocs) tarballs are
 # DELIBERATELY not a fourth layer here.

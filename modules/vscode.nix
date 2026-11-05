@@ -84,6 +84,30 @@
         '';
       };
 
+      # +vscode-ext: cooled, profile-scoped installs (see modules/_files/vscode/vscode_ext.py
+      # for why it does not use `code --install-extension`). supply-chain.py and its TOML
+      # sit beside it because vscode_ext.py loads the former by path and the former reads
+      # the cooldown from the latter (`Path(__file__).with_suffix(".toml")`), so the number
+      # of days lives in exactly one file.
+      vscodeExtLib = pkgs.runCommand "vscode-ext-lib" { } ''
+        mkdir -p $out
+        cp ${../scripts/supply-chain.py} $out/supply-chain.py
+        cp ${../scripts/supply-chain.toml} $out/supply-chain.toml
+        cp ${./_files/vscode/vscode_ext.py} $out/vscode_ext.py
+      '';
+      vscodeExt = pkgs.writeTextFile {
+        name = "+vscode-ext";
+        destination = "/bin/+vscode-ext";
+        executable = true;
+        text = ''
+          #!${pkgs.zsh}/bin/zsh
+          export PATH="${lib.makeBinPath [ pkgs.coreutils ]}:/usr/bin:/bin"
+          # nixpkgs' python has no CA bundle of its own on darwin; the system one is fine.
+          export SSL_CERT_FILE=/etc/ssl/cert.pem
+          exec ${pkgs.python3}/bin/python3 ${vscodeExtLib}/vscode_ext.py "$@"
+        '';
+      };
+
       # anthropic.claude-code is the one extension that is deliberately NOT in
       # `generalExtensions` and not under Nix at all. It ships in lockstep with the CLI
       # (same version numbers, published 1-2 hours after each npm release; measured
@@ -214,6 +238,103 @@
         vsmp.deerawan.vscode-dash # not on Open VSX at all (404)
         codeAceJumper # hash-pinned, not from vsmp/ovsx — see the binding above
       ];
+
+      # -- Stack profiles ----------------------------------------------------------
+      # A VS Code profile per tech stack, so a Java extension is not loaded into a window
+      # that edits Nix. Built here, NOT through programs.vscode.profiles: that option
+      # makes ~/.vscode/extensions a read-only store symlink and ends every runtime
+      # install (details in _files/vscode/vscode_profiles.py). All of them come from the
+      # marketplace set: the cooldown is the age of the nix-vscode-extensions input, same
+      # as the general set, and `code` installs from the marketplace too.
+      #
+      # Only extensions with a "recommend" verdict from the 2026-11-05 supply-chain review
+      # are listed; the reasons for every exclusion are in _files/vscode/EXTENSIONS.md.
+      # Nothing proprietary: a local build of an unfree extension would be pushed into the
+      # public R2 cache (the same reason ms-vscode-remote.remote-containers is absent),
+      # which is why Pylance is not here although ms-python.python's pack names it.
+      webCore = [
+        vsmp.dbaeumer.vscode-eslint
+        vsmp.esbenp.prettier-vscode
+        vsmp.vitest.explorer
+        vsmp.ms-playwright.playwright # newest STABLE is 1.1.19; 1.1.20 is a pre-release
+        vsmp.vue.volar
+      ];
+      stackProfiles = {
+        java = [
+          vsmp.redhat.java
+          vsmp.vscjava.vscode-java-debug
+          vsmp.vscjava.vscode-java-test
+          vsmp.vscjava.vscode-java-dependency
+          vsmp.vscjava.vscode-maven # Open VSX lags behind
+          vsmp.vscjava.vscode-gradle # Open VSX lags behind
+          vsmp.vmware.vscode-spring-boot # Open VSX: no cooled release in its last 40 versions
+          vsmp.vscjava.vscode-spring-boot-dashboard
+          vsmp.redhat.vscode-xml
+          vsmp.ivory-lab.jenkinsfile-support
+        ];
+        python = [
+          vsmp.ms-python.python
+          vsmp.ms-python.debugpy
+          vsmp.charliermarsh.ruff
+          vsmp.ms-python.mypy-type-checker
+          vsmp.ms-toolsai.jupyter-renderers
+        ];
+        web = webCore ++ [ vsmp.bradlc.vscode-tailwindcss ];
+        slidev = webCore ++ [
+          vsmp.antfu.slidev
+          vsmp.github.vscode-github-actions
+          vsmp.mkhl.direnv
+          vsmp.ltex-plus.vscode-ltex-plus
+        ];
+        nix = [
+          vsmp.ms-python.python
+          vsmp.charliermarsh.ruff
+          vsmp.timonwong.shellcheck
+          vsmp.mkhl.shfmt
+          vsmp.idleberg.applescript
+          vsmp.nefrob.vscode-just-syntax
+          vsmp.editorconfig.editorconfig
+          vsmp.sumneko.lua
+        ];
+      };
+
+      # Every profile gets the general set too: a new profile does not inherit the default
+      # profile's extensions (measured: it lists none). `oneoff` is created and seeded
+      # here but filled at runtime by +vscode-ext, so its `nix` flag is false.
+      profileEntries = name: exts:
+        pkgs.writeText "vscode-profile-${name}.json" (pkgs.vscode-utils.toExtensionJson exts);
+      profileSpec = pkgs.writeText "vscode-profiles-spec.json" (builtins.toJSON {
+        # The Turbo Vision theme is a hand-built directory (see the home.file entries at
+        # the end), not a registry package, so toExtensionJson cannot see it. Every
+        # profile needs it: the theme is named in settings.json, which they share.
+        local = [{
+          id = "local.turbo-vision-theme";
+          version = "1.0.0";
+          dir = "${config.home.homeDirectory}/.vscode/extensions/local-turbo-vision-theme";
+        }];
+        flags = {
+          settings = true;
+          keybindings = true;
+          snippets = true;
+          tasks = true;
+          mcp = true;
+        };
+        profiles = {
+          oneoff = { nix = false; entries = profileEntries "oneoff" generalExtensions; };
+        } // lib.mapAttrs
+          (name: exts: { nix = true; entries = profileEntries name (generalExtensions ++ exts); })
+          stackProfiles;
+      });
+      vscodeProfilesScript = pkgs.writeTextFile {
+        name = "+vscode-profiles";
+        destination = "/bin/+vscode-profiles";
+        executable = true;
+        text = ''
+          #!${pkgs.zsh}/bin/zsh
+          export PATH="${lib.makeBinPath [ pkgs.coreutils ]}:/usr/bin:/bin"
+          exec ${pkgs.python3}/bin/python3 ${./_files/vscode/vscode_profiles.py} --spec ${profileSpec} "$@"
+        '';
+      };
 
       # Named rather than inline so the Settings Sync ignore list below can be
       # generated from its key set. Everything VS Code reads out of settings.json
@@ -394,6 +515,19 @@
         "git.confirmSync" = false;
         "git.enableSmartCommit" = true;
         "git.suggestSmartCommit" = false;
+
+        # Tool paths for the stack profiles. They share this settings.json with the default
+        # profile (useDefaultFlags), so these keys exist everywhere and are inert where
+        # the extension is not installed. Pointing the extensions at store paths keeps them
+        # from fetching a binary of their own at runtime: sumneko.lua clones addon
+        # definitions from GitHub unpinned, ltex-plus downloads ltex-ls-plus from a GitHub
+        # release, and foxundermoon.shell-format (rejected) wrote an unchecked shfmt into
+        # /usr/local/bin. The matching extensions are in the nix and slidev profiles.
+        "shellcheck.executablePath" = "${pkgs.shellcheck}/bin/shellcheck";
+        "shfmt.executablePath" = "${pkgs.shfmt}/bin/shfmt";
+        "Lua.misc.executablePath" = "${pkgs.lua-language-server}/bin/lua-language-server";
+        "Lua.addonManager.enable" = false;
+        "ltex.ltex-ls.path" = "${pkgs.ltex-ls-plus}";
       };
     in
     {
@@ -534,7 +668,17 @@
       # Also on PATH, because the one case the hook cannot handle is the one that needs
       # a human: extensions queued for deletion have to be cleared by starting VS Code
       # once, and only then can the registry be rebuilt.
-      home.packages = [ regenScript claudeCodeExtScript ];
+      home.packages = [ regenScript claudeCodeExtScript vscodeExt vscodeProfilesScript ];
+
+      # Registers the Nix-declared profiles and writes their Nix-owned extension entries.
+      # Exit 1 means "VS Code is running, a missing profile could not be registered" and is
+      # tolerated for the same reason as in the onChange hook above: a state a human
+      # resolves, not a reason to abort a system activation. `+vscode-profiles` is the same
+      # command, on PATH for the retry.
+      home.activation.vscodeStackProfiles =
+        lib.hm.dag.entryAfter [ "onFilesChange" "vscodeProfiles" ] ''
+          run ${vscodeProfilesScript}/bin/+vscode-profiles || [ $? -eq 1 ]
+        '';
 
       # Installs anthropic.claude-code at the version of the pinned CLI (see
       # claudeCodeExtScript above). After `onFilesChange`, which runs

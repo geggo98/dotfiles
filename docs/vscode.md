@@ -202,3 +202,74 @@ closed for 1.135.0. Do not silence it by dropping the `[Theme]` scoping: that wo
 this repo's cyberpunk bracket colours into every other theme, to fix a warning that the
 next cask update removes.
 
+#### Project extensions: stack profiles, `oneoff`, and `+vscode-ext`
+
+Everything with a toolchain behind it is installed per repository, into a **VS Code
+profile**, never into the default one. The skill is
+`modules/ai/_files/skills/vscode-extensions/`; the tool is `+vscode-ext`
+(`modules/_files/vscode/vscode_ext.py`). Measured 2026-11-05 on VS Code 1.145.0 in an
+isolated `--user-data-dir`, so the real profile was never touched.
+
+**Three routes, chosen with the user every time:** a Nix stack profile (`java`, `python`,
+`web`, `slidev`, `nix`) for a repo worked on for good; `oneoff`, a disposable runtime
+profile, for a workshop, a demo or trying an extension; an own profile for a long-lived
+repo no stack profile covers.
+
+**Why `programs.vscode.profiles` is not used.** In the pinned home-manager
+(`mkVscodeModule.nix`) the first non-default profile makes `mutableExtensionsDir` an
+assertion failure, replaces `~/.vscode/extensions` with one read-only `buildEnv` symlink,
+turns every profile's `extensions.json` into a store symlink and registers the profile in
+`storage.json` without `useDefaultFlags`. That ends every runtime install. Instead
+`modules/vscode.nix` builds the profile data and `vscode_profiles.py` merges it in an
+activation step: store-path entries are Nix's and are rewritten, any other entry is a
+runtime install and survives; `storage.json` is touched only when a profile is missing or
+its flags differ.
+
+**What the spike found.**
+
+| Question | Measurement |
+|---|---|
+| Does `code --profile X --install-extension` create the profile? | No: `Profile 'X' not found.` and exit **0**. The profile must be in `storage.json` and have a directory first. Only opening a folder creates one |
+| Do profiles see the default profile's extensions? | No. A new profile lists none, so each profile is `general ++ stack` |
+| Does an extension of one profile leak into the default one? | **Yes, through the regen scan.** `rm extensions.json && code --list-extensions` (what `+vscode-regen-extensions` does) adopted a profile's extension into the default profile. Profile extensions therefore live in `~/.vscode/extensions-profiles`, a separate root; the profile's `extensions.json` carries absolute locations **and no `relativeLocation`** (see below), and a normal launch loads them |
+| Does `code --install-extension id@ver` honour the cooldown for what it pulls in? | **No.** `ms-python.python@2026.10.0` brought `ms-python.vscode-python-envs` 1.42.0 along — one day old and never reviewed. `pylance@2026.4.1` pulled `ms-python.python` in its latest version, a dependency of a dependency. A member that is already installed is never upgraded, but `python` and `debugpy` depend on each other, so no install order avoids it |
+| Is there a switch to skip pack members and dependencies? | No. `--donot-include-pack-and-dependencies` is "not in the list of known options, but still passed to Electron/Chromium". A local `.vsix` installs dependencies just the same |
+| Does VS Code accept an extension unpacked by hand and registered in `extensions.json`? | Yes, **provided the entry has no `relativeLocation`**. It installs nothing else, and `--uninstall-extension` removes it. This is how `+vscode-ext` installs. The first version got this wrong, see the next row |
+| `relativeLocation` | **VS Code resolves a non-empty one against `~/.vscode/extensions` and ignores `location`** (`ExtensionsProfileScannerService`: `if (relativeLocation) location = resolveExtensionLocation(relativeLocation) else location = revive(location)`). `pkgs.vscode-utils.toExtensionJson` writes `relativeLocation = <id>` for every store path, and a hand-written entry had one too. The Extensions view then says `Unable to read file '~/.vscode/extensions/<id>/package.json'` (measured 2026-11-05, eight extensions of the `nix` profile). The 19 general extensions survived only because home-manager also symlinks them into `~/.vscode/extensions`. **`code --list-extensions` lists such entries anyway**, which is why the spike did not see it: it proved nothing about validity. Both scripts now drop a `relativeLocation` that points outside the default root (`heal()`), and `+vscode-ext` checks `package.json` at the path VS Code will read, not only the listing |
+| Is the `.vsix` checkable? | Yes: the Marketplace publishes `VsixSha256` per build, and the download matched it. For a platform-specific extension take the `darwin-arm64` build, not the first entry: the first one listed was `linux-arm64` |
+
+**Hence the design.** `supply-chain.py extension-pick` resolves the whole closure (pack
+members and `extensionDependencies`, recursively, cycles included) to the newest stable
+version that clears `[cooldown] extensions`, with URL, SHA-256 and target platform.
+`+vscode-ext install` downloads each build, refuses a checksum mismatch, a `package.json`
+that names a different extension or version, an absolute or `..` path and an escaping
+symlink, unpacks into a temporary directory and renames it into place, then asks VS Code
+(not its own files) what the profile now contains. The cooldown is read from
+`scripts/supply-chain.toml` by the script itself; neither a person nor an agent passes a
+number of days. A blocked extension is reported and **not** installed in some newer
+version.
+
+**Things that bite.**
+
+- Create profiles only while VS Code is closed. It rewrites `storage.json` when it exits;
+  a profile registered meanwhile is silently dropped. `vscode_profiles.py` and
+  `+vscode-ext profile create` both refuse when `pgrep -x Code` finds it. Whether a
+  *running* VS Code really drops the registration was not measured — the refusal is the
+  conservative reading.
+- The profiles share `settings.json` and `keybindings.json` with the default profile
+  (`useDefaultFlags`). Their tool paths (`shellcheck.executablePath`,
+  `shfmt.executablePath`, `Lua.misc.executablePath`, `ltex.ltex-ls.path`) therefore exist
+  in the default profile too, and are inert where the extension is absent. The Turbo Vision
+  theme is a hand-built directory, not a registry package, so `vscode_profiles.py` adds it
+  to every profile explicitly.
+- Nothing proprietary is built through Nix. `ms-python.python`'s pack names Pylance, which
+  is unfree; the Nix `python` profile omits it, and `+vscode-ext` can still install it into
+  `oneoff` on request.
+- `just vscode-ext-check` runs the offline tests (JSONC, safe unpacking, checksum, plan,
+  profile merge). The Marketplace queries and `code --list-extensions` are not covered
+  there.
+- A reviewed list with a verdict per extension (licence, maintenance, incidents, runtime
+  downloads) is in the skill's `references/recommended.md`. One open item from it:
+  CVE-2026-12856 in `redhat.java` (CVSS 8.8, 2026-06-29) names no fixed vscode-java
+  version in NVD or the changelog.
+

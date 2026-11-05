@@ -222,6 +222,17 @@ for necessity against vstirbu 2.2.0 alone. If a future `nix-vscode-extensions` b
 vstirbu again and the self-nesting error or a blank preview returns, re-read this section
 before assuming a new bug.
 
+## Stack profiles (added 2026-11-05)
+
+The project-specific half below no longer has to be installed by hand. Five stack profiles
+are declared in `modules/vscode.nix` (`stackProfiles`): `java`, `python`, `web`, `slidev`
+and `nix`, each the 19 general extensions plus a stack set; `oneoff` is created empty and
+filled at runtime by `+vscode-ext`. Only extensions that earned a "recommend" in the
+supply-chain review are in them. The verdict for every reviewed extension, accepted or
+not, with the reason, is in
+`modules/ai/_files/skills/vscode-extensions/references/recommended.md`; the mechanism and
+the measurements are in `docs/vscode.md`.
+
 ## Project-specific — install per project, not globally (24)
 
 **All 24 were removed from the global install on 2026-08-26.** They are listed here as

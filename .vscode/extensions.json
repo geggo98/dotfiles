@@ -15,12 +15,23 @@
     // hosts/*/secrets.enc.yaml, .sops.yaml, the Brewfile-adjacent YAML.
     "redhat.vscode-yaml"
   ],
-  // Deliberately NOT recommended, so nobody re-adds them:
+  // Open this repo with its Nix-declared profile (shellcheck, shfmt, ruff, Lua, AppleScript,
+  // justfile, EditorConfig on top of the general set): `code --profile nix .`
+  // Anything else belongs in a profile too, installed by `+vscode-ext` with the cooldown;
+  // see docs/vscode.md. Deliberately NOT recommended, so nobody re-adds them:
   //   TypeScript (infra/, 9 files) needs no extension — VS Code ships the language
   //   service, and infra/ carries only a tsconfig.json, no eslint or biome config.
   "unwantedRecommendations": [
     // Syntax highlighting only, last published 2020, no language server.
     // Superseded by jnoortheen.nix-ide above.
-    "bbenoist.nix"
+    "bbenoist.nix",
+    // Decrypts SOPS files into `.decrypted~<name>` NEXT TO the encrypted file, inside the
+    // git working tree; removed only on a focus change, not on a crash or quit, and the
+    // name is not in .gitignore. A secret in the tree and in agent context. Edit with
+    // `sops edit` in a terminal; the git textconv shows diffs.
+    "signageos.signageos-vscode-sops",
+    // Downloads shfmt without a checksum into /usr/local/bin. mkhl.shfmt, with
+    // shfmt.executablePath pointing at the Nix binary, does the job.
+    "foxundermoon.shell-format"
   ]
 }
