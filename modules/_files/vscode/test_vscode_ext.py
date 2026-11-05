@@ -210,6 +210,122 @@ class Entries(unittest.TestCase):
         self.assertEqual(e["relativeLocation"], "acme.tool-1.0.0")
 
 
+class Cli(unittest.TestCase):
+    """The commands end to end, with the Marketplace and `code` replaced. This class exists
+    because a refactor once left `dry` undefined in cmd_scan_install and every unit test
+    stayed green: nothing called the command."""
+
+    PKG = {"publisher": "Acme", "name": "tool", "version": "1.0.0"}
+
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.home = Path(self.tmp.name)
+        self.ve = load("vscode_ext", self.tmp.name)
+        self.ve.vscode_running = lambda: False
+        self.vsix = vsix(self.PKG)
+        self.ve.download = lambda url, sha: self.vsix
+        item = {"id": "Acme.tool", "version": "1.0.0", "ageDays": 30.0,
+                "domainVerified": True, "installs": 9, "targetPlatform": "universal",
+                "sha256": "x", "vsixUrl": "http://x.invalid", "needs": []}
+
+        class SC:
+            class ToolError(Exception):
+                pass
+
+            @staticmethod
+            def load_manifest():
+                return {"cooldown": {"extensions": 14}}
+
+            @staticmethod
+            def extension_closure(ext_id, cutoff, now, done, *a, **k):
+                if ext_id.lower() != "acme.tool":
+                    raise SC.ToolError("too new")
+                done["acme.tool"] = item
+
+        self.ve.load_sc = lambda: SC
+        self.codes = []                      # what `code --list-extensions` reports
+
+        real_run = self.ve.subprocess.run
+
+        def fake_run(cmd, *a, **k):
+            if str(cmd[0]).endswith("code"):
+                class R:
+                    stdout = "\n".join(self.codes)
+                    stderr = ""
+                    returncode = 0
+                return R()
+            return real_run(cmd, *a, **k)
+        self.ve.subprocess.run = fake_run
+        self.ve.code_bin = lambda: "/fake/code"
+
+        s = self.ve.STORAGE
+        s.parent.mkdir(parents=True)
+        s.write_text(json.dumps({"userDataProfiles": [
+            {"name": "oneoff", "location": "oneoff"}]}))
+        (self.ve.PROFILES_DIR / "oneoff").mkdir(parents=True)
+        (self.ve.PROFILES_DIR / "oneoff/extensions.json").write_text("[]")
+
+    def tearDown(self):
+        self.tmp.cleanup()
+
+    def test_scan_runs_and_changes_nothing(self):
+        self.assertEqual(self.ve.main(["scan", "--profile", "oneoff", "acme.tool"]), 0)
+        self.assertEqual(
+            json.loads((self.ve.PROFILES_DIR / "oneoff/extensions.json").read_text()), [])
+
+    def test_scan_reports_a_blocked_id_with_exit_1(self):
+        self.assertEqual(self.ve.main(["scan", "--profile", "oneoff", "acme.young"]), 1)
+
+    def test_install_then_install_again(self):
+        self.codes = ["acme.tool@1.0.0"]
+        self.assertEqual(self.ve.main(["install", "--profile", "oneoff", "acme.tool"]), 0)
+        entries = json.loads((self.ve.PROFILES_DIR / "oneoff/extensions.json").read_text())
+        self.assertEqual([e["identifier"]["id"] for e in entries], ["acme.tool"])
+        self.assertNotIn("relativeLocation", entries[0])
+        self.assertTrue(self.ve.readable(entries[0]))
+        # run twice: nothing to do, exit 0
+        self.assertEqual(self.ve.main(["install", "--profile", "oneoff", "acme.tool"]), 0)
+
+    def test_install_fails_when_vscode_does_not_list_it(self):
+        self.codes = []                       # VS Code does not see what was written
+        self.assertEqual(self.ve.main(["install", "--profile", "oneoff", "acme.tool"]), 1)
+
+    def test_install_is_refused_for_default_and_for_nix_profiles(self):
+        self.assertEqual(self.ve.main(["install", "--profile", "default", "acme.tool"]), 2)
+        self.ve.NIX_SIDECAR.parent.mkdir(parents=True, exist_ok=True)
+        self.ve.NIX_SIDECAR.write_text(json.dumps({"profiles": ["oneoff"]}))
+        self.assertEqual(self.ve.main(["install", "--profile", "oneoff", "acme.tool"]), 2)
+
+    def test_install_into_an_unregistered_profile_explains_itself(self):
+        self.assertEqual(self.ve.main(["install", "--profile", "nope", "acme.tool"]), 2)
+
+    def test_global_is_refused_for_an_undeclared_id(self):
+        self.assertEqual(self.ve.main(["install", "--global", "acme.tool"]), 2)
+        self.assertFalse((self.ve.DEFAULT_EXT_ROOT / "acme.tool-1.0.0").exists())
+
+    def test_global_install_lands_in_the_default_root_with_a_valid_entry(self):
+        self.ve.ROOT.mkdir(parents=True, exist_ok=True)
+        self.ve.SHARED_SIDECAR.write_text(json.dumps({"ids": ["Acme.tool"]}))
+        # stand-in for +vscode-regen-extensions: what VS Code does after a rescan
+        regen = self.home / "regen"
+        entry = {"identifier": {"id": "acme.tool"}, "version": "1.0.0",
+                 "relativeLocation": "acme.tool-1.0.0",
+                 "location": {"fsPath": str(self.ve.DEFAULT_EXT_ROOT / "acme.tool-1.0.0"),
+                              "path": str(self.ve.DEFAULT_EXT_ROOT / "acme.tool-1.0.0"),
+                              "scheme": "file"}}
+        regen.write_text("#!/bin/sh\nmkdir -p '%s'\ncat > '%s' <<'EOF'\n%s\nEOF\n" % (
+            self.ve.DEFAULT_REGISTRY.parent, self.ve.DEFAULT_REGISTRY, json.dumps([entry])))
+        regen.chmod(0o755)
+        os.environ["VSCODE_REGEN_BIN"] = str(regen)
+        os.environ["VSCODE_PROFILES_BIN"] = "/usr/bin/true"
+        self.codes = ["acme.tool@1.0.0"]
+        try:
+            self.assertEqual(self.ve.main(["install", "--global", "acme.tool"]), 0)
+        finally:
+            del os.environ["VSCODE_REGEN_BIN"], os.environ["VSCODE_PROFILES_BIN"]
+        self.assertTrue((self.ve.DEFAULT_EXT_ROOT / "acme.tool-1.0.0/package.json").is_file())
+
+
 class Plan(unittest.TestCase):
     """plan_for() against a fake supply-chain module."""
 
@@ -343,6 +459,46 @@ class Profiles(unittest.TestCase):
         e = json.loads(target.read_text())[0]
         self.assertNotIn("relativeLocation", e)
         self.assertTrue(e["location"]["fsPath"].startswith("/nix/store/"))
+
+    def test_shared_extension_is_mirrored_from_the_default_profile(self):
+        self.vp.STORAGE.parent.mkdir(parents=True)
+        inside = self.vp.DEFAULT_EXT_ROOT / "m.shared-1.0.0"
+        shared = {"identifier": {"id": "m.shared"}, "version": "1.0.0",
+                  "relativeLocation": "m.shared-1.0.0",
+                  "location": {"fsPath": str(inside), "path": str(inside), "scheme": "file"}}
+        self.vp.DEFAULT_REGISTRY.parent.mkdir(parents=True)
+        self.vp.DEFAULT_REGISTRY.write_text(json.dumps([shared]))
+        f = self.spec_dir / "a.json"
+        f.write_text("[]")
+        sf = self.spec_dir / "spec.json"
+        sf.write_text(json.dumps({"flags": {}, "shared": ["M.Shared"],
+                                  "profiles": {"web": {"nix": True, "entries": str(f)},
+                                               "oneoff": {"nix": False, "entries": str(f)}}}))
+        for _ in range(2):                                   # and again: stable
+            sys.argv = ["x", "--spec", str(sf)]
+            self.assertEqual(self.vp.main(), 0)
+        for name in ("web", "oneoff"):
+            es = json.loads((self.vp.PROFILES_DIR / f"{name}/extensions.json").read_text())
+            self.assertEqual([e["identifier"]["id"] for e in es], ["m.shared"])
+            # inside the default root, so the relativeLocation is right and is kept
+            self.assertEqual(es[0]["relativeLocation"], "m.shared-1.0.0")
+        # the default profile moves on to a newer version: every profile follows
+        shared["version"] = "2.0.0"
+        self.vp.DEFAULT_REGISTRY.write_text(json.dumps([shared]))
+        self.assertEqual(self.vp.main(), 0)
+        es = json.loads((self.vp.PROFILES_DIR / "web/extensions.json").read_text())
+        self.assertEqual(es[0]["version"], "2.0.0")
+        self.assertEqual(json.loads(self.vp.SHARED_SIDECAR.read_text()), {"ids": ["M.Shared"]})
+
+    def test_shared_extension_missing_from_the_default_is_a_note_not_a_failure(self):
+        self.vp.STORAGE.parent.mkdir(parents=True)
+        f = self.spec_dir / "a.json"
+        f.write_text("[]")
+        sf = self.spec_dir / "spec.json"
+        sf.write_text(json.dumps({"flags": {}, "shared": ["m.missing"],
+                                  "profiles": {"web": {"nix": True, "entries": str(f)}}}))
+        sys.argv = ["x", "--spec", str(sf)]
+        self.assertEqual(self.vp.main(), 0)
 
     def test_second_run_changes_nothing(self):
         self.vp.STORAGE.parent.mkdir(parents=True)

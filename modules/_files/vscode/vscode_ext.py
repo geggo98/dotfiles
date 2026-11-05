@@ -7,6 +7,8 @@ nowhere else. Callers, agents included, never pass a version or a number of days
 
     +vscode-ext scan    [--profile P] (ID… | --from-repo DIR)   what would happen
     +vscode-ext install [--profile P] (ID… | --from-repo DIR)   do it
+    +vscode-ext install --global ID…        the default profile AND every profile; only
+                                            ids that modules/vscode.nix declares shared
     +vscode-ext list    [--profile P]
     +vscode-ext prune   [--profile P]                           drop what was installed
     +vscode-ext profile create NAME                             VS Code must be closed
@@ -66,6 +68,8 @@ PROFILES_DIR = USER_DIR / "profiles"
 ROOT = HOME / ".vscode/extensions-profiles"
 NIX_SIDECAR = ROOT / ".nix-profiles.json"          # written by the Nix activation
 NIX_GENERAL = HOME / ".vscode/extensions/.nix-managed-extensions.json"
+SHARED_SIDECAR = ROOT / ".shared-extensions.json"   # written by vscode_profiles.py
+DEFAULT_REGISTRY = HOME / ".vscode/extensions/extensions.json"
 LOCK = ROOT / ".vscode-ext.lock"
 STATUS = ROOT / ".vscode-ext.status"
 DEFAULT_PROFILE = "oneoff"
@@ -206,6 +210,11 @@ def nix_general_ids() -> set[str]:
     return {e["identifier"]["id"].lower() for e in read_json(NIX_GENERAL, [])}
 
 
+def shared_ids() -> set[str]:
+    """Extensions that modules/vscode.nix declares as shared by every profile."""
+    return {i.lower() for i in read_json(SHARED_SIDECAR, {}).get("ids", [])}
+
+
 def profile_file(name: str) -> Path:
     loc = registered_profiles().get(name)
     if loc is None:
@@ -308,6 +317,9 @@ class Run:
         log(f"{self.n}/{self.total}  {rate:.2f}/s  ETA {eta}  elapsed {el:.0f}s")
 
     def summary(self) -> int:
+        lk = getattr(self, "lk", None)
+        if lk is not None:                      # release the lock as soon as the work is done
+            lk.close()
         left = self.total - self.n
         c = self.counts
         tail = " — interrupted" if self.stop else (" — nothing left to do" if not left else "")
@@ -380,10 +392,15 @@ def dir_name(item: dict) -> str:
     return f"{item['id'].lower()}-{item['version']}{suffix}"
 
 
-def install_item(item: dict, entries: list[dict]) -> list[dict]:
-    """Download, verify, unpack, publish atomically; return the new entry list."""
+def install_item(item: dict, entries: list[dict], dest: Path | None = None) -> list[dict]:
+    """Download, verify, unpack, publish atomically; return the new entry list.
+
+    `dest` is the directory the extension ends up in: ~/.vscode/extensions-profiles for a
+    profile, ~/.vscode/extensions for a global install."""
+    dest = dest or ROOT
+    dest.mkdir(parents=True, exist_ok=True)
     rel = dir_name(item)
-    final = ROOT / rel
+    final = dest / rel
     tmp = ROOT / f".tmp.{os.getpid()}.{rel}"
     if tmp.exists():
         shutil.rmtree(tmp)
@@ -400,10 +417,12 @@ def install_item(item: dict, entries: list[dict]) -> list[dict]:
         "version": item["version"],
         "location": {"$mid": 1, "fsPath": str(final), "external": f"file://{final}",
                      "path": str(final), "scheme": "file"},
-        # No `relativeLocation`: VS Code resolves a non-empty one against ~/.vscode/extensions
-        # and IGNORES `location`, so an entry that lives in ~/.vscode/extensions-profiles
-        # would be read from a directory that does not exist ("Unable to read file …
-        # package.json"). `--list-extensions` does not notice; the Extensions view does.
+        # `relativeLocation` only for an extension inside ~/.vscode/extensions: VS Code resolves
+        # a non-empty one against that directory and IGNORES `location`, so for an entry that
+        # lives in ~/.vscode/extensions-profiles it would be read from a directory that does
+        # not exist ("Unable to read file … package.json"). `--list-extensions` does not
+        # notice; the Extensions view does.
+        **({"relativeLocation": rel} if dest == DEFAULT_EXT_ROOT else {}),
         "metadata": {"installedTimestamp": int(time.time() * 1000), "pinned": True,
                      "source": "vsix", "isPreReleaseVersion": False,
                      "hasPreReleaseVersion": False,
@@ -493,17 +512,30 @@ def plan_for(sc, ids: list[str], installed: dict[str, dict], nixids: set[str]):
 
 def cmd_scan_install(args, do_install: bool) -> int:
     sc = load_sc()
-    profile = args.profile
-    if do_install:
-        check_writable(profile)
+    glob = getattr(args, "glob", False)
+    dry = getattr(args, "dry_run", False)
+    profile = "default" if glob else args.profile
     ids = candidates(args)
-    pf = profile_file(profile)
+    if glob:
+        undeclared = [i for i in ids if i.lower() not in shared_ids()]
+        if undeclared:
+            raise Usage(
+                f"{', '.join(undeclared)}: not declared shared in modules/vscode.nix "
+                f"(sharedRuntimeExtensions). A global install is a decision made there, "
+                f"not on the command line; declared: {sorted(shared_ids()) or 'none'}")
+        dest, pf = DEFAULT_EXT_ROOT, DEFAULT_REGISTRY
+    else:
+        if do_install:
+            check_writable(profile)
+        dest, pf = ROOT, profile_file(profile)
     entries = heal(read_json(pf, []))
     installed = {e["identifier"]["id"].lower(): e for e in entries}
     table, plan, skips, blocked, days = plan_for(sc, ids, installed, nix_general_ids())
-    log(f"profile {profile!r}, cooldown {days} days (scripts/supply-chain.toml)")
+    log(f"{'GLOBAL (default profile + every profile)' if glob else f'profile {profile!r}'}, "
+        f"cooldown {days} days (scripts/supply-chain.toml)")
     for status, ext_id, text in table:
-        log(f"  {status.upper():8} {ext_id}  {text}")
+        if not do_install or dry or status == "install":   # skips and blocks are counted below
+            log(f"  {status.upper():8} {ext_id}  {text}")
     if not do_install or dry:
         log(f"{len(plan)} to install, {len(skips)} skip, {len(blocked)} blocked"
             + (" (dry run)" if dry else ""))
@@ -523,32 +555,61 @@ def cmd_scan_install(args, do_install: bool) -> int:
             break
         label = f"{item['id']}@{item['version']} ({item['targetPlatform']})"
         try:
-            entries = install_item(item, entries)
-            write_json_atomic(pf, entries)
+            entries = install_item(item, entries, dest)
+            if not glob:                        # the default registry is VS Code's own file;
+                write_json_atomic(pf, entries)  # a global install goes through the regen below
             run.count(SUCCESS, label)
         except Fail as e:
             run.count(ERROR, label, str(e))
+    if glob and plan and not run.stop:
+        adopt_global(run)
     if not run.stop:
         verify(profile, plan, run)
     code = run.summary()
     if plan and code == 0:
-        log("windows that already use this profile need `Developer: Reload Window`")
+        log("windows that already use these profiles need `Developer: Reload Window`")
     return code
+
+
+def adopt_global(run: Run) -> None:
+    """Make VS Code's default profile adopt what was unpacked into ~/.vscode/extensions,
+    then copy it into every other profile.
+
+    The default registry is rebuilt from a directory scan by +vscode-regen-extensions (it
+    deletes extensions.json and lets `code` rescan, which is the only way VS Code picks a
+    new directory up; see docs/vscode.md); +vscode-profiles then mirrors the shared entries
+    into the other profiles. Both are Nix-built and found through the environment, which
+    the +vscode-ext wrapper sets. Exit 1 from either means "a human has to do something"
+    and is reported, not fatal."""
+    for var, what in (("VSCODE_REGEN_BIN", "regenerate the default profile"),
+                      ("VSCODE_PROFILES_BIN", "mirror into the other profiles")):
+        exe = os.environ.get(var)
+        if not exe:
+            log(f"  NOTE    {var} is not set; run the matching command by hand to {what}")
+            continue
+        res = subprocess.run([exe], capture_output=True, text=True, timeout=180)
+        for line in (res.stdout + res.stderr).strip().splitlines()[-6:]:
+            log(f"          {line}")
+        if res.returncode:
+            run.counts[ERROR] += 1
+            log(f"  ERROR   {Path(exe).name} exited {res.returncode}; {what} did not complete")
 
 
 def verify(profile: str, plan: list[dict], run: Run) -> None:
     """Ask VS Code, not our own files, what the profile now contains."""
     if not plan:
         return
-    res = subprocess.run([code_bin(), "--profile", profile, "--list-extensions",
-                          "--show-versions"], capture_output=True, text=True, timeout=120)
+    cmd = [code_bin(), "--list-extensions", "--show-versions"]
+    if profile != "default":
+        cmd[1:1] = ["--profile", profile]
+    res = subprocess.run(cmd, capture_output=True, text=True, timeout=120)
     seen = {l.strip().lower() for l in res.stdout.splitlines() if "@" in l}
     # `--list-extensions` also lists entries whose directory VS Code cannot read (measured
     # 2026-11-05: it listed them while the Extensions view said "Unable to read file …
     # package.json"), so the listing proves little. Resolve each entry the way VS Code
     # does and require the manifest to be there.
-    current = {e["identifier"]["id"].lower(): e
-               for e in heal(read_json(profile_file(profile), []))}
+    reg = DEFAULT_REGISTRY if profile == "default" else profile_file(profile)
+    current = {e["identifier"]["id"].lower(): e for e in heal(read_json(reg, []))}
     for it in plan:
         want = f"{it['id']}@{it['version']}".lower()
         e = current.get(it["id"].lower())
@@ -648,6 +709,9 @@ def main(argv: list[str] | None = None) -> int:
     i = sub.add_parser("install", help="install the cooled plan")
     common(i, ids=True)
     i.add_argument("--dry-run", action="store_true", help="same as scan")
+    i.add_argument("--global", dest="glob", action="store_true",
+                   help="install for the default profile and every profile; only ids that "
+                        "modules/vscode.nix declares shared (ignores --profile)")
     common(sub.add_parser("list", help="extensions in the profile"))
     common(sub.add_parser("prune", help="remove everything that was installed here"))
     o = sub.add_parser("open", help="open DIR with the profile")

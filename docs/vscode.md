@@ -249,6 +249,19 @@ symlink, unpacks into a temporary directory and renames it into place, then asks
 number of days. A blocked extension is reported and **not** installed in some newer
 version.
 
+**Shared runtime extensions (`sharedRuntimeExtensions` in `modules/vscode.nix`).** A
+profile does not inherit the default profile's extensions, so Dev Containers, installed by
+hand in the default profile, appeared as "Recommended: Install" in every other window. It
+is unfree, so Nix cannot build it (a local build would be pushed into the public cache).
+The list in `vscode.nix` names the ids that must exist everywhere: `vscode_profiles.py`
+copies each one's entry from the default profile's `extensions.json` into every profile
+(an entry inside `~/.vscode/extensions` keeps its `relativeLocation`, which is correct
+there), and `+vscode-ext install --global ID` installs one, cooled, into
+`~/.vscode/extensions` and then runs `+vscode-regen-extensions` and `+vscode-profiles`.
+`--global` refuses every id that is not on that list: making something global is decided
+in `vscode.nix`, not on a command line. It does not upgrade an installed version; remove
+it first (`code --uninstall-extension`).
+
 **Things that bite.**
 
 - Create profiles only while VS Code is closed. It rewrites `storage.json` when it exits;

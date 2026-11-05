@@ -31,7 +31,11 @@ toolchain behind it belongs to a repository, so it goes into a **profile**, inst
    `scripts/supply-chain.toml`. If an extension is blocked, report it; do not look for
    another way in.
 3. **Never touch the `default` profile**, and never install into a Nix-managed stack
-   profile (`java`, `python`, `web`, `slidev`, `nix`). The script refuses both.
+   profile (`java`, `python`, `web`, `slidev`, `nix`). The script refuses both. The one
+   exception is `+vscode-ext install --global <id>`, which the script allows only for an id
+   that `modules/vscode.nix` lists in `sharedRuntimeExtensions` (unfree extensions every
+   profile needs, such as Dev Containers). That list is the user's decision; do not edit it
+   to make an install work, and do not use `--global` for anything else.
 4. **Do not install what `references/recommended.md` rejects.** Tell the user why instead.
 5. **Always ask which route (below), every time.** A choice made once does not carry over.
 
@@ -81,6 +85,7 @@ toolchain behind it belongs to a repository, so it goes into a **profile**, inst
 +vscode-ext list   --profile oneoff     # [nix] = pinned by Nix, [installed] = runtime
 +vscode-ext prune  --profile oneoff     # removes runtime installs, keeps the Nix entries
 +vscode-ext status                      # is an install running? (pid, elapsed)
++vscode-ext install --global <id>       # only ids from sharedRuntimeExtensions (see rule 3)
 ```
 
 An interrupted run is safe to repeat: finished extensions are skipped, a half-unpacked one

@@ -104,6 +104,10 @@
           export PATH="${lib.makeBinPath [ pkgs.coreutils ]}:/usr/bin:/bin"
           # nixpkgs' python has no CA bundle of its own on darwin; the system one is fine.
           export SSL_CERT_FILE=/etc/ssl/cert.pem
+          # `install --global` adopts what it unpacked into the default profile and mirrors
+          # it into the others; both steps are Nix-built, so they are found by store path.
+          export VSCODE_REGEN_BIN=${regenScript}/bin/+vscode-regen-extensions
+          export VSCODE_PROFILES_BIN=${vscodeProfilesScript}/bin/+vscode-profiles
           exec ${pkgs.python3}/bin/python3 ${vscodeExtLib}/vscode_ext.py "$@"
         '';
       };
@@ -298,6 +302,16 @@
         ];
       };
 
+      # Extensions that every profile must have but that Nix cannot build: UNFREE, so a local
+      # build would be pushed into the public R2 cache (the reason remote-containers is
+      # absent from the general set). They are installed at runtime into the DEFAULT profile
+      # (`+vscode-ext install --global`, cooled) and mirrored from there into every profile,
+      # because a profile does not inherit the default profile's extensions. Adding an id
+      # here is the decision; the tool refuses any other id for a global install.
+      sharedRuntimeExtensions = [
+        "ms-vscode-remote.remote-containers" # Dev Containers (Microsoft licence)
+      ];
+
       # Every profile gets the general set too: a new profile does not inherit the default
       # profile's extensions (measured: it lists none). `oneoff` is created and seeded
       # here but filled at runtime by +vscode-ext, so its `nix` flag is false.
@@ -312,6 +326,7 @@
           version = "1.0.0";
           dir = "${config.home.homeDirectory}/.vscode/extensions/local-turbo-vision-theme";
         }];
+        shared = sharedRuntimeExtensions;
         flags = {
           settings = true;
           keybindings = true;

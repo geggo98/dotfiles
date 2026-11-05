@@ -161,9 +161,12 @@ write; leave alone what something else writes back.
 | `openai.chatgpt` | Same, for the ChatGPT CLI. |
 | `ms-vscode-remote.remote-containers` | The only unfree one of the seventeen candidates (`meta.unfree = true`; every other is MIT or Apache-2.0). Building it locally would make the R2 `post-build-hook` publish a non-redistributable Microsoft binary into a world-readable bucket — the same reason VS Code itself stays on the Homebrew cask. A licence filter in the push hook is not available: `meta.license` is eval-time data and is not recorded in the store. |
 
-Install the other two by hand. To take `remote-containers` under Nix anyway, add
-`vsmp.ms-vscode-remote.remote-containers` in `modules/vscode.nix` and accept the
-publication — it is one line, and the decision belongs to whoever makes it.
+Since 2026-11-05 `remote-containers` is a **shared runtime extension**
+(`sharedRuntimeExtensions` in `modules/vscode.nix`): installed at runtime into the default
+profile, with the cooldown (`+vscode-ext install --global`), and mirrored from there into
+every profile. Nix never builds it, so nothing is published. To take it under Nix anyway,
+add `vsmp.ms-vscode-remote.remote-containers` to `generalExtensions` and accept the
+publication — the decision belongs to whoever makes it.
 
 ### `bierner.markdown-mermaid` + `vstirbu.vscode-mermaid-preview` conflict — root cause was a vstirbu bug, not a config gap
 
