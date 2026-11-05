@@ -6,11 +6,11 @@
       # patched with Nerd Font glyphs. Not in nixpkgs; fetched from upstream release.
       ioskeleyMonoNerdFont = pkgs.stdenvNoCC.mkDerivation (finalAttrs: {
         pname = "ioskeley-mono-nerd-font";
-        version = "2.0.0";
+        version = "2.2.0";
 
         src = pkgs.fetchzip {
           url = "https://github.com/ahatem/IoskeleyMono/releases/download/v${finalAttrs.version}/IoskeleyMono-NerdFont.zip";
-          hash = "sha256-Nt8EaVhKvlb9BMKQe4l5iNGcPLzKba6KScIWZbcL8gA=";
+          hash = "sha256-58wKG9DnaGKBdqjhue3hd9QEIHTBB6u4vExKCFKTt5g=";
           stripRoot = false;
         };
 
