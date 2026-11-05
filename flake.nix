@@ -139,7 +139,7 @@
     # on its own, for good reasons written up in AGENTS.md; this was a decision
     # by hand, and the two weeks of unreleased main are exactly what was given
     # up.
-    devenv.url = "github:cachix/devenv/v2.2.2";
+    devenv.url = "github:cachix/devenv/v2.4.0";
 
     # https://github.com/numtide/llm-agents.nix
     # Tracks main. Source for claude-code, codex, opencode, gemini-cli,
