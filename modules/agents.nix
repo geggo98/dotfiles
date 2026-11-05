@@ -3,60 +3,19 @@ let
   aiOptions = config.flake.modules.homeManager.ai-options;
   llm-agents-pkgs = system: inputs.nixpkgs-llm-agents.packages.${system};
 
-  # TEMPORARY claude-code pin, 2.1.296 — the full reasoning is at the
-  # llm-agents-claude-code-pin input in flake.nix. Only claude-code comes from
-  # that input; opencode below stays on nixpkgs-llm-agents (codex has a pin of
-  # its own, next block).
-  #
-  # The version string and the rev in flake.nix belong together; the first
-  # assertion below is what keeps them together.
-  claude-code-pin-version = "2.1.296";
-  claude-code-pinned = system:
-    inputs.llm-agents-claude-code-pin.packages.${system}.claude-code;
-
-  # TEMPORARY codex pin, 0.160.0 -- the full reasoning, the supply-chain
-  # research and the cooldown undercut are at the llm-agents-codex-pin input in
-  # flake.nix. Short form: the rev is NOT the plain 0.160.0 bump commit but the
-  # one two commits later, which installs upstream's package layout
-  # (codex-package.json) and runs the app-server daemon from the store. The
-  # plain bump commit starts with "this CLI has no complete local package".
-  #
-  # Nothing is overridden any more: unlike the 0.156.1 pin, this rev builds
-  # codex itself, so `version`/`hash`/`cargoHash` come from the recipe.
-  #
-  # The version string and the rev in flake.nix belong together; the first
-  # assertion below enforces it. codex-acp stays on nixpkgs-llm-agents and is
-  # overridden to use this codex in +agent-codex.
-  codex-pin-version = "0.160.0";
-  codex-pinned = system:
-    inputs.llm-agents-codex-pin.packages.${system}.codex;
-
 in
 {
   flake.modules.homeManager.agents = { config, pkgs, lib, ... }:
     let
       enabled = name: config.my.ai.agents.enable && config.my.ai.agents.${name}.enable;
       llm-agents = llm-agents-pkgs pkgs.stdenv.hostPlatform.system;
-      claude-code = claude-code-pinned pkgs.stdenv.hostPlatform.system;
-      codex = codex-pinned pkgs.stdenv.hostPlatform.system;
+      claude-code = llm-agents.claude-code;
+      codex = llm-agents.codex;
       loadSecretsLib = builtins.readFile ./_files/shell/load-secrets.sh;
       wrappers = {
         claude = pkgs.writeShellApplication {
           name = "+agent-claude";
-          # The override is about the CLOSURE, not about behaviour. Both branches
-          # below already point at /etc/profiles/…/bin/claude — the ACP branch by
-          # exporting CLAUDE_CODE_EXECUTABLE over the `--set-default` baked into
-          # claude-agent-acp, the interactive one by exec'ing it directly — so at
-          # runtime the pinned binary was reached either way. But the store
-          # REFERENCE survives that, and without this override it drags the old
-          # claude-code into every generation: measured 2026-09-02, when the pin
-          # was still 2.1.247, `nix store diff-closures` reported "claude-code:
-          # 2.1.247 added" rather than an upgrade, and `nix why-depends` traced
-          # the leftover through home-manager-path -> +agent-claude ->
-          # claude-agent-acp -> claude-code-2.1.234. That is ~222 MB of second
-          # copy per generation. The version numbers are the measurement's, not
-          # today's; the mechanism is what the override addresses.
-          runtimeInputs = [ (llm-agents.claude-agent-acp.override { claude-code = claude-code; }) ];
+          runtimeInputs = [ llm-agents.claude-agent-acp ];
           text = ''
             export DISABLE_AUTOUPDATER='1'
             if (( $# > 0 )) && [[ "''${1}" == "--acp" ]]; then
@@ -92,12 +51,7 @@ in
         };
         codex = pkgs.writeShellApplication {
           name = "+agent-codex";
-          # Same closure argument as the claude-agent-acp override above:
-          # codex-acp bakes `CODEX_PATH ${lib.getExe codex}` into its wrapper, so
-          # without the override the main input's codex (0.150.1 at the time of
-          # the pin) would ride along as a second copy in every generation.
-          # `exec codex` below reaches the pinned one through the profile.
-          runtimeInputs = [ (llm-agents.codex-acp.override { inherit codex; }) ];
+          runtimeInputs = [ llm-agents.codex-acp ];
           text = ''
             ${loadSecretsLib}
             load_from_secret OPENAI_API_KEY openai_api_key
@@ -167,69 +121,6 @@ in
     in
     {
       imports = [ aiOptions ];
-      # These exist so the TEMPORARY pins (flake.nix, inputs
-      # llm-agents-claude-code-pin and llm-agents-codex-pin) cannot fail quietly.
-      # A pin that outlives its reason, or drifts away from the version everything
-      # documents, is the failure class this repo keeps paying for elsewhere.
-      # One pair per pin: rev matches the documented version, and the pin
-      # removes itself once the main input catches up.
-      assertions = lib.optionals (enabled "claude") [
-        {
-          # Tripwire against silent drift: bump the rev in flake.nix without
-          # bumping the version here and you would get a different version than
-          # the one flake.nix, this file and scripts/supply-chain.toml all name.
-          assertion = claude-code.version == claude-code-pin-version;
-          message = ''
-            llm-agents-claude-code-pin ships claude-code ${claude-code.version},
-            expected ${claude-code-pin-version}. The rev in flake.nix and this
-            version string belong together -- one was moved without the other.
-          '';
-        }
-        {
-          # The pin removes itself instead of standing there forever.
-          assertion = lib.versionOlder
-            llm-agents.claude-code.version
-            claude-code-pin-version;
-          message = ''
-            nixpkgs-llm-agents now ships claude-code
-            ${llm-agents.claude-code.version} >= ${claude-code-pin-version}, so the
-            pin has served its purpose. Remove it:
-              1. drop the llm-agents-claude-code-pin input from flake.nix
-              2. set `package = llm-agents.claude-code;` again below
-              3. drop the "claude-code (pinned)" [[packages]] entry from
-                 scripts/supply-chain.toml
-              4. drop these two assertions and the claude-code-pin-version /
-                 claude-code-pinned bindings at the top of this file
-          '';
-        }
-      ] ++ lib.optionals (enabled "codex") [
-        {
-          assertion = codex.version == codex-pin-version;
-          message = ''
-            llm-agents-codex-pin ships codex ${codex.version}, expected
-            ${codex-pin-version}. The rev in flake.nix and this version string
-            belong together -- one was moved without the other.
-          '';
-        }
-        {
-          assertion = lib.versionOlder
-            llm-agents.codex.version
-            codex-pin-version;
-          message = ''
-            nixpkgs-llm-agents now ships codex ${llm-agents.codex.version} >=
-            ${codex-pin-version}, so the pin has served its purpose. Remove it:
-              1. drop the llm-agents-codex-pin input from flake.nix
-              2. set `package = llm-agents.codex;` again below
-              3. in this file, drop the codex-pinned binding and the
-                 `.override { codex = … }` on codex-acp in +agent-codex
-              4. drop the "codex (pinned)" [[packages]] entry from
-                 scripts/supply-chain.toml
-              5. drop these two assertions and the codex-pin-version /
-                 codex-pinned bindings at the top of this file
-          '';
-        }
-      ];
-
       programs.claude-code = lib.mkIf (enabled "claude") {
         enable = true;
         package = claude-code;

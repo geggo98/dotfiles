@@ -121,10 +121,10 @@
       #
       # So it is installed imperatively, by the activation hook
       # `home.activation.claudeCodeExtension` further down, at exactly the version of
-      # the CLI that modules/agents.nix pins: one fact, one place, no second copy to
-      # forget. The cooldown for that version is the one on the CLI pin (flake.nix,
-      # input llm-agents-claude-code-pin), and `just audit` dates it through the
-      # "claude-code (pinned)" entry in scripts/supply-chain.toml.
+      # the CLI that modules/agents.nix installs: one fact, one place, no second copy to
+      # forget. The cooldown for that version is the one on nixpkgs-llm-agents, and
+      # `just audit` dates it through the "claude-code" entry in
+      # scripts/supply-chain.toml.
       #
       # The `code` binary comes from the Homebrew cask (see `package = null` below),
       # which is not on an activation script's PATH, hence the absolute path. A missing

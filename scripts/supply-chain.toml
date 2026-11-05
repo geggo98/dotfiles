@@ -78,63 +78,8 @@ attr = "claude-code"
 npm = "@anthropic-ai/claude-code"
 
 [[packages]]
-# A SECOND entry for the same npm package, deliberately, and the two standing
-# next to each other are the whole point. Since the claude-code pin (flake.nix,
-# input llm-agents-claude-code-pin, added 2026-09-02) the version installed on
-# these machines is NOT the one the entry above dates. Without these lines
-# `just audit` would keep reporting the main input's 2.1.250 as OK and would be
-# quietly wrong about what is on the machine -- the failure class AGENTS.md names
-# under "Validate the scan before believing 'no hits'". The entry above stays and
-# keeps dating what the main input ships; this one dates what is actually
-# installed.
-#
-# Expected output up to and including 2026-10-23: TOO NEW, exit 1. That is the
-# wanted state, not a defect -- the pin is a deliberate cooldown undercut, and an
-# audit that reported it as clean would be hiding exactly the fact that justifies
-# the write-up in flake.nix.
-#
-# Two dates, both moved by the 2.1.284 -> 2.1.296 bump on 2026-10-10, and they
-# are close enough to be confused: this ENTRY goes quiet once 2.1.296 itself
-# turns 14 days old (published to npm 2026-10-09 16:58:10Z, so from 2026-10-24),
-# and the PIN can go away once nixpkgs-llm-agents ships >= 2.1.296, i.e. once
-# `just update` with the same bar lands on a rev from 2026-10-10 04:45Z or
-# later -- also 2026-10-24 at the earliest. A quiet entry is therefore not by
-# itself permission to remove the pin; the assertion in modules/agents.nix is
-# what says when, and it breaks the build rather than waiting to be noticed.
-name = "claude-code (pinned)"
-input = "llm-agents-claude-code-pin"
-attr = "claude-code"
-npm = "@anthropic-ai/claude-code"
-
-[[packages]]
 name = "codex"
 input = "nixpkgs-llm-agents"
-attr = "codex"
-npm = "@openai/codex"
-
-[[packages]]
-# Second entry for codex, same construction and same reason as "claude-code (pinned)"
-# above: since the codex pin (flake.nix, input llm-agents-codex-pin, added 2026-09-11)
-# the version on these machines is not the one the entry above dates. This one dates
-# what is installed.
-#
-# npm is only the dated PROXY here — llm-agents builds codex from the GitHub tag
-# rust-v<version>, npm never enters the chain. The npm `time` entry and the GitHub
-# release were published minutes apart, so the date is the same either way.
-#
-# Since the 0.160.0 pin (2026-10-05) the pin is a plain rev of llm-agents-codex-pin
-# with no `.override` in modules/agents.nix, so `eval_package_version()` reads the
-# installed version again. Until the 0.156.1 pin this entry was blind: that pin
-# overrode `version`/`hash`/`cargoHash` inside the consuming module, which input
-# evaluation cannot see.
-#
-# Expected output up to and including 2026-10-15: TOO NEW, exit 1 -- the wanted
-# state, a deliberate cooldown undercut (release rust-v0.160.0, 2026-10-01 20:19Z;
-# research in the comment at the input in flake.nix). The PIN itself can go once
-# nixpkgs-llm-agents ships >= 0.160.0 including the package-layout commits (rev
-# 43597605 or later). The assertion in modules/agents.nix enforces the version half.
-name = "codex (pinned)"
-input = "llm-agents-codex-pin"
 attr = "codex"
 npm = "@openai/codex"
 
