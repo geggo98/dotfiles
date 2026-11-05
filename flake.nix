@@ -21,7 +21,7 @@
     # upgrade, bump the tag below to the latest release from
     # https://github.com/yt-dlp/yt-dlp/releases (then `just build`).
     yt-dlp-src = {
-      url = "github:yt-dlp/yt-dlp/2026.08.19";
+      url = "github:yt-dlp/yt-dlp/2026.10.26";
       flake = false;
     };
 
