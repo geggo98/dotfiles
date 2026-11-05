@@ -3,8 +3,10 @@
   flake.modules.homeManager.bitbucket-cli = { pkgs, lib, ... }:
     let
       unstable = inputs.nixpkgs-unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system};
-      version = "0.18.2";
-      rev = "ab8655edd3f042eaa6ee4a6244a15bd21603c1fa"; # tag v0.18.2
+      # Newest tag that builds with nixpkgs-unstable's Go (1.26.x): v0.18.6 and later
+      # declare `go 1.27` in go.mod ("go.mod requires go >= 1.27"). Re-check before bumping.
+      version = "0.18.5";
+      rev = "82e360722844f1ff9fcef34d3bdfb33a8b8d2cce"; # tag v0.18.5
       bitbucket-cli = unstable.buildGoModule {
         pname = "bitbucket-cli";
         inherit version;
@@ -13,10 +15,10 @@
           owner = "gildas";
           repo = "bitbucket-cli";
           inherit rev;
-          hash = "sha256-XAyvB0opkmOriIEj8L3iYrAUPJCNsrzkBu/cd2tpuuc=";
+          hash = "sha256-u61dRrNzLO9WvPytpCZ06ojz+2s5l0gEsO0M+T1BUGs=";
         };
 
-        vendorHash = "sha256-S1tH62vQ1+JyzkXxdN6t+yHMSmiqQ6QIkRyYGCROGlg=";
+        vendorHash = "sha256-p4jlcxvOslGOXk58X3dJ6/WiFOEjCACnx5pwsvH0o28=";
 
         ldflags = [
           "-s"
