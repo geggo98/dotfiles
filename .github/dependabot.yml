@@ -1,0 +1,14 @@
+# Dependabot moves the SHA pins in .github/workflows/. Only github-actions: infra/'s npm
+# tree is watched through its own audit (`just pulumi-audit`) and the cooldown ladder
+# in docs/supply-chain.md, not through version-update PRs.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    # The same bar this repo applies to every other release it adopts: do not be the
+    # first consumer. A SHA pin without a cooldown only pins the newest thing faster.
+    cooldown:
+      default-days: 14
+    open-pull-requests-limit: 3

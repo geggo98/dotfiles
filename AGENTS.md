@@ -55,7 +55,8 @@ A `justfile` provides safe, pre-approved commands that agents can run without us
 | `just fmt` | Format all Nix files with `nixpkgs-fmt` |
 | `just vscode-ext-check` | Offline tests for `+vscode-ext` and the VS Code profile activation |
 | `just update` / `-preview` / `-input <i>` / `-head` | Update flake inputs honouring the supply-chain cooldown (`-head` bypasses it) |
-| `just audit` / `-inputs` / `-extensions [ids…]` | Cooldown + withdrawal audit: inputs, npm/GitHub package ages, VS Code extensions |
+| `just audit` / `-inputs` / `-extensions [ids…]` / `-pins` | Cooldown + withdrawal audit: inputs, npm/GitHub package ages, VS Code extensions, hand-bumped pins behind upstream |
+| `just update-pr [serial…]` | Check out the weekly update PR and build it (never switches); see "Updating flake inputs" |
 | `just creds-check` | Do the long-lived credentials still authenticate? (jira, confluence, bb) |
 | `just vscode-settings-check` | Has VS Code been trying to write the Nix-managed settings.json? |
 | `just devdocs-list` / `-lock [families…]` / `-check` | DevDocs offline index: drift, re-lock, hermetic pipeline test |
@@ -468,6 +469,9 @@ unpublish) — age alone cannot express that. Full detail — nixpkgs channel-br
 exemption, tag-vs-branch resolution, FlakeHub yank handling, the per-package npm/GitHub
 audit layer, and the pin rituals for nvf/Pulumi/agent-browser/Gram — in
 `docs/supply-chain.md`.
+
+A weekly workflow (`.github/workflows/flake-update.yml`) opens the update PR. It only
+**locks and evaluates**; build, R2 push and switch stay local (`just update-pr`).
 
 ### uv-based skill scripts (lockfiles + the read-only Nix store)
 

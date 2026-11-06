@@ -223,6 +223,29 @@ update-input input:
     set -euo pipefail
     python3 scripts/supply-chain.py --only "$1" update
 
+# The weekly GitHub workflow (.github/workflows/flake-update.yml) only LOCKS and
+# EVALUATES: no sudo, no cache signing key, no darwin builder. Building, the R2 push
+# (through the post-build hook) and switching stay on this machine. This is the local
+# half: check out the PR branch and build it where it can actually be built. Extra
+# hosts: `just update-pr <serial> …`. Never switches and never pushes.
+#
+# Check out the open weekly update PR and build it (plus the hosts named as arguments)
+update-pr *hosts:
+    #!/bin/zsh
+    set -euo pipefail
+    # --force: the workflow force-pushes this branch every week, so a stale local copy
+    # must be reset to the PR head rather than refused.
+    gh pr checkout automation/flake-update --force
+    just build
+    for h in "$@"; do just build-host "$h"; done
+    # Findings (exit 1) must not hide that the builds passed, nor the other way round:
+    # run the audit last, print it, and hand its exit code on.
+    audit_rc=0
+    python3 scripts/supply-chain.py audit || audit_rc=$?
+    echo
+    echo "Builds passed. Review the PR, then: just switch   (selects the flake attr by serial)"
+    exit $audit_rc
+
 # --- Supply-chain audit (read-only, agent-safe: no sudo, publishes nothing) ---
 #
 # Answers a DIFFERENT question from `just pulumi-audit`, and the two must not be
@@ -231,10 +254,11 @@ update-input input:
 # actually mattered on 2026-08-04, when ChainDrop's poisoned tarballs carried valid
 # npm provenance and SLSA L3 attestations and every scanner said clean.
 #
-# Three layers: flake inputs, tracked npm packages (an input's age bounds its contents
-# only from below, and loosely), and VS Code extensions. Exit 1 on findings, 2 on error.
+# Four layers: flake inputs, tracked npm packages (an input's age bounds its contents
+# only from below, and loosely), VS Code extensions, and hand-bumped version pins that
+# nothing else moves. Exit 1 on findings, 2 on error.
 #
-# Audit every layer: input ages, tracked-package ages (npm / GitHub releases), extension ages + withdrawals
+# Audit every layer: input ages, tracked-package ages (npm / GitHub releases), extension ages + withdrawals, pins behind upstream
 audit *args:
     #!/bin/zsh
     set -euo pipefail
@@ -245,6 +269,17 @@ audit-inputs:
     #!/bin/zsh
     set -euo pipefail
     python3 scripts/supply-chain.py audit --inputs-only
+
+# Layer 4 only: which hand-bumped pins (yt-dlp, agent-browser, the npx versions, …)
+# has upstream moved past, and has that newer release cleared its bar? A pin that
+# cannot follow for a real reason carries `hold` in scripts/supply-chain.toml and is
+# shown as a skip with that reason.
+#
+# Hand-bumped pins behind upstream (read-only; PINNED = review and bump by hand)
+audit-pins:
+    #!/bin/zsh
+    set -euo pipefail
+    python3 scripts/supply-chain.py audit --pins-only
 
 # Check VS Code extensions by id, e.g. `just audit-extensions rust-lang.rust-analyzer`.
 # With no argument it reads [[extensions]] from scripts/supply-chain.toml. An extension

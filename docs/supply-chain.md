@@ -223,6 +223,94 @@ activation. No cooldown, pin or audit in this repo covers any of it.
   intentionally left unmanaged — Gram writes UI settings back to it.
 
 
+#### Layer 4 — hand-bumped pins (`just audit-pins`)
+
+Layers 1–3 date what a tool moves. Plenty of versions here are moved by nothing: the
+npx versions in `modules/mcp-servers.nix`, the release binaries and hashes in
+`modules/camoufox.nix`, `yt-dlp-src`, the Playwright version in a skill script. A pin that
+nothing moves stays where it was set until someone happens to look. Measured 2026-11-05,
+when the layer was added: bitbucket-cli sat on a release 152 days old, IoskeleyMono on
+2.0.0 with 2.2.0 two weeks out, and `mcp-remote` on 0.1.38 while 0.15.2 had cleared the 14-day bar.
+
+Each `[[pins]]` entry in `scripts/supply-chain.toml` names a `source` (GitHub release, npm
+or PyPI), and a `file` plus a `match` regex that **reads the pinned version out of the
+file that really carries it**. It is never copied into the manifest: a second copy of the
+fact drifts, and an audit comparing upstream with a stale copy reports "current" for a
+pin that was bumped or reverted by hand. A `match` that stops matching is an ERROR, not a
+silent "current" — checked with a drifted pattern, a missing named group, a missing file
+and a version that no longer exists upstream; all four report loudly.
+
+The question per pin is: *has upstream published a release that is newer than the pin
+and has also cleared the bar?* Yes → `PINNED`, a finding. A newer release still inside
+the bar is listed as "waiting", not as a finding. Two details that matter:
+
+- **`hold = "<reason>"`** is for a pin that cannot follow, for a real reason. It is shown
+  as a skip together with the reason, so the reason stays in front of the reader without
+  turning every weekly run red. First use: bitbucket-cli, whose 0.18.6 and later declare
+  `go 1.27` in `go.mod` while nixpkgs-unstable ships Go 1.26.x (`go.mod requires go >=
+  1.27`), and the Playwright pin, which must equal nixpkgs' `playwright-driver`. **A hold
+  is not permanent**: delete the line when the reason is gone.
+- **The GitHub release list is a window of 100**, so a pin that has fallen out of it is
+  asked for again by its exact tag; only npm and PyPI list every version ever published,
+  and only there does absence mean "withdrawn".
+
+Deliberately outside this layer: `nixos/nix` (a bump only takes effect after `just
+linux-builder-destroy`), the Pulumi `~` pins (coupled to the plugins inside `pulumi-bin`,
+see above), the uv scripts (the relative `exclude-newer = "30 days"` already holds them
+back) and the VS Code `pin` (layer 3 covers it).
+
+### Weekly update PR (`.github/workflows/flake-update.yml`)
+
+Mondays 04:17 UTC and on demand (`gh workflow run flake-update.yml`) a workflow runs
+`scripts/supply-chain.py update`, `just brew-bump` and `just devenv-bump`, the full
+`audit`, and a **no-build evaluation** of every host configuration, then opens or
+refreshes one PR from the fixed branch `automation/flake-update`. It never builds and
+never touches the binary cache: the darwin builds, the signed R2 push (the post-build
+hook) and `just switch` need this machine's keys and sudo and stay here. The local half
+is `just update-pr [serial…]`, which checks out the PR branch, builds, runs the audit and
+never switches or pushes.
+
+**Two jobs, split by what each may touch.** The reason is that evaluating ~25 upstream
+inputs executes their Nix code, and evaluation can build (import-from-derivation):
+
+| Job | Runner | Token | Runs |
+|---|---|---|---|
+| `update` | `macos-15` | `contents: read`, no persisted git credentials | Nix, the repo's scripts; produces an artifact (patch, PR body) |
+| `pr` | `ubuntu-latest` | `contents: write`, `pull-requests: write` | no Nix, no repo script: re-checks the patch, applies it, pushes, opens the PR |
+
+A poisoned input can therefore read nothing worth stealing and push nothing. Both jobs
+check independently that the patch touches `flake.nix` and `flake.lock` and nothing else:
+the `pr` job holds the write token and does not take the other job's word for it. Tested
+locally with a patch that also changes `justfile` (rejected, one message), with no change
+(`changed=false`), and with a failed evaluation (title suffix and warning in the body).
+
+Why `macos-15` and not Linux: the `justfile` recipes use `#!/bin/zsh`, which the Ubuntu
+runners lack, and the darwin configurations evaluate natively. The repository is public,
+so the runner minutes cost nothing. `just` itself comes from the nixpkgs revision this
+flake locks (`nix shell github:NixOS/nixpkgs/<rev>#just`), not from Homebrew or a
+floating channel. Hosts are enumerated (`nix eval .#darwinConfigurations --apply
+builtins.attrNames`), so the workflow names no host.
+
+An evaluation failure does **not** stop the PR: it is opened with `(evaluation FAILED)`
+in the title and a warning at the top, because a broken update nobody can look at is worse
+than a flagged one. An audit exit code 2 (could not run) is shown the same way; exit 1
+(findings, the normal case while a pin is behind) is just recorded.
+
+Settings the workflow relies on, none of which can be set from a commit (Settings >
+Actions > General):
+
+- *Allow GitHub Actions to create and approve pull requests* — on.
+- *Require actions to be pinned to a full-length commit SHA* — on. Every `uses:` is a SHA
+  of a release older than 14 days; `.github/dependabot.yml` moves them with a 14-day
+  cooldown.
+- Allowed actions: GitHub-created ones plus `DeterminateSystems/determinate-nix-action@*`.
+- Fork pull-request workflows: approval required for all outside contributors.
+- A ruleset on `main` forbidding force-push and deletion; the workflow itself only ever
+  force-pushes `automation/flake-update`.
+
+A PR opened with `GITHUB_TOKEN` starts no further workflows. There are none, so that is
+harmless today; it becomes relevant the day a CI check on pull requests is added.
+
 ### Closing a dependency advisory in `infra/`
 
 `infra/` is the only npm tree in this repo (Pulumi, pnpm 11). GitHub Dependabot

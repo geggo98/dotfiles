@@ -1,0 +1,219 @@
+# Weekly update PR: lock every flake input under the supply-chain cooldown, evaluate
+# the result, report the audit. NOTHING IS BUILT HERE and nothing is pushed to the
+# binary cache: the darwin builds, the signed R2 push (post-build hook) and
+# `just switch` stay on the user's machines. The local half is `just update-pr`.
+#
+# Two jobs on purpose, split by what they may touch:
+#
+#   update  runs Nix and the repo's own scripts, which evaluate code from ~25 upstream
+#           inputs (and evaluation can build, through import-from-derivation). It gets a
+#           READ-ONLY token and no persisted git credentials, so a poisoned input has
+#           nothing to steal and nothing to push with. Its only product is an artifact:
+#           a patch, a PR body, a title suffix.
+#   pr      holds the write token but runs no Nix and no repo script. It checks that the
+#           patch touches flake.nix and flake.lock and nothing else, applies it, pushes
+#           the fixed branch and opens or refreshes the PR.
+#
+# Repo settings this relies on (Settings > Actions > General, not settable from here):
+#   - "Allow GitHub Actions to create and approve pull requests"
+#   - "Require actions to be pinned to a full-length commit SHA"
+#   - allowed actions: GitHub-created ones, plus DeterminateSystems/determinate-nix-action
+# Every `uses:` below is pinned to a commit SHA of a release older than 14 days, the same
+# bar this repo applies to everything else. Dependabot (.github/dependabot.yml) moves them.
+
+name: flake-update
+
+on:
+  schedule:
+    - cron: "17 4 * * 1"   # Mondays, 04:17 UTC
+  workflow_dispatch:
+
+# Nothing by default; each job asks for exactly what it needs.
+permissions: {}
+
+concurrency:
+  group: flake-update
+  cancel-in-progress: false
+
+env:
+  BRANCH: automation/flake-update
+
+jobs:
+  update:
+    runs-on: macos-15          # darwin eval is native, and /bin/zsh exists for the justfile recipes
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    outputs:
+      changed: ${{ steps.patch.outputs.changed }}
+    defaults:
+      run:
+        shell: zsh -e -u -o pipefail {0}
+    env:
+      GH_TOKEN: ${{ github.token }}
+      # Lifts the GitHub API limit for input resolution from 60 to 1000 requests/hour.
+      # The token is read-only; builds run in the Nix sandbox and never see this variable.
+      NIX_CONFIG: |
+        access-tokens = github.com=${{ github.token }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: false
+
+      - uses: DeterminateSystems/determinate-nix-action@96c5ee93a9dddf2830d31e1da6ec719077336c28 # v3.23.3
+
+      - name: Lock flake inputs under the cooldown
+        run: |
+          mkdir -p "$RUNNER_TEMP/out"
+          python3 scripts/supply-chain.py update 2>&1 | tee "$RUNNER_TEMP/out/update.log"
+
+      # The tag-pinned inputs are invisible to `update` (a tag is immutable), so the two
+      # that have a cooled bump recipe go through it. `just` comes from the nixpkgs rev
+      # this flake itself locks: no floating package, no extra download source.
+      - name: Bump tag pins (Homebrew, devenv) under the cooldown
+        run: |
+          rev=$(python3 -I -c 'import json; print(json.load(open("flake.lock"))["nodes"]["nixpkgs"]["locked"]["rev"])')
+          for recipe in brew-bump devenv-bump; do
+            nix shell "github:NixOS/nixpkgs/$rev#just" -c just "$recipe" 2>&1 | tee -a "$RUNNER_TEMP/out/update.log"
+          done
+
+      # Exit 1 = findings (a pin behind upstream, something inside the cooldown) and is
+      # the normal case, so it is recorded, not fatal. Exit 2 = the audit itself could not
+      # run; that is recorded too and shown at the top of the PR, never swallowed.
+      - name: Audit
+        id: audit
+        run: |
+          rc=0
+          python3 scripts/supply-chain.py audit 2>&1 | tee "$RUNNER_TEMP/out/audit.log" || rc=$?
+          echo "rc=$rc" >> "$GITHUB_OUTPUT"
+
+      # Evaluation only, never a build. Hosts are enumerated, not named, so this file
+      # carries no host identifier. A failure is recorded and shown, and the PR is still
+      # opened: a broken update that nobody can look at is worse than a flagged one.
+      - name: Evaluate every host configuration
+        id: eval
+        run: |
+          failed=0 ok=0
+          : > "$RUNNER_TEMP/out/eval.log"
+          for kind in darwinConfigurations nixosConfigurations; do
+            nix eval --json ".#$kind" --apply builtins.attrNames \
+              | python3 -I -c 'import json, sys; print("\n".join(json.load(sys.stdin)))' > "$RUNNER_TEMP/$kind.txt"
+            if [ "$kind" = darwinConfigurations ]; then attr=system.drvPath; else attr=config.system.build.toplevel.drvPath; fi
+            while read -r host; do
+              if nix eval --raw ".#$kind.\"$host\".$attr" > /dev/null 2> "$RUNNER_TEMP/eval.err"; then
+                ok=$((ok + 1))
+              else
+                failed=$((failed + 1))
+                echo "FAILED  $kind.$host" >> "$RUNNER_TEMP/out/eval.log"
+                tail -n 12 "$RUNNER_TEMP/eval.err" >> "$RUNNER_TEMP/out/eval.log"
+              fi
+            done < "$RUNNER_TEMP/$kind.txt"
+          done
+          echo "$ok configuration(s) evaluate, $failed failed" | tee -a "$RUNNER_TEMP/out/eval.log"
+          echo "failed=$failed" >> "$GITHUB_OUTPUT"
+
+      - name: Package the result
+        id: patch
+        env:
+          AUDIT_RC: ${{ steps.audit.outputs.rc }}
+          EVAL_FAILED: ${{ steps.eval.outputs.failed }}
+        run: |
+          out="$RUNNER_TEMP/out"
+          git status --porcelain | cut -c4- | sort > "$out/changed.txt"
+          if [ ! -s "$out/changed.txt" ]; then
+            echo "Nothing moved: every mutable input already sits at or behind the bar."
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # The scripts only ever write these two files. Anything else means a script
+          # misbehaved, and the pr job must not be handed that.
+          unexpected=$(perl -ne 'print unless /^(?:flake\.lock|flake\.nix)$/' "$out/changed.txt")
+          if [ -n "$unexpected" ]; then
+            echo "unexpected files changed:" >&2; echo "$unexpected" >&2
+            exit 1
+          fi
+          git diff --no-ext-diff --no-textconv --binary > "$out/changes.patch"
+
+          cooled=$(perl -ne 'print $+{n} if /^summary: (?<n>\d+) cooled/' "$out/update.log")
+          : "${cooled:=unknown}"
+          title_suffix=""
+          [ "$EVAL_FAILED" != "0" ] && title_suffix=" (evaluation FAILED)"
+          printf '%s' "$title_suffix" > "$out/title-suffix.txt"
+
+          cap() { head -c 14000 "$1"; [ "$(wc -c < "$1")" -gt 14000 ] && printf '\n… truncated, see the workflow run.\n'; return 0; }
+          {
+            echo "**TL;DR** Weekly lock under the supply-chain cooldown: $cooled cooled input(s) moved, plus any tag-pin bumps. Evaluation failed for $EVAL_FAILED configuration(s). Audit exit code $AUDIT_RC. Nothing was built or cached here."
+            echo
+            if [ "$AUDIT_RC" = 2 ]; then echo "> **The audit could not complete** (exit 2). Read the audit section before merging."; echo; fi
+            if [ "$EVAL_FAILED" != "0" ]; then echo "> **Evaluation failed.** Do not merge before reading the evaluation section."; echo; fi
+            echo "### Local steps"
+            echo
+            echo "1. \`just update-pr\` — checks out this branch and builds the current host; add serials for other hosts (\`just update-pr <serial> …\`)."
+            echo "2. \`just switch\` — applies the config (selects the attribute by hardware serial)."
+            echo "3. The R2 push happens through the post-build hook during step 1/2, not here."
+            echo
+            echo "### What moved"; echo; echo '```text'; cap "$out/update.log"; echo '```'; echo
+            echo "### Evaluation (no build)"; echo; echo '```text'; cap "$out/eval.log"; echo '```'; echo
+            echo "### Audit (exit $AUDIT_RC)"; echo; echo '```text'; cap "$out/audit.log"; echo '```'
+          } > "$out/body.md"
+          echo "changed=true" >> "$GITHUB_OUTPUT"
+
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        if: steps.patch.outputs.changed == 'true'
+        with:
+          name: flake-update
+          path: |
+            ${{ runner.temp }}/out/changes.patch
+            ${{ runner.temp }}/out/body.md
+            ${{ runner.temp }}/out/title-suffix.txt
+          if-no-files-found: error
+          retention-days: 7
+
+  pr:
+    needs: update
+    if: needs.update.outputs.changed == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write          # push the fixed branch
+      pull-requests: write     # open or refresh the PR
+    env:
+      GH_TOKEN: ${{ github.token }}
+      DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.repository.default_branch }}
+          persist-credentials: true   # needed for the push below
+
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: flake-update
+          path: ${{ runner.temp }}/in
+
+      - name: Apply the patch and push the branch
+        run: |
+          in="$RUNNER_TEMP/in"
+          # Second check, deliberately independent of the first: this job holds the write
+          # token, so it does not take the other job's word for what the patch contains.
+          git apply --numstat "$in/changes.patch" \
+            | perl -ne '@f = split /\t/; chomp(my $p = $f[2]); $n++; die "unexpected path in patch: $p\n" unless $p =~ /^(?:flake\.lock|flake\.nix)$/; END { die "empty patch\n" unless $n }'
+          git apply --index "$in/changes.patch"
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git commit -q -m "chore(flake): Weekly update under the cooldown" \
+                         -m "Locked by .github/workflows/flake-update.yml via scripts/supply-chain.py. Evaluated, not built: the build, the cache push and the switch happen locally (just update-pr)."
+          git push --force origin "HEAD:refs/heads/$BRANCH"
+
+      - name: Open or refresh the pull request
+        run: |
+          in="$RUNNER_TEMP/in"
+          title="chore(flake): Weekly update under the cooldown$(cat "$in/title-suffix.txt")"
+          number=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          if [ -n "$number" ]; then
+            gh pr edit "$number" --title "$title" --body-file "$in/body.md"
+            echo "refreshed PR #$number"
+          else
+            gh pr create --head "$BRANCH" --base "$DEFAULT_BRANCH" --title "$title" --body-file "$in/body.md"
+          fi
