@@ -1,7 +1,7 @@
 ---
 name: diagram-renderer
 description: "Render PlantUML (@startuml…@enduml) and Mermaid fenced blocks to a self-contained HTML preview; if rendering fails, the error text must be embedded in the output image. Use when the user asks to render, preview, or export diagrams."
-argument-hint: "[paths...] [--stdin] [--select plantuml|mermaid|both] [--blocks startuml|fenced|all] [--only 1,3-5] [--out-dir DIR] [--format png|svg] [--json] [--timeout DURATION]"
+argument-hint: "[paths...] [--stdin] [--select plantuml|mermaid|both] [--blocks startuml|fenced|all] [--only 1,3-5] [--out-dir DIR] [--format png|svg] [--json] [--dpi N] [--min-width PX] [--timeout DURATION]"
 allowed-tools: Bash(./scripts/render_diagram.sh *) Bash(zsh *)
 dependencies: "uv, plantuml, mmdc (Mermaid CLI), gtimeout"
 ---
@@ -63,6 +63,12 @@ ${CLAUDE_SKILL_DIR}/scripts/render_diagram.sh docs/architecture.md --timeout 10m
 4. If any diagram fails, the preview must still include an image for it where the **error text is rendered into the image**.
 5. You can get structured JSON output with `--json` (default: minimal, omitting source/bytes). Use `--detail full` for full output.
 
+## Resolution
+
+PNGs are rendered at `--dpi 192` (2x; 96 = 1x) and, if still narrower than `--min-width 1200` px, re-rendered once at a higher density (at most 8x; Mermaid only takes whole-number scales). The HTML preview shows them at their 1x size, so they stay sharp instead of huge. `--min-width 0` turns the re-render off. `--format svg` is resolution-independent and ignores both.
+
+**Call `mmdc` and `plantuml` through this script, not directly.** Only the script picks the browser, the density and the error image consistently.
+
 ## Selecting which diagrams to render
 
 - To list extracted blocks and their IDs:
@@ -87,5 +93,7 @@ The helper script will try, in order:
 
 - PlantUML: `plantuml` executable; otherwise `java -jar <plantuml.jar>` if available (via `PLANTUML_JAR`).
 - Mermaid: `mmdc`; otherwise `npx -y @mermaid-js/mermaid-cli` if `npx` exists.
+
+Mermaid needs a local Google Chrome (Homebrew cask). The Nix `mmdc` wrapper (`modules/packages.nix`) sets `PUPPETEER_EXECUTABLE_PATH` to it by default; the script also searches Chromium and Canary.
 
 If a tool is missing, still generate an error image explaining what is missing and how to fix it.

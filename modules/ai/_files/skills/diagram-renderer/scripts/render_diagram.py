@@ -37,6 +37,7 @@ import argparse
 import base64
 import html
 import json
+import math
 import os
 import re
 import shutil
@@ -77,9 +78,12 @@ class RenderResult(BaseModel):
     output_path: Optional[str] = None  # relative path (for HTML) if written to disk
     width: Optional[int] = None
     height: Optional[int] = None
+    scale: float = 1.0      # pixel-density factor relative to 96 dpi (PNG only)
 
 
 PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+BASE_DPI = 96
+MAX_SCALE = 8.0
 
 
 def _get_image_dimensions(fmt: str, data: bytes) -> Tuple[Optional[int], Optional[int]]:
@@ -338,7 +342,7 @@ def _run_cmd(cmd: List[str], *, input_bytes: bytes, timeout_s: int) -> Tuple[int
         return 127, b"", b"command not found"
 
 
-def render_plantuml(source: str, fmt: str, timeout_s: int) -> Tuple[bool, str, bytes, str, str, int]:
+def render_plantuml(source: str, fmt: str, timeout_s: int, scale: float = 1.0) -> Tuple[bool, str, bytes, str, str, int]:
     base_cmd, name = _find_plantuml_base_cmd()
     if not base_cmd:
         msg = (
@@ -350,6 +354,8 @@ def render_plantuml(source: str, fmt: str, timeout_s: int) -> Tuple[bool, str, b
 
     fmt_flag = f"-t{fmt}"
     cmd = base_cmd + [fmt_flag, "-pipe", "-charset", "UTF-8"]
+    if fmt == "png":
+        cmd.append(f"-Sdpi={round(BASE_DPI * scale)}")
     rc, out, err = _run_cmd(cmd, input_bytes=source.encode("utf-8"), timeout_s=timeout_s)
     stderr = err.decode("utf-8", errors="replace")
     stdout_text = ""
@@ -396,7 +402,7 @@ def _find_chrome_executable() -> Optional[str]:
     return None
 
 
-def render_mermaid(source: str, fmt: str, timeout_s: int) -> Tuple[bool, str, bytes, str, str, int]:
+def render_mermaid(source: str, fmt: str, timeout_s: int, scale: float = 1.0) -> Tuple[bool, str, bytes, str, str, int]:
     base_cmd, name = _find_mmdc_base_cmd()
     if not base_cmd:
         msg = (
@@ -412,6 +418,8 @@ def render_mermaid(source: str, fmt: str, timeout_s: int) -> Tuple[bool, str, by
         in_file.write_text(source, encoding="utf-8")
 
         cmd = base_cmd + ["--input", str(in_file), "--output", str(out_file), "--outputFormat", fmt, "--quiet"]
+        if fmt == "png":
+            cmd += ["--scale", f"{scale:g}"]
 
         # Puppeteer needs a Chrome binary; set PUPPETEER_EXECUTABLE_PATH if not already set.
         env = None
@@ -460,13 +468,31 @@ def render_mermaid(source: str, fmt: str, timeout_s: int) -> Tuple[bool, str, by
         return False, "error", _make_error_png("Mermaid render failed", detail or "No output produced."), stderr, stdout_text, rc
 
 
-def render_block(block: DiagramBlock, fmt: str, timeout_s: int) -> RenderResult:
+def _render_once(block: DiagramBlock, fmt: str, timeout_s: int, scale: float):
     if block.language == "plantuml":
-        ok, renderer, out_bytes, stderr, stdout, rc = render_plantuml(block.source, fmt, timeout_s)
-    elif block.language == "mermaid":
-        ok, renderer, out_bytes, stderr, stdout, rc = render_mermaid(block.source, fmt, timeout_s)
-    else:
-        raise ValueError(f"Unknown language: {block.language}")
+        return render_plantuml(block.source, fmt, timeout_s, scale)
+    if block.language == "mermaid":
+        return render_mermaid(block.source, fmt, timeout_s, scale)
+    raise ValueError(f"Unknown language: {block.language}")
+
+
+def render_block(block: DiagramBlock, fmt: str, timeout_s: int, dpi: int = 192, min_width: int = 1200) -> RenderResult:
+    # mmdc floors a fractional --scale (2.98 -> 2, measured), so Mermaid gets whole numbers.
+    def effective(s: float) -> float:
+        s = min(MAX_SCALE, s)
+        return float(math.ceil(s - 1e-9)) if block.language == "mermaid" else s
+
+    scale = effective(dpi / BASE_DPI)
+    ok, renderer, out_bytes, stderr, stdout, rc = _render_once(block, fmt, timeout_s, scale)
+
+    # Small diagrams come out unreadable at a fixed density: re-render once, wide enough.
+    if ok and fmt == "png" and renderer != "error":
+        w, _ = _get_image_dimensions("png", out_bytes)
+        if w and w < min_width:
+            wanted = effective(scale * min_width / w)
+            if wanted > scale:
+                scale = wanted
+                ok, renderer, out_bytes, stderr, stdout, rc = _render_once(block, fmt, timeout_s, scale)
 
     actual_fmt = fmt
     if renderer == "error":
@@ -485,6 +511,7 @@ def render_block(block: DiagramBlock, fmt: str, timeout_s: int) -> RenderResult:
         exit_code=rc,
         width=width,
         height=height,
+        scale=scale if actual_fmt == "png" and renderer != "error" else 1.0,
     )
 
 
@@ -501,6 +528,13 @@ def _mime_for(fmt: str) -> str:
     if fmt == "svg":
         return "image/svg+xml"
     return "application/octet-stream"
+
+
+def _img_width_attr(r: RenderResult) -> str:
+    """Show hi-dpi PNGs at their natural (1x) size; max-width keeps them inside the page."""
+    if r.fmt == "png" and r.width and r.scale > 1:
+        return f" width='{round(r.width / r.scale)}'"
+    return ""
 
 
 def build_html(results: Sequence[RenderResult], *, embed: bool, title: str) -> str:
@@ -541,9 +575,9 @@ details { margin-top: 8px; }
         if embed:
             mime = _mime_for(r.fmt)
             data_uri = f"data:{mime};base64,{base64.b64encode(r.bytes).decode('ascii')}"
-            parts.append(f"<img src='{data_uri}' alt='diagram {b.id}'>")
+            parts.append(f"<img src='{data_uri}' alt='diagram {b.id}'{_img_width_attr(r)}>")
         else:
-            parts.append(f"<img src='{html.escape(r.output_path or '')}' alt='diagram {b.id}'>")
+            parts.append(f"<img src='{html.escape(r.output_path or '')}' alt='diagram {b.id}'{_img_width_attr(r)}>")
 
         parts.append("<details><summary>Source</summary>")
         parts.append(f"<pre>{html.escape(b.source)}</pre>")
@@ -606,6 +640,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                     help="Print results as JSON to stdout. Implies --no-html unless --html is set explicitly.")
     ap.add_argument("--detail", choices=["full", "minimal"], default="minimal",
                     help="Detail level for --json output: 'minimal' (default, omits source/bytes) or 'full'.")
+    ap.add_argument("--dpi", type=int, default=192,
+                    help="PNG pixel density (96 = 1x). Default 192 (2x) for readable text.")
+    ap.add_argument("--min-width", type=int, default=1200,
+                    help="Re-render PNGs narrower than this many pixels with a higher density (max 8x). 0 disables.")
     ap.add_argument("--timeout", type=int, default=60, help="Per-diagram render timeout (seconds).")
     args = ap.parse_args(argv)
 
@@ -682,7 +720,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print("No blocks selected (after applying --only).", file=sys.stderr)
         return 1
 
-    results: List[RenderResult] = [render_block(b, args.fmt, args.timeout) for b in blocks_to_render]
+    results: List[RenderResult] = [render_block(b, args.fmt, args.timeout, args.dpi, args.min_width) for b in blocks_to_render]
     had_errors = any(not r.ok for r in results)
 
     embed = args.out_dir is None

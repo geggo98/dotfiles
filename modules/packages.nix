@@ -8,6 +8,19 @@
           substituteInPlace Makefile --replace " parallel " " " --replace " parallel.1 " " "
         '';
       });
+      # nixpkgs' mmdc starts bare `node cli.js` and ships no browser on darwin, so a direct
+      # `mmdc` call dies in puppeteer's ChromeLauncher. Point it at the Homebrew Chrome;
+      # --set-default keeps a caller-provided PUPPETEER_EXECUTABLE_PATH in charge.
+      mermaid-cli-chrome = pkgs.symlinkJoin {
+        name = "mermaid-cli-chrome-${pkgs.mermaid-cli.version}";
+        paths = [ pkgs.mermaid-cli ];
+        nativeBuildInputs = [ pkgs.makeWrapper ];
+        postBuild = lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
+          wrapProgram $out/bin/mmdc \
+            --set-default PUPPETEER_EXECUTABLE_PATH "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+        '';
+        meta.mainProgram = "mmdc";
+      };
     in
     {
       programs.k9s.enable = true;
@@ -73,7 +86,7 @@
         graphviz
         lazygit
         python313Packages.markitdown
-        mermaid-cli
+        mermaid-cli-chrome
         typescript
         nodejs
         neovim
