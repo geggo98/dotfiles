@@ -7,7 +7,7 @@ tool than the one that applies it drifts apart:
 
     update   resolve every mutable flake input to the newest revision that clears the
              cooldown, and write those revisions into flake.lock   (`just update`)
-    audit    report-only, across all three layers below               (`just audit`)
+    audit    report-only, across all four layers below                (`just audit`)
 
 WHY THIS EXISTS. `nix flake update` always jumps every input to the CURRENT head of its
 branch. There is no "give me last week's head", so every update adopts code that is
@@ -43,12 +43,14 @@ checks presence as well as age:
 That is not hypothetical: on the first real run, layer 1 rejected determinate 3.22.0 —
 comfortably old enough at 15 days, and yanked on 2026-08-17.
 
-THREE LAYERS.
+FOUR LAYERS.
     1 flake inputs      github branches, github tags, FlakeHub semver ranges
     2 tracked packages  a hand-kept list dated against npm or GitHub releases; a
                         flake input's age bounds its contents only from below,
                         and loosely
     3 VS Code extensions  Open VSX / MS Marketplace, cooldown + still-exists
+    4 hand-bumped pins  version strings no tool moves (a Nix module, a script header):
+                        read from the file that carries them, compared with upstream
 
 MECHANISM (layer 1). `nix flake lock --override-input <name> github:<o>/<r>/<rev>`
 writes the explicit rev into flake.lock while leaving flake.nix untouched: `original`
@@ -132,7 +134,8 @@ TOO_NEW = "too_new"      # audit: younger than the bar                  (FINDING
 WITHDRAWN = "withdrawn"  # yanked / unpublished / 404 / deprecated      (FINDING)
 PIN_BEHIND = "pin_behind"  # audit: hard-pinned, upstream has a newer   (FINDING)
                             # release — review before bumping the pin
-IMMUTABLE = "immutable"  # tag/rev pin — flake update cannot move it    (SKIP)
+PIN_HELD = "pin_held"    # audit: newer release exists, held on purpose  (SKIP)
+IMMUTABLE ="immutable"  # tag/rev pin — flake update cannot move it    (SKIP)
 FROZEN = "frozen"        # explicitly excluded by the manifest          (SKIP)
 UNSUPPORTED = "unsupported"  # not a datable input type                 (SKIP)
 FAILED = "failed"        # lookup or lock error                         (ERROR)
@@ -646,6 +649,152 @@ def check_extension(ext_id: str, registry: str, cutoff: datetime, now: datetime,
     return OK, ext_id, detail
 
 
+# ------------------------------------------------------ layer 4: hand-bumped pins
+
+class PinWithdrawn(Exception):
+    """The pinned version is gone from its registry — a finding, not a tool error."""
+
+
+def pin_current_version(root: Path, pin: dict) -> str:
+    """The version the repo ACTUALLY pins, read out of the file that carries it.
+
+    Never copied into the manifest: a second copy of the fact is a copy that drifts,
+    and an audit comparing upstream against a stale copy reports "current" for a pin
+    that was bumped or reverted by hand. A pattern that stops matching is FAILED,
+    not skipped — a filter that cannot match reads the same as a clean result.
+    """
+    rel, pattern = pin.get("file"), pin.get("match")
+    if not rel or not pattern:
+        raise ToolError("manifest entry needs `file` and `match`")
+    try:
+        text = (root / rel).read_text()
+    except OSError as e:
+        raise ToolError(f"cannot read {rel}: {e}") from e
+    try:
+        m = re.search(pattern, text, re.M)
+    except re.error as e:
+        raise ToolError(f"`match` is not a valid regex: {e}") from e
+    if not m or not m.groupdict().get("v"):
+        raise ToolError(f"`match` found no version in {rel} — pattern drift? "
+                        f"(it needs a named group `v`)")
+    return m.group("v")
+
+
+def pin_releases(pin: dict, token: str | None
+                 ) -> tuple[dict[str, tuple[datetime, bool]], bool]:
+    """-> ({version: (published_at, is_prerelease)}, listing_is_complete).
+
+    `complete` decides what a missing version means. npm and PyPI list every version
+    ever published, so absence is a withdrawal. The GitHub list is a window of the
+    newest 100 releases, so absence there proves nothing and is asked again by tag.
+    """
+    src = pin.get("source")
+    rels: dict[str, tuple[datetime, bool]] = {}
+    if src == "github":
+        repo, prefix = pin["repo"], pin.get("tag_prefix", "")
+        status, data = http_json(f"{GITHUB_API}/repos/{repo}/releases?per_page=100", token)
+        if status != 200 or not isinstance(data, list):
+            raise ToolError(f"cannot list releases of github.com/{repo} (HTTP {status})")
+        for r in data:
+            tag = r.get("tag_name") or ""
+            if r.get("draft") or not r.get("published_at") or not tag.startswith(prefix):
+                continue
+            rels[tag[len(prefix):]] = (iso(r["published_at"]), bool(r.get("prerelease")))
+        return rels, False
+    if src == "npm":
+        pkg = pin["package"]
+        status, body = http_json(f"{NPM_REGISTRY}/{urllib.parse.quote(pkg, safe='@')}")
+        if status in (404, 410) or not isinstance(body, dict):
+            raise PinWithdrawn(f"npm package {pkg} no longer resolves (HTTP {status})")
+        times = body.get("time", {})
+        if "unpublished" in times:
+            raise PinWithdrawn(f"npm package {pkg} has been UNPUBLISHED")
+        for v, raw in times.items():
+            if v not in ("created", "modified"):
+                rels[v] = (iso(raw), "-" in v)
+        return rels, True
+    if src == "pypi":
+        pkg = pin["package"]
+        status, body = http_json(f"https://pypi.org/pypi/{pkg}/json")
+        if status in (404, 410) or not isinstance(body, dict):
+            raise PinWithdrawn(f"PyPI project {pkg} no longer resolves (HTTP {status})")
+        for v, files in body.get("releases", {}).items():
+            live = [f for f in files if not f.get("yanked")]
+            if live:   # a release with no live file is yanked or empty: not a candidate
+                rels[v] = (min(iso(f["upload_time_iso_8601"]) for f in live),
+                           re.search(r"[A-Za-z]", v) is not None)
+        return rels, True
+    raise ToolError(f"unknown source {src!r} (expected github, npm or pypi)")
+
+
+def check_pin(pin: dict, root: Path, manifest: dict, now: datetime,
+              token: str | None) -> tuple[str, str, str]:
+    """-> (category, name, detail) for one hand-bumped version pin.
+
+    The question is the one layer 2 cannot ask: not "is what the input ships old
+    enough" but "has upstream moved past what a human pinned, and has that newer
+    release cleared the bar". A pin never moves by itself, so a pin that is behind is
+    silent unless something reports it — that is this layer.
+
+    `hold = "<reason>"` marks a pin whose newer release exists but cannot be adopted
+    for a real technical reason (a toolchain too old, a lockstep coupling). It is
+    still reported, as a SKIP, so the reason stays in front of whoever reads the
+    audit, but it does not make the run red every week.
+    """
+    name = pin.get("name", "?")
+    try:
+        cur = pin_current_version(root, pin)
+        rels, complete = pin_releases(pin, token)
+    except PinWithdrawn as e:
+        return WITHDRAWN, name, str(e)
+    except ToolError as e:
+        return FAILED, name, str(e)
+
+    bar = pin.get("bar", "packages")
+    days = manifest["cooldown"][bar] if isinstance(bar, str) else bar
+    cutoff = now - timedelta(days=days)
+    prefix, allow_pre = pin.get("prefix", ""), pin.get("prereleases", False)
+
+    if cur not in rels:
+        if complete:
+            return WITHDRAWN, name, (f"{cur} is no longer published — withdrawn, or "
+                                     f"never published under this name")
+        # The GitHub window is only the newest 100; ask for exactly this tag.
+        repo, tag = pin["repo"], pin.get("tag_prefix", "") + cur
+        status, rel = http_json(f"{GITHUB_API}/repos/{repo}/releases/tags/"
+                                f"{urllib.parse.quote(tag)}", token)
+        if status in (404, 410) or not isinstance(rel, dict) or not rel.get("published_at"):
+            return WITHDRAWN, name, (f"no release under tag {tag} on github.com/{repo} — "
+                                     f"withdrawn, or never published under this name")
+        rels[cur] = (iso(rel["published_at"]), bool(rel.get("prerelease")))
+    when = rels[cur][0]
+
+    if when > cutoff:
+        return TOO_NEW, name, (f"pinned {cur} ({when:%Y-%m-%d}, {age_days(when, now):.1f}d) "
+                               f"is younger than the {days}d bar")
+
+    newer = {v: w for v, (w, pre) in rels.items()
+             if w > when and v != cur and v.startswith(prefix) and (allow_pre or not pre)}
+    cleared = {v: w for v, w in newer.items() if w <= cutoff}
+    waiting = sorted(((v, w) for v, w in newer.items() if w > cutoff), key=lambda x: x[1])
+
+    if cleared:
+        v, w = max(cleared.items(), key=lambda kv: kv[1])
+        detail = (f"{cur} -> {v} ({w:%Y-%m-%d}, {age_days(w, now):.1f}d, {days}d bar)")
+        if pin.get("hold"):
+            return PIN_HELD, name, f"{detail}; held: {pin['hold']}"
+        if pin.get("note"):
+            detail += f"; {pin['note']}"
+        return PIN_BEHIND, name, detail
+
+    detail = (f"{cur} ({when:%Y-%m-%d}, {age_days(when, now):.1f}d) is the newest "
+              f"release past the {days}d bar")
+    if waiting:
+        detail += "; newer but inside the bar: " + ", ".join(
+            f"{v} ({age_days(w, now):.1f}d)" for v, w in waiting[-3:])
+    return CURRENT, name, detail
+
+
 # ---------------------------------------------------------------------------- render
 
 LABEL = {
@@ -657,13 +806,14 @@ LABEL = {
     TOO_NEW: "TOO NEW — inside the cooldown",
     WITHDRAWN: "WITHDRAWN UPSTREAM",
     PIN_BEHIND: "PINNED — upstream published a newer version; review before bumping",
+    PIN_HELD: "held — a newer release exists but is deliberately not adopted",
     IMMUTABLE: "skipped — immutable pin",
     FROZEN: "skipped — frozen",
     UNSUPPORTED: "skipped — cannot be dated",
     FAILED: "ERROR",
 }
 ORDER = [WITHDRAWN, PIN_BEHIND, TOO_NEW, COOLED, CHANNEL, OK, CURRENT, HELD_NEWER,
-         IMMUTABLE, FROZEN, UNSUPPORTED, FAILED]
+         PIN_HELD, IMMUTABLE, FROZEN, UNSUPPORTED, FAILED]
 
 
 def render(title: str, results: list[tuple[str, str, str]]) -> dict[str, int]:
@@ -928,13 +1078,13 @@ def cmd_audit(args, manifest, now, token) -> int:
     findings = 0
     errors = 0
 
-    if not args.extensions_only:
+    if not args.extensions_only and not args.pins_only:
         results, _ = resolve_inputs(args, manifest, now, token, for_update=False)
         c = render("layer 1 — flake inputs", results)
         findings += sum(c.get(k, 0) for k in FINDING_CATEGORIES)
         errors += c.get(FAILED, 0)
 
-    if not args.inputs_only and not args.extensions_only:
+    if not args.inputs_only and not args.extensions_only and not args.pins_only:
         pkg_days = manifest.get("cooldown", {}).get("packages", 14)
         cutoff = now - timedelta(days=pkg_days)
         rows: list[tuple[str, str, str]] = []
@@ -983,7 +1133,7 @@ def cmd_audit(args, manifest, now, token) -> int:
         findings += sum(c.get(k, 0) for k in FINDING_CATEGORIES)
         errors += c.get(FAILED, 0)
 
-    if not args.inputs_only:
+    if not args.inputs_only and not args.pins_only:
         ext_days = manifest.get("cooldown", {}).get("extensions", 14)
         cutoff = now - timedelta(days=ext_days)
         declared = list(manifest.get("extensions", []))
@@ -1002,6 +1152,13 @@ def cmd_audit(args, manifest, now, token) -> int:
                        f"({ext_days}d bar, must still be published)", rows)
             findings += sum(c.get(k, 0) for k in FINDING_CATEGORIES)
             errors += c.get(FAILED, 0)
+
+    if not args.inputs_only and not args.extensions_only:
+        root = MANIFEST.parent.parent
+        rows = [check_pin(p, root, manifest, now, token) for p in manifest.get("pins", [])]
+        c = render("layer 4 — hand-bumped version pins (still behind upstream?)", rows)
+        findings += sum(c.get(k, 0) for k in FINDING_CATEGORIES)
+        errors += c.get(FAILED, 0)
 
     print(f"\n{'=' * 78}")
     if errors:
@@ -1216,11 +1373,13 @@ def main() -> int:
                     help="also move inputs BACKWARDS when the locked rev is newer than "
                          "the bar allows (default: report and leave alone)")
 
-    au = sub.add_parser("audit", help="report-only across all three layers")
+    au = sub.add_parser("audit", help="report-only across all four layers")
     au.add_argument("--inputs-only", action="store_true",
                     help="layer 1 only (no npm, GitHub-release or marketplace lookups)")
     au.add_argument("--extensions-only", action="store_true",
                     help="layer 3 only")
+    au.add_argument("--pins-only", action="store_true",
+                    help="layer 4 only: hand-bumped version pins behind upstream")
     au.add_argument("--extension", action="append", default=[], metavar="ID",
                     help="check this <namespace>.<name> instead of the manifest list")
     au.add_argument("--registry", default="open-vsx",

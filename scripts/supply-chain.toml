@@ -376,6 +376,135 @@ id = "sumneko.lua"
 registry = "vscode-marketplace"
 
 # ---------------------------------------------------------------------------------
+# Layer 4 — hand-bumped version pins. Nothing moves these: not `just update`, not the
+# cooldown walk. Without a report, a pin stays where it was set until someone happens to
+# look, which is how bitbucket-cli sat on a release 152 days old and IoskeleyMono on 2.0.0
+# while 2.2.0 had been out for two weeks (measured 2026-11-05).
+#
+# The audit asks, per pin: has upstream published a release that is NEWER than the
+# pinned one and has also cleared the bar? Yes -> PIN_BEHIND, a finding. A release
+# newer than the pin but still inside the bar is listed as "waiting", not a finding.
+#
+# The pinned version is NOT written here. `file` + `match` read it out of the file that
+# really carries it, so this list cannot drift from the code. `match` is a Python regex
+# with a named group `v`, applied with re.M; a pattern that stops matching is an ERROR,
+# never a silent "current".
+#
+#   source        github (`repo`, optional `tag_prefix`), npm or pypi (`package`)
+#   bar           a [cooldown] key ("inputs", "packages", ...) or a number of days;
+#                 default "packages"
+#   prefix        only consider versions starting with this, to stay inside a major
+#   prereleases   true where upstream ships only pre-releases (camoufox)
+#   note          shown with a PIN_BEHIND: what to read or run before bumping
+#   hold          the pin CANNOT follow upstream, for a real reason. Reported as a
+#                 SKIP with the reason, so it stays visible without a red run every
+#                 week. Remove the line when the reason is gone.
+#
+# Deliberately not covered: `nixos/nix` (modules/_files/linux-builder/linux-builder; a
+# bump only takes effect after `just linux-builder-destroy`), the Pulumi `~` pins in
+# infra/package.json (coupled to the plugins inside `pulumi-bin`, see docs/supply-chain.md),
+# the uv scripts (relative `exclude-newer = "30 days"` already holds them back), and
+# lucax88x.codeacejumper (its `pin` under [[extensions]] above).
+
+[[pins]]
+name = "yt-dlp-src"
+source = "github"
+repo = "yt-dlp/yt-dlp"
+file = "flake.nix"
+match = 'github:yt-dlp/yt-dlp/(?P<v>[^"]+)"'
+bar = "inputs"
+
+[[pins]]
+name = "agent-browser-src"
+source = "github"
+repo = "vercel-labs/agent-browser"
+tag_prefix = "v"
+file = "flake.nix"
+match = 'github:vercel-labs/agent-browser/v(?P<v>[^"]+)"'
+note = "re-read the open issue about project-local agent-browser.json (comment at the input in flake.nix), then `just agent-browser-hashes <v>`"
+
+[[pins]]
+name = "camoufox"
+source = "github"
+repo = "daijro/camoufox"
+tag_prefix = "v"
+prereleases = true
+file = "modules/camoufox.nix"
+match = '^\s+version = "(?P<v>[^"]+)";'
+note = "follow the 4-step bump in modules/camoufox.nix; the asset stamp differs from the tag"
+
+[[pins]]
+name = "mcp-remote"
+source = "npm"
+package = "mcp-remote"
+file = "modules/mcp-servers.nix"
+match = 'mcp-remote = "(?P<v>[^"]+)";'
+note = "never below 0.1.38; read the changelog, the jump may be large"
+
+[[pins]]
+name = "context7-mcp"
+source = "npm"
+package = "@upstash/context7-mcp"
+file = "modules/mcp-servers.nix"
+match = 'context7-mcp = "(?P<v>[^"]+)";'
+
+[[pins]]
+name = "bitbucket-cli"
+source = "github"
+repo = "gildas/bitbucket-cli"
+tag_prefix = "v"
+file = "modules/bitbucket-cli.nix"
+match = '^\s+version = "(?P<v>[^"]+)";'
+hold = "0.18.6 and later declare `go 1.27` in go.mod, nixpkgs-unstable ships Go 1.26.x; drop this line once `go.mod requires go >= 1.27` no longer fails the build"
+
+[[pins]]
+name = "IoskeleyMono Nerd Font"
+source = "github"
+repo = "ahatem/IoskeleyMono"
+tag_prefix = "v"
+file = "modules/macos.nix"
+match = '^\s+version = "(?P<v>[^"]+)";'
+note = "new fetchzip hash: nix store prefetch-file --json --unpack <zip url>"
+
+[[pins]]
+name = "mlx-whisper"
+source = "pypi"
+package = "mlx-whisper"
+file = "modules/voxscriber.nix"
+match = 'pname = "mlx-whisper";\s+version = "(?P<v>[^"]+)";'
+
+[[pins]]
+name = "voxscriber"
+source = "pypi"
+package = "voxscriber"
+file = "modules/voxscriber.nix"
+match = 'pname = "voxscriber";\s+version = "(?P<v>[^"]+)";'
+
+[[pins]]
+name = "ajv"
+source = "npm"
+package = "ajv"
+prefix = "8."
+file = "modules/ai/_files/skills/stream-deck/scripts/streamdeck_manifest_lib.ts"
+match = 'npm:ajv@(?P<v>[^"]+)"'
+
+[[pins]]
+name = "ajv-formats"
+source = "npm"
+package = "ajv-formats"
+prefix = "2."
+file = "modules/ai/_files/skills/stream-deck/scripts/streamdeck_manifest_lib.ts"
+match = 'npm:ajv-formats@(?P<v>[^"]+)"'
+
+[[pins]]
+name = "playwright (slidev)"
+source = "npm"
+package = "playwright"
+file = "modules/ai/_files/skills/slidev/scripts/check-slide-overflow.sh"
+match = '^PW_VERSION="(?P<v>[^"]+)"'
+hold = "must equal playwright-driver in nixpkgs (browsers are resolved by exact revision); move it together with NIXPKGS_REF and smoke.ts of isometric-explainer"
+
+# ---------------------------------------------------------------------------------
 # modules/devdocs.nix's 39 DevDocs (freeCodeCamp/devdocs) tarballs are
 # DELIBERATELY not a fourth layer here.
 #
