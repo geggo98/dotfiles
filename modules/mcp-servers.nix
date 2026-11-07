@@ -15,7 +15,7 @@ in
       # for known-bad versions. mcp-remote < 0.1.38 has runtime
       # regressions and supply-chain risk and must not be used.
       npmVersions = {
-        mcp-remote = "0.1.38";
+        mcp-remote = "0.15.2";
         context7-mcp = "4.4.4";
       };
 
