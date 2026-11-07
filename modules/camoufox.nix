@@ -13,9 +13,9 @@
       #      asset filenames listed on the release page.
       #   4. Set the affected hashes to `lib.fakeHash`, run `just build`, read
       #      the "got: sha256-..." lines, paste them back.
-      version = "150.0.2-beta.25";
-      assetVersion = "150.0.2-alpha.25"; # mac.arm64 / mac.x86_64 asset stamp
-      assetVersionLinux = "150.0.2-alpha.26"; # lin.x86_64 asset stamp
+      version = "158.0-beta.40";
+      assetVersion = "158.0-beta.40"; # mac.arm64 / mac.x86_64 asset stamp (equals the tag since 158)
+      assetVersionLinux = "158.0-beta.40"; # lin.x86_64 asset stamp
 
       sys = pkgs.stdenv.hostPlatform.system;
 
@@ -25,7 +25,7 @@
       asset =
         if sys == "aarch64-darwin" then {
           file = "camoufox-${assetVersion}-mac.arm64.zip";
-          hash = "sha256-yxAIUddk5hWtfjm4TGD0SL1NKKUjoQ/oKB7tbcBIFSE=";
+          hash = "sha256-aIhB+JI2w5R2uAs4wT0pZUs6XHFHoEqWBQq3ME6SI+c=";
           executable = "Camoufox.app/Contents/MacOS/camoufox";
         }
         else if sys == "x86_64-darwin" then {
