@@ -16,7 +16,7 @@ in
       # regressions and supply-chain risk and must not be used.
       npmVersions = {
         mcp-remote = "0.1.38";
-        context7-mcp = "3.2.1";
+        context7-mcp = "4.4.4";
       };
 
       mcp-atlassian = (pkgs.writeShellApplication {
