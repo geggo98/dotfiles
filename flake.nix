@@ -157,23 +157,21 @@
     # Pinned by tag, not rev: github archive URLs are ambiguous when a repo has a
     # branch and tag of the same name (llm-agents hit this in 62903bf).
     #
-    # AT 0.36.0 (2026-09-01), NOT 0.37.x (both 2026-09-08). This is a tag pin, so
-    # `just update`'s cooldown does not move it and the bar is applied here by hand:
-    # `supply-chain.py release vercel-labs/agent-browser` picked 0.36.0 at 10.6 days
-    # and declined 0.37.0/0.37.1 at 3.1-3.8 days. Asset names are unchanged since
-    # 0.33.x, so the bump was the tag plus the four hashes in
-    # modules/agent-browser.nix, cross-checked against the sha256 digests GitHub
-    # records on the release assets.
+    # AT 0.39.3 (2026-10-26, 12 d), 2 days short of the 14 d bar, ON PURPOSE: 0.39.3 is
+    # the first release that closes vercel-labs/agent-browser#1679 (the CLI auto-
+    # discovered a project-local `agent-browser.json` and honoured `executablePath`
+    # and `plugins` from it, so a repository that merely contained such a file ran
+    # code as you). Fixed by #2180, merged 2026-10-23, in 0.39.3 and not in 0.39.2.
+    # The same release carries four more hardening fixes (MCP tool arguments can no
+    # longer override access settings #2181, inspect WebSocket origin check #2182,
+    # signals only after a process identity check #2183, auth key overwrite #2178).
+    # Metadata checked before the fetch: the four asset sha256 digests GitHub records
+    # on the release equal the hashes in modules/agent-browser.nix. This is a tag pin,
+    # so `just update`'s cooldown does not move it; `supply-chain.py release
+    # vercel-labs/agent-browser` still names 0.39.2 until 2026-11-09.
     #
-    # THE OPEN ISSUE, unchanged: vercel-labs/agent-browser#1679 — the CLI
-    # auto-discovers a project-local `agent-browser.json` from its working directory
-    # and honours `executablePath` and `plugins` from it. A repository that merely
-    # *contains* such a file therefore runs code as you the moment you invoke
-    # agent-browser inside that checkout. The fix, PR #1702, was still open on
-    # 2026-09-11 and is in none of 0.34.0..0.37.1; the exposure is the same as at
-    # 0.33.0, which this repo shipped before.
-    #   -> Until #1702 lands, do not run agent-browser with cwd inside an untrusted
-    #      checkout. Re-read the issue before the next bump.
+    # Verified after the bump: with a `agent-browser.json` in the working directory
+    # whose `executablePath` points at a marker script, the script does not run.
     #
     # WHAT ARRIVED between 0.33.2 and 0.36.0, in the order it matters here:
     #   0.36.0  experimental WebMCP, ON by default for locally managed Chrome: a page
@@ -193,7 +191,7 @@
     #           closes the browser and exits; AGENT_BROWSER_IDLE_TIMEOUT_MS=0 restores
     #           the always-persist daemon for a long-running skill workflow.
     agent-browser-src = {
-      url = "github:vercel-labs/agent-browser/v0.36.0";
+      url = "github:vercel-labs/agent-browser/v0.39.3";
       flake = false;
     };
 

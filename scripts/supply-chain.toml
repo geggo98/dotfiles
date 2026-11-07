@@ -421,7 +421,7 @@ repo = "vercel-labs/agent-browser"
 tag_prefix = "v"
 file = "flake.nix"
 match = 'github:vercel-labs/agent-browser/v(?P<v>[^"]+)"'
-note = "re-read the open issue about project-local agent-browser.json (comment at the input in flake.nix), then `just agent-browser-hashes <v>`"
+note = "then `just agent-browser-hashes <v>` and compare with the digests GitHub records on the release assets"
 
 [[pins]]
 name = "camoufox"
