@@ -289,82 +289,97 @@ let
 
   # Everything with an SDK, a second editor, or a desktop assumption behind it.
   # This is the part a server does not get.
-  workstation = { ... }: {
-    programs.helix = {
-      enable = true;
-      settings = {
-        editor = {
-          bufferline = "multiple";
-        };
-      };
-    };
-
-    programs.nvf.settings.vim = {
-      languages = {
-        clang.enable = true;
-        css.enable = true;
-        html.enable = true;
-        sql.enable = true;
-        # Moved out of `common` on measurement, not on principle: `lua` drags
-        # luacheck -> luarocks -> cmake (61 MiB) and `json` drags
-        # vscode-langservers-extracted -> nodejs-slim (84 MiB). The union with
-        # `common` is unchanged, so the workstation is unaffected.
-        lua.enable = true;
-        json.enable = true;
-        java.enable = true;
-        kotlin.enable = true;
-        # nvf 0.9 renamed `languages.ts` → `languages.typescript` and split
-        # JSX/TSX out into the separate `languages.tsx` module.
-        typescript.enable = true;
-        tsx.enable = true;
-        go.enable = true;
-        zig.enable = true;
-        python.enable = true;
-        typst.enable = true;
-        rust = {
-          enable = true;
-          extensions.crates-nvim.enable = true;
-        };
-        scala.enable = true;
-      };
-
-      # nvf 0.9 moved `lsp.harper-ls` → `lsp.presets.harper`. ~112 MiB of
-      # grammar model, which is not what a server is for.
-      lsp.presets.harper.enable = true;
-
-      utility = {
-        leetcode-nvim.enable = true;
-        images.img-clip.enable = true;
-      };
-
-      notes.obsidian = {
+  workstation = { pkgs, ... }:
+    let
+      unstable = inputs.nixpkgs-unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system};
+    in
+    {
+      programs.helix = {
         enable = true;
-        setupOpts = {
-          # Opt out of the `ObsidianBacklinks`-style commands ahead of
-          # obsidian.nvim 4.0, which deletes them. They default to on, and
-          # 3.16.4 pays for that with a vim.notify_once deprecation on the
-          # first markdown buffer of every session
-          # (lua/obsidian/config/init.lua:332). Keeping the commands *and*
-          # silencing the warning is not on offer — the warning is gated on
-          # exactly this flag. `:Obsidian <subcommand>` is unaffected and is
-          # the form upstream documents; nothing here binds the old names.
-          legacy_commands = false;
-
-          # obsidian.nvim (obsidian-nvim/obsidian.nvim fork) runs each
-          # workspace path through vim.fs.normalize, which expands ~ and
-          # env vars — so this stays portable across both Macs.
-          workspaces = [
-            {
-              name = "work_notes";
-              path = "~/Documents/Obsidian/work_notes";
-            }
-          ];
+        settings = {
+          editor = {
+            bufferline = "multiple";
+          };
         };
       };
 
-      assistant.avante-nvim.enable = true;
+      programs.nvf.settings.vim = {
+        languages = {
+          clang.enable = true;
+          css.enable = true;
+          html.enable = true;
+          sql.enable = true;
+          # Moved out of `common` on measurement, not on principle: `lua` drags
+          # luacheck -> luarocks -> cmake (61 MiB) and `json` drags
+          # vscode-langservers-extracted -> nodejs-slim (84 MiB). The union with
+          # `common` is unchanged, so the workstation is unaffected.
+          lua.enable = true;
+          json.enable = true;
+          java.enable = true;
+          kotlin.enable = true;
+          # nvf 0.9 renamed `languages.ts` → `languages.typescript` and split
+          # JSX/TSX out into the separate `languages.tsx` module.
+          typescript.enable = true;
+          tsx.enable = true;
+          go.enable = true;
+          zig.enable = true;
+          python.enable = true;
+          typst.enable = true;
+          rust = {
+            enable = true;
+            extensions.crates-nvim.enable = true;
+          };
+          scala.enable = true;
+        };
+
+        # nvf 0.9 moved `lsp.harper-ls` → `lsp.presets.harper`. ~112 MiB of
+        # grammar model, which is not what a server is for.
+        lsp.presets.harper.enable = true;
+
+        utility = {
+          leetcode-nvim.enable = true;
+          images.img-clip.enable = true;
+        };
+
+        notes.obsidian = {
+          enable = true;
+          setupOpts = {
+            # Opt out of the `ObsidianBacklinks`-style commands ahead of
+            # obsidian.nvim 4.0, which deletes them. They default to on, and
+            # 3.16.4 pays for that with a vim.notify_once deprecation on the
+            # first markdown buffer of every session
+            # (lua/obsidian/config/init.lua:332). Keeping the commands *and*
+            # silencing the warning is not on offer — the warning is gated on
+            # exactly this flag. `:Obsidian <subcommand>` is unaffected and is
+            # the form upstream documents; nothing here binds the old names.
+            legacy_commands = false;
+
+            # obsidian.nvim (obsidian-nvim/obsidian.nvim fork) runs each
+            # workspace path through vim.fs.normalize, which expands ~ and
+            # env vars — so this stays portable across both Macs.
+            workspaces = [
+              {
+                name = "work_notes";
+                path = "~/Documents/Obsidian/work_notes";
+              }
+            ];
+          };
+        };
+
+        assistant.avante-nvim.enable = true;
+
+        # nvf's avante.nvim pin (421209b) requires `mega.cmdparse`
+        # (lua/avante/commands.lua), but nvf's avante module does not ship it. Measured
+        # after the 0ae8788 bump, on every DeferredUIEnter:
+        #   module 'mega.cmdparse' not found: no field package.preload['mega.cmdparse']
+        # Only nixpkgs-unstable has these two plugins. Drop this once nvf's avante
+        # module brings the dependency itself.
+        startPlugins = [
+          unstable.vimPlugins.mega-cmdparse
+          unstable.vimPlugins.mega-logging
+        ];
+      };
     };
-  };
 
   # Server-only additions. Nothing here reaches a workstation, so this attrset
   # is the safe place to add things the servers want and the Macs do not.
