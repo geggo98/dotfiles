@@ -211,9 +211,12 @@ jobs:
           in="$RUNNER_TEMP/in"
           title="chore(flake): Weekly update under the cooldown$(cat "$in/title-suffix.txt")"
           number=$(gh pr list --head "$BRANCH" --state open --json number --jq '.[0].number // empty')
+          # REST, not `gh pr create`/`gh pr edit`: those go through GraphQL, whose refusal
+          # is the bare "Resource not accessible by integration". REST prints GitHub's
+          # own reason (message + documentation_url) on stderr.
           if [ -n "$number" ]; then
-            gh pr edit "$number" --title "$title" --body-file "$in/body.md"
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/pulls/$number" -f title="$title" -F body=@"$in/body.md" --silent
             echo "refreshed PR #$number"
           else
-            gh pr create --head "$BRANCH" --base "$DEFAULT_BRANCH" --title "$title" --body-file "$in/body.md"
+            gh api -X POST "repos/$GITHUB_REPOSITORY/pulls" -f title="$title" -f head="$BRANCH" -f base="$DEFAULT_BRANCH" -F body=@"$in/body.md" --jq '.html_url'
           fi
