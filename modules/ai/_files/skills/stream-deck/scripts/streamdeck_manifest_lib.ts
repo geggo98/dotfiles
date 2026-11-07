@@ -1,7 +1,7 @@
 #!/usr/bin/env -S deno run --allow-env
 // Library functions used by tools/streamdeck_manifest.ts
 
-import Ajv, { type ErrorObject } from "npm:ajv@8.12.0";
+import Ajv, { type ErrorObject } from "npm:ajv@8.20.0";
 import addFormats from "npm:ajv-formats@2.1.1";
 
 import { parse as parseJsonc } from "jsr:@std/jsonc@1";
