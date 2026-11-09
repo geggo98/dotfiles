@@ -92,7 +92,7 @@
     #   nix eval --raw .#inputs.brew-src.rev   (or read flake.lock)
     # Reading the label instead invites "fixing" a pin that was never wrong.
     brew-src = {
-      url = "github:Homebrew/brew/7.0.11";
+      url = "github:Homebrew/brew/7.0.12";
       flake = false;
     };
 
