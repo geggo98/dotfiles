@@ -3,10 +3,11 @@
   flake.modules.homeManager.bitbucket-cli = { pkgs, lib, ... }:
     let
       unstable = inputs.nixpkgs-unstable.legacyPackages.${pkgs.stdenv.hostPlatform.system};
-      # Newest tag that builds with nixpkgs-unstable's Go (1.26.x): v0.18.6 and later
-      # declare `go 1.27` in go.mod ("go.mod requires go >= 1.27"). Re-check before bumping.
-      version = "0.18.5";
-      rev = "82e360722844f1ff9fcef34d3bdfb33a8b8d2cce"; # tag v0.18.5
+      # v0.18.7 is the first tag that recognizes `ssh.bitbucket.org` remotes (upstream #136);
+      # 0.18.5 fails with "Argument repository is missing" on them. Needs Go 1.27
+      # (go.mod), which nixpkgs-unstable ships by default since the 2026-11 lock.
+      version = "0.18.7";
+      rev = "42615311d6c766203bf57f5aea55f23286cd58a3"; # tag v0.18.7
       bitbucket-cli = unstable.buildGoModule {
         pname = "bitbucket-cli";
         inherit version;
@@ -15,10 +16,10 @@
           owner = "gildas";
           repo = "bitbucket-cli";
           inherit rev;
-          hash = "sha256-u61dRrNzLO9WvPytpCZ06ojz+2s5l0gEsO0M+T1BUGs=";
+          hash = "sha256-HJCaZ5CQaKnnwZkmHGLuUotCTNQVi/pwaVYj2aGkRk8=";
         };
 
-        vendorHash = "sha256-p4jlcxvOslGOXk58X3dJ6/WiFOEjCACnx5pwsvH0o28=";
+        vendorHash = "sha256-vTW6A6YkYXzE+Smts8lmLR/ghDGYwhh/V/yW7SxzU10=";
 
         ldflags = [
           "-s"
