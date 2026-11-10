@@ -30,9 +30,10 @@ in
           load_from_secret JIRA_URL                  jira_url
           load_from_secret JIRA_USERNAME             jira_username
           load_from_secret JIRA_API_TOKEN            jira_api_token
+          load_from_secret JIRA_PROJECTS_FILTER      jira_projects_filter
           require_secrets \
             CONFLUENCE_URL CONFLUENCE_USERNAME CONFLUENCE_PERSONAL_TOKEN \
-            JIRA_URL JIRA_USERNAME JIRA_API_TOKEN
+            JIRA_URL JIRA_USERNAME JIRA_API_TOKEN JIRA_PROJECTS_FILTER
           IMAGE="''${MCP_ATLASSIAN_IMAGE:-ghcr.io/sooperset/mcp-atlassian:latest}"
           args=(
             run -i --rm
@@ -43,7 +44,7 @@ in
             -e JIRA_USERNAME
             -e JIRA_API_TOKEN
             -e "ENABLED_TOOLS=jira_get_issue,jira_get_sprint_issues,jira_search,jira_create_issue,jira_update_issue,jira_transition_issue,jira_add_comment,confluence_get_page,confluence_get_page_children,confluence_get_labels,confluence_search"
-            -e "JIRA_PROJECTS_FILTER=VUKFZIF,VUKFZOPS,VUKFZCORE"
+            -e JIRA_PROJECTS_FILTER
             "$IMAGE"
           )
           exec docker "''${args[@]}" "$@"

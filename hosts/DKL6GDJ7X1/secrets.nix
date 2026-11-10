@@ -27,6 +27,8 @@
   jira_url = { };
   jira_username = { };
   jira_api_token = { };
+  jira_project_key = { };
+  jira_projects_filter = { };
   confluence_url = { };
   confluence_username = { };
   confluence_personal_token = { };

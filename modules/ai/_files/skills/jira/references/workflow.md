@@ -1,11 +1,11 @@
-# VUKFZIF — Workflow, Transition IDs, Conventions
+# PROJ — Workflow, Transition IDs, Conventions
 
 Encapsulated project knowledge for the `jira` skill. Captured by read-only discovery
 against the `/transitions` endpoint (snapshot: 2026-06-22, ticket JIRA-3052).
 
 ## Statuses & transition IDs
 
-The VUKFZIF workflow uses **global "Any status" transitions** (marked ⚡ "Any" in the
+The PROJ workflow uses **global "Any status" transitions** (marked ⚡ "Any" in the
 workflow editor): every transition is named exactly like its target status, **none** has
 a screen or required field, and **the same transition id is reachable from every status**.
 That is precisely what makes arbitrary status changes trivial — one id per target status
@@ -36,7 +36,7 @@ list it. The skill therefore does not offer it.
 
 ## Issue types & hierarchy (measured 2026-09-25)
 
-VUKFZIF has three issue types, no sub-tasks:
+PROJ has three issue types, no sub-tasks:
 
 | Type | hierarchyLevel |
 | --- | --- |
@@ -82,7 +82,7 @@ reorder anything:
   generic `[Security]`. One ticket per repo.
 - **Description:** affected packages, severity, advisory IDs with links; the last line is
   the attribution line (in wiki-markup for REST v2).
-- **Project key:** `VUKFZIF` (client default `JIRA_PROJECT_KEY`).
+- **Project key:** `PROJ` (client default: env `JIRA_PROJECT_KEY`, else file `jira_project_key`; `PROJ` is a placeholder).
 
 ## Attachments & embedding (REST v2)
 

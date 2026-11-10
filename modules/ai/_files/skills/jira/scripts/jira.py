@@ -34,6 +34,7 @@ environment variable is a deliberate manual override.
   JIRA_URL        | jira_url            (required; no built-in default)
   JIRA_USERNAME   | jira_username
   JIRA_API_TOKEN  | jira_api_token
+  JIRA_PROJECT_KEY | jira_project_key   (create only; --project overrides)
 Auth is HTTP Basic ("$JIRA_USERNAME:$JIRA_API_TOKEN") against the Jira site. httpx
 puts it in a header, so the token never reaches the process argv.
 
@@ -1879,7 +1880,14 @@ def cmd_create(ctx: Ctx, args: list[str]) -> None:
         text_flag="--description",
     )
     typ = typ or "Task"
-    project = project or os.environ.get("JIRA_PROJECT_KEY", "VUKFZIF")
+    # ONE env name, then ONE file; no built-in default (the real key is not in the repo).
+    project = project or _resolve(["JIRA_PROJECT_KEY"], ["jira_project_key"])
+    if not project:
+        raise SkillError(
+            "create needs a project: pass --project, set JIRA_PROJECT_KEY, "
+            f"or place the file jira_project_key in: {_secrets_dir()}",
+            2,
+        )
     fields: dict[str, Any] = {"project": {"key": project}, "issuetype": {"name": typ}, "summary": summary}
     if desc:
         fields["description"] = desc
@@ -2575,7 +2583,7 @@ CREDENTIALS (ONE env name overrides ONE file; files are the default source):
   JIRA_API_TOKEN | jira_api_token
 
 ENVIRONMENT:
-  JIRA_PROJECT_KEY        default project for create   (default: VUKFZIF)
+  JIRA_PROJECT_KEY | jira_project_key   default project for create (no built-in default)
   JIRA_OUTPUT_MAX_BYTES   spill output > N bytes to a tempfile (default: 32768)
   JIRA_UPLOAD_MAX_TIME    upload timeout in seconds     (default: 300)
   JIRA_USER_CACHE_TTL     user-cache TTL in seconds     (default: 86400)

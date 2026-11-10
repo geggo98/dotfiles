@@ -36,6 +36,7 @@ echo "mock on $BASE"
 export JIRA_URL="$BASE"
 export JIRA_USERNAME="test@example.com"
 export JIRA_API_TOKEN="secret-token"
+export JIRA_PROJECT_KEY="PROJ"
 
 run(){ "$CLIENT" "$@"; }
 count(){ grep -c "$1" "$REQLOG" 2>/dev/null || true; }
@@ -47,7 +48,7 @@ run get JIRA-1 >/dev/null 2>&1 && ok "get (read)" || no "get failed"
 run status JIRA-1 >/dev/null 2>&1 && ok "status (read)" || no "status failed"
 run transitions JIRA-1 >/dev/null 2>&1 && ok "transitions (read)" || no "transitions failed"
 run comments JIRA-1 >/dev/null 2>&1 && ok "comments (read)" || no "comments failed"
-run search 'project = VUKFZIF' >/dev/null 2>&1 && ok "search (read)" || no "search failed"
+run search 'project = PROJ' >/dev/null 2>&1 && ok "search (read)" || no "search failed"
 
 echo "== test 2: write gating (comment) =="
 before="$(count 'POST /rest/api/2/issue/JIRA-1/comment')"
@@ -130,6 +131,12 @@ run --write create --summary S6 >/dev/null 2>&1 && ok "create without a descript
 # stdin is a pipe but no '-' was asked for -> it must be ignored, never read
 k="$(printf 'MUST-NOT-APPEAR' | run --write create --summary S7 2>/dev/null)"
 [[ -z "$(run description "$k" 2>/dev/null)" ]] && ok "create ignores an unrequested pipe" || no "create read stdin unasked"
+
+# no project anywhere (no env, no file, no --project): refuse before POSTing
+b="$(count 'POST /rest/api/2/issue$')"
+err="$(env -u JIRA_PROJECT_KEY "$CLIENT" --write create --summary S6b 2>&1 >/dev/null)"; rc=$?
+{ [[ $rc -eq 2 ]] && grep -q jira_project_key <<<"$err" && [[ "$b" == "$(count 'POST /rest/api/2/issue$')" ]]; } \
+  && ok "create without a project is refused, nothing POSTed" || no "missing project not rejected (rc=$rc)"
 
 echo "== test 7: conflicting / malformed create arguments =="
 b="$(count 'POST /rest/api/2/issue$')"

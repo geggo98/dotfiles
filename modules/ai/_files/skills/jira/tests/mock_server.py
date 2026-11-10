@@ -376,7 +376,7 @@ class Handler(BaseHTTPRequestHandler):
             jql = (q.get("jql") or [""])[0]
             # Only the one clause `epic`/`search` actually send is understood — this is a
             # mock, not a JQL parser. `parent = KEY` narrows; anything else lists everyone
-            # (matches the existing 'project = VUKFZIF' callers, which want all issues).
+            # (matches the existing 'project = PROJ' callers, which want all issues).
             pm = re.search(r"parent\s*=\s*(\S+)", jql)
             if pm:
                 keys = [k for k, it in STATE["issue"].items() if it.get("parent") == pm.group(1)]
@@ -455,7 +455,7 @@ class Handler(BaseHTTPRequestHandler):
                     return self._send(400, {"errorMessages": [f"no such parent: {parent_key}"]})
             with LOCK:
                 STATE["next_issue_id"] += 1
-                key = f"VUKFZIF-{STATE['next_issue_id']}"
+                key = f"PROJ-{STATE['next_issue_id']}"
             STATE["issue"][key] = {
                 "summary": fields.get("summary", ""),
                 "status": "To Do",
