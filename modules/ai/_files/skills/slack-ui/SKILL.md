@@ -2,7 +2,7 @@
 name: slack-ui
 description: "Interact with Slack workspaces via browser automation: check unread channels, navigate the sidebar, send messages, search conversations, extract data from messages and threads. Triggers: 'check my Slack', 'what channels have unreads', 'send a message to', 'search Slack for', 'find who said'. Connects to an existing Slack browser tab or Slack desktop (via electron-ui) on port 9222."
 argument-hint: "<slack task>"
-allowed-tools: Read(references/*) Read(templates/*) Bash(./scripts/slack-ui.sh *) Bash(zsh *) Skill(web-browser) Skill(electron-ui) Read
+allowed-tools: Read(references/*) Read(templates/*) Bash(./scripts/slack-ui.sh *) Bash(zsh *) Skill(web-browser) Skill(electron-ui) Skill(technical-writing) Read
 dependencies: "agent-browser, gtimeout"
 ---
 
@@ -76,6 +76,14 @@ agent-browser snapshot -i
 agent-browser click @e21        # Ref for "More unreads"
 agent-browser screenshot slack-unreads.png
 ```
+
+## Writing Messages
+
+A message you send is read by people. Compose it with
+`Skill(technical-writing)`: main point first, short, in the language the channel
+already uses. An Opus- or Sol-class model drafts it; on any other model,
+delegate the draft with a short brief (see "Which Model Writes" in
+`technical-writing`) and send the returned text unchanged.
 
 ## Common Tasks
 

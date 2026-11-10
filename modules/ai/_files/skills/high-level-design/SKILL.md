@@ -21,6 +21,8 @@ Class and method design, configuration and step-by-step implementation do not be
 > high-level design is read to decide whether the approach is sound, so it starts with
 > a TL;DR. A diagram that does not render counts as not delivered.
 > Match the language of the surrounding documentation (German or English).
+> An Opus- or Sol-class model drafts the prose; on any other model, delegate it
+> with a short brief (see "Which Model Writes" in `technical-writing`).
 
 Start from `references/template.md`. Delete every chapter that has nothing to say.
 

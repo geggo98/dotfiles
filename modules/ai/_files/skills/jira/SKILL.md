@@ -69,7 +69,7 @@ $J status JIRA-3052                      # current status name only
 $J transitions JIRA-3052                 # available transitions (id, target, name)
 $J comments JIRA-3052 --max 50           # newest comments first (idempotency pre-check)
 $J comment-get JIRA-3052 121771          # one comment's raw body (read side of comment-edit)
-$J search 'project = VUKFZIF AND status = "In QA"' --max 20   # JQL search
+$J search 'project = PROJ AND status = "In QA"' --max 20   # JQL search
 $J links JIRA-3052                       # issue links: id, relation, key, status, summary
 $J epic JIRA-3000                        # an Epic's children, dependency-sorted (see below)
 $J epic JIRA-3000 --format json --open   # JSON, done children dropped from list and order
@@ -81,7 +81,8 @@ $J undo --list --issue JIRA-3052         # list undoable journal entries
 
 # --- write (need --write) ---
 # Ticket summaries, descriptions and comments are prose that other people read:
-# write them with Skill(technical-writing) — see "Writing the prose" below.
+# write them with Skill(technical-writing), drafted by an Opus/Sol-class model —
+# see "Writing the prose" below.
 $J --write transition JIRA-3052 "In Code Review"   # any status, by name, idempotent
 $J --write transition JIRA-3052 61                  # or by transition id
 printf '%s' "<wiki body>" | $J --write comment JIRA-3052 -   # body via stdin (no escaping)
@@ -139,7 +140,7 @@ $J --write undo --id 42                                 # revert a specific jour
 - **`comments`** shows the newest `--max` (default 50) and warns on stderr when the ticket
   has more (`Showing newest N of M …`) — raise `--max` before trusting a negative
   idempotency check on a long-history ticket.
-- **`create`** defaults to project `$JIRA_PROJECT_KEY` (default `VUKFZIF`) and prints the new
+- **`create`** defaults to project `$JIRA_PROJECT_KEY` (file `jira_project_key`) and prints the new
   key on stdout; the sizes it actually sent go to stderr (`summary: 37 chars, description:
   1183 chars`). Check that line — a description of `1 char` after a long heredoc means the
   body never arrived. Its description comes from exactly one of `--description TEXT`,
@@ -300,7 +301,7 @@ Exit codes: `0` ok, `1` bad args / gating refusal, `2` missing prereq/credential
 - `describe` **replaces** the description (journaled for undo). Deletes require the
   explicit `--dangerous` flag and are journaled (with bytes, for attachments).
 
-## Workflow statuses (VUKFZIF)
+## Workflow statuses (project `PROJ`)
 
 Global "Any status" transitions — reachable from **every** status, transition name equals
 the target status. Runtime source of truth is the `/transitions` endpoint; the id table is
@@ -326,6 +327,11 @@ Two reasons it matters more here than in most places:
 
 It covers German and English: match the language the ticket is already in
 rather than switching.
+
+**Which model writes:** an Opus- or Sol-class model drafts the text. On any other
+model, delegate the draft with a short brief instead of writing it yourself; see
+"Which Model Writes" in `technical-writing`. Post the returned draft with
+`--file`.
 
 ## Related skills
 

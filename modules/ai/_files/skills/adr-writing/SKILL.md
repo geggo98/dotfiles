@@ -11,7 +11,9 @@ Architecture Decision Records document significant architectural choices.
 Core principle: Explain why you decided, not how you'll implement.
 
 > **Write the prose with `Skill(technical-writing)`, and load it before you
-> start rather than after.** An ADR is usually read once, by someone deciding
+> start rather than after.** An Opus- or Sol-class model drafts the ADR; on any
+> other model, delegate it with a short brief (see "Which Model Writes" in
+> `technical-writing`). An ADR is usually read once, by someone deciding
 > whether the decision concerns them — so it stands or falls on its opening,
 > which is exactly what that skill's TL;DR-first rule is for. The Y-statement
 > below is already a TL;DR by construction; it only pays off if the words

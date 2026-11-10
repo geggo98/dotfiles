@@ -2,7 +2,8 @@
 
 The copy is half the product. The animation earns attention; the writing spends
 it. A beautiful explainer with vague captions teaches nothing. Write it with
-`Skill(technical-writing)`.
+`Skill(technical-writing)`, drafted by an Opus- or Sol-class model; on any other
+model, delegate it (see "Which Model Writes" in `technical-writing`).
 
 ## Three fields per district
 

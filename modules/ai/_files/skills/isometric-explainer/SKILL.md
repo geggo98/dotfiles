@@ -60,7 +60,9 @@ saver with captions.
 3. **Publish a fidelity ledger.** Say exactly what is computed, what is scaled
    down, what is assumed, and what is faked — in the About modal *and* the
    README. Half the educational value is the reader knowing which numbers to
-   trust. Write it with `Skill(technical-writing)`. See `references/fidelity.md`.
+   trust. Write it with `Skill(technical-writing)`, drafted by an Opus- or
+   Sol-class model (delegate on any other; see `references/narration.md`). See
+   `references/fidelity.md`.
 4. **Pace it for reading, not watching.** The first visit to a station stops for
    as long as its write-up takes to read. Later visits get a beat. The reader
    never has to pause to keep up. See `references/pacing.md`.

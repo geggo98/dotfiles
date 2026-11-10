@@ -121,6 +121,11 @@ When **you (the agent) create a PR via `create`** (or replace its description vi
 > diff from the description alone. Load it before composing, not after:
 > rewriting a finished description into a summary-first one is more work than
 > writing it that way.
+>
+> **An Opus- or Sol-class model drafts it.** On any other model, delegate the
+> draft with a short brief (see "Which Model Writes" in `technical-writing`)
+> instead of writing it yourself. Name the attribution footer and, if the user
+> agreed, the quoted-prompt block as required parts in that brief.
 
 **Attribution footer (on by default, opt-out).** Make the **very last line** of
 the description a single footer line: a robot emoji plus a note that the PR was
@@ -135,7 +140,7 @@ user asks you to.
 **No other AI attribution.** This footer is the *only* provenance line. Do **not**
 add `Co-Authored-By: Claude`, `Generated with Claude Code`, or any other AI/model
 byline anywhere in the PR description (commits are already covered by the global
-`includeCoAuthoredBy = false` Claude Code setting).
+`attribution.commit = ""` Claude Code setting).
 
 **Original prompt as reviewer reference (off by default — ask first).**
 **Before** creating the PR, ask the user whether the original prompt that
@@ -187,7 +192,9 @@ Clarifications:
 > `Skill(technical-writing)` for anything you post here. The skill names review
 > comments explicitly, and its TL;DR-first rule applies to any comment long
 > enough to have a point buried in it. It covers German and English, so match
-> the thread's language rather than switching to English.
+> the thread's language rather than switching to English. The same model rule
+> applies: an Opus- or Sol-class model drafts the text, others delegate it
+> (see "Which Model Writes" in `technical-writing`).
 
 ```bash
 # All comments on a PR — JSON filtered to {id, content, inline}

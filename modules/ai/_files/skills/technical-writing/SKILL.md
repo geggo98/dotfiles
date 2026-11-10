@@ -1,6 +1,6 @@
 ---
 name: technical-writing
-description: "Use when writing documentation, commit messages, error text, explanations, reports, or summaries. Applies especially to Jira tickets, pull request descriptions, and review comments: always start these with a TL;DR summary. Combines Strunk, ASD-STE100 (Simplified Technical English), and ISO 24495-1 (plain language), for English and German text. Triggers: writing human-readable content, verbose text, unclear explanations, Jira tickets, pull requests, review comments, AI-sounding text, unslop."
+description: "Use when writing documentation, commit messages, error text, explanations, reports, or summaries. Applies especially to Jira tickets, pull request descriptions, and review comments: always start these with a TL;DR summary. Combines Strunk, ASD-STE100 (Simplified Technical English), and ISO 24495-1 (plain language), for English and German text. Text for people is drafted by an Opus- or Sol-class model (see "Which Model Writes"). Triggers: writing human-readable content, verbose text, unclear explanations, Jira tickets, pull requests, review comments, AI-sounding text, unslop."
 allowed-tools: Read(references/*) Bash(zsh *) Read
 ---
 
@@ -34,6 +34,47 @@ TL;DR (what changed and why), then details, then how to test.
 Review comment:
 main point first, then reasoning, then a concrete suggestion.
 Critique the code, not the author.
+
+# Which Model Writes
+
+Text that people will read is drafted by a model of the Opus class (Claude)
+or the Sol class (OpenAI, for example `gpt-6.1-sol`).
+This covers tickets, comments, pull request descriptions, review comments,
+ADRs, design documents, chat messages, and narration.
+Mechanical text does not: commit trailers, labels, IDs.
+
+If you already run on such a model, write the text yourself.
+
+Otherwise delegate the writing. Do not switch models in the running session:
+a switch discards the prompt cache and is expensive.
+Start a separate run with a short brief instead:
+
+- Claude Code: the `Agent` tool with `model: "opus"`.
+  The brief tells it to load `Skill(technical-writing)`,
+  write the draft to a file, and return the path.
+- Codex: the default is already `gpt-6.1-sol`, so write it yourself.
+  On another model, use a sub-agent or `codex exec -m gpt-6.1-sol` with the same brief.
+
+The brief holds everything the writer needs,
+because it does not see this session:
+
+- purpose and medium (Jira wiki markup, Bitbucket Markdown, Slack)
+- the reader
+- the language, taken from the existing discussion
+- the facts, as bullet points
+- required parts, such as the attribution footer or a quoted prompt
+- a length limit and the output file
+
+Check the draft for facts and required parts only, not for style.
+Post it through the usual `--file` or stdin route.
+If the facts are wrong, send a corrected brief back.
+Do not rewrite the draft yourself.
+
+If no Opus or Sol model is reachable (for example Gemini or Antigravity),
+or the delegation fails: do not post.
+Ask the user, and offer a headless run:
+`claude -p --model opus …` or `codex exec -m gpt-6.1-sol …`, brief on stdin.
+Start no other CLI without the user's consent.
 
 # Core Principles
 
