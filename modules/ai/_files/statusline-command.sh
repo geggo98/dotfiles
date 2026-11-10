@@ -15,7 +15,7 @@ total_output=$(echo "$input" | jq -r '.context_window.total_output_tokens // 0')
 # Window start is not documented; assumed = resets_at - 7d. Projection = average
 # pace so far, extrapolated to the reset. Empty output when no seven_day window.
 #   7d:42% →78% 🟡 ↻2d5h            reaches the reset with reserve / just about
-#   7d:65% →140% 🔴 leer 1d8h ↻3d2h  runs out 1d8h from now, 3d2h before the reset
+#   7d:65% →140% 🔴 out in 1d8h ↻3d2h  runs out 1d8h from now, 3d2h before the reset
 # No projection in the first 5% of the window (~8h): the extrapolation is noise.
 week_seg=$(echo "$input" | jq -r '
   def dur(s): (s | floor) as $s
@@ -33,7 +33,7 @@ week_seg=$(echo "$input" | jq -r '
        elif $f < 0.05 then " ↻" + dur($left)
        else ($u / $f) as $p
          | " →\($p | round)% " + (if $p <= 70 then "🟢" elif $p <= 100 then "🟡" else "🔴" end)
-           + (if $p > 100 then " leer " + dur((100 - $u) / ($u / ($f * $week))) else "" end)
+           + (if $p > 100 then " out in " + dur((100 - $u) / ($u / ($f * $week))) else "" end)
            + " ↻" + dur($left)
        end)
 ' 2>/dev/null)
