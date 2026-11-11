@@ -7,7 +7,8 @@ description: >
   development environments with Nix, configuring languages/services/processes declaratively, managing
   secrets with SecretSpec, integrating with direnv, devcontainers, or Claude Code in a devenv context,
   or when .envrc files reference `use devenv`. Trigger for ad-hoc Nix environments (`devenv -O`),
-  polyrepo/monorepo setups, devenv profiles, devenv outputs, or devenv LSP/MCP. Even if the user just
+  polyrepo/monorepo setups, devenv profiles, devenv outputs, or devenv LSP/MCP, and when a script
+  or test passes locally but fails or is skipped in the devenv CI image. Even if the user just
   says "set up my project environment" or "I need MySQL and Java for local dev", consider this skill.
 allowed-tools: Read(references/*) Bash(+nix-query *) Bash(${CLAUDE_SKILL_DIR}/scripts/devenv-tools.sh *) Bash(./scripts/devenv-tools.sh *) Bash(zsh *) Read
 ---
@@ -299,6 +300,27 @@ reachable either way while Linux has no system compiler at all — so a cgo buil
 a Mac and fail in Linux CI. For the per-language matrix, the measured CGO trap and the rest
 of the traps: read `references/nix-recipes.md`.
 
+## Green locally, red in the devenv CI image
+
+The Mac's login shell has everything from nix-darwin and Homebrew; the CI image
+(`ghcr.io/cachix/devenv/devenv`, `devenv shell -- <ci-script>`) has the stdenv and
+`packages`, nothing more. Measured in the image: no `/bin/bash` (`#!/bin/bash` -> "bad
+interpreter", exit 126), no `perl` (exit 127), no `zstd` (tests guarded by
+`shutil.which` skipped silently). Whatever a script or test calls that is not in
+`packages` or the stdenv (bash, coreutils, sed, find, awk, grep) is not guaranteed there.
+
+Fix in this order: avoid the tool (`#!/usr/bin/env bash`; process groups via `set -m` and
+`kill -- -<pgid>` instead of `pgrep -P`/`pkill -P`); else add it to `packages` with a
+comment naming who needs it; and let a tool-dependent test skip only outside devenv:
+`skipif(which(tool) is None and not os.environ.get("DEVENV_ROOT"))`.
+
+Second trap from the same case: the CI container's PID 1 does not reap, so a stopped
+process stays a zombie and `os.kill(pid, 0)` still finds it — a test asserting "the
+process is gone" must count state `Z` in `/proc/<pid>/status` as gone. Test before
+pushing in Docker, work tree mounted read-only and copied to the container's temp, with
+`sleep` as PID 1. For both stages, the measurements and the exact commands: read
+`references/ci-image.md`.
+
 ## Documentation links
 
 - Getting started: https://devenv.sh/getting-started/
@@ -335,3 +357,4 @@ of the traps: read `references/nix-recipes.md`.
 | `references/tasks.md` | Tasks: defining, dependencies, lifecycle events, agent-friendly patterns, allowlisting |
 | `references/pinning.md` | Pin one package to a version: nixhub/devbox API, second nixpkgs input, `overlays`, cache check, measured costs, traps |
 | `references/nix-recipes.md` | Dropping the C toolchain (`stdenvNoCC`), macOS `apple.sdk`, per-language matrix, measured CGO trap |
+| `references/ci-image.md` | Tools missing in the devenv CI image, silent skips, zombies under a non-reaping PID 1, testing in Docker before the push |
