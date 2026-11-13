@@ -430,7 +430,7 @@ load-bearing:
   everything else verbatim.
 
 restic's exit codes are mapped deliberately, per the resumability rule in
-`AGENTS.md`: `0` done, `3` done but some files were unreadable (a valid snapshot
+`docs/scripting.md`: `0` done, `3` done but some files were unreadable (a valid snapshot
 — not an error, and not to be retried), anything else means no snapshot, so wait
 and restart. A missing `.restic-env` or binary exits `2` immediately: no amount
 of waiting fixes it, and patiently retrying would hide it.

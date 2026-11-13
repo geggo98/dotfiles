@@ -66,7 +66,7 @@ new cloudflare.R2CustomDomain("nix-cache-domain", {
 // type: `.zst` qualifies, `.narinfo` (content-type text/x-nix-narinfo) does
 // not, so every single narinfo lookup went to the R2 origin. Against
 // cache.nixos.org's 117-196 ms that is 4-9x, and a cold closure is thousands
-// of narinfo lookups — see "Why a cold closure substitutes slowly" in AGENTS.md.
+// of narinfo lookups — see "Why a cold closure substitutes slowly" in docs/linux-builder.md.
 //
 // THE 404s ARE DELIBERATELY NOT CACHED, and that is the whole design
 // constraint. We push to this bucket continuously; if an edge-cached 404

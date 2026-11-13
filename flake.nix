@@ -136,7 +136,7 @@
     #
     # Adopting v2.2.2 moved this input BACKWARDS, from a main commit of
     # 2026-08-27 to the release of 2026-08-13. `just update` refuses to do that
-    # on its own, for good reasons written up in AGENTS.md; this was a decision
+    # on its own, for good reasons written up in docs/supply-chain.md; this was a decision
     # by hand, and the two weeks of unreleased main are exactly what was given
     # up.
     devenv.url = "github:cachix/devenv/v2.4.0";

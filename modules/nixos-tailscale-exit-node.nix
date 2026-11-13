@@ -42,7 +42,7 @@
       # failure mode this repository refuses everywhere else.
       #
       # writeShellApplication and not a zsh script (the repo default) for the
-      # reason CLAUDE.md carves out: shellcheck runs over the source, `set -euo
+      # reason docs/scripting.md carves out: shellcheck runs over the source, `set -euo
       # pipefail` is injected, and `ethtool` resolves to a pinned store path.
       tuneUdpGro = pkgs.writeShellApplication {
         name = "tailscale-tune-udp-gro";
@@ -68,7 +68,7 @@
           # macOS, which cannot happen inside a pinned Linux closure — whereas
           # putting perl in runtimeInputs to run one regex would add it to the
           # closure of the 4 GB host whose path count was deliberately cut from
-          # ~9000 to 941. CLAUDE.md names BASH_REMATCH as the sanctioned
+          # ~9000 to 941. docs/scripting.md names BASH_REMATCH as the sanctioned
           # fallback where there is no named-capture form.
           declare -A seen=()
           devs=()

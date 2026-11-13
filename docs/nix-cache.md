@@ -1,6 +1,13 @@
+---
+paths:
+  - "modules/nix-cache.nix"
+  - "modules/nix-tarball-cache-repack.nix"
+  - "modules/_files/nix-cache/**"
+---
+
 # The R2 Nix binary cache: async push, and what it mirrors
 
-Moved out of `AGENTS.md` to stay under Codex's 32 KiB project-doc budget. AGENTS.md keeps a short pointer; this file has the full, unedited text.
+Read this before changing the files listed under `paths` in the front matter above. Claude loads it automatically when it reads one of them.
 
 ### Key Architectural Decisions — the "Binary cache (R2)" bullet
 

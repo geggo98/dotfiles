@@ -17,14 +17,14 @@
   perSystem = { system, ... }:
     let
       pkgs = import inputs.nixpkgs { inherit system; };
-      maxBytes = 32768;
+      maxBytes = 16384;
     in
     {
       checks.agents-md-budget = pkgs.runCommand "agents-md-budget-check"
         { nativeBuildInputs = [ pkgs.perl ]; } ''
-        cp ${../AGENTS.md} AGENTS.md
-        cp -r ${../docs} docs
-        perl ${./_files/agents-md-check/check.pl} AGENTS.md ${toString maxBytes}
+        # The flake source holds the symlinks as written; run from its root.
+        cd ${../.}
+        perl ${./_files/agents-md-check/check.pl} ${toString maxBytes}
         touch $out
       '';
     };

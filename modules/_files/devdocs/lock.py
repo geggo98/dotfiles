@@ -238,7 +238,7 @@ def load_lock(lock_path):
 
 def write_lock_atomic(lock_path, lock):
     # Same publish discipline as every other list-processing script in this
-    # repo (AGENTS.md, "Any script that processes a list must be
+    # repo (docs/scripting.md, "Any script that processes a list must be
     # resumable"): write to a temp name in the same directory, fsync, then
     # rename -- an interrupted run leaves a stray .tmp, never a truncated
     # lock file that the next `just build` would silently trust.

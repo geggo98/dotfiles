@@ -1,0 +1,1 @@
+../../docs/iterm2-duckduckgo.md

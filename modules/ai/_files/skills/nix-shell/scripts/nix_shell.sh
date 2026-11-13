@@ -1,7 +1,7 @@
 #!/bin/zsh
 set -euo pipefail
 
-# zsh on purpose (AGENTS.md, "Script style"): SKILL.md has always invoked this file
+# zsh on purpose (docs/scripting.md, "Script style"): SKILL.md has always invoked this file
 # as `zsh nix_shell.sh`, so the former bash shebang was never honoured. Two zsh
 # rules apply throughout: word lists are arrays, never unquoted scalars (zsh does
 # not word-split), and variable content is printed with printf, never echo (zsh's

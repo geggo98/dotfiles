@@ -202,8 +202,8 @@ on "free, local diagram previewing" — cloud/AI/account features moved to a sep
 "Mermaid rendering in Markdown preview" as a still-supported feature post-split. Confirmed
 working here. No `nix-vscode-extensions` revision old enough to clear the 14-day extension
 cooldown (`[cooldown.per_input]` in `scripts/supply-chain.toml`) carried 2.2.0 as of
-2026-09-17, so the cooldown was deliberately overridden — see "Undercutting a cooldown" in
-`AGENTS.md` — with the research it requires done first:
+2026-09-17, so the cooldown was deliberately overridden — see "Undercutting a cooldown: research first, fetch second"
+in `docs/supply-chain.md` — with the research it requires done first:
 
 - The extension's repo transferred to the `Mermaid-Chart` GitHub org (the creators of
   mermaid.js itself, matching the changelog's own "now maintained by the creators of

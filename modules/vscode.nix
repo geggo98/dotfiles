@@ -197,7 +197,7 @@
         # working here. `nix-vscode-extensions` had no revision old enough to
         # clear its 14-day extension cooldown (scripts/supply-chain.toml)
         # that also carried 2.2.0, so the cooldown was deliberately
-        # overridden per AGENTS.md's "Undercutting a cooldown" protocol:
+        # overridden per docs/supply-chain.md's "Undercutting a cooldown" protocol:
         # `nix flake lock --override-input nix-vscode-extensions
         # github:nix-community/nix-vscode-extensions/41316674b…` — the
         # OLDEST revision (2026-09-08) that carries it, chosen specifically
@@ -601,7 +601,7 @@
           extensions = generalExtensions;
 
           # Settings Sync must not touch what Nix writes here — see the section in
-          # AGENTS.md. Generated rather than hand-listed, because a hand-listed set
+          # docs/vscode.md. Generated rather than hand-listed, because a hand-listed set
           # drifts exactly where nobody looks. Two details:
           #   - `extensions.autoCheckUpdates` is named explicitly because home-manager
           #     merges it in AFTER this attrset (mkVscodeModule.nix, out of

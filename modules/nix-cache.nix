@@ -11,7 +11,7 @@
 #        The push is NOT part of the build any more. The post-build-hook only
 #        appends to a spool and returns in ~20 ms; the daemon empties it every
 #        300 s. See the hook's own comment below for the measurements that
-#        forced the split, and "The push is asynchronous, and why" in AGENTS.md.
+#        forced the split, and docs/nix-cache.md, "The push is asynchronous, and why".
 #
 # The bucket + custom domain are provisioned by Pulumi; see infra/src/index.ts.
 { ... }:
@@ -74,7 +74,7 @@
       # takes <name> verbatim from the project's own `processes.*` keys — which
       # then becomes the StorePath: line of a world-readable narinfo in a bucket
       # that is public by design (see "The public cache mirrors system closures"
-      # in AGENTS.md). Measured in this store: devenv-files 58, -files-cleanup
+      # in docs/nix-cache.md). Measured in this store: devenv-files 58, -files-cleanup
       # 60, -git-hooks-install 11, -git-hooks-run 10, -enterShell 6,
       # -container-copy 6, -python-uv 4, -test 3, -processes-* 3, -flake-* 4.
       # Selecting by "what timed out" was the wrong criterion — those outputs are
@@ -136,7 +136,7 @@
       # would read as "cached" and surface weeks later as a miss on the other Mac.
       maxClosureBytes = "68719476736"; # 64 GiB
 
-      # zsh, per AGENTS.md, and `writeShellScriptBin` hardcodes bash — hence
+      # zsh, per docs/scripting.md, and `writeShellScriptBin` hardcodes bash — hence
       # writeTextFile with an explicit shebang. It is `${pkgs.zsh}` rather than
       # /bin/zsh so the interpreter is pinned like every other tool these scripts
       # call; the source file carries its own /bin/zsh line for direct invocation
@@ -193,7 +193,7 @@
         mkdir -p '${spoolDir}/queue' '${spoolDir}/retry' 2>/dev/null
 
         # ''${=VAR}, not $VAR. zsh does NOT word-split unquoted parameters — the
-        # very property AGENTS.md praises it for — and $OUT_PATHS is a
+        # very property docs/scripting.md praises it for — and $OUT_PATHS is a
         # space-separated list that must arrive as separate words. Measured:
         # `V="x y z"; set -- $V` gives argc=1 under zsh, 3 under bash.
         q=0 f=0 e=0 first=-
@@ -230,7 +230,7 @@
       '';
 
       # The drainer. stdlib-only python3, deliberately WITHOUT the PEP-723/uv
-      # header AGENTS.md prescribes for skill scripts: there is nothing to lock,
+      # header docs/scripting.md prescribes for skill scripts: there is nothing to lock,
       # and `uv run --frozen` inside a root LaunchDaemon would additionally need
       # a writable UV_CACHE_DIR. Precedent for a Nix-built stdlib-python script
       # in this repo: modules/boundary.nix.
@@ -238,7 +238,7 @@
         (builtins.readFile ./_files/nix-cache/nix-cache-drain.py);
 
       # Every value is baked in at BUILD time rather than passed through
-      # launchd's EnvironmentVariables, for the reason AGENTS.md gives about
+      # launchd's EnvironmentVariables, for the reason docs/launchd.md gives about
       # launchd jobs: they inherit no shell environment, so a value that is only
       # exported from a shell is simply absent. Baking also guarantees that a
       # manual `nix-cache-drain` and the daemon's run see identical settings.

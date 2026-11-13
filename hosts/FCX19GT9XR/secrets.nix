@@ -10,7 +10,7 @@
   # BookFusion credentials for the bookfusion-api skill. sops-nix decrypts
   # these to ~/.config/sops-nix/secrets/bookfusion_{username,password}, which
   # the skill reads directly. Their values must be encrypted into
-  # ./secrets.enc.yaml (see repo CLAUDE.md / .sops.yaml FCX rule) before
+  # ./secrets.enc.yaml (see docs/secrets.md / .sops.yaml FCX rule) before
   # `just switch`.
   bookfusion_username = { };
   bookfusion_password = { };

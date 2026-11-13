@@ -36,7 +36,7 @@ prev=$(readlink -f /nix/var/nix/profiles/system)
 #
 # The timer fired on the second; the rollback simply did nothing, and --collect
 # then tidied the corpse away. Nothing anywhere would have said so. This is the
-# same class of trap AGENTS.md already records for launchd ("launchd jobs get no
+# same class of trap docs/launchd.md already records for launchd ("launchd jobs get no
 # shell environment … must never fall back silently") — systemd, same lesson.
 #
 # nix-env is taken from the TARGET generation rather than /run/current-system:

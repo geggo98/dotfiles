@@ -59,7 +59,7 @@ def fail(code, *lines) -> NoReturn:
 
 def devdocs_dir():
     # No os.environ.get(..., default): a launchd job or a harness `Bash(...)`
-    # tool call inherits no shell environment at all (see AGENTS.md, "launchd
+    # tool call inherits no shell environment at all (see docs/launchd.md, "launchd
     # jobs get no shell environment"), so a silent default here would report
     # "no docs installed" while a real index sits in the store. The +devdocs
     # wrapper always sets this; a bare invocation of this file must say so.
@@ -880,7 +880,7 @@ def build_content_index(conn, slug, ddir):
     atomically: write to a per-process temp file, then os.replace() into
     place. A killed build (Ctrl-C, the activation hook's timeout) leaves
     only an obvious stray `.tmp.<pid>` file, never a half-written `.fts`
-    that a concurrent reader could open -- see AGENTS.md's "any script that
+    that a concurrent reader could open -- see docs/scripting.md's "Any script that
     processes a list must be resumable". Returns the finished path.
 
     Deliberately the DEFAULT (content-storing) FTS5 table, not a
@@ -910,7 +910,7 @@ def build_content_index(conn, slug, ddir):
     # run under a DIFFERENT pid would otherwise never look for or remove
     # it: harmless to a future build (which always writes its own fresh
     # tmp name and only ever reads `final`), but a permanent per-crash disk
-    # leak -- see AGENTS.md's "clean stale temp files at start-up and count
+    # leak -- see docs/scripting.md's "clean stale temp files at start-up and count
     # that as CLEANUP". `final` itself is untouched by this build regardless
     # of whether it already exists: this function never writes to it
     # directly, only atomically replaces it at the very end -- creating
@@ -1367,7 +1367,7 @@ def cmd_warm_content(args):
     correctness backstop if the pre-warm times out or is skipped.
 
     Every doc is classified SUCCESS/SKIP/ERROR, never collapsed -- per
-    AGENTS.md's "any script that processes a list must be resumable" rule --
+    docs/scripting.md's "Any script that processes a list must be resumable" rule --
     so the summary line is trustworthy and a re-run is cheap (SKIP unless
     --force)."""
     ddir = devdocs_dir()

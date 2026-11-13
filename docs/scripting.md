@@ -1,6 +1,13 @@
+---
+paths:
+  - "scripts/**"
+  - "modules/_files/**/*.pl"
+  - "modules/ai/_files/skills/*/scripts/**"
+---
+
 # Script style and resumable scripts — full incident reports
 
-Moved out of `AGENTS.md` to stay under Codex's 32 KiB project-doc budget. AGENTS.md keeps a short pointer; this file has the full, unedited text.
+Read this before changing the files listed under `paths` in the front matter above. Claude loads it automatically when it reads one of them.
 
 ### Script style (shell, Python, regex)
 
@@ -125,3 +132,21 @@ Two additions that follow from the same reasoning:
   A resumable script run twice must exit 0 the second time; anything else trains
   people to ignore its exit code.
 
+
+### uv-based skill scripts (lockfiles and the read-only Nix store)
+
+Some skill helpers under `modules/ai/_files/skills/*/scripts/` are self-contained `uv`
+scripts (PEP-723 `# /// script` header), called from a thin zsh wrapper via
+`gtimeout … script.py`. Two rules keep them working once deployed:
+
+- **Always run with `--frozen`.** The shebang must be
+  `#!/usr/bin/env -S uv --quiet run --frozen --script`. Deployed skill files land in
+  `/nix/store`, which is read-only, so any attempt by `uv` to *update* the lockfile at
+  runtime fails. `--frozen` reads the lock without writing it.
+- **Commit the lockfile.** Each such script ships a sibling `script.py.lock`, generated with
+  `uv lock --script script.py`. Regenerate and commit it whenever the PEP-723
+  `dependencies` change. Like any new file, `git add -N` it so the flake build picks it up
+  (see `docs/commands.md`).
+
+Reference example: `modules/ai/_files/skills/grafana/scripts/grafana.py` (+ `.lock`); also
+`bitbucket-pr/scripts/bitbucket_pr_reviewers.py`.

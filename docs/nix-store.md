@@ -1,6 +1,12 @@
+---
+paths:
+  - "modules/nix-gc.nix"
+  - "modules/determinate.nix"
+---
+
 # Store deduplication: auto-optimise-store and the weekly nix-optimise pass
 
-Moved out of `AGENTS.md` to stay under Codex's 32 KiB project-doc budget. AGENTS.md keeps a short pointer; this file has the full, unedited text.
+Read this before changing the files listed under `paths` in the front matter above. Claude loads it automatically when it reads one of them.
 
 **Changing `auto-optimise-store` needs one `just daemon-restart`.** It is a daemon-side
 setting, and Determinate's `nix-daemon` reads `/etc/nix/nix.custom.conf` only at startup —

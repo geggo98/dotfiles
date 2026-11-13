@@ -123,7 +123,7 @@ VSMARKETPLACE_QUERY = ("https://marketplace.visualstudio.com/_apis/public/galler
 UA = "supply-chain (nix-darwin config)"
 MANIFEST = Path(__file__).with_suffix(".toml")
 
-# Categories, kept distinct on purpose. CLAUDE.md: "Classify every item as SUCCESS,
+# Categories, kept distinct on purpose. docs/scripting.md: "Classify every item as SUCCESS,
 # SKIP, ERROR or CLEANUP, and never collapse two of them. A skip is not a failure."
 COOLED = "cooled"        # moved to an older-but-fresh-enough rev       (SUCCESS)
 CURRENT = "current"      # already at the right rev, nothing to do      (SUCCESS)

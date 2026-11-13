@@ -84,8 +84,8 @@ in
           # binary off Google Cloud Storage, not npm -- which is why it is dated
           # against its GitHub releases in scripts/supply-chain.toml rather than
           # a registry. Licence is `unfree` there; like every other closure it
-          # ends up in the R2 cache, see "The public cache mirrors system
-          # closures" in AGENTS.md.
+          # ends up in the R2 cache, see docs/nix-cache.md, "The public cache
+          # mirrors system closures".
           runtimeInputs = [ llm-agents.antigravity-cli ];
           text = ''
             # The binary carries a statically linked self-updater that runs in

@@ -134,8 +134,8 @@ in
           !(lib.hasInfix "/${lib.replaceStrings [ "." ] [ "/" ] s.groupId}/${s.artifactId}/" e.url))
         resolvedSrc;
       # Third-party content needs an explicit, resolved licence before it can
-      # enter this repo's PUBLIC, world-readable R2 cache (AGENTS.md, "This
-      # repository is PUBLIC" and the third-party-data global rule) -- an
+      # enter this repo's PUBLIC, world-readable R2 cache (AGENTS.md, "Public repository: what
+      # needs explicit clearance" and the third-party-data global rule) -- an
       # empty licence string is a build failure, not a silent "unknown".
       licenseMissing = lib.filter
         (n: cfg.sources.${n}.license == "" && !cfg.sources.${n}.licensePending)
@@ -370,7 +370,7 @@ in
       devdocsCli = mkZshScript "+devdocs" ''
         # DEVDOCS_DIR is BAKED, not passed through: a launchd job or a
         # harness `Bash(...)` tool call inherits no shell environment at all
-        # (AGENTS.md, "launchd jobs get no shell environment") -- a silent
+        # (docs/launchd.md, "launchd jobs get no shell environment") -- a silent
         # default would report "no docs installed" while a real index sits
         # in the store. `''${VAR:-default}` still lets a caller override it
         # (used by the hermetic test below).
@@ -481,7 +481,8 @@ in
             own `licensePending` flag, so a pending-licence source can never
             start shipping by editing one file -- per this repo's own
             "third-party content needs explicit clearance every time" rule
-            (AGENTS.md, "This repository is PUBLIC"), this list is the
+            (AGENTS.md, "Public repository: what needs explicit
+            clearance"), this list is the
             record that clearance was actually given, not merely declared.
           '';
         };
@@ -594,7 +595,8 @@ in
               cannot build: ${lib.concatStringsSep ", " pendingNotAllowed}
 
               This repository is PUBLIC and its R2 cache is world-readable
-              (AGENTS.md). Third-party content needs EXPLICIT clearance,
+              (AGENTS.md, "Public repository: what needs explicit
+              clearance"). Third-party content needs EXPLICIT clearance,
               re-asked every time -- get that clearance, then add the name to
               my.devdocs.allowLicensePending. Until then this is not a bug,
               it is the gate working.
@@ -625,7 +627,7 @@ in
         # on-demand build in open_content_index is the correctness
         # backstop. Full store paths throughout, not bare command names, so
         # this does not depend on whatever PATH the activation script runs
-        # with (the same reasoning AGENTS.md gives for launchd jobs, though
+        # with (the same reasoning docs/launchd.md gives for launchd jobs, though
         # activation scripts are not launchd -- belt and suspenders here
         # costs nothing).
         home.activation.devdocsContentWarm = lib.hm.dag.entryAfter [ "writeBoundary" ] ''

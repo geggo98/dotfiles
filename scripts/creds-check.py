@@ -42,7 +42,7 @@ TIMEOUT = 20
 
 # Four outcomes, never collapsed into two. A credential that is simply absent on
 # this host is a SKIP, not a failure -- the personal Mac has no work tokens and
-# must not report red for it. (AGENTS.md, "Any script that processes a list".)
+# must not report red for it. (docs/scripting.md, "Any script that processes a list".)
 OK, SKIP, ERROR = "ok", "skip", "error"
 
 COLOR = sys.stdout.isatty() and os.environ.get("NO_COLOR") is None

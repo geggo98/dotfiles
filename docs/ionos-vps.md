@@ -1,6 +1,13 @@
+---
+paths:
+  - "modules/nixos-*.nix"
+  - "modules/onepassword.nix"
+  - "hosts/p-ion-*/**"
+---
+
 # The IONOS VPS (NixOS)
 
-Moved out of `AGENTS.md` to stay under Codex's 32 KiB project-doc budget. AGENTS.md keeps a short pointer; this file has the full, unedited text.
+Read this before changing the files listed under `paths` in the front matter above. Claude loads it automatically when it reads one of them.
 
 ### The IONOS VPS (NixOS)
 

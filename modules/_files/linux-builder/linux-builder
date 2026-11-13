@@ -411,7 +411,7 @@ cmd_gc() {
   #
   # Not `2>&1 || true`. Swallowing this would leave cap enforcement quietly
   # degraded to "only nix store gc runs" with nothing anywhere saying so — the
-  # silent-fallback pattern AGENTS.md forbids. stderr stays visible and a
+  # silent-fallback pattern docs/launchd.md forbids. stderr stays visible and a
   # failure is announced; it is still non-fatal, because the sweep below is what
   # actually reclaims space.
   in_container "nix profile wipe-history --profile '$PROFILE' >/dev/null" \

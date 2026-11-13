@@ -14,7 +14,7 @@ and skips what it already has, so an interrupted drain loses only the NAR in
 flight. Everything already uploaded stays uploaded and is never paid for twice.
 
 STATE LIVES IN THE FILESYSTEM, per the "Any script that processes a list must be
-resumable" rule in AGENTS.md. One empty file per queued store path:
+resumable" rule in docs/scripting.md. One empty file per queued store path:
 
     $NIX_CACHE_SPOOL/queue/<hash>-<name>      waiting        (mtime = enqueued)
     $NIX_CACHE_SPOOL/retry/<n>/<hash>-<name>  failed n times (mtime = last try)
@@ -44,7 +44,7 @@ Exit codes:  0 did work OR nothing to do (the summary distinguishes them)
              2 misconfiguration — a required environment variable is missing,
                or this was run without the privileges the spool needs
 
-python3, stdlib only, deliberately WITHOUT the PEP-723/uv header AGENTS.md
+python3, stdlib only, deliberately WITHOUT the PEP-723/uv header docs/scripting.md
 prescribes for skill scripts: there are no dependencies to lock, and `uv run
 --frozen` inside a root LaunchDaemon would additionally need a writable
 UV_CACHE_DIR. Precedent for a Nix-built stdlib-python script in this repo:
@@ -119,7 +119,7 @@ def env(name):
     """Required environment variable, or exit 2 naming it.
 
     Never `.get(name, default)`. A launchd job inherits no shell environment
-    (AGENTS.md), so a missing value here means the Nix wrapper stopped baking it
+    (docs/launchd.md), so a missing value here means the Nix wrapper stopped baking it
     in — and a default would turn that into a drain writing to the wrong spool,
     reporting success all the while.
     """
@@ -359,7 +359,7 @@ def push_group(names, levels):
     live = [pth for pth in paths if pth not in gone]
 
     for pth, size in (oversized(live) if live else {}).items():
-        # Never a silent cap (AGENTS.md): what was dropped, and how big it was,
+        # Never a silent cap (docs/nix-cache.md): what was dropped, and how big it was,
         # goes in the log where the next cache miss can be traced back to it.
         record(status="SKIP", exit=0, reason="closure-limit", bytes=size,
                path=paths[pth])

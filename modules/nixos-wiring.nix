@@ -10,7 +10,7 @@
       # the justfile so adding a server means editing only its own host module —
       # the deploy recipe never learns about individual machines. It is also the
       # first place the address is declared in Nix at all; until now it lived
-      # only in AGENTS.md prose and infra/src/inventory.ts.
+      # only in infra/Naming.md prose and infra/src/inventory.ts.
       options.deployTarget = lib.mkOption {
         type = lib.types.nullOr lib.types.str;
         default = null;

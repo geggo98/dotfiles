@@ -11,7 +11,7 @@ and the `justfile` are the authority for anything you would actually run, and
 the old text had drifted into contradicting them. It told you to run
 `just pulumi stack init prod`, which `README.md` explicitly warns against
 ("do NOT run `stack init`, that creates a second, empty one"), and it decrypted
-SOPS with the `env SOPS_AGE_KEY=$(ssh-to-age …)` form that `AGENTS.md` records
+SOPS with the `env SOPS_AGE_KEY=$(ssh-to-age …)` form that `docs/secrets.md` records
 as measured-broken. A stale plan that reads like a runbook is worse than no
 plan.
 
@@ -85,7 +85,7 @@ Shelling out from a `command.local.Command` mutates a tracked file, so the next
   the first write. The home-manager class validates the manifest at build time,
   so the wrong order fails `just build` with `the key '<x>' cannot be found`.
 
-`AGENTS.md` § "Moving a secret between SOPS files" has since worked out the
+`docs/secrets.md` § "Moving a secret between SOPS files" has since worked out the
 mechanics of scripted SOPS writes for a different purpose, and that is the
 starting point rather than this section: `sops set --value-stdin` takes JSON on
 stdin (never as an argument, which would put the secret in the process list),
@@ -223,7 +223,7 @@ under the same value.
   `+nix-query info _1password-cli` reports `License: unfree`, and this repo
   already avoids putting unfree vendor binaries where the R2 post-build-hook
   could sweep them into the public cache (see the VS Code editor decision in
-  `AGENTS.md`).
+  `docs/vscode.md`).
 - In the 1Password app: Settings → Developer → enable "Integrate with
   1Password CLI". Manual, not scriptable — the CLI is then unlocked by Touch
   ID with no separate `op signin` needed.
@@ -254,7 +254,7 @@ under the same value.
    `secrets/infra.enc.yaml`:
    `sops unset secrets/infra.enc.yaml '["aws_access_key_id"]'` and
    `sops unset secrets/infra.enc.yaml '["aws_secret_access_key"]'` —
-   following `AGENTS.md` § "Moving a secret between SOPS files"'s order
+   following `docs/secrets.md` § "Moving a secret between SOPS files"'s order
    (config first, copy, flip the routing, only then unset the source),
    adapted here to "flip `providers`" instead of "flip the Nix declaration".
 

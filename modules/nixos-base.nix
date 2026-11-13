@@ -24,7 +24,7 @@ let
     # because ~/.config/1Password/ssh/agent.toml lists it. That file is
     # 1Password's, not restored by `just switch`, and its absence is the most
     # likely reason a machine with 1Password installed still cannot log in.
-    # AGENTS.md carries the symptom and the client-side diagnosis.
+    # docs/ionos-vps.md carries the symptom and the client-side diagnosis.
     #
     # The trailing comment is free text that sshd ignores; it names the machine
     # by its canonical name (infra/Naming.md). The 1Password item is a separate

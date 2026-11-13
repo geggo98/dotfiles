@@ -64,7 +64,7 @@ in
 
       # Built from xdg.configHome, NOT from config.sops.secrets.<n>.path.
       # Dereferencing sops.secrets is an EVAL error on a host that does not
-      # declare the secret (AGENTS.md, "Watch for Nix-side references"), and
+      # declare the secret (docs/secrets.md, "Watch for Nix-side references"), and
       # this module reaches both workstations.
       secretFile = n: "${config.xdg.configHome}/sops-nix/secrets/${n}";
 

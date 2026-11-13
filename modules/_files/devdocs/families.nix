@@ -20,7 +20,7 @@
 # every family below carries an explicit redistribution license except `man`,
 # whose per-page licenses (GPL/BSD/MIT) are individually attributed but not
 # summarized by DevDocs' own catalog — devdocs.io serves it unauthenticated
-# regardless, the same basis AGENTS.md already argues from for this cache.
+# regardless, the same basis docs/nix-cache.md argues from for this cache.
 [
   # --- JVM ---
   "openjdk" # the JDK's own javadoc — the reason this module exists

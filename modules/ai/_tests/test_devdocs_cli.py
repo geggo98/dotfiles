@@ -170,8 +170,8 @@ def test_output_plumbing(cli, ddir):
 def _content_env(tag):
     # A dedicated tmp cache dir per test, never the real ~/.cache -- hermetic
     # even when this file is run standalone outside the Nix sandbox (which
-    # sets HOME=$TMPDIR itself; this is defense in depth, matching AGENTS.md's
-    # general preference for explicit inputs over relying on ambient state).
+    # sets HOME=$TMPDIR itself; this is defense in depth, matching docs/secrets.md's
+    # "Files are the default source" preference for explicit inputs over ambient state).
     return {"XDG_CACHE_HOME": tempfile.mkdtemp(prefix=f"devdocs-cache-{tag}-")}
 
 

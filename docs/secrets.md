@@ -1,6 +1,16 @@
+---
+paths:
+  - "**/*.enc.yaml"
+  - ".sops.yaml"
+  - "**/secrets.nix"
+  - "modules/secrets.nix"
+  - "modules/nixos-secrets.nix"
+  - "modules/vault.nix"
+---
+
 # Secrets: env/file discipline, the `key` grouping, moving a secret between SOPS files
 
-Moved out of `AGENTS.md` to stay under Codex's 32 KiB project-doc budget. AGENTS.md keeps a short pointer; this file has the full, unedited text.
+Read this before changing the files listed under `paths` in the front matter above. Claude loads it automatically when it reads one of them.
 
 ### One env name, one file — and export as few secret values as possible
 
@@ -282,3 +292,37 @@ example — breaks the *other* host's build. Grep before moving:
 grep -rn --include='*.nix' 'sops\.secrets\.' modules/
 ```
 
+
+### Basics: where secrets live and how to add one
+
+- **Location:** `secrets/secrets.enc.yaml` (global), `hosts/<serial>/secrets.enc.yaml` (per host).
+- **Decryption key:** SSH Ed25519 key at `~/.ssh/id_ed25519_sops_nopw` (no passphrase).
+- **Declarations:** in `modules/secrets.nix` and `hosts/<serial>/secrets.nix`.
+- **SOPS does not work in the agent sandbox.** Ask the user to edit secrets manually.
+- **Edit command:** `sops edit secrets/secrets.enc.yaml`, with **no `env` prefix**.
+  `SOPS_AGE_SSH_PRIVATE_KEY_FILE` is already exported from `home.sessionVariables`
+  (`modules/shells.nix`), so sops finds the identity on its own.
+- **Changing recipients:** after editing a rule in `.sops.yaml`, existing files are *not*
+  re-encrypted. Run `sops updatekeys -y <file>`. Without `-y` it asks `Is this okay? (y/n)`
+  and dies on `EOF` when no terminal is attached.
+- Declare new secrets with explicit paths and modes. Never commit derived plaintext files.
+- On a new machine, confirm the correct host serial directory under `hosts/` before switching.
+
+### Adding a new secret
+
+1. The user edits the file with `sops edit secrets/secrets.enc.yaml` (no `env` prefix).
+2. Add the declaration in `modules/secrets.nix` or `hosts/<serial>/secrets.nix`.
+3. Read it via `config.sops.secrets.<name>.path`.
+
+**Group related secrets in the YAML with `key`, and keep the attribute name flat**, for
+example `r2_access_key_id.key = "nix_cache/r2/access_key_id"`. `key` addresses a value
+*inside* the encrypted file, and `path` still defaults from `name`, so nesting never moves a
+file on disk. On the home-manager class a mismatch fails `just build`; on the NixOS class the
+same mistake surfaces only at activation.
+
+**Files are the default source. An environment variable is a deliberate manual override.**
+A credential chain gets exactly one env name and one file, with no generic aliases and no
+cross-product fallback tiers. `modules/shells.nix` exports no secret values, only `*_PATH`;
+every consumer reads its sops-nix file through `load_from_secret`. **Jira answers 404, not
+401**, on an invalid token (it hides issue existence from unauthenticated callers), so a 404
+on a ticket that exists usually means a dead or misrouted credential.
