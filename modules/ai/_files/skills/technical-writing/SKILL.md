@@ -1,6 +1,6 @@
 ---
 name: technical-writing
-description: "Use when writing documentation, commit messages, error text, explanations, reports, or summaries. Applies especially to Jira tickets, pull request descriptions, and review comments: always start these with a TL;DR summary. Combines Strunk, ASD-STE100 (Simplified Technical English), and ISO 24495-1 (plain language), for English and German text. Text for people is drafted by an Opus- or Sol-class model (see "Which Model Writes"). Triggers: writing human-readable content, verbose text, unclear explanations, Jira tickets, pull requests, review comments, AI-sounding text, unslop."
+description: "Use when writing documentation, commit messages, error text, explanations, reports, or summaries. Applies especially to Jira tickets, pull request descriptions, and review comments: always start these with a TL;DR summary. Combines Strunk, ASD-STE100 (Simplified Technical English), and ISO 24495-1 (plain language), for English and German text. Text for people is drafted by Opus 5.5 or a Sol-class model, never by Fable 5.1 or 5.2 (section Which Model Writes), and a fresh agent checks that it is self-contained (section Fresh-Eyes Review). Triggers: writing human-readable content, verbose text, unclear explanations, Jira tickets, pull requests, review comments, AI-sounding text, unslop."
 allowed-tools: Read(references/*) Bash(zsh *) Read
 ---
 
@@ -37,19 +37,22 @@ Critique the code, not the author.
 
 # Which Model Writes
 
-Text that people will read is drafted by a model of the Opus class (Claude)
-or the Sol class (OpenAI, for example `gpt-6.1-sol`).
+Text that people will read is drafted by Opus 5.5 (`claude-opus-5-5`)
+or a model of the Sol class (OpenAI, for example `gpt-6.1-sol`).
+Fable 5.1 and Fable 5.2 (`claude-fable-5-1`, `claude-fable-5-2`) do not write
+such text, even when they are the model of the running session.
 This covers tickets, comments, pull request descriptions, review comments,
 ADRs, design documents, chat messages, and narration.
 Mechanical text does not: commit trailers, labels, IDs.
 
-If you already run on such a model, write the text yourself.
+If you already run on Opus 5.5 or a Sol-class model, write the text yourself.
+On any other model, including Fable 5.1 and 5.2, delegate.
 
-Otherwise delegate the writing. Do not switch models in the running session:
+Delegate the writing. Do not switch models in the running session:
 a switch discards the prompt cache and is expensive.
 Start a separate run with a short brief instead:
 
-- Claude Code: the `Agent` tool with `model: "opus"`.
+- Claude Code: the `Agent` tool with `model: "opus"` (Opus 5.5, never `"fable"`).
   The brief tells it to load `Skill(technical-writing)`,
   write the draft to a file, and return the path.
 - Codex: the default is already `gpt-6.1-sol`, so write it yourself.
@@ -70,11 +73,74 @@ Post it through the usual `--file` or stdin route.
 If the facts are wrong, send a corrected brief back.
 Do not rewrite the draft yourself.
 
-If no Opus or Sol model is reachable (for example Gemini or Antigravity),
+If no Opus 5.5 or Sol model is reachable (for example Gemini or Antigravity),
 or the delegation fails: do not post.
 Ask the user, and offer a headless run:
 `claude -p --model opus …` or `codex exec -m gpt-6.1-sol …`, brief on stdin.
 Start no other CLI without the user's consent.
+
+# Fresh-Eyes Review
+
+A document that leaves the session must make sense without the session.
+After the draft exists, a fresh agent reads it cold and checks one property:
+the document is **conceptually closed**.
+Every term is either common knowledge for the intended reader
+or defined in the document.
+Nothing points at something that exists only in the session.
+
+This applies to text that outlives the conversation or reaches people without it:
+tickets, pull request descriptions, ADRs, design documents, READMEs, runbooks, reports.
+It does not apply to replies inside the running conversation,
+where the reader holds the context.
+
+**What the reviewer flags:**
+
+- a term, abbreviation, option or component name that is neither common
+  knowledge for the reader nor defined in the text
+- a name coined during the session: a nickname for an approach,
+  a variable, a branch, a "plan B", "the first option"
+- a back-reference with no target in the document:
+  "as discussed", "the above", "the earlier finding", "this change" when
+  the text never says which change
+- an identifier with no locator: a ticket key, PR number, or file path
+  that the reader cannot open from the text alone
+
+**What is fine:** a reference to a glossary or another document,
+provided it is **stored together with this one**
+(same repository, same ticket system, same wiki)
+and the text says where to find it.
+A link to a glossary on one person's laptop is not a definition.
+
+**How to run it:**
+
+- The reviewer is a fresh agent **without access to the session**:
+  in Claude Code the `Agent` tool with a general-purpose type, never a fork;
+  in a Workflow script a plain `agent()` call.
+- The brief holds only the path of the draft, the intended reader,
+  where the co-located documents live (repository path, wiki space, ticket project),
+  and the checklist above.
+  No summary of the session, no hints, no list of terms the author considers known.
+  Anything you add to the brief leaks context the real reader will not have.
+- Ask for structured findings: the quoted passage, the category,
+  and the fix ("define in place" or "link to <co-located document>").
+  The reviewer does not rewrite the text.
+- Apply the fixes yourself, define the term in place or add the link, and run the review again
+  with a new agent.
+  Stop when a round returns no findings, after at most three rounds.
+  If the third round still finds problems, tell the user instead of posting.
+
+```js
+const FINDINGS = { type: "object", properties: { findings: { type: "array", items: {
+  type: "object", required: ["quote", "category", "fix"],
+  properties: { quote: { type: "string" },
+    category: { enum: ["undefined-term", "session-coinage", "dangling-reference", "locator-missing"] },
+    fix: { type: "string" } } } } }, required: ["findings"] }
+// The prompt carries the path, the reader and the co-located locations. Nothing else.
+const r = await agent(
+  `Read ${path}. Intended reader: ${reader}. Co-located documents: ${where}. ` +
+  `Report every passage that fails the checklist.`,
+  { label: "fresh-eyes", schema: FINDINGS })
+```
 
 # Core Principles
 
@@ -231,6 +297,7 @@ When writing:
 5. One topic per paragraph
 6. Emphatic words at end
 7. Reread once as the reader, using the checklist in reader comprehension, section 9
+8. For text that leaves the session, run the Fresh-Eyes Review
 
 Every word must justify its presence.
 
