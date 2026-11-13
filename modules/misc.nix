@@ -100,12 +100,21 @@
     home.activation.hammerspoon = lib.hm.dag.entryAfter [ "writeBoundary" ] ''
       if test -e ~/.hammerspoon/init.lua
       then
-          if ! grep 'require("nix")' ~/.hammerspoon/init.lua > /dev/null
+          # nixwait.lua is a regular file, not a store symlink: it has to exist
+          # before the Nix Store volume is mounted at login, and wait for it.
+          install -m 0644 ${./_files/darwin/hammerspoon/nixwait.lua} ~/.hammerspoon/nixwait.lua
+          if grep -q 'require("nixwait")' ~/.hammerspoon/init.lua
           then
-              echo 'Add nix to Hammerspoon config\n'
+              :
+          elif grep -q 'require("nix")' ~/.hammerspoon/init.lua
+          then
+              echo "Switch Hammerspoon config from require(nix) to require(nixwait)"
+              ${pkgs.perl}/bin/perl -i -pe 's/require\("nix"\)/require("nixwait")/' ~/.hammerspoon/init.lua
+          else
+              echo "Add nixwait to Hammerspoon config"
               echo "" >> ~/.hammerspoon/init.lua
-              echo "-- Load Nix home manager provided packages" >> ~/.hammerspoon/init.lua
-              echo "require(\"nix\")" >> ~/.hammerspoon/init.lua
+              echo "-- Load Nix home manager provided packages (waits for /nix at login)" >> ~/.hammerspoon/init.lua
+              echo "require(\"nixwait\")" >> ~/.hammerspoon/init.lua
               echo "" >> ~/.hammerspoon/init.lua
           fi
       fi
