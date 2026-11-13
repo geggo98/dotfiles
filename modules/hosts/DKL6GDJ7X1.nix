@@ -43,6 +43,7 @@ in
     homebrew.casks = [
       "aptakube"
       "bleunlock"
+      "elgato-stream-deck"
       "hashicorp/tap/hashicorp-boundary-desktop"
       "Dropbox"
 
@@ -64,6 +65,9 @@ in
       # Work-only monitoring MCP; its URL is the monitoring_mcp_url secret.
       my.ai.monitoring.enable = true;
 
+      # Pinned release builds of the two own Stream Deck plugins (modules/stream-deck.nix).
+      my.streamDeck.enable = true;
+
       programs.git.settings.user.email = "stefan.schwetschke@check24.de";
       programs.gpg.settings.default-key = "DKL6GDJ7X1@schwetschke.de";
       imports = [
@@ -71,6 +75,7 @@ in
         homeManager.secrets-DKL6GDJ7X1
         homeManager.bitbucket-cli
         homeManager.boundary
+        homeManager.stream-deck
         homeManager.vault
         homeManager.tunnelblick-raycast
       ];
