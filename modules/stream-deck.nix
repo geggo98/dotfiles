@@ -6,9 +6,9 @@ let
     home-weather-station = {
       owner = "geggo98";
       repo = "stream-deck-home-weather-station";
-      tag = "v0.1.1";
+      tag = "v0.1.4";
       uuid = "de.schwetschke.sd.home-weather-station";
-      sha256 = "e7831965b7686940b56041b9ef13eda66156241850a283753c3e2a19eeb965ca";
+      sha256 = "e75a5f1da55fe536623896fbf0132e01b0a04a25aaceb70315ea1e4461f00dce";
     };
     eiscp-avr-remote = {
       owner = "geggo98";
