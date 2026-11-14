@@ -127,3 +127,7 @@ Consuming skills define domain-specific meanings:
 - **Loopholes**: Domain-specific failure patterns to watch for
 
 The methodology stays the same. The domain provides the vocabulary.
+
+For code, the `testing` skill defines what a good test is:
+mutations, coverage, and test data.
+This skill defines the process.
