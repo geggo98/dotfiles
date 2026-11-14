@@ -28,7 +28,7 @@
     // Decrypts SOPS files into `.decrypted~<name>` NEXT TO the encrypted file, inside the
     // git working tree; removed only on a focus change, not on a crash or quit, and the
     // name is not in .gitignore. A secret in the tree and in agent context. Edit with
-    // `sops edit` in a terminal; the git textconv shows diffs.
+    // `sops edit` in a terminal; `git dsops` shows decrypted diffs of SOPS files.
     "signageos.signageos-vscode-sops",
     // Downloads shfmt without a checksum into /usr/local/bin. mkhl.shfmt, with
     // shfmt.executablePath pointing at the Nix binary, does the job.

@@ -84,7 +84,6 @@
         git-trim
         git-credential-manager
         graphviz
-        lazygit
         python313Packages.markitdown
         mermaid-cli-chrome
         typescript

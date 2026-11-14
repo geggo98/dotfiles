@@ -32,8 +32,8 @@ lassen.
 
 **Den Scan validieren, bevor „keine Treffer" als Ergebnis gilt.** Ein Filter, der
 strukturell nichts finden kann, meldet dasselbe wie ein sauberes Ergebnis. Erst
-zählen, wie viele Zeilen er überhaupt sieht. Siehe die Regel zu `git diff` und
-difftastic für einen gemessenen Fall, in dem genau das passiert ist.
+zählen, wie viele Zeilen er überhaupt sieht. Siehe die Regel
+`filter-validation.md`.
 
 Im Zweifel fragen. Eine Frage kostet nichts; eine nachträgliche Bereinigung
 kostet einen Rewrite der Historie und einen Force-Push.

@@ -46,8 +46,8 @@ Drei Gründe, der zweite ist der wichtigste:
    Dekomprimieren**. Gemessen an einem um 20 % gekürzten Blob: der
    `DecompressionStream` bricht ab, während derselbe Text roh gekappt wortlos
    durchläuft und danach aussieht wie ein vollständiges Ergebnis — dieselbe
-   Fehlerklasse wie bei der Regel zu `git diff` und difftastic, wo ein Filter
-   „keine Treffer" meldet, statt zu scheitern. Das gilt für den **Transport** —
+   Fehlerklasse wie bei einem Filter, der „keine Treffer" meldet, statt zu
+   scheitern (Regel `filter-validation.md`). Das gilt für den **Transport** —
    gegen eine Kappung *vor* der Kompression hilft es nicht, siehe unten.
 3. **Größe.** Siehe unten.
 

@@ -76,8 +76,8 @@ dem alten Wert. Das trifft `git`s Credential-Helper genauso wie Vaults
 Token-Helper.
 
 Prüfen statt annehmen: das Flag setzen, den Helfer etwas Beobachtbares tun lassen
-und nachsehen, welchen Wert er benutzt hat. Dieselbe Denkart wie bei der Regel zu
-`git diff` und difftastic — erst den Filter validieren, dann seinem Ergebnis
+und nachsehen, welchen Wert er benutzt hat. Dieselbe Denkart wie in der Regel
+`filter-validation.md`: erst den Filter validieren, dann seinem Ergebnis
 glauben.
 
 ## `+vault` maskiert Tokens — `--show-tokens` ist nichts für Agenten

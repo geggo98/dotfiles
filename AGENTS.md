@@ -30,11 +30,8 @@ and `modules/ai/`. For every other agent the index is the only trigger.
 4. **SOPS does not work in the agent sandbox.** Ask the user to edit secrets. Credentials
    never go into a config or a commit; use sops-nix files.
 5. **Push only after `git push --dry-run` and explicit approval.** Never push tags or `--all`.
-6. **`git diff` here runs difftastic and textconv.** For anything automated use
-   `git diff --no-ext-diff --no-textconv --no-color`; otherwise a plus-line filter finds
-   nothing, and SOPS files show decrypted plaintext.
-7. **This repository is public.** See the next section.
-8. **Lists and long jobs must be resumable:** classify each item as SUCCESS, SKIP, ERROR or
+6. **This repository is public.** See the next section.
+7. **Lists and long jobs must be resumable:** classify each item as SUCCESS, SKIP, ERROR or
    CLEANUP, derive state from the work products, publish atomically. See `docs/scripting.md`.
    General form (progress with ETA, abort, `flock`, `--status`): global rule
    `long-running-scripts.md`. Wrap noisy commands in `+errlog -- <cmd>` (rule `errlog.md`).

@@ -45,15 +45,14 @@ Laut und folgenlos, also ungefährlich — aber eben auch nutzlos in Automatisie
 werden muss:
 
 ```bash
-git diff --no-ext-diff --no-textconv --no-color <datei> > /tmp/p.patch
+git diff <datei> > /tmp/p.patch
 # gewünschte Hunks herausschneiden: Datei-Header plus die @@-Blöcke
 git apply --cached --recount /tmp/p.patch
 git commit -m "..."   # der Rest bleibt im Arbeitsbaum für den nächsten Commit
 ```
 
 `--recount` macht die Zeilenzähler des Ausschnitts wieder stimmig, wenn davor
-liegende Hunks fehlen. Die beiden `--no-*`-Flags sind Pflicht — siehe die Regel zu
-`git diff` und difftastic.
+liegende Hunks fehlen.
 
 Wo die Trennlinie ohnehin zwischen Dateien verläuft, ist der einfachere Weg, von
 vornherein zweimal zu committen statt einen Commit nachträglich zu zerlegen.

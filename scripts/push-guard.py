@@ -10,21 +10,13 @@ once does not carry over, so every push gets looked at again.
 Stdlib only, on purpose: a guard that installs dependencies to run has a supply
 chain of its own (same reasoning as infra/scripts/osv-audit.py).
 
-THE ONE THING THAT MUST NOT BREAK: `git diff | grep '^+'` returns NOTHING in
-this repo. modules/git.nix sets diff.external to difftastic in
-~/.config/git/config, so `git diff` emits a structural view with line numbers
-instead of a unified diff, and every plus-line filter silently matches zero
-lines -- no error, exit code 0. A scan built on it reports "clean" because it
-structurally cannot find anything. Measured 2026-08-27 while preparing a real
-push: 0 plus-lines where --no-ext-diff gave 789.
+A repository can set diff.external or a textconv driver in its own .git/config
+(this one has a git-crypt textconv there). The guard parses plus-lines and must
+not depend on that, so it passes --no-ext-diff --no-textconv (DIFF_FLAGS).
 
-  Details: modules/ai/_files/rules/git-external-diff.md (shipped globally to
-  ~/.claude/rules/), and the memory note
-  ~/.claude/projects/<project>/memory/git-diff-difftastic-bricht-plus-grep.md
-
-Hence --no-ext-diff below, and hence scan_is_vacuous(): if there are commits to
-push but the scan saw no lines, that is reported as INCONCLUSIVE rather than
-clean. "No hits" is only a result once you know the filter could have hit.
+If there are commits to push but the scan saw no lines, that is reported as
+INCONCLUSIVE rather than clean. "No hits" is only a result once you know the
+filter could have hit.
 
 Exit codes: 0 = decision emitted on stdout (or nothing to do). 1 = the guard
 itself failed, which is also surfaced as "ask" rather than swallowed.
@@ -132,13 +124,8 @@ TICKET = rx(r"""
 HEXBLOB = rx(r""" (?<! [\w/-] ) (?P<id> [0-9a-f]{24,} ) (?! [\w-] ) """)
 
 
-# --no-textconv is a SECURITY flag here, not a formatting one. .gitattributes
-# maps *.enc.yaml to the `sopsdiffer` driver whose textconv is `sops -d`, so a
-# plain `git diff` hands back DECRYPTED secrets. Measured 2026-08-27 on a real
-# commit: 3 plaintext hits with textconv, 0 with --no-textconv. Without it this
-# guard would read secrets and print them into its own findings output.
-#
-# --no-ext-diff is the difftastic fix described in the module docstring.
+# Independent of any diff.external or textconv driver in .git/config; see the
+# module docstring.
 DIFF_FLAGS = ("--no-ext-diff", "--no-textconv", "--no-color", "-U0")
 
 
@@ -169,7 +156,7 @@ def commits_to_push() -> tuple[list[str], str]:
 def added_lines(commits: list[str]) -> list[tuple[str, int, str]]:
     """(path, lineno, text) for every added line across the pushed commits.
 
-    --no-ext-diff is load-bearing; see the module docstring.
+    DIFF_FLAGS is load-bearing; see the module docstring.
     """
     if not commits:
         return []
@@ -335,7 +322,8 @@ def main() -> int:
             "The pre-push PII/infrastructure guard could not run, so nothing "
             f"has been checked: {exc}\n\n"
             "Do not treat this as a clean result. Scan manually with "
-            "`git diff --no-ext-diff origin/main..HEAD` before publishing."
+            "`git diff --no-ext-diff --no-textconv origin/main..HEAD` before "
+            "publishing."
         )
         return 0
 
@@ -347,10 +335,8 @@ def main() -> int:
     if not rows:
         decide(
             f"The pre-push guard saw {len(commits)} commit(s) to push but read "
-            "0 lines from them, so it cannot have found anything. This is the "
-            "difftastic failure mode described in "
-            "modules/ai/_files/rules/git-external-diff.md. Check the guard "
-            "before trusting this push."
+            "0 lines from them, so it cannot have found anything. Check the "
+            "guard before trusting this push."
         )
         return 0
 

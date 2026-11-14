@@ -77,7 +77,7 @@ Free, maintained, no uncontrolled runtime download.
 
 | Extension | Reason |
 |---|---|
-| signageos.signageos-vscode-sops | Writes the **decrypted** file as `.decrypted~<name>` into the working directory, next to the encrypted one; deleted only on a focus change, not on crash or quit, and no `.gitignore` entry. That is a secret in the git working tree and in agent context. Use `sops edit` in a terminal; the repo's git textconv shows diffs |
+| signageos.signageos-vscode-sops | Writes the **decrypted** file as `.decrypted~<name>` into the working directory, next to the encrypted one; deleted only on a focus change, not on crash or quit, and no `.gitignore` entry. That is a secret in the git working tree and in agent context. Use `sops edit` in a terminal; `git dsops` shows decrypted diffs |
 | foxundermoon.shell-format | Downloads shfmt without a checksum into `/usr/local/bin`; mkhl.shfmt does the job |
 | vscjava.vscode-lombok | Redundant: redhat.java supports Lombok by default |
 | fwcd.kotlin | Upstream declared it deprecated in favour of the official LSP |
