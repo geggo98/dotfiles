@@ -1,6 +1,6 @@
 ---
 name: technical-writing
-description: "Use when writing documentation, commit messages, error text, explanations, reports, or summaries. Applies especially to Jira tickets, pull request descriptions, and review comments: always start these with a TL;DR summary. Combines Strunk, ASD-STE100 (Simplified Technical English), and ISO 24495-1 (plain language), for English and German text. Text for people is drafted by Opus 5.5 or a Sol-class model, never by Fable 5.1 or 5.2 (section Which Model Writes), and a fresh agent checks that it is self-contained (section Fresh-Eyes Review). Triggers: writing human-readable content, verbose text, unclear explanations, Jira tickets, pull requests, review comments, AI-sounding text, unslop."
+description: "Use when creating or changing technical documents, in particular every Markdown and AsciiDoc file unless the user explicitly says otherwise, and when writing commit messages, error text, explanations, reports, or summaries. Applies especially to Jira tickets, pull request descriptions, and review comments: always start these with a TL;DR summary. Combines Strunk, ASD-STE100 (Simplified Technical English), and ISO 24495-1 (plain language), for English and German text. Text for people is drafted by Opus 5.5 or a Sol-class model, never by Fable 5.1 or 5.2 (section Which Model Writes), and a fresh agent checks that it is self-contained (section Fresh-Eyes Review). Triggers: Markdown, AsciiDoc, README, docs, rules, skills, writing human-readable content, verbose text, unclear explanations, Jira tickets, pull requests, review comments, AI-sounding text, unslop."
 allowed-tools: Read(references/*) Bash(zsh *) Read
 ---
 
@@ -10,6 +10,22 @@ Vigorous writing is concise.
 A sentence should contain no unnecessary words,
 a paragraph no unnecessary sentences,
 for the same reason that a drawing should have no unnecessary lines and a machine no unnecessary parts.
+
+# Scope
+
+This skill applies when you create or change a technical document.
+It applies in particular to every Markdown file (`.md`) and every AsciiDoc file (`.adoc`, `.asciidoc`):
+READMEs, documentation, rules, skills, ADRs, runbooks.
+It applies unless the user explicitly specifies otherwise.
+
+The reason: people and agents read these files later, without the session in which they were written.
+Whatever the text does not say, that reader cannot recover.
+
+Two limits:
+
+- Files that a tool generates, such as a changelog written by a release tool or a lock file, are out of scope.
+- Replies in the running conversation need only the Core Principles,
+  because the reader holds the context.
 
 # Jira Tickets, Pull Requests, Review Comments
 
