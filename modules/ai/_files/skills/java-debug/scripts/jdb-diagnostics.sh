@@ -10,7 +10,7 @@ Collect diagnostics from a running JVM via JDB, including thread dumps,
 class listings, and deadlock analysis. Outputs results to stdout or a file.
 
 Options:
-  --host <hostname>      Target host (default: localhost)
+  --host <hostname>      Target host (default: 127.0.0.1; the JDWP agent listens on IPv4 only)
   --port <port>          JDWP port (default: 5005)
   --output <file>        Write diagnostics to file (default: stdout)
   --threads              Collect thread dump (default: enabled)
@@ -20,7 +20,7 @@ Options:
 
 Prerequisites:
   The target JVM must have JDWP enabled:
-    java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 ...
+    java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:5005 ...
 
 Examples:
   $(basename "$0") --port 5005
@@ -31,7 +31,7 @@ EOF
   exit 0
 }
 
-HOST="localhost"
+HOST="127.0.0.1"
 PORT="5005"
 OUTPUT=""
 COLLECT_THREADS=true

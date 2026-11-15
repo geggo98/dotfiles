@@ -9,7 +9,7 @@ Usage: $(basename "$0") [options]
 Attach JDB to a running JVM that has the JDWP agent enabled.
 
 Options:
-  --host <hostname>      Target host (default: localhost)
+  --host <hostname>      Target host (default: 127.0.0.1; the JDWP agent listens on IPv4 only)
   --port <port>          JDWP port (default: 5005)
   --sourcepath <path>    Colon-separated source directories
   --jdb-args <args>      Additional arguments passed to jdb
@@ -17,11 +17,11 @@ Options:
 
 Prerequisites:
   The target JVM must have been started with JDWP enabled:
-    java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:5005 ...
+    java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:5005 ...
 
 Examples:
-  $(basename "$0")                                    # localhost:5005
-  $(basename "$0") --port 8000                        # localhost:8000
+  $(basename "$0")                                    # 127.0.0.1:5005
+  $(basename "$0") --port 8000                        # 127.0.0.1:8000
   $(basename "$0") --host 10.0.1.5 --port 5005        # remote host
   $(basename "$0") --sourcepath src/main/java          # with source
 
@@ -29,7 +29,7 @@ EOF
   exit 0
 }
 
-HOST="localhost"
+HOST="127.0.0.1"
 PORT="5005"
 SOURCEPATH=""
 JDB_ARGS=""
@@ -83,7 +83,7 @@ if command -v nc &>/dev/null; then
     echo "Warning: Cannot reach ${HOST}:${PORT}. The JVM may not be running or JDWP may not be enabled."
     echo ""
     echo "Ensure the target JVM was started with:"
-    echo "  java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:${PORT} ..."
+    echo "  java -agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=127.0.0.1:${PORT} ..."
     echo ""
     echo "Attempting to connect anyway..."
     echo ""

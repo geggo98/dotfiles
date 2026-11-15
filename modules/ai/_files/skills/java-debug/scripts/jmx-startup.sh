@@ -15,8 +15,14 @@ Options:
                       (com.sun.management.jmxremote.port == .rmi.port).
   --hostname HOST     java.rmi.server.hostname — what the RMI server reports back
                       to clients. Defaults to 127.0.0.1 for dev safety.
-                      Set to the external IP for containers (see references/jmx.md §6).
-  --auth              Require authentication. Reads JMX_PASSWORD_FILE env var
+                      Keep 127.0.0.1 for kubectl port-forward; set a name the
+                      client resolves only for direct access (references/jmx.md §6).
+                      A loopback hostname (127.x, localhost, ::1) also binds the
+                      listener to loopback (com.sun.management.jmxremote.host).
+  --bind-all          Do not bind to loopback even for a loopback hostname. Needed
+                      for docker port publishing (-p), which forwards to the
+                      container's eth0. Warns on stderr when used without --auth.
+  --auth             Require authentication. Reads JMX_PASSWORD_FILE env var
                       (path to a JDK-format password file, mode 0400/0600).
                       Optionally also JMX_ACCESS_FILE for readonly/readwrite.
   --ssl               Require SSL. RMI keystore/truststore must be configured
@@ -32,29 +38,33 @@ Examples:
   # Local dev — single port, no auth, localhost-only
   jmx-startup.sh --port 5000 --print-args-only
 
-  # Container with port-forward — bind to 127.0.0.1 (kubectl port-forward case)
+  # Pod via kubectl port-forward (preferred): hostname 127.0.0.1, forward the
+  # same local port (kubectl port-forward pod/<pod> 5000:5000)
   jmx-startup.sh --port 5000 --hostname 127.0.0.1 --print-args-only
 
-  # Container with direct external access — hostname must match what the client uses
-  jmx-startup.sh --port 5000 --hostname myhost.example.com --print-args-only
+  # Direct access: hostname = a name the client resolves, e.g. the service DNS
+  # name. Port-forward does NOT work with such a hostname.
+  jmx-startup.sh --port 5000 --hostname <svc>.<ns>.svc.cluster.local --print-args-only
 EOF
 }
 
 err() { printf 'error: %s\n' "$*" >&2; }
 
 PORT=5000
-HOSTNAME=127.0.0.1
+RMI_HOSTNAME=127.0.0.1
 AUTH=0
 SSL=0
+BIND_ALL=0
 PRINT_ARGS_ONLY=0
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     -h|--help) usage; exit 0 ;;
     --port) PORT="$2"; shift 2 ;;
-    --hostname) HOSTNAME="$2"; shift 2 ;;
+    --hostname) RMI_HOSTNAME="$2"; shift 2 ;;
     --auth) AUTH=1; shift ;;
     --ssl) SSL=1; shift ;;
+    --bind-all) BIND_ALL=1; shift ;;
     --print-args-only) PRINT_ARGS_ONLY=1; shift ;;
     *) err "unknown option: $1"; usage; exit 1 ;;
   esac
@@ -62,7 +72,7 @@ done
 
 # Warn on 0.0.0.0 — common footgun
 HOSTNAME_WARNING=""
-if [[ "$HOSTNAME" == "0.0.0.0" ]]; then
+if [[ "$RMI_HOSTNAME" == "0.0.0.0" ]]; then
   HOSTNAME_WARNING="WARNING: java.rmi.server.hostname=0.0.0.0 makes the RMI server tell clients to call back to 0.0.0.0, which breaks JMX from any non-local client. Set this to the externally-reachable hostname/IP instead."
 fi
 
@@ -70,8 +80,27 @@ flags=(
   "-Dcom.sun.management.jmxremote=true"
   "-Dcom.sun.management.jmxremote.port=$PORT"
   "-Dcom.sun.management.jmxremote.rmi.port=$PORT"
-  "-Djava.rmi.server.hostname=$HOSTNAME"
+  "-Djava.rmi.server.hostname=$RMI_HOSTNAME"
 )
+
+# Without this flag the JMX listener binds to ALL interfaces, even when the RMI stub says 127.0.0.1.
+# Bind to loopback whenever the advertised hostname is loopback (local use and kubectl port-forward),
+# unless --bind-all asks for all interfaces (docker port publishing forwards to eth0, not loopback).
+# matches: 127.0.0.1, 127.1.2.3, localhost, LOCALHOST, ::1, [::1]
+shopt -s nocasematch
+BIND_ADDR=""
+case "$RMI_HOSTNAME" in
+  localhost) BIND_ADDR=127.0.0.1 ;;
+  127.*) BIND_ADDR=$RMI_HOSTNAME ;;
+  ::1|'[::1]') BIND_ADDR=::1 ;;
+esac
+shopt -u nocasematch
+if [[ -n "$BIND_ADDR" ]] && (( ! BIND_ALL )); then
+  flags+=("-Dcom.sun.management.jmxremote.host=$BIND_ADDR")
+  LISTEN_WARNING=""
+else
+  LISTEN_WARNING="WARNING: the JMX port $PORT listens on ALL interfaces (no com.sun.management.jmxremote.host)."
+fi
 
 if (( AUTH )); then
   : "${JMX_PASSWORD_FILE:?--auth requires JMX_PASSWORD_FILE env var (path to a JDK-format password file)}"
@@ -93,6 +122,11 @@ fi
 if (( PRINT_ARGS_ONLY )); then
   printf '%s ' "${flags[@]}"
   printf '\n'
+  # Warnings go to stderr, so $(jmx-startup.sh --print-args-only) composition keeps working.
+  [[ -n "$HOSTNAME_WARNING" ]] && printf '%s\n' "$HOSTNAME_WARNING" >&2
+  if [[ -n "$LISTEN_WARNING" ]] && (( ! AUTH )); then
+    printf '%s Without --auth anyone who reaches it can execute code in this JVM.\n' "$LISTEN_WARNING" >&2
+  fi
 else
   cat <<EOM
 === JVM startup flags for JMX ===
@@ -110,6 +144,9 @@ Single-port pattern: com.sun.management.jmxremote.port == .rmi.port avoids the
 EOM
   if [[ -n "$HOSTNAME_WARNING" ]]; then
     printf '%s\n\n' "$HOSTNAME_WARNING" >&2
+  fi
+  if [[ -n "$LISTEN_WARNING" ]]; then
+    printf '%s\n\n' "$LISTEN_WARNING" >&2
   fi
   if (( ! AUTH )); then
     cat <<EOM >&2

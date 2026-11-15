@@ -173,7 +173,7 @@ echo ""
 # Build jdb command
 if [[ -n "$HOST" || -z "$MAINCLASS" ]]; then
   # Attach mode
-  TARGET_HOST="${HOST:-localhost}"
+  TARGET_HOST="${HOST:-127.0.0.1}"
   CMD="jdb -attach ${TARGET_HOST}:${PORT}"
 else
   # Launch mode

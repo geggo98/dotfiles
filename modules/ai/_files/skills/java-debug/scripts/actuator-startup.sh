@@ -80,7 +80,6 @@ esac
 
 flags=(
   "-Dspring.jmx.enabled=true"
-  "-Dmanagement.endpoints.enabled-by-default=true"
   "-Dmanagement.endpoints.web.exposure.include=$INCLUDE"
   "-Dmanagement.endpoints.jmx.exposure.include=*"
   "-Dmanagement.endpoints.jmx.exposure.exclude=none"
@@ -115,7 +114,6 @@ Equivalent application.yml:
       enabled: true
   management:
     endpoints:
-      enabled-by-default: true
       web:
         exposure:
           include: "$INCLUDE"

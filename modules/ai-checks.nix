@@ -104,7 +104,12 @@ in
     {
       checks.ai-composition =
         assert lib.assertMsg (builtins.all (x: x) assertions) "AI aspect composition invariant failed";
-        pkgs.runCommand "ai-composition-check" { nativeBuildInputs = [ python pkgs.zsh pkgs.perl ]; } ''
+        pkgs.runCommand "ai-composition-check"
+          {
+            nativeBuildInputs = [ python pkgs.zsh pkgs.perl pkgs.bash ];
+            # test_jmx_sample.py talks to a fake Jolokia endpoint on 127.0.0.1.
+            __darwinAllowLocalNetworking = true;
+          } ''
           export PYTHONDONTWRITEBYTECODE=1
           cp -R ${./ai/_tests} tests
           mkdir -p _files
@@ -122,6 +127,11 @@ in
           chmod +x _files/skills/database/scripts/*.sh
           patchShebangs _files/skills/database/scripts
           python3 tests/test_database_secrets.py
+          mkdir -p _files/skills/java-debug/scripts
+          cp ${./ai/_files/skills/java-debug/scripts/jmx-sample.py} _files/skills/java-debug/scripts/jmx-sample.py
+          python3 tests/test_jmx_sample.py
+          cp ${./ai/_files/skills/java-debug/scripts/jmx-startup.sh} _files/skills/java-debug/scripts/jmx-startup.sh
+          python3 tests/test_jmx_startup.py
           python3 tests/test_codex_config.py
           python3 - ${codexLeafHooks} <<'PY'
           import json, re, sys, tomllib
