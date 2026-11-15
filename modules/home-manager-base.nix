@@ -36,6 +36,7 @@ in
       hm.neovim
       hm.devdocs
       hm.errlog
+      hm.perl-i
       hm.agents
       hm.agent-content
       hm.mcp-servers

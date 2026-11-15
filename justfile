@@ -174,6 +174,10 @@ ai-check: _check-untracked
 errlog-check: _check-untracked
     nix build --no-link .#checks.aarch64-darwin.errlog
 
+# Test suite of the +perl-i wrapper (modules/_files/perl-i), in the Nix sandbox
+perl-i-check: _check-untracked
+    nix build --no-link .#checks.aarch64-darwin.perl-i
+
 # Format all Nix files
 fmt:
     nix run nixpkgs#nixpkgs-fmt -- $(find . -name '*.nix' -not -path './_*')
