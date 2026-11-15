@@ -59,7 +59,8 @@ bricht dann mit `Too late for "-CSD" option` ab (exit 255). Dort stattdessen
 
 ### In-place-Edits: immer mit Backup
 
-In-place-Edits mit perl laufen über den Wrapper `+perl-i`. Er sichert jede Datei,
+In-place-Edits mit perl laufen über den Wrapper `+perl-i`. Den Wrapper liefert dieses
+Repository (`modules/perl-i.nix`, Quelle `modules/_files/perl-i/perl-i.py`). Er sichert jede Datei,
 bevor perl sie anfasst:
 
 ```zsh
@@ -111,10 +112,10 @@ zweite Lauf die einzige gute Kopie überschreibt.
 
 **Grenzen:** Die Regel gilt nicht, wenn der Edit nur Dateien berührt, die in git
 committet und seitdem unverändert sind; dann ist git das Backup. Sie gilt auch
-nicht für Wegwerfdateien im Scratchpad. Im Zweifel das Backup anlegen.
+nicht für Wegwerfdateien im Scratchpad (dem sitzungseigenen Temp-Verzeichnis des Agenten). Im Zweifel das Backup anlegen.
 
 Ein Backup ersetzt nicht die Prüfung des Ergebnisses: Steht der neue Text in der
-Datei, ist die Größe plausibel? Siehe die Regel `filter-validation.md`.
+Datei, ist die Größe plausibel? Siehe die Regel `filter-validation.md` (im selben Verzeichnis, `modules/ai/_files/rules/`).
 
 ## Kurze Skripte: `#!/bin/zsh`, nicht bash
 
