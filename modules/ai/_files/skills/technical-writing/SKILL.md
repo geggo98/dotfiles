@@ -158,6 +158,41 @@ const r = await agent(
   { label: "fresh-eyes", schema: FINDINGS })
 ```
 
+# Writing Rules
+
+A rule that is written down carries three parts:
+
+1. **Origin**, if known: the incident, the dated measurement, the source, or the user request that produced the rule.
+   Never invent one.
+2. **Rationale**: the mechanism that explains why the rule prevents the failure.
+   From the mechanism follows when the rule applies and when it does not.
+   State those limits explicitly.
+3. **Expiry criterion** (optional): what must change for the rule to become unnecessary.
+
+The reason: rules without reasons only accumulate.
+Nobody can tell which rules are obsolete and can be retired,
+or which rules do not fit a concrete case.
+When two rules conflict, the rationales show which one serves its purpose in the case at hand.
+
+Bad:
+
+> Never use `sed -i`.
+
+Good:
+
+> Do not use `sed -i'' -e` for in-place edits; use `perl -i -pe` instead.
+> Origin: BSD `sed` reads `-i'' -e` as the backup extension `-e` and silently leaves a stale `file-e` beside the original.
+> Limit: GNU `sed` and perl are not affected, so the rule matters wherever a script can meet BSD `sed`, such as macOS.
+> Expiry: none; this is platform behaviour.
+
+The bad version gives no way to decide whether it applies on a Linux host with GNU `sed`,
+or whether it is still needed.
+The good version answers both from the rule itself.
+
+When the origin is unknown, write "origin unknown" instead of inventing one.
+The rule stays as it is;
+the missing origin only tells a later reader that nobody recorded it.
+
 # Core Principles
 
 Make paragraph the unit of composition:
@@ -313,7 +348,8 @@ When writing:
 5. One topic per paragraph
 6. Emphatic words at end
 7. Reread once as the reader, using the checklist in reader comprehension, section 9
-8. For text that leaves the session, run the Fresh-Eyes Review
+8. Check that every rule has an origin and a rationale (section Writing Rules)
+9. For text that leaves the session, run the Fresh-Eyes Review
 
 Every word must justify its presence.
 
