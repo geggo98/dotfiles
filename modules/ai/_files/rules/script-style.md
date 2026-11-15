@@ -17,7 +17,7 @@ wortlos eine Datei `foo-e` neben das Original.
 | statt | schreiben |
 |---|---|
 | `grep -o` / `sed -n 's/…/\1/p'` | `perl -ne 'print $+{x} if /(?<x>…)/'` |
-| `sed -i'' -e 's/a/b/'` | `perl -i -pe 's/a/b/'` |
+| `sed -i'' -e 's/a/b/'` | `+perl-i -pe 's/a/b/' -- datei` |
 | `awk -F'\t' '{print $4}'` | `perl -F'\t' -lane 'print $F[3]'` |
 | `grep -c` | `perl -ne '$n++ if /…/; END { print $n // 0 }'` |
 | `date -d "$ts" +%s` | `perl -MTime::Local=timegm_modern -e '…'` (rein UTC, keine Sommerzeitfälle) |
@@ -56,6 +56,65 @@ bricht ab, alle liefern plausibel aussehende falsche Werte:
 In einer Skriptdatei gehört `-C` nicht in die Shebang-Zeile: `perl script.pl`
 bricht dann mit `Too late for "-CSD" option` ab (exit 255). Dort stattdessen
 `use utf8;` und `use open qw(:std :encoding(UTF-8));`.
+
+### In-place-Edits: immer mit Backup
+
+In-place-Edits mit perl laufen über den Wrapper `+perl-i`. Er sichert jede Datei,
+bevor perl sie anfasst:
+
+```zsh
++perl-i -pe 's/a/b/' -- datei1 datei2
+```
+
+- **Das `--` ist Pflicht:** links davon stehen die perl-Schalter, rechts davon die
+  Dateien. Fehlt es, endet `+perl-i` mit exit 2 und fasst nichts an. `-i` nicht
+  selbst übergeben, das lehnt der Wrapper ebenfalls mit exit 2 ab.
+- **Ein neues Backup-Verzeichnis je Lauf:**
+  `$TMPDIR/perl-i/<YYYYmmddTHHMMSS>-<zufall>/<absoluter Pfad der Datei>`, dazu
+  `manifest.tsv` mit sha256, Größe und Pfad jeder Kopie. Zwei Läufe auf dieselbe
+  Datei ergeben also zwei getrennte Backups. Backup-Pfad und Restore-Kommando
+  stehen auf stderr.
+- **Leer gewordene Dateien sind ein Fehler:** schrumpft eine Datei von mehr als
+  0 Byte auf 0 Byte, warnt der Wrapper und endet mit exit 1. `--allow-empty`
+  schaltet das ab.
+- **Symlinks lehnt er ab.** `perl -i` ersetzt einen Symlink durch eine reguläre
+  Datei und lässt das Ziel unverändert (gemessen am 15.11.2026, perl 5.34.1).
+- `--backup-root DIR` legt die Backups woanders ab. `+perl-i --list` zeigt die
+  Backup-Läufe, den neuesten zuerst. `+perl-i --restore <backup-verzeichnis>`
+  prüft zuerst die sha256 jeder Kopie und stellt dann atomar wieder her.
+- **Exit-Codes:** der von perl; 1 = eine Datei wurde leer oder der Restore
+  scheiterte; 2 = falscher Aufruf; 125 = das Backup scheiterte, perl lief nicht.
+
+Wo `+perl-i` nicht installiert ist, für **eine** Datei von Hand sichern:
+
+```zsh
+bak=$(mktemp -d "${TMPDIR:-/tmp}/perl-i.XXXXXX") && cp -p -- datei "$bak/" && echo "backup: $bak" >&2 && perl -i -pe 's/a/b/' -- datei
+```
+
+Für mehrere Dateien mit gleichem Basisnamen reicht das nicht, dort den Wrapper
+nehmen. perls eigenes `-i"$bak/*"` ist kein Ersatz. Gemessen am 15.11.2026 mit
+perl 5.34.1 scheitert es an Dateien in Unterverzeichnissen (`Can't rename sub/f to
+…/sub/f: No such file or directory, skipping file`, exit 2; die Datei wird
+übersprungen, nicht zerstört), und gleiche Basisnamen überschreiben sich im
+Backup-Verzeichnis gegenseitig.
+
+**Herkunft:** Am 15.11.2026 kürzte ein zsh-Helfer mit verschachteltem perl-Quoting
+12 Skill-Markdown-Dateien auf 0 Byte. Ein anschließendes `perl -i`
+„ersetzte" in der leeren Datei und meldete 1 Treffer. Die Trefferzahl bewies also
+nichts. Die Dateien hatten nicht committete Änderungen und kein Backup; sie ließen
+sich nur aus den Transkripten der Agenten wiederherstellen.
+
+**Begründung:** `-i` ohne Endung überschreibt die Datei ohne Weg zurück, und ein
+Fehler im Ausdruck zeigt sich erst nach dem Schreiben. Ein Backup unter `$TMPDIR`
+kostet im Arbeitsbaum nichts. Ein eigenes Verzeichnis je Lauf verhindert, dass der
+zweite Lauf die einzige gute Kopie überschreibt.
+
+**Grenzen:** Die Regel gilt nicht, wenn der Edit nur Dateien berührt, die in git
+committet und seitdem unverändert sind; dann ist git das Backup. Sie gilt auch
+nicht für Wegwerfdateien im Scratchpad. Im Zweifel das Backup anlegen.
+
+Ein Backup ersetzt nicht die Prüfung des Ergebnisses: Steht der neue Text in der
+Datei, ist die Größe plausibel? Siehe die Regel `filter-validation.md`.
 
 ## Kurze Skripte: `#!/bin/zsh`, nicht bash
 

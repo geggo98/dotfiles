@@ -32,7 +32,7 @@ runs outside a Nix wrapper must not assume either flavour.
   | Instead of | Write |
   |---|---|
   | `grep -o` / `sed -n 's/…/\1/p'` | `perl -ne 'print $+{x} if /(?<x>…)/'` |
-  | `sed -i'' -e 's/a/b/'` | `perl -i -pe 's/a/b/'` |
+  | `sed -i'' -e 's/a/b/'` | `+perl-i -pe 's/a/b/' -- file` |
   | `awk -F'\t' '{print $4}'` | `perl -F'\t' -lane 'print $F[3]'` |
   | `grep -c` | `perl -ne '$n++ if /…/; END { print $n // 0 }'` |
 
@@ -40,6 +40,10 @@ runs outside a Nix wrapper must not assume either flavour.
   `-e`" and silently leaves a stale `file-e` beside the real one. Perl implements
   `-i` itself, so the divergence is gone at the root rather than worked around. See
   the comment on the `brew-bump` recipe in the `justfile`.
+
+  In-place edits go through `+perl-i`, which backs up every file before perl runs,
+  into a new directory per run under `$TMPDIR/perl-i`; the full rule is in the
+  global rule `script-style.md`, section "In-place-Edits: immer mit Backup".
 
 - **Regex: named capture groups** wherever the syntax supports them — `(?<name>…)`
   with `$+{name}` in Perl, `(?P<name>…)` with `m["name"]` in Python. The name is free
