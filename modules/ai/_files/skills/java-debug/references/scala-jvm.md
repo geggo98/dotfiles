@@ -1,6 +1,8 @@
 # Scala-on-JVM Diagnostics
 
-Scala compiles to JVM bytecode, so every tool that works for Java works for Scala — but the language idioms differ, the build tools differ, and async runtimes (Pekko, ZIO, Cats Effect) fragment stacks in ways that change how you read profiles. This reference covers the Scala-specific deltas for JFR, OpenTelemetry, and JDB; it assumes you have read the language-neutral guides under `references/jfr.md`, `references/otel.md`, and `references/jdb.md`.
+Scala compiles to JVM bytecode, so every tool that works for Java also works for Scala. The language idioms and the build tools differ, however. Async runtimes also split stacks in ways that change how you read profiles. Pekko is the Apache fork of the Akka actor toolkit. ZIO and Cats Effect are effect-system runtimes that run work as fibers: lightweight tasks that the runtime schedules itself and multiplexes onto a small thread pool, so many fibers share few OS threads. This reference covers what is different for Scala in JFR, OpenTelemetry, and JDB. It assumes that you have read the language-neutral guides [`references/jfr.md`](jfr.md), [`references/otel.md`](otel.md), and [`references/jdb.md`](jdb.md).
+
+Paths that start with `references/` or `scripts/` are relative to the root of the `java-debug` skill, not to this file. For example, `scripts/jdb-attach.sh` is the file `java-debug/scripts/jdb-attach.sh`, and from this `references/` directory it is `../scripts/jdb-attach.sh`. Run the commands below from the skill root.
 
 ## Contents
 
@@ -14,9 +16,9 @@ Scala compiles to JVM bytecode, so every tool that works for Java works for Scal
 
 ## 1. Running with the modern `scala` runner (Scala 3.5.0+)
 
-Since Scala 3.5.0 (released August 2024), the `scala` binary **is** Scala CLI — the historical `scala-cli` binary still exists as an alias to the same code, and both flags and behavior are identical. This is the result of [SIP-46](https://docs.scala-lang.org/sips/scala-cli.html). See also the [`scala` command reference](https://scala-cli.virtuslab.org/docs/reference/scala-command/).
+Since Scala 3.5.0 (released August 2024), the `scala` binary **is** Scala CLI. The historical `scala-cli` binary still exists as an alias to the same code, with identical flags and behavior. This change came with [SIP-46](https://docs.scala-lang.org/sips/scala-cli.html). See also the [`scala` command reference](https://scala-cli.virtuslab.org/docs/reference/scala-command/).
 
-Practically this means: `scala Main.scala` no longer drops you in a REPL — it compiles and runs the file. All Scala CLI flags (`--jvm`, `--jvm-opt`, `--java-prop`, `--dep`, `--using`) work directly. Older docs that suggest `scala-cli run …` still apply verbatim; you can read `scala-cli` as a synonym for `scala`.
+As a result, `scala Main.scala` no longer opens a REPL. It compiles and runs the file. All Scala CLI flags work directly: `--jvm` selects the JVM version, `--jvm-opt` passes an option to the JVM, `--java-prop` sets a system property, and `--dep` adds a library dependency. The same settings can also live in the source file as `//> using` directives (see "Embed JVM options in the source file" below). Older documentation that shows `scala-cli run …` therefore still applies word for word.
 
 ### Run a single-file program with JFR
 
@@ -24,7 +26,7 @@ Practically this means: `scala Main.scala` no longer drops you in a REPL — it 
 scala --jvm-opt='-XX:StartFlightRecording=duration=60s,filename=rec.jfr,settings=profile' Main.scala
 ```
 
-The `settings=profile` preset is a balanced default; for memory work prefer `settings=default` plus `gc=detailed`. See `references/jfr.md` §2 for the full settings matrix.
+The `settings=profile` preset is a balanced default. For memory work, prefer `settings=default` plus `gc=detailed`. `gc=detailed` is an option of `-XX:StartFlightRecording` (JDK 17+) that turns on detailed GC events on top of the chosen settings file. `references/jfr.md` explains the two shipped settings files in the §1 table (row "Settings / `.jfc` file") and lists the common `-XX:StartFlightRecording` options in the §2.1 table. That table does not include `gc=`, so this paragraph is the only description of it.
 
 ### Run with the OpenTelemetry Java Agent
 
@@ -36,7 +38,7 @@ scala --jvm-opt="-javaagent:$(./scripts/otel-agent-download.sh)" \
       Main.scala
 ```
 
-`--java-prop=K=V` becomes `-DK=V` on the JVM command line; the OTel agent reads its config from system properties. The agent is bytecode-level and instruments libraries (HTTP servers, JDBC, JMS, Kafka) without source changes — Scala wrappers around those libraries inherit the instrumentation for free.
+`--java-prop=K=V` becomes `-DK=V` on the JVM command line, and the OTel agent reads its configuration from system properties. Section 4 lists what the agent instruments in Scala code.
 
 ### Run under JDB
 
@@ -47,11 +49,11 @@ scala --jvm-opt='-agentlib:jdwp=transport=dt_socket,server=y,suspend=y,address=5
 bash scripts/jdb-attach.sh --port 5005
 ```
 
-`suspend=y` makes the JVM wait at startup until JDB connects, which is what you want for stepping through `main`. Use `suspend=n` to attach to an already-running long-lived process.
+`suspend=y` makes the JVM wait at startup until JDB connects, so you can step through `main` from its first line. Use `suspend=n` to attach to a long-lived process that is already running.
 
 ### Embed JVM options in the source file
 
-`//> using` directives let a `.scala` file carry its JVM configuration so collaborators (and CI) get the same recording without remembering the flags:
+`//> using` directives let a `.scala` file carry its JVM configuration. Collaborators and CI then get the same recording without remembering the flags:
 
 ```scala
 //> using jvm 21
@@ -61,49 +63,49 @@ bash scripts/jdb-attach.sh --port 5005
 @main def run() = …
 ```
 
-Each directive becomes a separate flag — multiple `javaOpt` lines stack. Useful for reproducing a perf issue: commit the file with the JFR flag enabled, anyone running `scala foo.scala` gets the recording.
+Each directive becomes a separate flag, and several `javaOpt` lines add up. This helps to reproduce a performance issue: commit the file with the JFR flag enabled, and everyone who runs `scala foo.scala` gets the recording.
 
 ## 2. sbt and other build tools
 
 ### sbt
 
-sbt forks the JVM only when you ask it to. Without `fork := true`, `javaOptions` are silently ignored — this is the most common reason "my JFR flag does nothing".
+sbt forks the JVM only when you ask it to. Without `fork := true`, sbt ignores `javaOptions` without a warning. This is the most common reason why a JFR flag "does nothing".
 
 ```scala
 javaOptions ++= Seq(
   "-XX:StartFlightRecording=duration=60s,filename=target/sbt.jfr,settings=profile"
 )
-fork := true   // mandatory — otherwise the flags don't reach the running JVM
+fork := true   // mandatory: without it, the flags do not reach the running JVM
 ```
 
-For tests, the same trap applies in `Test / fork`. For `run`, set `run / fork := true` or the global `fork := true`. Verify with `sbt "show javaOptions"` — sbt prints exactly what it will pass.
+For tests, the same trap applies to `Test / fork`. For `run`, set `run / fork := true` or the global `fork := true`. Verify the result with `sbt "show javaOptions"`, which prints exactly what sbt will pass.
 
 ### Mill
 
-Mill ships forking by default; add JVM args via `forkArgs`:
+Mill, a Scala build tool, forks by default. Add JVM arguments with `def forkArgs` inside the module definition in the build file (`build.mill`, or `build.sc` in older Mill versions):
 
 ```scala
 def forkArgs = Seq("-XX:StartFlightRecording=duration=60s,filename=out/mill.jfr,settings=profile")
 ```
 
-For OTel attach the agent the same way: `def forkArgs = Seq("-javaagent:/path/to/opentelemetry-javaagent.jar", "-Dotel.service.name=mill-app")`.
+For OTel, attach the agent the same way: `def forkArgs = Seq("-javaagent:/path/to/opentelemetry-javaagent.jar", "-Dotel.service.name=mill-app")`.
 
 ### Spring Boot in Scala
 
-Rare in practice, but it exists (Scala-on-Spring services). Identical flags to the Java path — see `references/jfr.md` §3 for `bootRun` JVM-arg syntax (`--jvmArgs=…` for Gradle, `-Dspring-boot.run.jvmArguments=…` for Maven).
+Scala services on Spring are rare, but they exist. They use the same flags as Java. On the command line, pass JVM arguments with `--jvmArgs=…` for Gradle `bootRun` and `-Dspring-boot.run.jvmArguments=…` for Maven `spring-boot:run`; `references/jdb.md` §3 shows both forms. To set them in the build file instead, see `references/jfr.md` §3.2.
 
 ## 3. JFR (Java Flight Recorder) from Scala
 
-The conceptual material — `settings=profile` vs `default`, periodic vs duration events, agent-friendly CLI output — is in `references/jfr.md`. The deltas below are Scala-language specific.
+The concepts are in `references/jfr.md`: `settings=profile` versus `default`, periodic versus duration events, and CLI output that an agent can read. The sections below cover only what is different in Scala.
 
 ### Custom events: no `case class`, no `val` fields
 
-JFR generates bytecode that writes to event fields via direct field access. The field must be a JVM-level mutable field that can be reflected on. That rules out:
+JFR generates bytecode that writes to event fields through direct field access. Each field must therefore be a mutable JVM field that reflection can reach. That rules out:
 
-- **`case class`** — fields are `val` (final) and the compiler generates `copy`/`equals`/`hashCode` machinery that fights JFR's bytecode synthesis. You will get runtime errors or silently empty events.
-- **`val` fields** — same final-field problem.
+- **`case class`**: its fields are `val` (final), and the compiler generates `copy`, `equals`, and `hashCode` methods that conflict with the bytecode that JFR generates. The result is runtime errors or events that stay empty without a warning.
+- **`val` fields**: they are final, which causes the same problem.
 
-Use a plain `class extends jdk.jfr.Event` with `var` fields. Annotations apply normally; only watch the `@Category` signature: the Java annotation declares `String[]`, so in Scala you must pass `Array(…)`:
+Use a plain `class extends jdk.jfr.Event` with `var` fields. Annotations work as usual, with one exception. The Java annotation `@Category` declares `String[]`, so in Scala you must pass `Array(…)`:
 
 ```scala
 package com.example.observability
@@ -126,7 +128,7 @@ e.commit()
 
 ### Idiomatic duration-event wrapper
 
-Scala 3 makes it easy to write a small wrapper that mirrors the Java `try-with-resources` pattern for duration events. Note the `isEnabled()` guard — if the event type is filtered out, we should not pay the begin/commit cost.
+In Scala 3, a small wrapper can mirror the Java `try-with-resources` pattern for duration events. The wrapper checks `isEnabled()` first: if the recording filters out the event type, the code skips `begin()` and `commit()` and does not pay for them.
 
 ```scala
 def recorded[E <: Event, R](event: E)(block: E => R): R =
@@ -141,15 +143,17 @@ recorded(PaymentProcessingEvent()): event =>
   paymentService.process(payment)
 ```
 
-Why pass the event to `block`? So the caller can populate fields *while inside* the timed region — useful when the values you want to record (transaction id, retry count) only exist after the work happens.
+The wrapper passes the event to `block`, so the caller can fill fields *inside* the timed region. This matters when the values to record (transaction id, retry count) exist only after the work is done.
 
 ### Helper scripts work unchanged
 
-`.jfr` is a binary format defined by the JDK; it does not care which language produced the events. The agent scripts `scripts/jfr-record.sh`, `scripts/jfr-summary.sh`, `scripts/jfr-view.sh`, and `scripts/jfr-events.sh` work identically for Scala-produced recordings. Custom event types appear under their `@Name`, queryable as `jfr print --events com.example.OrderProcessed rec.jfr`.
+`.jfr` is a binary format that the JDK defines, and the format is the same whichever language produced the events. The helper scripts of this skill (`scripts/jfr-record.sh`, `scripts/jfr-summary.sh`, `scripts/jfr-view.sh`, and `scripts/jfr-events.sh`, described in `references/jfr.md` §2) therefore work the same way for recordings from Scala. Custom event types appear under their `@Name`. Query them with `jfr print --events com.example.OrderProcessed rec.jfr`.
 
 ## 4. OpenTelemetry spans from Scala
 
-The OTel Java Agent operates at the bytecode level, so all auto-instrumentation (HTTP servers, JDBC drivers, HTTP clients, Kafka clients, JMS, gRPC, Redis) fires for Scala code that uses those libraries — including Scala wrappers like sttp, Cask, http4s' blaze backend, Quill, or Skunk-via-JDBC. Cross-service trace propagation works identically; see `references/otel.md` for the W3C `traceparent` header chain and exporter configuration.
+The OTel Java Agent works on bytecode, without source changes. Its auto-instrumentation (HTTP servers, JDBC drivers, HTTP clients, Kafka clients, JMS, gRPC, Redis) therefore also fires for Scala code that uses those libraries. This includes Scala wrappers such as sttp (HTTP client), Cask and the blaze backend of http4s (HTTP servers), and Quill (database access through JDBC). Skunk, a native PostgreSQL client, does not go through JDBC, so the JDBC instrumentation does not cover it.
+
+Trace propagation across services works the same way. The agent passes the trace context in the W3C `traceparent` and `tracestate` HTTP headers, so a downstream service can attach its spans to the caller's trace. In `references/otel.md`, §5.1 describes this header chain, §4.5 covers baggage, and §2 (Variant A) and §3.4 configure the OTLP exporters.
 
 ### Manual spans, idiomatic Scala 3
 
@@ -179,11 +183,11 @@ def charge(customerId: String, amount: BigDecimal): PaymentResult =
     span.end()
 ```
 
-Order matters: open the scope **after** `startSpan()` so the span becomes the current context, and close it **before** `span.end()` (the scope is a thread-local thing; the span is the data). Auto-instrumentation hanging off this span (e.g. an HTTP call inside `doCharge`) will become a child only while the scope is active.
+The order matters. Open the scope **after** `startSpan()`, so that the span becomes the current context. Close the scope **before** `span.end()`, because the scope is thread-local state and the span holds the data. An auto-instrumented call inside the span, for example an HTTP call inside `doCharge`, becomes a child of the span only while the scope is active.
 
 ### `Using`-based helper
 
-`scala.util.Using` cleans up the boilerplate, but it needs a `Releasable[Span]` typeclass instance. Spans need both scope-close and span-end, which is two actions on two different objects, so a clean `Using` wrapper takes a tiny case class:
+`scala.util.Using` removes the boilerplate, but it needs a `Releasable[Span]` typeclass instance. A span needs two actions on two different objects: close the scope and end the span. A clean `Using` wrapper therefore needs a small case class:
 
 ```scala
 import scala.util.Using
@@ -207,26 +211,24 @@ def traced[R](name: String)(block: Span => R): R =
   }
 ```
 
-Using a plain `try/finally` (as in the first example) is equally fine; pick whichever your codebase prefers. The `Releasable` shape composes well if you already use `Using` for resource management elsewhere.
+A plain `try/finally`, as in the first example, works equally well. Pick the form that your codebase prefers. The `Releasable` form fits well if the codebase already uses `Using` for resources elsewhere.
 
 ### Effect-system wrappers
 
-The raw OTel API uses thread-locals (`Context.makeCurrent`), which breaks under fiber-based runtimes that hop threads transparently. Use the language-level bridge libraries:
+The raw OTel API keeps the context in thread-locals (`Context.makeCurrent`). Fiber-based runtimes (ZIO and Cats Effect) move a fiber between threads without notice, so the context gets lost. Use the bridge libraries for these runtimes instead:
 
-- **ZIO** — [`zio-opentelemetry`](https://github.com/zio/zio-telemetry) (the `zio-telemetry` repo). Provides `Tracing` service and `ZIO`-aware span propagation that follows fiber semantics rather than threads.
-- **Cats Effect / Typelevel stack** — [`otel4s`](https://github.com/typelevel/otel4s). Pure functional wrapper; integrates with `IO`, `Resource`, and `MonadCancel`. Span lifecycle is encoded in the type so you cannot forget to `end()`.
+- **ZIO**: [`zio-opentelemetry`](https://github.com/zio/zio-telemetry) (the `zio-telemetry` repo). It provides a `Tracing` service and `ZIO`-aware span propagation that follows the fiber rather than the thread.
+- **Cats Effect and the Typelevel stack** (the functional Scala libraries built on Cats, such as http4s, fs2, Doobie, and Skunk): [`otel4s`](https://github.com/typelevel/otel4s). It is a purely functional wrapper and integrates with `IO`, `Resource`, and `MonadCancel` (the Cats Effect typeclass for cancellable effects with guaranteed cleanup). The type encodes the span lifecycle, so you cannot forget `end()`.
 
-Both libraries cross-propagate with the OTel Java Agent's auto-instrumentation when configured to share the global tracer provider — incoming HTTP spans from the agent become parents of your effect-typed application spans.
-
-Cross-service tracing (W3C trace context, baggage, OTLP exporter setup) works identically from Scala — see `references/otel.md`.
+Both libraries exchange context with the auto-instrumentation of the OTel Java Agent when you configure them to share the global tracer provider. Incoming HTTP spans from the agent then become the parents of the application spans in your effect types.
 
 ## 5. JDB attach / step-debug for Scala
 
-JDB sees compiled Scala as it sees compiled Java: classes, methods, line numbers, locals. The full workflow (attach modes, breakpoint syntax, batch automation via `scripts/jdb-breakpoints.sh`) is in `references/jdb.md`. Two Scala-specific friction points:
+JDB sees compiled Scala as it sees compiled Java: classes, methods, line numbers, and local variables. The full workflow (attach modes, breakpoint syntax, batch automation with `scripts/jdb-breakpoints.sh`) is in `references/jdb.md`. Scala adds two problems:
 
 ### Name mangling makes method names verbose
 
-Scala's compiler synthesizes `$anonfun$` methods for lambdas and pattern-match cases, `$$Lambda$` for SAM conversions, and `Foo$.bar` for module (`object`) members. JDB's `methods <class>` command shows the real bytecode names — use it before you guess:
+The Scala compiler generates `$anonfun$` methods for lambdas and pattern-match cases, `$$Lambda$` for SAM conversions (a lambda passed as a Java functional interface), and `Foo$.bar` for module (`object`) members. The JDB command `methods <class>` shows the real bytecode names. Run it before you guess a name:
 
 ```
 methods com.example.Foo$
@@ -238,55 +240,58 @@ Then set the breakpoint on the verbose name:
 stop in com.example.Foo$.bar$$anonfun$1
 ```
 
-Stable line-number breakpoints are usually less painful than method-name breakpoints — see next point.
-
 ### Prefer line-number breakpoints over method-name breakpoints
 
-A single `match` expression compiles into multiple synthetic methods, each with its own `$anonfun$N` suffix. A `for`-comprehension expands into nested `flatMap`/`map` lambdas, each a separate method. Stepping `next` through this code can land in places that look unrelated to your source until you realize the compiler hoisted the body of a `case` into its own method.
+A single `match` expression compiles into several synthetic methods, each with its own `$anonfun$N` suffix. A `for`-comprehension expands into nested `flatMap` and `map` lambdas, and each lambda is a separate method. When you step through this code with `next`, you can land in places that look unrelated to your source. The reason is that the compiler moved the body of a `case` into its own method.
 
-Solution: set breakpoints at line numbers, which the compiler preserves accurately in the LineNumberTable attribute:
+Set breakpoints at line numbers instead. They stay stable, because the compiler keeps them accurate in the LineNumberTable attribute of the class file:
 
 ```
 stop at com.example.MyClass:42
 ```
 
-Make sure the build emits debug info — Scala compiles with `-g:vars` (line numbers + locals) by default; do not strip it. For sbt this is the default; for `scala`/Scala CLI it is the default; for `scalac` directly, verify `-g:vars` is present.
+Make sure that the build emits debug info. Scala compiles with `-g:vars` (line numbers and local variables) by default. Do not strip this info: without it, `locals` in JDB reports "Local variable information not available" (see `references/jdb.md` §6). sbt and `scala` (Scala CLI) use this default. If you call `scalac` directly, verify that `-g:vars` is present.
 
 ## 6. Async runtime gotchas — Pekko/Akka, ZIO, Cats Effect
 
-In synchronous code, a JFR `hot-methods` view and a thread stack trace tell the same story. In async runtimes they diverge — the dispatcher thread is busy running fibers or actor messages, and the methods at the top of the stack are runtime plumbing, not your application code.
+`references/jfr.md` §5.2 describes the predefined JFR views that `jfr view` prints, such as `hot-methods` and `thread-cpu-load`. In synchronous code, the JFR view `hot-methods` and a thread stack trace show the same picture. In async runtimes they differ. A dispatcher thread, that is, a worker thread of the runtime's thread pool, runs fibers or actor messages, so the methods at the top of the stack belong to the runtime, not to your application code.
 
 ### Pekko and Akka
 
-Stacks show dispatcher threads named `pekko.actor.default-dispatcher-N` (or `akka.actor.default-dispatcher-N` for the older fork). `jfr view thread-cpu-load rec.jfr` aggregates by thread and surfaces dispatcher hotspots — useful for capacity planning, but it tells you the dispatcher is busy, not what it is busy doing.
+Stacks show dispatcher threads named `pekko.actor.default-dispatcher-N` (or `akka.actor.default-dispatcher-N` for Akka). `jfr view thread-cpu-load rec.jfr` (the "CPU per thread" view) aggregates by thread and shows which dispatchers are busy. This helps with capacity planning, but it does not show what the dispatcher is busy with.
 
-Actor mailbox latency is **not** in JFR. A message sitting in a slow actor's mailbox burns no CPU and produces no JFR event. For actor-level observability use [Pekko Telemetry](https://pekko.apache.org/docs/pekko/current/typed/observability.html) (the Cinnamon-style libraries, or the official OTel bridge from Pekko 1.1+). The OTel bridge produces real spans per message processed, which is what you want.
+JFR does **not** record actor mailbox latency. A message that waits in the mailbox of a slow actor uses no CPU and produces no JFR event. To observe actors, use one of two kinds of instrumentation, both listed on the [Pekko observability page](https://pekko.apache.org/docs/pekko/current/typed/observability.html):
+
+- a third-party instrumentation library in the style of Cinnamon, which is Lightbend Telemetry, the commercial instrumentation agent for Akka;
+- the official OTel bridge from Pekko 1.1+, an integration that reports actor message processing to OpenTelemetry.
+
+The OTel bridge produces one real span per processed message, which JFR cannot provide.
 
 ### ZIO
 
-ZIO fibers hop between dispatcher threads on every suspension point (`*>`, `flatMap`, `ZIO.yieldNow`, semantic blocking). A stack trace captured at any instant shows the ZIO runtime's `FiberRuntime.runLoop` on top with the application code several frames down — and the frames below shift between samples even when the same fiber is "running".
+ZIO fibers move between dispatcher threads at every suspension point (`*>`, `flatMap`, `ZIO.yieldNow`, semantic blocking). The operator `*>` is ZIO's `zipRight`: it runs two effects in sequence and keeps the result of the second. Semantic blocking means that a fiber waits, for example on a `Promise`, a `Queue`, or `sleep`, without blocking an OS thread. A stack trace at any moment shows `FiberRuntime.runLoop` of the ZIO runtime on top and the application code several frames lower. The lower frames also change between samples, even while the same fiber is "running".
 
-`hot-methods` therefore over-counts ZIO runtime methods. Don't be alarmed by `FiberRuntime`, `ZIO$flatMap`, or `Cause` at the top of a profile — that is the engine, not a bug.
+`hot-methods` therefore counts too many ZIO runtime methods. `FiberRuntime`, `ZIO$flatMap`, or `Cause` at the top of a profile are the runtime doing its normal work, not a bug.
 
 ### Cats Effect
 
-Same fiber-hopping behavior. Profiles are dominated by `IOFiber.resume`, `IOFiber.runLoop`, and the trampoline. The user-land `IO` you actually wrote is reachable through the stack but no longer at the hot spot.
+Cats Effect fibers also move between threads. `IOFiber.resume`, `IOFiber.runLoop`, and the trampoline dominate the profiles. The trampoline is the part of the Cats Effect run loop that executes chained `IO` steps one after another in a loop instead of through recursive calls, so its frames appear where you would expect your own code. The `IO` code that you wrote is still in the stack, but not at the hot spot.
 
 ### Common advice for all three
 
-Two things help much more than reading a raw JFR profile:
+Two things help much more than a raw JFR profile:
 
-1. **OTel auto-instrumentation for entry points** (HTTP, DB, message brokers). The agent captures spans around the boundary calls regardless of which fiber/actor handles them, giving you actionable latency attribution per request.
-2. **Manual OTel spans for application logic**, via `zio-opentelemetry` or `otel4s` so the spans follow the fiber, not the thread. The resulting trace tree describes the *logical* flow of work — exactly what you cannot reconstruct from a thread-based profile.
+1. **OTel auto-instrumentation for entry points** (HTTP, databases, message brokers). The agent records spans around these calls, whichever fiber or actor handles them. You then see the latency of each request and where it comes from.
+2. **Manual OTel spans for application logic**, through `zio-opentelemetry` or `otel4s`, so that the spans follow the fiber and not the thread. The resulting trace tree shows the *logical* flow of work, which a thread-based profile cannot show.
 
-Use JFR for what it is still good at in async code: GC behavior, allocation hot spots, lock contention, file/socket I/O. Use OTel for everything that crosses a fiber/actor boundary.
+In async code, use JFR for what it still shows well: GC behavior, allocation hot spots, lock contention, and file and socket I/O. Use OTel for everything that crosses a fiber or actor boundary, because JFR follows threads, not fibers or actors.
 
 ## 7. References
 
-- `references/jfr.md` — JFR concepts, recording lifecycle, CLI tools, custom events (Java POV).
-- `references/otel.md` — OTel agent setup, OTLP exporters, cross-service propagation.
-- `references/jdb.md` — JDB attach/launch workflow, breakpoint syntax, batch automation.
-- [SIP-46: Scala CLI as the default Scala runner](https://docs.scala-lang.org/sips/scala-cli.html) — the proposal that made `scala` and `scala-cli` the same binary.
-- [`scala` command reference](https://scala-cli.virtuslab.org/docs/reference/scala-command/) — exhaustive flag list including `--jvm-opt`, `--java-prop`, `--using` directives.
-- [`zio-opentelemetry`](https://github.com/zio/zio-telemetry) — fiber-aware OTel for ZIO.
-- [`otel4s`](https://github.com/typelevel/otel4s) — Typelevel/Cats Effect OTel bindings.
+- `references/jfr.md`: JFR concepts, recording lifecycle, CLI tools, and custom events, from the Java side.
+- `references/otel.md`: OTel agent setup, OTLP exporters, and propagation across services.
+- `references/jdb.md`: the JDB attach and launch workflow, breakpoint syntax, and batch automation.
+- [SIP-46: Scala CLI as the default Scala runner](https://docs.scala-lang.org/sips/scala-cli.html): the proposal that made `scala` and `scala-cli` the same binary.
+- [`scala` command reference](https://scala-cli.virtuslab.org/docs/reference/scala-command/): the complete flag list, including `--jvm-opt` and `--java-prop`. The `//> using` directives are covered in section 1 under "Embed JVM options in the source file".
+- [`zio-opentelemetry`](https://github.com/zio/zio-telemetry): OTel for ZIO that follows fibers.
+- [`otel4s`](https://github.com/typelevel/otel4s): OTel bindings for Typelevel and Cats Effect.
