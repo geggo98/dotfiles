@@ -100,6 +100,7 @@
           "obsidian"
           "raindropio"
           "raycast"
+          "rcmd" # was MAS 1596283165; vendor moved to direct distribution
           "mac-monitor"
           "redis-insight"
           "sf-symbols"
@@ -153,7 +154,6 @@
           "PLIST Editor" = 1157491961;
           "Save to Raindrop.io" = 1549370672;
           "Omnivore: Read-it-later" = 1564031042;
-          "rcmd" = 1596283165;
           "Shortery" = 1594183810;
           "Source Files: Git Storage" = 6450856155;
           "StopTheMadness Pro" = 6471380298;
