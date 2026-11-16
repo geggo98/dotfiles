@@ -8,6 +8,12 @@ reason, listener agents (Jolokia, remote JMX, nREPL) do not belong in a JVM that
 the same container image instead, started normally without `-XX:CRaCRestoreFrom`. JDWP and a JFR
 recording do not block the checkpoint on Zulu 25.0.5 CRaC (§4). Values that the app read before the checkpoint stay old after the restore.
 
+This file debugs a checkpoint that fails or a restore that misbehaves. To decide whether CRaC fits, and
+to build, bake, deploy and verify a checkpoint, see the skill
+[`java-fast-startup`](../../java-fast-startup/SKILL.md), in particular
+[crac-build-and-deploy.md](../../java-fast-startup/references/crac-build-and-deploy.md) and
+[security.md](../../java-fast-startup/references/security.md).
+
 Measured lines marked "2026-11-15" ran in containers on arm64 (OrbStack, a local Docker and Kubernetes
 runtime for macOS, see
 [orbstack-telepresence.md](../../jvm-remote-debug/references/orbstack-telepresence.md); kernel 7.2) with
@@ -115,7 +121,7 @@ cannot tell the two cases apart. Read the output instead:
 For an app without warm-up, a warp restore was about as fast as a cold start. A cold start reached app
 code in 18 to 44 ms, and a restore with `direct_map=false` in 16 to 23 ms (one run up to 128 ms) (measured
 2026-11-15, Zulu 25.0.5 CRaC, Ubuntu 24.04, unprivileged, in a container).
-The gain comes from the skipped warm-up.
+The gain comes from the skipped warm-up. **Open inconsistency:** [crac-engines.md](../../java-fast-startup/references/crac-engines.md) reports PetClinic restored in 43 to 62 ms with no request before the checkpoint, so the skipped work there is the framework start, not a warm-up.
 
 ## 2. What blocks a checkpoint
 
@@ -201,9 +207,12 @@ Both were measured 2026-11-15 as described:
   the restored JVM nor aborts the restore.
 - **Values cached at checkpoint time stay old:** Spring `@Value` fields, configuration read once at
   startup, and anything stored in a field.
-- **A fresh `System.getenv()` call returns the new value** after a `warp` restore (measured 2026-09,
-  Zulu 25, and again 2026-11-15, Zulu 25.0.5 CRaC, all three test base images, in a container). So the
-  environment itself is new, and only what the app cached is old. **But there is a race.** In most measured restores,
+- **Environment after a `warp` restore** (measured 2026-09, Zulu 25, and again 2026-11-15, Zulu 25.0.5
+  CRaC, all three test base images, in a container): a fresh `System.getenv()` call returns the value of
+  a variable that is set at restore. A variable that is absent at restore keeps its checkpoint value, so
+  removing a secret variable does not remove it from the restored process. Cached values (a Spring
+  `Environment`, `@Value` fields, static fields) stay old. CRIU was not measured, and some public sources
+  report old values. **And there is a race.** In most measured restores,
   the first output of a resumed app thread still showed the old environment value, the old PID and the
   old system properties. The next output of that thread showed the new ones. An `afterRestore` callback
   already saw the new values. For that reason, read the environment in `afterRestore`, not in a thread
@@ -251,9 +260,11 @@ measured). Support came with CRIU pull request
 [checkpoint-restore/criu#2652](https://github.com/checkpoint-restore/criu/pull/2652), "Support
 MADV_GUARD_INSTALL", whose commits lie between the tags v4.1 and v4.2. The bundled CRIU 3.17.1-crac fails
 with `Can't splice all pages to pipe` (measured 2026-11-15, Zulu 25.0.5 CRaC, Ubuntu 25.10, privileged, in
-a container). `warp` <= 2.9.0 is reported to crash with SIGSEGV. Treat this as unverified hearsay: it was not measured,
-the source of the report is not recorded, and a search of Azul's CRaC docs and the CRaC GitHub projects
-on 2026-11-15 found none. The bundled warp 2.12.0 checkpoints and restores on glibc 2.42 with guard regions
+a container). `warp` <= 2.9.0 is reported to crash with SIGSEGV by an earlier unpublished team measurement (2026-09).
+The same earlier measurement reported (not re-measured) that no CRIU version worked on kernels 6.13 to 6.15
+with glibc 2.42, that CRIU 4.2 failed intermittently, and that CRIU 4.2.1 on kernel 6.16 or later worked.
+It was not re-measured, and a search of Azul's CRaC docs and the CRaC GitHub projects on 2026-11-15 found
+no public source. The bundled warp 2.12.0 checkpoints and restores on glibc 2.42 with guard regions
 present (measured 2026-11-15, Zulu 25.0.5 CRaC, Ubuntu 25.10, unprivileged, in a container). Check the
 running JVM:
 

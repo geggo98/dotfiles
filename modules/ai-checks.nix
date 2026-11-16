@@ -107,7 +107,8 @@ in
         pkgs.runCommand "ai-composition-check"
           {
             nativeBuildInputs = [ python pkgs.zsh pkgs.perl pkgs.bash ];
-            # test_jmx_sample.py talks to a fake Jolokia endpoint on 127.0.0.1.
+            # test_jmx_sample.py talks to a fake Jolokia endpoint on 127.0.0.1,
+            # test_startup_bench.py polls a fake application on 127.0.0.1.
             __darwinAllowLocalNetworking = true;
           } ''
           export PYTHONDONTWRITEBYTECODE=1
@@ -132,6 +133,11 @@ in
           python3 tests/test_jmx_sample.py
           cp ${./ai/_files/skills/java-debug/scripts/jmx-startup.sh} _files/skills/java-debug/scripts/jmx-startup.sh
           python3 tests/test_jmx_startup.py
+          mkdir -p _files/skills/java-fast-startup/scripts
+          cp ${./ai/_files/skills/java-fast-startup/scripts/startup-bench.py} _files/skills/java-fast-startup/scripts/startup-bench.py
+          python3 tests/test_startup_bench.py
+          cp ${./ai/_files/skills/java-fast-startup/scripts/checkpoint-secret-scan.py} _files/skills/java-fast-startup/scripts/checkpoint-secret-scan.py
+          python3 tests/test_checkpoint_secret_scan.py
           python3 tests/test_codex_config.py
           python3 - ${codexLeafHooks} <<'PY'
           import json, re, sys, tomllib

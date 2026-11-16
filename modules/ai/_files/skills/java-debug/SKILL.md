@@ -16,6 +16,7 @@ description: >-
   request mappings, PKIX. For a JVM in a pod or container (kubectl debug,
   ephemeral container, agents via initContainer), also load
   `jvm-remote-debug`. Hot code replacement and REPL: `spring-boot-repl`.
+  Making startup faster (CDS, AOT cache, CRaC setup): `java-fast-startup`.
 allowed-tools: >-
   Read(references/*)
   Bash(./scripts/jdb-attach.sh *)
@@ -98,7 +99,7 @@ CRaC is Coordinated Restore at Checkpoint: the JVM writes a checkpoint image of 
 | Memory grows | `jcmd <pid> GC.class_histogram -all` (without `-all`: forced full GC), then Native Memory Tracking (NMT: `-XX:NativeMemoryTracking=summary`, `jcmd <pid> VM.native_memory summary`) | [`heap-dumps.md`](references/heap-dumps.md) §1, [`profiling-and-threads.md`](references/profiling-and-threads.md) §2 |
 | `OutOfMemoryError` | `-XX:+HeapDumpOnOutOfMemoryError -XX:HeapDumpPath=<dir>/app_%p.hprof` (`%t` is not expanded) | [`heap-dumps.md`](references/heap-dumps.md) §3 |
 | Start fails, flags unclear | `jcmd <pid> VM.flags`, `VM.command_line` | [`profiling-and-threads.md`](references/profiling-and-threads.md) §2 |
-| Slow startup | `scripts/actuator.sh startup`, or JFR at startup | Strategy A / E |
+| Slow startup | `scripts/actuator.sh startup`, or JFR at startup | Strategy A / E; to make it faster: [`java-fast-startup`](../java-fast-startup/SKILL.md) |
 | `PKIX path building failed` | `keytool -list -cacerts` (the JDK ignores the OS trust store) | [`heap-dumps.md`](references/heap-dumps.md) §6 |
 | CRaC checkpoint fails | open sockets / files in the JVM | [`crac.md`](references/crac.md) |
 | Container exit 137 / OOMKilled | not a Java OOM: cgroup limit | [`jvm-remote-debug` wiring.md](../jvm-remote-debug/references/wiring.md#oomkilled-vs-outofmemoryerror) |
@@ -462,6 +463,6 @@ The script never prints the resolved secret. `--verbose` prints only the *comman
 | [`references/jolokia.md`](references/jolokia.md) | Jolokia: loopback start flags, measured policy semantics, read-only policy template, negative tests |
 | [`references/heap-dumps.md`](references/heap-dumps.md) | Class histogram, heap dump on demand and on OOM (`%p`, not `%t`), MAT headless, dumps in containers, TLS trust (`PKIX`) |
 | [`references/profiling-and-threads.md`](references/profiling-and-threads.md) | Thread dumps (incl. virtual threads), GC log, NMT vs RSS, `VM.*` commands, attach rules, async-profiler |
-| [`references/crac.md`](references/crac.md) | CRaC: engines (warp, CRIU), checkpoint blockers, what a restore keeps, debug agents vs checkpoint, restore failure with glibc >= 2.42 guard regions (§5) |
+| [`references/crac.md`](references/crac.md) | CRaC: engines (warp, CRIU), checkpoint blockers, what a restore keeps, debug agents vs checkpoint, restore failure with glibc >= 2.42 guard regions (§5). Setting up CRaC or an AOT cache for speed: [`java-fast-startup`](../java-fast-startup/SKILL.md) |
 | [`references/scala-jvm.md`](references/scala-jvm.md) | Scala 3.5+ `scala` runner, sbt, Scala-specific JFR/OTel/JDB idioms, Pekko/ZIO/Cats Effect async caveats |
 

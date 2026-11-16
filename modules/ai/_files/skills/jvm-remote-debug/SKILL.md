@@ -115,8 +115,10 @@ from the user first:
   a container).
 - `jcmd <pid> JDK.checkpoint`, the checkpoint command of CRaC
   (Coordinated Restore at Checkpoint, see
-  [crac](../java-debug/references/crac.md)). The JVM stops after the
-  checkpoint is written, so the container exits and restarts.
+  [crac](../java-debug/references/crac.md); building and deploying a
+  checkpoint: [`java-fast-startup`](../java-fast-startup/SKILL.md)). The
+  JVM stops after the checkpoint is written, so the container exits and
+  restarts.
 
 Before you ask, say what the step does and what it costs.
 
@@ -255,6 +257,8 @@ Related skills:
   [actuator](../java-debug/references/actuator.md),
   [jmc](../java-debug/references/jmc.md),
   [crac](../java-debug/references/crac.md).
+- [`java-fast-startup`](../java-fast-startup/SKILL.md): faster start with
+  an AOT cache or CRaC, and how to prove the pod really uses it.
 - `spring-boot-repl`: hot swap, nREPL and Arthas, and its
   [Redefine.java](../spring-boot-repl/scripts/Redefine.java), which
   replaces loaded classes in a running JVM over JDWP in one call.

@@ -262,4 +262,8 @@ Related skills:
 - `java-debug` for diagnosis (JFR, OTel, JDB breakpoints, JMX, Actuator)
 - `jvm-remote-debug` for reaching a JVM in a pod or container
   (port-forward, Secrets, memory limits)
+- [`java-fast-startup`](../java-fast-startup/SKILL.md): HotSwap and the REPL
+  hold listener sockets and so exclude CRaC for the same JVM. JDWP does not
+  block a checkpoint, but it makes the JVM discard an AOT cache. A dev JVM of
+  this skill therefore starts without either technique
 - `devdocs` (a separate offline API-reference skill, if installed) for Spring and JDK javadoc
