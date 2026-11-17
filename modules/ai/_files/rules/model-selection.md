@@ -32,6 +32,33 @@ Versuchen rot bleiben oder der Subagent selbst meldet, die Aufgabe sei zu groß.
 Schritt wechselt auf Opus beziehungsweise Sol, der Rest des Workflows bleibt beim bisherigen
 Modell.
 
+## Design, Bilder und GIFs
+
+Für den gestalterischen Entwurf in diesen Aufgaben gilt statt der Tabelle oben nur diese
+Zuordnung, ohne weitere Modelle:
+
+| Aufgabe | Modell |
+|---|---|
+| 2D-Design, insbesondere Webdesign | nur Fable, kein Astra; nur nach Freigabe oder auf Anforderung |
+| 3D-Design, Bilder, GIFs | Astra nach Freigabe oder auf Anforderung, sonst Sol |
+
+Freigabe und Anforderung gelten wie im Absatz „Fable und Astra nur mit Freigabe" oben: für
+genau einen Workflow oder einen Einsatz eines Subagenten.
+
+Ist das vorgesehene Modell nicht verfügbar, den User fragen. Das betrifft 2D-Design ohne
+Freigabe, 2D-Design in einem Agenten ohne Anthropic-Modelle und 3D-Design, Bilder und GIFs in
+einem Agenten ohne OpenAI-Modelle. Ein Ersatzmodell gibt es hier nicht.
+
+Zwei Teile einer Design-Aufgabe folgen weiter den anderen Regeln:
+
+- **Code, der einen fertigen Entwurf umsetzt** (HTML, CSS, JavaScript), geht nach der
+  Tabelle oben an Sonnet beziehungsweise Terra.
+- **Texte, die Menschen lesen**, auch UI-Texte, schreibt Opus oder ein Sol-Modell, nie Fable
+  oder Astra (Skill `technical-writing`, Abschnitt „Which Model Writes").
+
+Wie die Rollentabelle ist auch diese Zuordnung ein Fallback: Nennt der User oder ein Skill ein
+Modell, gilt dessen Vorgabe.
+
 ## Umsetzung
 
 In Claude Code bei jedem Aufruf des `Agent`-Tools und bei jedem `agent()` in einem
@@ -62,6 +89,9 @@ Wunsch des Users vom 17.11.2026. Am selben Tag gegen die Empfehlungen der Herste
   für klar umrissene Änderungen und Extraktion; Sol mit Effort „extra high" für Entscheidungen
   aus widersprüchlichen Belegen.
 
+Der Abschnitt „Design, Bilder und GIFs" kam am 17.11.2026 auf Wunsch des Users hinzu. Er wurde
+nicht gegen Herstellerangaben geprüft.
+
 ## Begründung
 
 1. **Stärken.** Fable, Opus, Astra und Sol sind am stärksten bei offener Analyse und Planung.
@@ -69,6 +99,8 @@ Wunsch des Users vom 17.11.2026. Am selben Tag gegen die Empfehlungen der Herste
 2. **Kosten und Kontingent.** Fable und Astra kosten am meisten. Deshalb brauchen sie eine
    Freigabe.
 3. **Geschwindigkeit.** Kleinere Modelle arbeiten parallele Umsetzungsschritte schneller ab.
+4. **Design, Bilder und GIFs.** Der User hat die Zuordnung vorgegeben, ohne Begründung. Sie
+   ist deshalb bei neuen Modellklassen als Erstes zu überprüfen.
 
 ## Grenzen
 
