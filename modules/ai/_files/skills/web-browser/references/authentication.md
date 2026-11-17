@@ -77,6 +77,16 @@ measured on 2026-11-03 (Chrome 156, agent-browser 0.36, an SSO-protected test sy
 Chrome running): a fresh session was redirected to the login page, both variants below
 reached the logged-in page.
 
+**Ask the user before every run of `scripts/chrome-cookies.py`, and name the exact host**,
+for example: "May I export the Chrome cookies for `app.example.com`?" Run the script only
+after the user says yes. The user asked for this rule on 2026-11-17. The script copies the
+cookies of the user's own logged-in Chrome, so it hands the agent the user's identity on
+that site; the user decides each time whether that is acceptable. Claude Code enforces the
+same point: in auto mode, the approver that checks each tool call rejects the call with
+`Auto Mode: Unauthorized Access` unless the user gave explicit permission first, and the
+script does not run. A yes covers one host and one run. Ask again for a different host and
+for every later run, even for the same host.
+
 ```bash
 # A) whole profile: every login in it is visible to the agent
 agent-browser --profile Default open https://app.example.com/home   # `agent-browser profiles` lists names
@@ -106,8 +116,7 @@ Limits of B:
 - Exit codes: 0 done, 1 file written but a cookie failed to decrypt, 2 nothing usable,
   125 setup or usage error (including a Keychain refusal).
 - macOS and Google Chrome only (no Chromium, no Linux).
-- Ask the user before running it, name one host, and delete the file afterwards. The state
-  file never belongs in a repository.
+- Delete the state file afterwards. It never belongs in a repository.
 
 Check the result by **URL**, not by title: in the measurement the login page and the
 logged-in page had the same `<title>`; only the URL differed.

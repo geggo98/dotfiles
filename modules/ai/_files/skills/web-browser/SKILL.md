@@ -232,6 +232,11 @@ To take the login from your everyday Chrome for one site, see
 [references/authentication.md](references/authentication.md#everyday-chrome-one-site-only)
 (`scripts/chrome-cookies.py <host>`, then `--state`).
 
+**Ask before every export.** Before each run of `scripts/chrome-cookies.py`, ask the user
+and name the exact host, for example "May I export the Chrome cookies for `app.example.com`?".
+Run the script only after a yes; without it, Claude Code's auto mode blocks the call.
+Details: [references/authentication.md](references/authentication.md#everyday-chrome-one-site-only).
+
 Or use `--session-name` for auto-save/restore:
 
 ```bash

@@ -11,6 +11,9 @@
     chrome-cookies.py app.example.com --profile "Profile 1" --out ./state.json
     agent-browser --state ~/.agent-browser/state/app.example.com.json open https://app.example.com
 
+Agents: ask the user first and name the host (see SKILL.md); without that, Claude Code's auto mode
+rejects the call with "Auto Mode: Unauthorized Access".
+
 Values go ONLY into the target file. stdout carries names, lengths and expiry — never a value.
 Chrome stays running and keeps its session; no remote-debugging port, no restart.
 
