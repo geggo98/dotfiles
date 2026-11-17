@@ -87,19 +87,101 @@ Limit: user-level and project-level `post-start` hooks run at the same time. A
 user-level `post-start` hook that the build depends on can lose that race. Put such a
 hook into `pre-start` instead.
 
+### Does a background hook survive the end of its caller?
+
+Origin of the question: a comment in a local project configuration of the user says that
+a background `post-start` build was killed in the middle of the compile when the caller
+(an agent or a script) ended right after `wt switch`. The project is not named here,
+because this repository is public. The comment is the only source.
+
+Measured on 17.11.2026 on macOS with the installed `wt` (`wt --version` prints
+`wt 0807dc3`), in a scratch repository, one run per variant. The project hook was
+`sleep 4` followed by writing a file; no real build ran. A Python test program started
+`wt` as the leader of a new process group and waited until `wt` returned. It then sent
+the signal shown to the process group named in the table and looked for the file 7 s
+after `wt` had returned (variant F: 8 s after the signal):
+
+| Variant | Call | Signal after the call returned | Sent to | File present |
+|---|---|---|---|---|
+| A | `wt hook post-start` | none | none | yes |
+| B | `wt hook post-start` | SIGTERM | process group of `wt` | yes |
+| C | `wt switch --create` | none | none | yes |
+| D | `wt switch --create` | SIGTERM | process group of `wt` | yes |
+| E | `wt switch --create` | SIGKILL | process group of `wt` | yes |
+| F | `wt hook post-start` | SIGKILL | process group of the hook | no |
+
+The core of the test program (hook: `build = "sleep 4; date +%s > \"{{ worktree_path }}/marker\""`
+under `[post-start]` in the scratch repository's `.config/wt.toml`; `-y` skips the
+approval prompt of that scratch project):
+
+```python
+p = subprocess.Popen(["wt", "hook", "post-start", "-y"], cwd=repo, start_new_session=True)
+p.wait()
+os.killpg(p.pid, signal.SIGTERM)   # B; D and E: `wt switch --create c1 -y --no-cd` with SIGTERM / SIGKILL
+time.sleep(7)
+print(os.path.exists(marker))
+```
+
+The call returned after 0.1 to 0.4 s. The test program had made `wt` the leader of a new
+process group and session. A process listing (`ps -axo pid=,ppid=,pgid=,command=`) taken
+right after `wt hook post-start` returned shows the hook's shell and its `sleep` in a
+different process group than `wt`. A signal to the process group of `wt` therefore cannot
+reach the hook, so B shows only that the hook is not in that group; it does not show that
+the hook withstands a signal. For `wt switch --create` (C to E) no listing was taken, so
+those variants show only that the file appeared. Variant F signalled the group id read
+from the listing, the group of the hook's shell, and the hook died.
+
+Not measured: the name of the process that leads the hook's group; the process listing
+for `wt switch --create` and for `wt hook post-switch`; a caller or environment that ends processes by other means, for
+example an IDE or agent harness that tracks jobs or sessions; a real build hook (devenv,
+Gradle); hooks that outlive a time limit of the caller. These measurements therefore
+neither confirm nor explain the older observation. If your caller ends its background
+processes, use a blocking hook (`pre-start`) or `wt hook post-start --foreground` (the
+flag appears in `wt hook post-start --help`; it was not run here). The price is that the
+creation waits for the build. For the IntelliJ script, the foreground variant needs a
+change in `modules/worktrunk.nix`, because the script calls `wt hook post-start` without
+`--foreground`.
+
 ## Approval
 
 Worktrunk runs a project hook only after the user has approved it, and asks again
-whenever the command changes. In a non-interactive session the hook fails with
-`Cannot prompt for approval in non-interactive environment`. The user approves once per
-repository:
+whenever the command changes (stated in the documentation of the `worktrunk` skill;
+observed on 17.11.2026: after a hook command had changed, `wt config approvals list`
+printed "Approved commands no longer in project config"). In a non-interactive session the
+hook fails with `Cannot prompt for approval in non-interactive environment`. The user
+approves per repository:
 
 ```bash
 wt config approvals add
 ```
 
-An agent never passes `--yes` to skip this. The approval is the user's decision about
-whether the repository may run commands on the machine.
+An agent does not pass `--yes` on its own initiative. The approval is the user's decision
+about whether the repository may run commands on the machine.
+
+Measured on 17.11.2026 with `wt 0807dc3`, in a real project repository with two
+unapproved hook commands and stdin from `/dev/null`: `wt config approvals add` listed the
+two commands, printed `Cannot prompt for approval in non-interactive environment` and
+approved nothing (a later `wt config approvals list` still showed both as unapproved).
+`wt config approvals list` prints an `APPROVED` and an `UNAPPROVED` section. The only
+non-interactive way that was tested is `wt config approvals add --yes`. It was run on
+17.11.2026 in 24 repositories, each time after the check described below; afterwards
+`wt config approvals list` showed no unapproved command in any of them. `--yes` is listed
+under "Global Options" in `wt config approvals --help`. `wt hook …` has its own `--yes`,
+which `wt hook pre-start --help` describes as skipping the approval prompts for project
+hooks; whether that stores an approval was not tested. `wt config approvals add --yes`
+approves every command the repository declares (that is why the check below comes first).
+
+Exception: when the user explicitly asks the agent to approve the hooks of repositories
+the user names, the agent first lists the unapproved commands of each repository with
+`wt config approvals list`, and approves a repository only if every listed command is on
+a list of commands that the user has seen in advance. Any other command: the agent skips
+that repository and reports it.
+
+Origin of the exception: on 17.11.2026 the user asked an agent to approve the hooks of
+many repositories in one go. The agent used a list of four commands (`wt step copy-ignored`,
+`devenv tasks run agent:build`, `devenv tasks run agent:install`,
+`devenv shell -- uv sync`).
+
 
 ## Approval of direnv and devenv
 
@@ -157,26 +239,56 @@ anywhere; it mentions only the notification on failure.
 
 `+wt-intellij-setup` (defined as `wt-intellij-setup` in `modules/worktrunk.nix`;
 overview in `docs/ai-tooling.md`) therefore sets its own `PATH`: the Nix-built `wt`,
-`devenv`, `direnv` and `git` first, then `/etc/profiles/per-user/<user>/bin`,
+`devenv`, `direnv`, `git` and `coreutils` first, then IntelliJ's own `PATH`, then
+`/etc/profiles/per-user/<user>/bin`,
 `/run/current-system/sw/bin`, `/nix/var/nix/profiles/default/bin` and
-`/opt/homebrew/bin`. It takes the worktree from the first argument and opens the log
+`/opt/homebrew/bin`. It assumes the worktree is the first argument (unverified, see "Open
+questions" below) and opens the log
 `~/Library/Logs/wt-intellij-setup/<time>-<name>.log` before it checks the argument
 (`<time>` is `YYYYMMDDTHHMMSS`; `<name>` is the last path component of the argument, or
-`no-argument`), so a missing or wrong argument leaves a trace. (`wt hook <type>` runs the configured hooks of that type in
-the current worktree.) It then runs `wt hook pre-start` (blocking),
-`wt hook post-start` and `wt hook post-switch` (background), which are the hooks
-`wt switch --create` would have run.
+`no-argument`), so a missing or wrong argument leaves a trace. The first line of the log
+reads `start <YYYY-MM-DD HH:MM:SS> argument=<argument> cwd=<directory>`. The script then runs
+`wt hook pre-start` (blocking), `wt hook post-start` and `wt hook post-switch`
+(background). `wt hook <type>` runs the configured hooks of that type in the current
+worktree; these are the hooks `wt switch --create` would have run.
 
-If the script fails, read the newest log first. A failure of `pre-start` ends the script
-with the same exit code; the most common cause is a project hook that the user has not
-approved yet (see "Approval").
+If the script fails, read the newest log first
+(`ls -t ~/Library/Logs/wt-intellij-setup | head -1`). The script runs with `set -e`. A
+failure of `wt hook pre-start` ends it with the same exit code and a message in the log; a
+known cause, seen in a test on 16.11.2026, is a project hook that the user has not
+approved yet (see "Approval"). The script's own hint says to run
+`wt config approvals add` "once"; that is shortened, because the call is needed again
+after a hook command changes. A failing `git -C <argument> rev-parse --show-toplevel`
+(a wrong argument; git exits with 128) or a failing `wt hook post-start` or
+`wt hook post-switch` also ends the script, with that command's exit code and without a
+message of the script's own.
 
-Open questions. Status on 16.11.2026: not yet checked in a real IntelliJ; the script was
-run by hand with a minimal `PATH` only. Check once: whether the background hooks survive
-the end of the script (a complete build log in `wt config state logs` shows it), and the
-argument position (the first log line, `argument=…`, shows what the script received; no
-log at all means IntelliJ did not start the script; a log named `…-no-argument.log`
-means it passed no argument).
+Open questions. Status on 17.11.2026: not yet checked in a real IntelliJ. The script, as
+built by `just build-host` on 16.11.2026, was run by hand in scratch repositories with
+`PATH=/usr/bin:/bin` and a worktree created by `git worktree add` as argument. The log
+showed the lines of `+wt-inherit-trust` (direnv and devenv approval were exercised with an
+isolated `XDG_DATA_HOME`), and the exit code was 0, 1 (a project hook that was not
+approved, with the approval hint in the log) or 2 (no argument, with a log). `wt` was
+`wt 0807dc3`. Not covered: an IntelliJ launched from the Dock or Finder, which inherits
+only the minimal `PATH` of launchd instead of a shell's `PATH`, and project hooks that run
+a real build. The background `post-start` hook is not in the process group of
+`wt hook post-start` (measured only for that call; `post-switch` and `wt switch --create`
+were not listed; see "Does a background hook survive the end of its caller?"). That does
+not show how IntelliJ ends a script's processes. Check once in IntelliJ:
+
+- Whether IntelliJ ends the background hooks. The log of the project's `post-start` build
+  hook (here `devenv tasks run agent:build`), listed by `wt config state logs`, should end
+  with the build's last output line if they survived (the logs of a surviving and of a
+  killed hook were not compared). Another check: the build's output, for example compiled
+  classes, exists after the 5-minute window. If they did not, change the script to
+  run `wt hook post-start --foreground` (not run here). IntelliJ then waits for the build;
+  what it does to a script that runs past its 5 minutes is not documented beyond the
+  notification.
+- The argument position. The first log line (`argument=…`) shows what the script
+  received. No log at all means the script did not run (wrong path, not executable, or IntelliJ
+  did not start it). A log named
+  `…-no-argument.log` means IntelliJ passed no argument.
+
 
 ## Worktree location
 
