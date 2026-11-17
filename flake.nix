@@ -139,6 +139,18 @@
     # on its own, for good reasons written up in docs/supply-chain.md; this was a decision
     # by hand, and the two weeks of unreleased main are exactly what was given
     # up.
+    #
+    # KNOWN BUG up to and including v2.4.0 (checked 2026-11-17): the git-hooks
+    # install task writes an ABSOLUTE `--config=` path into `.git/hooks/pre-commit`,
+    # a file all linked worktrees of one repository share (cachix/devenv#3270,
+    # introduced by #2925). The path names the worktree whose shell ran last;
+    # deleting that worktree breaks every commit in all of them. Fixed on main by
+    # commit 19e4724 (cachix/devenv#3299, 2026-10-21), in no release yet.
+    # Projects that work around it with a local `devenv.local.nix` override must
+    # drop the override once their module pin contains that commit. When
+    # `just devenv-bump` brings a release that contains it, check with
+    #   gh api repos/cachix/devenv/compare/19e4724...<rev> --jq .status
+    # (`ahead` or `identical` = fixed), then remove this note and the overrides.
     devenv.url = "github:cachix/devenv/v2.4.0";
 
     # https://github.com/numtide/llm-agents.nix
