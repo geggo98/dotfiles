@@ -192,6 +192,8 @@ devenv tasks run agent:build
 ```
 
 For lifecycle events, status/caching, input/output, and namespace conventions: read `references/tasks.md`.
+For worktrees (`agent:build` as a worktree build hook, `.config/wt.toml` template, IntelliJ setup script,
+direnv/devenv approval): read `references/worktrees.md`.
 
 ## Git hooks
 
@@ -355,6 +357,7 @@ pushing in Docker, work tree mounted read-only and copied to the container's tem
 | `references/git-hooks.md` | Git hooks: built-in hooks, custom hooks, Claude Code auto-format, per-language recipes |
 | `references/flakes.md` | Nix Flakes: plain flake.nix, flake-parts, feature comparison, multiple shells |
 | `references/tasks.md` | Tasks: defining, dependencies, lifecycle events, agent-friendly patterns, allowlisting |
+| `references/worktrees.md` | Git worktrees: `agent:build` contract, project `.config/wt.toml` template, approval of direnv/devenv, IntelliJ setup script |
 | `references/pinning.md` | Pin one package to a version: nixhub/devbox API, second nixpkgs input, `overlays`, cache check, measured costs, traps |
 | `references/nix-recipes.md` | Dropping the C toolchain (`stdenvNoCC`), macOS `apple.sdk`, per-language matrix, measured CGO trap |
 | `references/ci-image.md` | Tools missing in the devenv CI image, silent skips, zombies under a non-reaping PID 1, testing in Docker before the push |

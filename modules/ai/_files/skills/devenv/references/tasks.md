@@ -211,6 +211,8 @@ Users add to `.claude/settings.json`:
 Or at project level in `.claude/settings.local.json`. This grants the agent
 permission to run any task in the `agent:` namespace without prompting.
 
+Use `agent:build` as the build step of a new git worktree: see `references/worktrees.md`.
+
 ### Recommended agent task namespaces
 
 | Namespace | Purpose | Examples |

@@ -171,6 +171,20 @@ individual skill directories through `programs.codex.skills`. Both are gated by
 the agent toggles. Move such an input with `just update-input <name>`, never
 `nix flake update`, so the cooldown applies.
 
+**IntelliJ worktrees get the worktrunk hooks through `+wt-intellij-setup`.**
+IntelliJ creates worktrees with `git worktree add`, so no `wt switch` runs and no
+worktrunk hook fires. Enter `/etc/profiles/per-user/<user>/bin/+wt-intellij-setup` as
+"Run setup script" in IntelliJ's New Worktree dialog; it runs `wt hook pre-start`,
+`post-start` and `post-switch` in the new worktree and logs to
+`~/Library/Logs/wt-intellij-setup/`. The user hooks in `modules/worktrunk.nix` copy the
+gitignored files and call `+wt-inherit-trust`. It runs `direnv allow` only for an
+`.envrc` identical to the approved one in the primary worktree, and, independently,
+`devenv allow` only when `devenv.nix` and `devenv.yaml` are identical to the primary
+worktree's and that worktree is approved (a blind `allow` would run code from a foreign branch). Both helpers are built in
+`modules/worktrunk.nix`; the helper's tests run in `checks.wt-inherit-trust`. Details,
+the project `.config/wt.toml` template and the open questions about IntelliJ's argument
+position and the background hooks: `modules/ai/_files/skills/devenv/references/worktrees.md`.
+
 **superlite is the exception: opt-in, one process.** Its SessionStart hook
 injects a skill into every session and its PreToolUse hooks run on every
 Bash/Edit/Agent call, so it is not in `programs.claude-code.plugins`. Run
