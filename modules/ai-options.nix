@@ -29,7 +29,7 @@
           };
           model = mkOption {
             type = types.nullOr types.str;
-            default = "gpt-6.1-sol";
+            default = "gpt-6.2-sol";
             description = "Default model merged into Codex's writable config.toml; null leaves the key unmanaged and gives back a previously owned value.";
           };
           reasoningEffort = mkOption {
@@ -63,9 +63,18 @@
           # gpt-6-astra and gpt-6.1-sol set it; gpt-6-sol and gpt-6-luna do not and
           # never receive the item. In 0.156.1 no model set it, so the flag was
           # inert. Hence this is only worth turning on together with a model that
-          # sets the gate -- the default `model` above is gpt-6.1-sol for that
+          # sets the gate -- the default `model` above is gpt-6.2-sol for that
           # reason. "Works across the whole GPT-6 suite" is not what the catalog
           # says.
+          #
+          # gpt-6.2-sol and gpt-6.2-astra set the gate too (bundled catalog of
+          # 0.170.0, measured 2026-11-19; minimal_client_version 0.166.0). The
+          # bundled catalog carries them only from 0.169.1 on. The pinned 0.167.0
+          # gets them from the remote catalog (~/.codex/models_cache.json) and
+          # answered `codex exec -m gpt-6.2-sol` on 2026-11-19. Offline with an
+          # empty cache it would lack the model metadata, so the flag would do
+          # nothing. That ends when `just update` reaches 0.169.1 (14-day bar,
+          # 2026-12-02).
           # https://github.com/openai/codex/issues/44751
           reasoningEffortOverride = mkOption {
             type = types.nullOr types.bool;

@@ -54,7 +54,7 @@ Critique the code, not the author.
 # Which Model Writes
 
 Text that people will read is drafted by Opus 5.5 (`claude-opus-5-5`)
-or a model of the Sol class (OpenAI, for example `gpt-6.1-sol`).
+or a model of the Sol class (OpenAI, for example `gpt-6.2-sol`).
 Fable 5.1 and Fable 5.2 (`claude-fable-5-1`, `claude-fable-5-2`) do not write
 such text, even when they are the model of the running session.
 This covers tickets, comments, pull request descriptions, review comments,
@@ -71,8 +71,8 @@ Start a separate run with a short brief instead:
 - Claude Code: the `Agent` tool with `model: "opus"` (Opus 5.5, never `"fable"`).
   The brief tells it to load `Skill(technical-writing)`,
   write the draft to a file, and return the path.
-- Codex: the default is already `gpt-6.1-sol`, so write it yourself.
-  On another model, use a sub-agent or `codex exec -m gpt-6.1-sol` with the same brief.
+- Codex: the default is already `gpt-6.2-sol`, so write it yourself.
+  On another model, use a sub-agent or `codex exec -m gpt-6.2-sol` with the same brief.
 
 The brief holds everything the writer needs,
 because it does not see this session:
@@ -92,7 +92,7 @@ Do not rewrite the draft yourself.
 If no Opus 5.5 or Sol model is reachable (for example Gemini or Antigravity),
 or the delegation fails: do not post.
 Ask the user, and offer a headless run:
-`claude -p --model opus …` or `codex exec -m gpt-6.1-sol …`, brief on stdin.
+`claude -p --model opus …` or `codex exec -m gpt-6.2-sol …`, brief on stdin.
 Start no other CLI without the user's consent.
 
 # Fresh-Eyes Review

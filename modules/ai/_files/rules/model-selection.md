@@ -68,10 +68,10 @@ Workflow-Tool von Claude Code; `agent()` startet darin einen Subagenten (Skill
 Sitzung, laut Dokumentation von Claude Code. In Codex und opencode das Modell ebenso für jeden
 Teillauf setzen.
 
-Beispiel-IDs, Stand 17.11.2026; sie veralten, maßgeblich sind die Klassen:
+Beispiel-IDs, Stand 19.11.2026; sie veralten, maßgeblich sind die Klassen:
 
 - Anthropic, Aliase: `fable`, `opus`, `sonnet`, `haiku`
-- OpenAI: `gpt-6-astra`, `gpt-6.1-sol`, `gpt-6.1-terra`, `gpt-6-luna`
+- OpenAI: `gpt-6.2-astra`, `gpt-6.2-sol`, `gpt-6.1-terra`, `gpt-6-luna`
 
 ## Herkunft
 

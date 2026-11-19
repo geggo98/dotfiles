@@ -69,7 +69,7 @@ in
         (noAgents allOff.config && noAgentWrappers allOff.config && noMcpWrappers allOff.config)
         (noMcp allOff.config && noMcp agentsOnly.config && noMcpWrappers agentsOnly.config)
         (agentsOnly.config.programs.claude-code.settings.model == "opusplan")
-        (agentsOnly.config.my.ai.agents.codex.model == "gpt-6.1-sol")
+        (agentsOnly.config.my.ai.agents.codex.model == "gpt-6.2-sol")
         (agentsOnly.config.my.ai.agents.codex.reasoningEffort == "medium")
         (agentsOnly.config.my.ai.agents.codex.planReasoningEffort == "xhigh")
         (agentsOnly.config.my.ai.agents.codex.reasoningEffortOverride == true)
@@ -156,7 +156,7 @@ in
                       "context-used", "five-hour-limit", "weekly-limit", "branch-changes",
                       "task-progress", "thread-title",
                   ], items
-                  assert settings.get("model") == "gpt-6.1-sol", settings.get("model")
+                  assert settings.get("model") == "gpt-6.2-sol", settings.get("model")
                   assert settings.get("model_reasoning_effort") == "medium", settings.get("model_reasoning_effort")
                   assert settings.get("plan_mode_reasoning_effort") == "xhigh", settings.get("plan_mode_reasoning_effort")
                   assert override is True, override
