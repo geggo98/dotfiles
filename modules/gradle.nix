@@ -335,6 +335,10 @@ in
         org.gradle.caching=true
         org.gradle.parallel=true
 
+        # Parallel IDE sync (Tooling API model queries) for Gradle 9.4+.
+        # Moved here from a project's gradle.properties, where the IDE had added it.
+        org.gradle.tooling.parallel=true
+
         # Stop idle daemons after 3 h. One daemon per project/JVM-args combo,
         # so many parallel worktrees would otherwise hold a lot of RAM.
         #
