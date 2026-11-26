@@ -65,7 +65,15 @@ in
       names = c: map lib.getName c.home.packages;
       noAgentWrappers = c: !(builtins.any (n: lib.hasPrefix "+agent-" n) (names c));
       noMcpWrappers = c: !(builtins.any (n: lib.hasPrefix "+mcp-" n) (names c));
+      claudeWrapper = lib.findFirst (p: lib.getName p == "+agent-claude")
+        (throw "ai-checks: +agent-claude missing from agentsOnly")
+        agentsOnly.config.home.packages;
       assertions = [
+        # Code Mode is on in settings.json; +agent-claude --no-code-mode turns it off per run.
+        (agentsOnly.config.programs.claude-code.settings.env.CLAUDE_CODE_EXPERIMENTAL_CODE_MODE == "1")
+        # Code Mode needs >= 2.1.323 (docs: code.claude.com/docs/en/code-mode); this is
+        # what the cooldown bypass in modules/agents.nix guarantees until the input catches up.
+        (lib.versionAtLeast agentsOnly.config.programs.claude-code.package.version "2.1.323")
         (noAgents allOff.config && noAgentWrappers allOff.config && noMcpWrappers allOff.config)
         (noMcp allOff.config && noMcp agentsOnly.config && noMcpWrappers agentsOnly.config)
         (agentsOnly.config.programs.claude-code.settings.model == "opusplan")
@@ -138,6 +146,7 @@ in
           python3 tests/test_startup_bench.py
           cp ${./ai/_files/skills/java-fast-startup/scripts/checkpoint-secret-scan.py} _files/skills/java-fast-startup/scripts/checkpoint-secret-scan.py
           python3 tests/test_checkpoint_secret_scan.py
+          AGENT_CLAUDE_WRAPPER=${claudeWrapper}/bin/+agent-claude python3 tests/test_agent_claude_wrapper.py
           python3 tests/test_codex_config.py
           python3 - ${codexLeafHooks} <<'PY'
           import json, re, sys, tomllib

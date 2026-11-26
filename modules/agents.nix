@@ -9,7 +9,46 @@ in
     let
       enabled = name: config.my.ai.agents.enable && config.my.ai.agents.${name}.enable;
       llm-agents = llm-agents-pkgs pkgs.stdenv.hostPlatform.system;
-      claude-code = llm-agents.claude-code;
+      # Cooldown bypass for claude-code ONLY (decided 2026-11-26, written down in
+      # docs/supply-chain.md). Why: Code Mode needs >= 2.1.323, and from 2.1.328 on
+      # Claude Code no longer hands the code's output to UserPromptSubmit hooks
+      # (the iTerm2 hook in modules/iterm2-claude-hooks.nix is one). The 14-day bar on
+      # nixpkgs-llm-agents only admits 2.1.322 until about 2026-12-03; the other
+      # agents in that input stay behind the bar.
+      # Source of the hashes: packages/claude-code/hashes.json at llm-agents.nix
+      # c2fec20df ("claude-code: 2.1.327 -> 2.1.328"); the binary is Anthropic's own
+      # build, and the package's codesign check still runs. Published 2026-11-18.
+      # Expiry: the guard below drops the override once the locked input carries this
+      # version or a newer one. Delete the whole block then.
+      claudeBypass = {
+        version = "2.1.328";
+        platforms = {
+          aarch64-darwin = {
+            name = "darwin-arm64";
+            hash = "sha256-6FVHGQ74zZgwM7phsXGUBFpv6gADXaNJ7+q+2GutrMk=";
+          };
+          aarch64-linux = {
+            name = "linux-arm64";
+            hash = "sha256-MH+LraJ7N9t1U/rHXoYATj2/9akx/8YRtU/nEM4etSE=";
+          };
+          x86_64-linux = {
+            name = "linux-x64";
+            hash = "sha256-qYLTgDC5fnUISK3Sy7LfbZpw1VRKIsqbIWo0m6JYZeg=";
+          };
+        };
+      };
+      claudeBase = llm-agents.claude-code;
+      claude-code =
+        if lib.versionOlder claudeBase.version claudeBypass.version then
+          let platform = claudeBypass.platforms.${pkgs.stdenv.hostPlatform.system};
+          in claudeBase.overrideAttrs (_: {
+            inherit (claudeBypass) version;
+            src = pkgs.fetchurl {
+              url = "https://storage.googleapis.com/claude-code-dist-86c565f3-f756-42ad-8dfa-d59b1c096819/claude-code-releases/${claudeBypass.version}/${platform.name}/claude";
+              inherit (platform) hash;
+            };
+          })
+        else claudeBase;
       codex = llm-agents.codex;
       loadSecretsLib = builtins.readFile ./_files/shell/load-secrets.sh;
       wrappers = {
@@ -18,6 +57,21 @@ in
           runtimeInputs = [ llm-agents.claude-agent-acp ];
           text = ''
             export DISABLE_AUTOUPDATER='1'
+            # --no-code-mode, at any position, turns Code Mode off for this run
+            # (https://code.claude.com/docs/en/code-mode). The setting in
+            # settings.json switches it on; the docs say a `0` anywhere wins over a
+            # `1` elsewhere, so the variable beats it. Limit: a session that ran with
+            # Code Mode on can only be resumed with it on, so
+            # `--no-code-mode --resume <id>` fails for such a session.
+            args=()
+            for arg in "$@"; do
+              if [[ "$arg" == "--no-code-mode" ]]; then
+                export CLAUDE_CODE_EXPERIMENTAL_CODE_MODE=0
+              else
+                args+=("$arg")
+              fi
+            done
+            set -- "''${args[@]+"''${args[@]}"}"
             if (( $# > 0 )) && [[ "''${1}" == "--acp" ]]; then
               export CLAUDE_CODE_EXECUTABLE="/etc/profiles/per-user/''${USER}/bin/claude"
               shift
@@ -127,6 +181,16 @@ in
         settings = {
           # Opus for planning, Sonnet for execution.
           model = "opusplan";
+          # Code Mode (experimental): Claude writes JavaScript that makes the tool
+          # calls, run by the REPL tool inside Claude Code
+          # (https://code.claude.com/docs/en/code-mode, read 2026-11-26). Needs
+          # Claude Code >= 2.1.323 (see claudeBypass above). Only user settings can set
+          # it; a cloned repository's settings are ignored. Off for one run:
+          # `+agent-claude --no-code-mode`. Off for good: "0" here.
+          # Limit: the JavaScript and its file, web and MCP calls run outside the
+          # sandbox, and in auto mode the classifier reviews the code, not the values
+          # computed at run time. Chosen deliberately, without `ask = [ "REPL" ]`.
+          env.CLAUDE_CODE_EXPERIMENTAL_CODE_MODE = "1";
           # No automatic attribution in commits or PRs.
           #
           # `attribution.commit = ""` replaces the deprecated `includeCoAuthoredBy`

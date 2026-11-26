@@ -99,6 +99,24 @@ Four behaviours worth knowing, each of which cost a measurement:
 `just update` when there is nothing to do exits 0 and says so. `just update-head` is the
 deliberate bypass — if you use it, write down why in the commit body.
 
+**A narrower bypass: claude-code alone, by package override.** The "bar" is the minimum
+age a release must have before `just update` adopts it, set per input in
+`scripts/supply-chain.toml` (`[cooldown]`, `[cooldown.per_input]`; see "Updating flake
+inputs" above). `nixpkgs-llm-agents` is the flake input for the upstream repository
+`numtide/llm-agents.nix`, the source of claude-code, codex, opencode and gemini-cli, and its
+bar is 14 days. On 2026-11-26 that bar admitted only claude-code 2.1.322, but Code Mode needs
+2.1.323 or newer, and from 2.1.328 on `UserPromptSubmit` hooks no longer see the code's output
+(`docs/ai-tooling.md`, "Claude Code: Code Mode"). Instead of loosening the bar for the whole
+input, `modules/agents.nix` (`claudeBypass`) overrides `claude-code` alone to 2.1.328, 7 days
+old when adopted. The hashes come from commit `c2fec20df` of `numtide/llm-agents.nix`
+(file `packages/claude-code/hashes.json`); the binary is
+Anthropic's own build, fetched from its release bucket, and the package's codesign check
+still runs. Codex, opencode and gemini-cli keep the 14-day bar. Cost: for one week this
+CLI, which holds the account tokens in `~/.claude.json`, runs code that has soaked for 7 days
+instead of 14. **Expiry:** the guard in `claudeBypass` drops the override as soon as the
+locked input carries 2.1.328 or newer (about 2026-12-03, via `just update`); delete the block
+then.
+
 #### `just audit` — the other half, and a different question
 
 `just pulumi-audit` asks *"is anything KNOWN-bad?"* against OSV. `just audit` asks *"is
