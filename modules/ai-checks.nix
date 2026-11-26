@@ -69,9 +69,11 @@ in
         (throw "ai-checks: +agent-claude missing from agentsOnly")
         agentsOnly.config.home.packages;
       assertions = [
-        # Code Mode is on in settings.json; +agent-claude --no-code-mode turns it off per run.
-        (agentsOnly.config.programs.claude-code.settings.env.CLAUDE_CODE_EXPERIMENTAL_CODE_MODE == "1")
-        # Code Mode needs >= 2.1.323 (docs: code.claude.com/docs/en/code-mode); this is
+        # Code Mode is off by default; +agent-claude --code-mode turns it on per run. The
+        # variable must not appear in settings.json: a `0` there would beat the flag
+        # (docs: a `0` anywhere wins), a `1` would make Code Mode the default.
+        (!((agentsOnly.config.programs.claude-code.settings.env or { }) ? CLAUDE_CODE_EXPERIMENTAL_CODE_MODE))
+        # The flag needs >= 2.1.323 (docs: code.claude.com/docs/en/code-mode); this is
         # what the cooldown bypass in modules/agents.nix guarantees until the input catches up.
         (lib.versionAtLeast agentsOnly.config.programs.claude-code.package.version "2.1.323")
         (noAgents allOff.config && noAgentWrappers allOff.config && noMcpWrappers allOff.config)

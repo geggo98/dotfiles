@@ -104,25 +104,32 @@ code (`mcp_nixos.server.nix.fn`) and reimplements none of it. See
 ### Claude Code: Code Mode
 
 Code Mode (experimental) lets Claude write JavaScript that makes the tool calls. The built-in
-`REPL` tool runs that code inside the Claude Code process. It is on for every session:
-`programs.claude-code.settings.env.CLAUDE_CODE_EXPERIMENTAL_CODE_MODE = "1"` in
-`modules/agents.nix`. Source: <https://code.claude.com/docs/en/code-mode>, read 2026-11-26.
+`REPL` tool runs that code inside the Claude Code process. It is **off by default** and
+turns on for one run with `+agent-claude --code-mode`. Source:
+<https://code.claude.com/docs/en/code-mode>, read 2026-11-26. Origin of the opt-in: user
+decision, 2026-11-26; the first version had it on in every session.
 
-- **Off for one run:** `+agent-claude --no-code-mode`. The wrapper is `wrappers.claude` in
+- **On for one run:** `+agent-claude --code-mode`. The wrapper is `wrappers.claude` in
   `modules/agents.nix`; `+agent-claude-superlite` (`modules/superlite.nix`) passes its
-  arguments through to it. The wrapper removes the flag, wherever it stands, and sets
-  the variable to `0`. The docs say a `0` anywhere wins over a `1` elsewhere.
-  Limit: a session that ran with Code Mode on can be resumed only with it on, so
-  `--no-code-mode --resume <id>` fails for such a session. The test is
+  arguments through to it. The wrapper removes the flag, wherever it stands, and exports
+  `CLAUDE_CODE_EXPERIMENTAL_CODE_MODE=1`. Without the flag it leaves the environment
+  alone, so a plain `claude` or `+agent-claude` runs without Code Mode. The old
+  `--no-code-mode` no longer exists; `claude` rejects it as an unknown option.
+  Limit: a session that ran with Code Mode on can be resumed only with it on, so such a
+  session needs `+agent-claude --code-mode --resume <id>`. The test is
   `modules/ai/_tests/test_agent_claude_wrapper.py`, part of `just ai-check`.
-- **Off for good:** set the value to `"0"` in `modules/agents.nix`.
-- **First start:** Claude Code asks once for confirmation and stores the answer in
-  `~/.claude.json`. That file is writable and not managed here.
+- **The variable must not appear in `settings.json`.** The docs say a `0` anywhere wins
+  over a `1` elsewhere. A `"0"` in `programs.claude-code.settings.env` would therefore make
+  the flag useless, and a `"1"` would make Code Mode the default again. `ai-checks.nix`
+  asserts that the entry is absent. Limit: a variable that the caller exported before
+  starting the wrapper keeps its value.
+- **First start with the flag:** Claude Code asks once for confirmation and stores the
+  answer in `~/.claude.json`. That file is writable and not managed here.
 - **Minimum version:** 2.1.323. `ai-checks.nix` asserts it. From 2.1.328 on, Claude Code no
   longer passes the code's output to `UserPromptSubmit` hooks (commands that run each time
   a prompt is submitted); the iTerm2 hook (`modules/iterm2-claude-hooks.nix`) is one of them. The docs also say it runs only in
   an interactive terminal session, not in the VS Code panel or ACP.
-- **What it changes for security:** the JavaScript and its file, web and MCP calls run
+- **What it changes for security, in runs started with `--code-mode`:** the JavaScript and its file, web and MCP calls run
   outside the sandbox. In `auto` mode (`permissions.defaultMode = "auto"` in
   `modules/agents.nix`, where a classifier model decides instead of a prompt) the classifier
   reviews each piece of code, not the values computed at run time. A script can therefore read a secret and pass

@@ -57,16 +57,19 @@ in
           runtimeInputs = [ llm-agents.claude-agent-acp ];
           text = ''
             export DISABLE_AUTOUPDATER='1'
-            # --no-code-mode, at any position, turns Code Mode off for this run
-            # (https://code.claude.com/docs/en/code-mode). The setting in
-            # settings.json switches it on; the docs say a `0` anywhere wins over a
-            # `1` elsewhere, so the variable beats it. Limit: a session that ran with
-            # Code Mode on can only be resumed with it on, so
-            # `--no-code-mode --resume <id>` fails for such a session.
+            # --code-mode, at any position, turns Code Mode on for this run
+            # (https://code.claude.com/docs/en/code-mode). It is off by default:
+            # settings.json deliberately does not carry the variable, because the docs
+            # say a `0` anywhere wins over a `1` elsewhere, so a `0` there would make
+            # this flag useless and a `1` would make Code Mode the default again.
+            # Without the flag the wrapper leaves the environment alone; a variable
+            # the caller already exported keeps its value. Limit: a session that ran
+            # with Code Mode on can only be resumed with it on, so such a session needs
+            # `--code-mode --resume <id>`.
             args=()
             for arg in "$@"; do
-              if [[ "$arg" == "--no-code-mode" ]]; then
-                export CLAUDE_CODE_EXPERIMENTAL_CODE_MODE=0
+              if [[ "$arg" == "--code-mode" ]]; then
+                export CLAUDE_CODE_EXPERIMENTAL_CODE_MODE=1
               else
                 args+=("$arg")
               fi
@@ -181,16 +184,16 @@ in
         settings = {
           # Opus for planning, Sonnet for execution.
           model = "opusplan";
-          # Code Mode (experimental): Claude writes JavaScript that makes the tool
-          # calls, run by the REPL tool inside Claude Code
-          # (https://code.claude.com/docs/en/code-mode, read 2026-11-26). Needs
-          # Claude Code >= 2.1.323 (see claudeBypass above). Only user settings can set
-          # it; a cloned repository's settings are ignored. Off for one run:
-          # `+agent-claude --no-code-mode`. Off for good: "0" here.
+          # Code Mode (experimental) is OFF by default and has NO entry here, on purpose:
+          # CLAUDE_CODE_EXPERIMENTAL_CODE_MODE must stay out of `env`. The docs say a
+          # `0` anywhere wins over a `1` elsewhere (https://code.claude.com/docs/en/code-mode,
+          # read 2026-11-26), so "0" here would block `+agent-claude --code-mode`, and
+          # "1" would turn it on in every session. ai-checks.nix asserts the absence.
+          # One run turns it on with `+agent-claude --code-mode` (wrapper above);
+          # needs Claude Code >= 2.1.323 (see claudeBypass).
           # Limit: the JavaScript and its file, web and MCP calls run outside the
           # sandbox, and in auto mode the classifier reviews the code, not the values
           # computed at run time. Chosen deliberately, without `ask = [ "REPL" ]`.
-          env.CLAUDE_CODE_EXPERIMENTAL_CODE_MODE = "1";
           # No automatic attribution in commits or PRs.
           #
           # `attribution.commit = ""` replaces the deprecated `includeCoAuthoredBy`

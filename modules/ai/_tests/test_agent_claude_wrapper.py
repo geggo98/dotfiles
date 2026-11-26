@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
-"""+agent-claude --no-code-mode: argument handling of the wrapper.
+"""+agent-claude --code-mode: argument handling of the wrapper.
 
-Origin: the flag was added on 2026-11-26 so that one run can switch Code Mode off
-while settings.json switches it on. The wrapper hard-codes the path of the real
-claude, so the test points that path at a fake that prints what it received.
+Origin: Code Mode is off by default and one run switches it on with --code-mode
+(decided 2026-11-26; an earlier version had it on in settings.json and used
+--no-code-mode). The wrapper hard-codes the path of the real claude, so the test
+points that path at a fake that prints what it received.
 
 Usage: AGENT_CLAUDE_WRAPPER=<path to +agent-claude> test_agent_claude_wrapper.py
 """
@@ -55,15 +56,17 @@ def main() -> None:
     base = ["--thinking-display", "summarized"]
     cases = [
         # (arguments, expected arguments after the wrapper's own, expected variable)
-        (["--no-code-mode", "foo", "bar"], ["foo", "bar"], "0"),
-        (["foo", "--no-code-mode", "bar"], ["foo", "bar"], "0"),
-        (["foo", "bar", "--no-code-mode"], ["foo", "bar"], "0"),
-        (["--no-code-mode"], [], "0"),
-        (["a b", "--no-code-mode", "c  d", ""], ["a b", "c  d", ""], "0"),
+        (["--code-mode", "foo", "bar"], ["foo", "bar"], "1"),
+        (["foo", "--code-mode", "bar"], ["foo", "bar"], "1"),
+        (["foo", "bar", "--code-mode"], ["foo", "bar"], "1"),
+        (["--code-mode"], [], "1"),
+        (["a b", "--code-mode", "c  d", ""], ["a b", "c  d", ""], "1"),
+        # The default: no flag, no variable.
         (["foo", "bar"], ["foo", "bar"], "unset"),
         ([], [], "unset"),
-        # Only the exact flag counts.
-        (["--no-code-mode-x", "--code-mode"], ["--no-code-mode-x", "--code-mode"], "unset"),
+        # Only the exact flag counts. The old --no-code-mode is no longer special and
+        # must reach claude, which rejects it, instead of being swallowed silently.
+        (["--code-mode-x", "--no-code-mode"], ["--code-mode-x", "--no-code-mode"], "unset"),
     ]
     with tempfile.TemporaryDirectory() as tmp:
         script = build(tmp)
@@ -71,10 +74,10 @@ def main() -> None:
             got, var = run(script, *args)
             assert got == base + want_args, f"{args}: arguments {got}"
             assert var == want_var, f"{args}: {VAR}={var}, wanted {want_var}"
-        # The flag wins over a value that is already set (settings.json sets "1"
-        # in the real session; here the environment stands in for it).
-        got, var = run(script, "--no-code-mode", preset="1")
-        assert var == "0", f"preset 1 not overridden: {var}"
+        # The flag sets the variable even where the environment holds another value.
+        # What Claude Code makes of a preset 0 is not tested here (docs: a 0 wins).
+        got, var = run(script, "--code-mode", preset="0")
+        assert var == "1", f"preset 0 not overridden by the flag: {var}"
         # Without the flag an existing value stays untouched.
         got, var = run(script, "foo", preset="1")
         assert var == "1", f"preset 1 changed without the flag: {var}"
