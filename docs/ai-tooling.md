@@ -107,7 +107,7 @@ Code Mode (experimental) lets Claude write JavaScript that makes the tool calls.
 `REPL` tool runs that code inside the Claude Code process. It is **off by default** and
 turns on for one run with `+agent-claude --code-mode`. Source:
 <https://code.claude.com/docs/en/code-mode>, read 2026-11-26. Origin of the opt-in: user
-decision, 2026-11-26; the first version had it on in every session.
+decision, 2026-11-26; until commit `06f61e0` the configuration set the variable for every session.
 
 - **On for one run:** `+agent-claude --code-mode`. The wrapper is `wrappers.claude` in
   `modules/agents.nix`; `+agent-claude-superlite` (`modules/superlite.nix`) passes its
@@ -120,25 +120,25 @@ decision, 2026-11-26; the first version had it on in every session.
   `modules/ai/_tests/test_agent_claude_wrapper.py`, part of `just ai-check`.
 - **The variable must not appear in `settings.json`.** The docs say a `0` anywhere wins
   over a `1` elsewhere. A `"0"` in `programs.claude-code.settings.env` would therefore make
-  the flag useless, and a `"1"` would make Code Mode the default again. `ai-checks.nix`
+  the flag useless, and a `"1"` would make Code Mode the default again. `modules/ai-checks.nix`
   asserts that the entry is absent. Limit: a variable that the caller exported before
   starting the wrapper keeps its value.
 - **First start with the flag:** Claude Code asks once for confirmation and stores the
   answer in `~/.claude.json`. That file is writable and not managed here.
-- **Minimum version:** 2.1.323. `ai-checks.nix` asserts it. From 2.1.328 on, Claude Code no
+- **Minimum version:** 2.1.323. `modules/ai-checks.nix` asserts it. From 2.1.328 on, Claude Code no
   longer passes the code's output to `UserPromptSubmit` hooks (commands that run each time
   a prompt is submitted); the iTerm2 hook (`modules/iterm2-claude-hooks.nix`) is one of them. The docs also say it runs only in
-  an interactive terminal session, not in the VS Code panel or ACP.
+  an interactive terminal session, not in the VS Code panel or over ACP (Agent Client Protocol, the editor integration behind `+agent-claude --acp`).
 - **What it changes for security, in runs started with `--code-mode`:** the JavaScript and its file, web and MCP calls run
   outside the sandbox. In `auto` mode (`permissions.defaultMode = "auto"` in
   `modules/agents.nix`, where a classifier model decides instead of a prompt) the classifier
   reviews each piece of code, not the values computed at run time. A script can therefore read a secret and pass
-  it on in one run without a prompt. `deny` rules and `PreToolUse` hooks still apply to
+  it on in one run without a prompt. `deny` rules and `PreToolUse` hooks (commands that run before each tool call) still apply to
   each call inside the code. `permissions.ask = [ "REPL" ]` would make every script need
   approval; this repository deliberately does not set it (user decision, 2026-11-26).
   Prompt injection from a dependency, a web page or an MCP answer can now chain several
   actions in one script.
-- **Remote switch:** Anthropic can turn the feature off through downloaded settings, and may
+- **Remote switch:** Anthropic can turn the feature off through the feature flags that Claude Code downloads from Anthropic (see the docs page above), and may
   change or remove it in any release.
 
 ### Independent AI aspects
