@@ -140,9 +140,18 @@
           "iMazing HEIC Converter" = 1292198261;
           "Infuse" = 1136220934;
           "Horo" = 1437226581;
-          "Keynote" = 409183694;
+          # Keynote: `mas` reports "No apps found in the App Store for ADAM ID 409183694"
+          # (2026-11-26). Apple moved it under Apple Creator Studio; the German store page
+          # now lists id361285480 (https://apps.apple.com/de/app/keynote-pr%C3%A4sentationen/id361285480).
+          # `mas info 361285480` finds "Keynote: Präsentationen 16.0" (2026-11-26), so the
+          # ID resolves; an actual install through `mas` is not tried yet. Stays
+          # commented out until then; replace the ID above and uncomment.
+          # "Keynote" = 409183694;
           "Logic Pro" = 634148309;
-          "Logoist 5" = 6443412717;
+          # Logoist 5: the old ID 6443412717 is gone from the App Store (2026-11-26); the
+          # app is now Logoist 6, probably a new purchase with its own ID. Add that
+          # ID here once it is bought.
+          # "Logoist 5" = 6443412717;
           "MainStage" = 634159523;
           "MeetingBar" = 1532419400;
           "MenubarX" = 1575588022;
@@ -153,7 +162,10 @@
           "Plash" = 1494023538;
           "PLIST Editor" = 1157491961;
           "Save to Raindrop.io" = 1549370672;
-          "Omnivore: Read-it-later" = 1564031042;
+          # Omnivore: `mas` reports "No apps found in the App Store for ADAM ID 1564031042"
+          # (2026-11-26); the app no longer seems to exist. Delete this entry if it
+          # stays gone.
+          # "Omnivore: Read-it-later" = 1564031042;
           "Shortery" = 1594183810;
           "Source Files: Git Storage" = 6450856155;
           "StopTheMadness Pro" = 6471380298;
