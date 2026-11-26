@@ -195,3 +195,22 @@ Components from these sources are auto-imported:
 4. `./components/` directory
 
 No import statements needed.
+
+### Logic Modules Under `components/` Can Hide a Component
+
+Slidev registers every `.vue`, `.md`, `.js`, `.ts`, `.jsx` and `.tsx` file under `components/` as a component, recursively, `lib/` and `__tests__/` included. The name is the file name without extension in PascalCase, so `components/ContextHygiene.vue` and `components/lib/contextHygiene.ts` both become `ContextHygiene`. The dev server then warns `component "ContextHygiene"(…/lib/contextHygiene.ts) has naming conflicts with other components, ignored.` and drops one of the two files. It keeps the first path it finds; the plugin documentation does not define that order.
+
+Rule: give a logic module under `components/` a name that no component has, for example with a `Logic`, `Math` or `Data` suffix, or move it out of `components/`. Renaming keeps the file where it is; moving it out removes it from the scan. The clash ignores case, `-` and `_`, so `context-hygiene.ts` also clashes. Test files such as `contextHygiene.test.ts` do not, because the name keeps `.test`. Origin: measured on 23.11.2026 with Slidev 52.14.1 (`createComponentsPlugin` in `@slidev/cli` uses unplugin-vue-components). Limit: the warning appears only after a browser loads a slide, and a running server does not rescan new files; restart it to check.
+
+A test that walks each `components/` directory catches the clash before startup:
+
+```ts
+// walk(dir) returns all file paths below dir, recursively
+const EXT = new Set([".vue", ".md", ".js", ".ts", ".jsx", ".tsx"]);
+const key = (f: string) =>
+  basename(f, extname(f)).replace(/[^A-Za-z0-9]/g, "").toLowerCase();
+const byKey = new Map<string, string[]>();
+for (const f of walk(componentsDir).filter((f) => EXT.has(extname(f))))
+  byKey.set(key(f), [...(byKey.get(key(f)) ?? []), f]);
+expect([...byKey.values()].filter((g) => g.length > 1)).toEqual([]);
+```
